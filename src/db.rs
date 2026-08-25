@@ -342,7 +342,9 @@ impl Kiban {
     }
 
     /// Internal iteration (raw mode) — newest entry per key, tombstones
-    /// included. Compaction's input stream.
+    /// included. Compaction's input stream; exercised via scan tests
+    /// until compaction consumes it.
+    #[allow(dead_code)]
     pub(crate) fn iter_internal(&self) -> DbRawIter<'_> {
         DbRawIter {
             core: self.merge_core(false),
@@ -376,6 +378,7 @@ impl Kiban {
         sources
     }
 
+    #[allow(dead_code)]
     pub(crate) fn iter_from<'a>(&'a self, start: &[u8]) -> DbIter<'a> {
         DbIter {
             core: MergeCore {
