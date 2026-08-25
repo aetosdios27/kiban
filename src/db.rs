@@ -2005,3 +2005,87 @@ mod shared_tests {
         assert_eq!(db.get(b"anchor").unwrap(), Some(b"stable".to_vec()));
     }
 }
+
+#[cfg(test)]
+mod cache_scaling_tests {
+    use super::*;
+    use crate::testutil::TempDir;
+    use std::collections::BTreeMap;
+
+    fn small_cache_options() -> KibanOptions {
+        KibanOptions {
+            l0_compaction_trigger: 8, // keep many tables alive
+            base_level_bytes: u64::MAX,
+            level_multiplier: 10,
+            target_file_size: 64 * 1024,
+            block_cache_bytes: 4096, // tiny: far smaller than the data
+        }
+    }
+
+    #[test]
+    fn database_much_larger_than_cache_opens_and_serves_correctly() {
+        let td = TempDir::new("cache-scale");
+        let options = small_cache_options();
+        let mut db = Kiban::open_with_options(td.path(), options.clone()).unwrap();
+
+        // ~300 KB of live data against a 4 KB cache: 75x oversubscription
+        let count = 4000usize;
+        let mut reference: BTreeMap<Vec<u8>, Vec<u8>> = BTreeMap::new();
+        for i in 0..count {
+            let key = format!("key-{i:06}");
+            let value = format!("value-{i:06}-{}", vec![b'x'; 50].len());
+            let value = format!("{value}-{:x}", i);
+            db.put(key.as_bytes(), value.as_bytes()).unwrap();
+            reference.insert(key.into_bytes(), value.into_bytes());
+        }
+        db.sync().unwrap();
+        db.flush().unwrap();
+        drop(db);
+
+        // fresh open: handles only; nothing may assume whole-table residency
+        let db = Kiban::open_with_options(td.path(), options.clone()).unwrap();
+        for i in 0..count {
+            let key = format!("key-{i:06}");
+            let got = db
+                .get(key.as_bytes())
+                .unwrap()
+                .unwrap_or_else(|| panic!("missing {key}"));
+            let want = &reference[key.as_bytes()];
+            assert_eq!(got, *want, "wrong value for {key}");
+        }
+
+        // full scan agrees too
+        let scanned: usize = db.iter().map(|r| r.unwrap()).fold(0, |n, _| n + 1);
+        assert_eq!(scanned, count);
+
+        // and the cache stayed inside its budget the whole time
+        assert!(db.cache.resident_bytes() <= options.block_cache_bytes);
+    }
+
+    #[test]
+    fn every_table_remains_readable_after_cold_reopen() {
+        let td = TempDir::new("cache-cold");
+        let mut db = Kiban::open_with_options(td.path(), small_cache_options()).unwrap();
+        let mut expected_total = 0usize;
+        for t in 0..24u32 {
+            for i in 0..20u32 {
+                db.put(format!("t{t:02}-k{i:03}"), format!("v{t}-{i}").as_bytes())
+                    .unwrap();
+                expected_total += 1;
+            }
+            db.sync().unwrap();
+            db.flush().unwrap();
+        }
+        drop(db);
+
+        let db = Kiban::open_with_options(td.path(), small_cache_options()).unwrap();
+        let scanned: usize = db.iter().map(|r| r.unwrap()).fold(0, |n, _| n + 1);
+        assert_eq!(scanned, expected_total);
+
+        // spot checks from the first, middle, and last table
+        assert_eq!(db.get(b"t00-k000").unwrap(), Some(b"v0-0".to_vec()));
+        assert_eq!(db.get(b"t12-k010").unwrap(), Some(b"v12-10".to_vec()));
+        assert_eq!(db.get(b"t23-k019").unwrap(), Some(b"v23-19".to_vec()));
+        assert_eq!(db.get(b"missing").unwrap(), None);
+    }
+}
