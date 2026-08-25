@@ -50,6 +50,6 @@ fn common_prefix_len(a: &[u8], b: &[u8]) -> usize {
     a.iter().zip(b.iter()).take_while(|(x, y)| x == y).count()
 }
 
-pub use block::{Block, BlockIter};
+pub use block::{BlockIter, VerifiedBlock};
 pub use builder::TableBuilder;
 pub use reader::{Found, Iter, SstTable};

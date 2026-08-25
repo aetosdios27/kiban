@@ -2,6 +2,7 @@
 //! points, per `docs/design/sstable.md`.
 
 use super::{Kind, SstError, common_prefix_len};
+use crate::cache::{ArcBlock, BlockMeta, CachedBlock};
 use crate::crc32;
 
 pub const RESTART_INTERVAL: usize = 16;
@@ -97,15 +98,16 @@ pub struct Match<'a> {
     pub value: &'a [u8],
 }
 
-pub struct Block<'a> {
-    raw: &'a [u8],
-    restart_start: usize,
-    num_restarts: usize,
-    entries_end: usize,
+/// A data block whose bytes are owned and whose layout was verified.
+#[derive(Debug, Clone)]
+pub struct VerifiedBlock {
+    data: ArcBlock,
+    meta: BlockMeta,
 }
 
-impl<'a> Block<'a> {
-    pub fn parse(raw: &'a [u8]) -> Result<Block<'a>, SstError> {
+impl VerifiedBlock {
+    /// Verifies trailer checksum and structural invariants.
+    pub fn verify(raw: &[u8]) -> Result<BlockMeta, SstError> {
         let bad = |m: String| SstError::Corrupt(format!("data block: {m}"));
         if raw.len() < ENTRY_FIXED_LEN + 4 + 4 + TRAILER_LEN {
             return Err(bad(
@@ -134,11 +136,7 @@ impl<'a> Block<'a> {
             return Err(bad("no room for a single entry".to_string()));
         }
         for i in 0..num_restarts {
-            let off = u32::from_le_bytes(
-                raw[restart_start + i * 4..restart_start + (i + 1) * 4]
-                    .try_into()
-                    .unwrap(),
-            ) as usize;
+            let off = restart_offset_of(raw, restart_start, i);
             if off >= entries_end || (i > 0 && off <= restart_offset_of(raw, restart_start, i - 1))
             {
                 return Err(bad(
@@ -146,62 +144,46 @@ impl<'a> Block<'a> {
                 ));
             }
         }
-        let first = restart_offset_of(raw, restart_start, 0);
-        if first != 0 {
+        if restart_offset_of(raw, restart_start, 0) != 0 {
             return Err(bad("first restart point is not at offset 0".to_string()));
         }
-        Ok(Block {
-            raw,
+        Ok(BlockMeta {
+            entries_end,
             restart_start,
             num_restarts,
-            entries_end,
         })
     }
 
+    pub fn from_raw(raw: Vec<u8>) -> Result<VerifiedBlock, SstError> {
+        let meta = Self::verify(&raw)?;
+        Ok(VerifiedBlock {
+            data: raw.into(),
+            meta,
+        })
+    }
+
+    pub fn from_cached(cached: CachedBlock) -> VerifiedBlock {
+        VerifiedBlock {
+            data: cached.data,
+            meta: cached.meta,
+        }
+    }
+
     fn restart_offset(&self, i: usize) -> usize {
-        u32::from_le_bytes(
-            self.raw[self.restart_start + i * 4..self.restart_start + (i + 1) * 4]
-                .try_into()
-                .unwrap(),
-        ) as usize
+        restart_offset_of(&self.data, self.meta.restart_start, i)
     }
 
     fn header(&self, pos: usize) -> Result<(Kind, usize, usize, usize), SstError> {
-        let bad = |m: String| SstError::Corrupt(format!("data block entry at {pos}: {m}"));
-        if pos + ENTRY_FIXED_LEN > self.entries_end {
-            return Err(bad("header runs past entries area".to_string()));
-        }
-        let kind =
-            Kind::from_u8(self.raw[pos]).ok_or_else(|| bad("unknown entry kind".to_string()))?;
-        let shared = u32::from_le_bytes(self.raw[pos + 1..pos + 5].try_into().unwrap()) as usize;
-        let non_shared =
-            u32::from_le_bytes(self.raw[pos + 5..pos + 9].try_into().unwrap()) as usize;
-        let value_len =
-            u32::from_le_bytes(self.raw[pos + 9..pos + 13].try_into().unwrap()) as usize;
-        if kind == Kind::Tombstone && value_len != 0 {
-            return Err(bad("tombstone with non-zero value length".to_string()));
-        }
-        let end = pos + ENTRY_FIXED_LEN + non_shared + value_len;
-        if end > self.entries_end {
-            return Err(bad("key/value runs past entries area".to_string()));
-        }
-        Ok((kind, shared, non_shared, value_len))
+        header_at(&self.data, &self.meta, pos)
     }
 
     fn full_key_at_restart(&self, i: usize) -> Result<Vec<u8>, SstError> {
-        let pos = self.restart_offset(i);
-        let (_, shared, non_shared, _) = self.header(pos)?;
-        if shared != 0 {
-            return Err(SstError::Corrupt(
-                "restart point entry has shared bytes".to_string(),
-            ));
-        }
-        Ok(self.raw[pos + ENTRY_FIXED_LEN..pos + ENTRY_FIXED_LEN + non_shared].to_vec())
+        full_key_at_restart(&self.data, &self.meta, i)
     }
 
-    pub fn get(&self, target: &[u8]) -> Result<Option<Match<'a>>, SstError> {
+    pub fn get(&self, target: &[u8]) -> Result<Option<Match<'_>>, SstError> {
         let mut lo = 0usize;
-        let mut hi = self.num_restarts;
+        let mut hi = self.meta.num_restarts;
         while lo < hi {
             let mid = lo + (hi - lo) / 2;
             if self.full_key_at_restart(mid)?.as_slice() <= target {
@@ -215,20 +197,15 @@ impl<'a> Block<'a> {
         let mut pos = self.restart_offset(start);
 
         loop {
-            if pos >= self.entries_end {
+            if pos >= self.meta.entries_end {
                 return Ok(None);
             }
             let (kind, shared, non_shared, value_len) = self.header(pos)?;
             key.truncate(shared);
             key.extend_from_slice(
-                &self.raw[pos + ENTRY_FIXED_LEN..pos + ENTRY_FIXED_LEN + non_shared],
+                &self.data[pos + ENTRY_FIXED_LEN..pos + ENTRY_FIXED_LEN + non_shared],
             );
-            let value = if kind == Kind::Put {
-                &self.raw[pos + ENTRY_FIXED_LEN + non_shared
-                    ..pos + ENTRY_FIXED_LEN + non_shared + value_len]
-            } else {
-                &[]
-            };
+            let value = entry_value(&self.data, &self.meta, pos, kind, non_shared, value_len);
             if key.as_slice() == target {
                 return Ok(Some(Match { kind, value }));
             }
@@ -239,10 +216,102 @@ impl<'a> Block<'a> {
         }
     }
 
-    pub fn iter(&self) -> BlockIter<'a> {
+    /// First entry in the block.
+    pub fn first_entry(&self) -> Result<Option<Entry>, SstError> {
+        self.iter().next().transpose()
+    }
+
+    /// Last entry in the block.
+    pub fn last_entry(&self) -> Result<Option<Entry>, SstError> {
+        // decode forward to the final entry; prefix compression makes a
+        // true backwards walk start from the previous restart anyway
+        let mut last: Option<Entry> = None;
+        for item in BlockIter::from_verified(self.clone()) {
+            last = Some(item?);
+        }
+        Ok(last)
+    }
+
+    pub fn iter(&self) -> BlockIter {
+        BlockIter::from_verified(self.clone())
+    }
+}
+
+fn header_at(
+    data: &[u8],
+    meta: &BlockMeta,
+    pos: usize,
+) -> Result<(Kind, usize, usize, usize), SstError> {
+    let bad = |m: String| SstError::Corrupt(format!("data block entry at {pos}: {m}"));
+    if pos + ENTRY_FIXED_LEN > meta.entries_end {
+        return Err(bad("header runs past entries area".to_string()));
+    }
+    let kind = Kind::from_u8(data[pos]).ok_or_else(|| bad("unknown entry kind".to_string()))?;
+    let shared = u32::from_le_bytes(data[pos + 1..pos + 5].try_into().unwrap()) as usize;
+    let non_shared = u32::from_le_bytes(data[pos + 5..pos + 9].try_into().unwrap()) as usize;
+    let value_len = u32::from_le_bytes(data[pos + 9..pos + 13].try_into().unwrap()) as usize;
+    if kind == Kind::Tombstone && value_len != 0 {
+        return Err(bad("tombstone with non-zero value length".to_string()));
+    }
+    let end = pos + ENTRY_FIXED_LEN + non_shared + value_len;
+    if end > meta.entries_end {
+        return Err(bad("key/value runs past entries area".to_string()));
+    }
+    Ok((kind, shared, non_shared, value_len))
+}
+
+fn restart_offset_of(data: &[u8], restart_start: usize, i: usize) -> usize {
+    u32::from_le_bytes(
+        data[restart_start + i * 4..restart_start + (i + 1) * 4]
+            .try_into()
+            .unwrap(),
+    ) as usize
+}
+
+fn full_key_at_restart(data: &[u8], meta: &BlockMeta, i: usize) -> Result<Vec<u8>, SstError> {
+    let pos = restart_offset_of(data, meta.restart_start, i);
+    let (_, shared, non_shared, _) = header_at(data, meta, pos)?;
+    if shared != 0 {
+        return Err(SstError::Corrupt(
+            "restart point entry has shared bytes".to_string(),
+        ));
+    }
+    Ok(data[pos + ENTRY_FIXED_LEN..pos + ENTRY_FIXED_LEN + non_shared].to_vec())
+}
+
+fn entry_value<'a>(
+    data: &'a [u8],
+    _meta: &BlockMeta,
+    pos: usize,
+    kind: Kind,
+    non_shared: usize,
+    value_len: usize,
+) -> &'a [u8] {
+    match kind {
+        Kind::Put => {
+            let vstart = pos + ENTRY_FIXED_LEN + non_shared;
+            &data[vstart..vstart + value_len]
+        }
+        Kind::Tombstone => &[],
+    }
+}
+
+/// One owned entry: (kind, key, value).
+pub type Entry = (Kind, Vec<u8>, Vec<u8>);
+
+/// Owning iterator over a verified block: yields fully-owned entries so
+/// callers never borrow from cache-managed bytes.
+pub struct BlockIter {
+    block: VerifiedBlock,
+    pos: usize,
+    key: Vec<u8>,
+    failed: bool,
+}
+
+impl BlockIter {
+    pub(crate) fn from_verified(block: VerifiedBlock) -> BlockIter {
         BlockIter {
-            raw: self.raw,
-            entries_end: self.entries_end,
+            block,
             pos: 0,
             key: Vec::new(),
             failed: false,
@@ -250,45 +319,29 @@ impl<'a> Block<'a> {
     }
 }
 
-fn restart_offset_of(raw: &[u8], restart_start: usize, i: usize) -> usize {
-    u32::from_le_bytes(
-        raw[restart_start + i * 4..restart_start + (i + 1) * 4]
-            .try_into()
-            .unwrap(),
-    ) as usize
-}
-
-pub struct BlockIter<'a> {
-    raw: &'a [u8],
-    entries_end: usize,
-    pos: usize,
-    key: Vec<u8>,
-    failed: bool,
-}
-
-impl<'a> Iterator for BlockIter<'a> {
-    type Item = Result<(Kind, Vec<u8>, &'a [u8]), SstError>;
+impl Iterator for BlockIter {
+    type Item = Result<(Kind, Vec<u8>, Vec<u8>), SstError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.failed || self.pos >= self.entries_end {
+        if self.failed || self.pos >= self.block.meta.entries_end {
             return None;
         }
+        let data = &self.block.data;
+        let meta = &self.block.meta;
         let pos = self.pos;
         let bad = |m: String| SstError::Corrupt(format!("data block entry at {pos}: {m}"));
-        let kind = match Kind::from_u8(self.raw[pos]) {
+        let kind = match Kind::from_u8(data[pos]) {
             Some(k) => k,
             None => {
                 self.failed = true;
                 return Some(Err(bad("unknown entry kind".to_string())));
             }
         };
-        let shared = u32::from_le_bytes(self.raw[pos + 1..pos + 5].try_into().unwrap()) as usize;
-        let non_shared =
-            u32::from_le_bytes(self.raw[pos + 5..pos + 9].try_into().unwrap()) as usize;
-        let value_len =
-            u32::from_le_bytes(self.raw[pos + 9..pos + 13].try_into().unwrap()) as usize;
+        let shared = u32::from_le_bytes(data[pos + 1..pos + 5].try_into().unwrap()) as usize;
+        let non_shared = u32::from_le_bytes(data[pos + 5..pos + 9].try_into().unwrap()) as usize;
+        let value_len = u32::from_le_bytes(data[pos + 9..pos + 13].try_into().unwrap()) as usize;
         let end = pos + ENTRY_FIXED_LEN + non_shared + value_len;
-        if end > self.entries_end || (kind == Kind::Tombstone && value_len != 0) {
+        if end > meta.entries_end || (kind == Kind::Tombstone && value_len != 0) {
             self.failed = true;
             return Some(Err(bad("entry runs past entries area".to_string())));
         }
@@ -297,13 +350,12 @@ impl<'a> Iterator for BlockIter<'a> {
             return Some(Err(bad("shared length exceeds previous key".to_string())));
         }
         self.key.truncate(shared);
-        self.key.extend_from_slice(
-            &self.raw[pos + ENTRY_FIXED_LEN..pos + ENTRY_FIXED_LEN + non_shared],
-        );
+        self.key
+            .extend_from_slice(&data[pos + ENTRY_FIXED_LEN..pos + ENTRY_FIXED_LEN + non_shared]);
         let value = if kind == Kind::Put {
-            &self.raw[end - value_len..end]
+            data[end - value_len..end].to_vec()
         } else {
-            &[]
+            Vec::new()
         };
         self.pos = end;
         Some(Ok((kind, self.key.clone(), value)))
@@ -330,7 +382,7 @@ mod tests {
     #[test]
     fn roundtrip_small_block() {
         let raw = build(&[("a", "1"), ("b", "2"), ("c", "3")]);
-        let block = Block::parse(&raw).unwrap();
+        let block = VerifiedBlock::from_raw(raw.clone()).unwrap();
         assert_eq!(block.get(b"a").unwrap().unwrap().value, b"1");
         assert_eq!(block.get(b"b").unwrap().unwrap().value, b"2");
         assert_eq!(block.get(b"c").unwrap().unwrap().value, b"3");
@@ -349,7 +401,7 @@ mod tests {
         let n_restarts = u32::from_le_bytes(raw[raw.len() - 9..raw.len() - 5].try_into().unwrap());
         // entries 0,16,32 -> 3 restarts
         assert_eq!(n_restarts, 3);
-        let block = Block::parse(&raw).unwrap();
+        let block = VerifiedBlock::from_raw(raw.clone()).unwrap();
         for i in 0..40 {
             let key = format!("key-{i:04}");
             assert_eq!(
@@ -383,7 +435,7 @@ mod tests {
         b.add(Kind::Put, b"alive", b"v");
         b.add(Kind::Tombstone, b"dead", b"");
         let raw = b.finish();
-        let block = Block::parse(&raw).unwrap();
+        let block = VerifiedBlock::from_raw(raw.clone()).unwrap();
         let dead = block.get(b"dead").unwrap().unwrap();
         assert_eq!(dead.kind, Kind::Tombstone);
         assert_eq!(dead.value, b"");
@@ -398,7 +450,7 @@ mod tests {
             b.add(Kind::Put, format!("k{:03}", i * 7).as_bytes(), b"v");
         }
         let raw = b.finish();
-        let block = Block::parse(&raw).unwrap();
+        let block = VerifiedBlock::from_raw(raw.clone()).unwrap();
         let got: Vec<String> = block
             .iter()
             .map(|r| r.unwrap().1)
@@ -418,7 +470,7 @@ mod tests {
         for i in 0..raw.len() {
             let mut bad = raw.clone();
             bad[i] ^= 0x01;
-            match Block::parse(&bad) {
+            match VerifiedBlock::from_raw(bad.clone()) {
                 Err(SstError::Corrupt(_)) => {}
                 Ok(block) => {
                     // a flip that survives parse must still not return wrong data
@@ -440,7 +492,10 @@ mod tests {
     fn truncated_block_is_rejected() {
         let raw = build(&[("k", "v")]);
         for cut in [0, 5, 13, raw.len() / 2] {
-            assert!(Block::parse(&raw[..cut]).is_err(), "cut={cut} accepted");
+            assert!(
+                VerifiedBlock::from_raw(raw[..cut].to_vec()).is_err(),
+                "cut={cut} accepted"
+            );
         }
     }
 }

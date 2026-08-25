@@ -10,11 +10,13 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::atomic;
+use crate::cache::BlockCache;
 use crate::manifest::{MANIFEST_NAME, Manifest, ManifestError, TableRef};
 use crate::memtable::{Entry as MemEntry, Memtable};
 use crate::sstable::{Kind, SstError, SstTable, TableBuilder};
 use crate::sys;
 use crate::wal::{Wal, WalError};
+use std::sync::Arc as StdArc;
 
 pub const SST_EXTENSION: &str = "sst";
 pub const WAL_EXTENSION: &str = "wal";
@@ -113,6 +115,7 @@ pub struct KibanOptions {
     pub base_level_bytes: u64,
     pub level_multiplier: u64,
     pub target_file_size: u64,
+    pub block_cache_bytes: usize,
 }
 
 impl Default for KibanOptions {
@@ -123,6 +126,7 @@ impl Default for KibanOptions {
             base_level_bytes: 4 * MIB,
             level_multiplier: 10,
             target_file_size: 4 * MIB,
+            block_cache_bytes: 32 * MIB as usize,
         }
     }
 }
@@ -130,6 +134,7 @@ impl Default for KibanOptions {
 pub struct Kiban {
     dir: PathBuf,
     options: KibanOptions,
+    cache: StdArc<BlockCache>,
     memtable: Memtable,
     wal: Wal,
     next_file_number: u64,
@@ -151,6 +156,7 @@ impl Kiban {
     ) -> Result<Kiban, DbError> {
         let dir = dir.as_ref().to_path_buf();
         fs::create_dir_all(&dir)?;
+        let cache = StdArc::new(BlockCache::new(options.block_cache_bytes));
 
         let manifest = match Manifest::load(&dir)? {
             Some(m) => m,
@@ -175,16 +181,10 @@ impl Kiban {
         let mut tables = Vec::with_capacity(manifest.tables.len());
         for tref in &manifest.tables {
             let path = dir.join(file_name(tref.number, SST_EXTENSION));
-            let bytes = sys::read(&path).map_err(|e| {
-                DbError::Corrupt(format!(
-                    "manifest lists table {} which cannot be read: {e}",
-                    tref.number
-                ))
-            })?;
-            let size = bytes.len() as u64;
-            let table = SstTable::parse(bytes)?;
-            let first_key = table.smallest_key()?;
-            let last_key = table.largest_key()?;
+            let table = SstTable::open(tref.number, &path, cache.clone())?;
+            let size = table.size_on_disk();
+            let first_key = table.smallest_key().to_vec();
+            let last_key = table.largest_key().to_vec();
             tables.push(TableEntry {
                 level: tref.level,
                 number: tref.number,
@@ -215,9 +215,11 @@ impl Kiban {
             }
         }
 
+        let cache = StdArc::new(BlockCache::new(options.block_cache_bytes));
         Ok(Kiban {
             dir,
             options,
+            cache,
             memtable,
             wal,
             next_file_number: manifest.next_file_number,
@@ -388,14 +390,17 @@ impl Kiban {
         // returned success.
         self.next_file_number = new_next_file_number;
         self.wal_number = new_wal_number;
-        let size = bytes.len() as u64;
-        let table = SstTable::parse(bytes)?;
+        let table = SstTable::open(
+            sst_number,
+            &self.dir.join(file_name(sst_number, SST_EXTENSION)),
+            self.cache.clone(),
+        )?;
         let entry = TableEntry {
             level: 0,
             number: sst_number,
-            size,
-            first_key: table.smallest_key()?,
-            last_key: table.largest_key()?,
+            size: table.size_on_disk(),
+            first_key: table.smallest_key().to_vec(),
+            last_key: table.largest_key().to_vec(),
             table,
         };
         let pos = self
@@ -437,7 +442,7 @@ impl Kiban {
         &'a self,
         start: &'a [u8],
         end: &'a [u8],
-    ) -> impl Iterator<Item = Result<(Vec<u8>, &'a [u8]), DbError>> + 'a {
+    ) -> impl Iterator<Item = Result<(Vec<u8>, Vec<u8>), DbError>> + 'a {
         let core = MergeCore {
             sources: self.sources_from(start),
             user_mode: true,
@@ -857,15 +862,15 @@ mod flush_tests {
 }
 
 /// One entry as the merge sees it: the newest version of a key.
-pub struct RawEntry<'a> {
+pub struct RawEntry {
     pub kind: Kind,
-    pub value: &'a [u8],
+    pub value: Vec<u8>,
 }
 
-struct HeadEntry<'a> {
+struct HeadEntry {
     key: Vec<u8>,
     kind: Kind,
-    value: &'a [u8],
+    value: Vec<u8>,
 }
 
 enum SourceFeed<'a> {
@@ -875,7 +880,7 @@ enum SourceFeed<'a> {
 
 struct SourceHead<'a> {
     feed: SourceFeed<'a>,
-    head: Option<HeadEntry<'a>>,
+    head: Option<HeadEntry>,
     exhausted: bool,
 }
 
@@ -889,12 +894,12 @@ impl<'a> SourceHead<'a> {
                 MemEntry::Value(v) => HeadEntry {
                     key: k.clone(),
                     kind: Kind::Put,
-                    value: v,
+                    value: v.clone(),
                 },
                 MemEntry::Tombstone => HeadEntry {
                     key: k.clone(),
                     kind: Kind::Tombstone,
-                    value: &[],
+                    value: Vec::new(),
                 },
             }),
             SourceFeed::Table(it) => match it.next() {
@@ -922,7 +927,7 @@ struct MergeCore<'a> {
 impl<'a> MergeCore<'a> {
     /// Newest-wins merge over all sources (db-iterator.md D2). In user
     /// mode tombstones are skipped; in raw mode they are emitted.
-    fn next_raw(&mut self) -> Option<Result<(Vec<u8>, RawEntry<'a>), DbError>> {
+    fn next_raw(&mut self) -> Option<Result<(Vec<u8>, RawEntry), DbError>> {
         if self.failed {
             return None;
         }
@@ -945,7 +950,7 @@ impl<'a> MergeCore<'a> {
             }
             let min_key = min_key?;
 
-            let mut newest: Option<(Kind, &'a [u8])> = None;
+            let mut newest: Option<(Kind, Vec<u8>)> = None;
             for source in &mut self.sources {
                 let matches = source
                     .head
@@ -954,7 +959,7 @@ impl<'a> MergeCore<'a> {
                 if matches {
                     if newest.is_none() {
                         let head = source.head.as_ref().unwrap();
-                        newest = Some((head.kind, head.value));
+                        newest = Some((head.kind, head.value.clone()));
                     }
                     source.advance();
                 }
@@ -976,12 +981,10 @@ pub struct DbIter<'a> {
 }
 
 impl<'a> Iterator for DbIter<'a> {
-    type Item = Result<(Vec<u8>, &'a [u8]), DbError>;
+    type Item = Result<(Vec<u8>, Vec<u8>), DbError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.core
-            .next_raw()
-            .map(|r| r.map(|(k, e)| (k.to_vec(), e.value)))
+        self.core.next_raw().map(|r| r.map(|(k, e)| (k, e.value)))
     }
 }
 
@@ -992,12 +995,12 @@ pub struct DbRawIter<'a> {
 }
 
 impl<'a> Iterator for DbRawIter<'a> {
-    type Item = Result<(Vec<u8>, Kind, &'a [u8]), DbError>;
+    type Item = Result<(Vec<u8>, Kind, Vec<u8>), DbError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.core
             .next_raw()
-            .map(|r| r.map(|(k, e)| (k.to_vec(), e.kind, e.value)))
+            .map(|r| r.map(|(k, e)| (k, e.kind, e.value)))
     }
 }
 
@@ -1306,20 +1309,24 @@ impl Kiban {
             failed: false,
         };
         let emit_output = |dir: &Path,
+                           cache: &StdArc<BlockCache>,
                            builder: TableBuilder,
                            number: u64,
                            outputs: &mut Vec<TableEntry>|
          -> Result<(), DbError> {
             let bytes = builder.finish()?;
             atomic::commit_file(&dir.join(file_name(number, SST_EXTENSION)), &bytes)?;
-            let size = bytes.len() as u64;
-            let table = SstTable::parse(bytes)?;
+            let table = SstTable::open(
+                number,
+                &dir.join(file_name(number, SST_EXTENSION)),
+                cache.clone(),
+            )?;
             let entry = TableEntry {
                 level: target,
                 number,
-                size,
-                first_key: table.smallest_key()?,
-                last_key: table.largest_key()?,
+                size: table.size_on_disk(),
+                first_key: table.smallest_key().to_vec(),
+                last_key: table.largest_key().to_vec(),
                 table,
             };
             outputs.push(entry);
@@ -1337,18 +1344,18 @@ impl Kiban {
             {
                 let number = next_number;
                 next_number += 1;
-                emit_output(&self.dir, builder, number, &mut outputs)?;
+                emit_output(&self.dir, &self.cache, builder, number, &mut outputs)?;
                 builder = TableBuilder::new();
                 output_entries = 0;
             }
-            builder.add(raw.kind, &key, raw.value)?;
+            builder.add(raw.kind, &key, &raw.value)?;
             output_entries += 1;
         }
 
         if output_entries > 0 {
             let number = next_number;
             next_number += 1;
-            emit_output(&self.dir, builder, number, &mut outputs)?;
+            emit_output(&self.dir, &self.cache, builder, number, &mut outputs)?;
         }
 
         // D6 step 4: the commit point — outputs in, inputs out.
@@ -1464,6 +1471,7 @@ mod compaction_tests {
             base_level_bytes: 300,
             level_multiplier: 4,
             target_file_size: 250,
+            block_cache_bytes: 1 << 20,
         }
     }
 
@@ -1703,6 +1711,7 @@ mod crash_sweep_tests {
                 base_level_bytes: 300,
                 level_multiplier: 4,
                 target_file_size: 250,
+                block_cache_bytes: 1 << 20,
             };
             let _ = &mut options;
             let mut db = Kiban::open_with_options(dir, options)?;
@@ -1783,6 +1792,7 @@ mod crash_sweep_tests {
                     base_level_bytes: 300,
                     level_multiplier: 4,
                     target_file_size: 250,
+                    block_cache_bytes: 1 << 20,
                 },
             ) {
                 Ok(db) => db,
