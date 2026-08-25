@@ -10,7 +10,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::atomic;
-use crate::manifest::{MANIFEST_NAME, Manifest, ManifestError};
+use crate::manifest::{MANIFEST_NAME, Manifest, ManifestError, TableRef};
 use crate::memtable::{Entry as MemEntry, Memtable};
 use crate::sstable::{Kind, SstError, SstTable, TableBuilder};
 use crate::wal::{Wal, WalError};
@@ -97,15 +97,41 @@ fn file_name(number: u64, extension: &str) -> String {
 }
 
 struct TableEntry {
+    level: u32,
     number: u64,
+    first_key: Vec<u8>,
+    last_key: Vec<u8>,
     table: SstTable,
+}
+
+/// Tunables for flush/compaction behavior (compaction.md configuration).
+#[derive(Debug, Clone)]
+pub struct KibanOptions {
+    pub l0_compaction_trigger: usize,
+    pub base_level_bytes: u64,
+    pub level_multiplier: u64,
+    pub target_file_size: u64,
+}
+
+impl Default for KibanOptions {
+    fn default() -> Self {
+        const MIB: u64 = 1 << 20;
+        KibanOptions {
+            l0_compaction_trigger: 4,
+            base_level_bytes: 4 * MIB,
+            level_multiplier: 10,
+            target_file_size: 4 * MIB,
+        }
+    }
 }
 
 pub struct Kiban {
     dir: PathBuf,
+    options: KibanOptions,
     memtable: Memtable,
     wal: Wal,
     next_file_number: u64,
+    /// sorted by (level, number)
     tables: Vec<TableEntry>,
 }
 
@@ -113,6 +139,13 @@ impl Kiban {
     /// Opens (or creates) a database in `dir`, running full recovery:
     /// MANIFEST validation, WAL replay, orphan sweep. See db-layout D3.
     pub fn open(dir: impl AsRef<Path>) -> Result<Kiban, DbError> {
+        Self::open_with_options(dir, KibanOptions::default())
+    }
+
+    pub fn open_with_options(
+        dir: impl AsRef<Path>,
+        options: KibanOptions,
+    ) -> Result<Kiban, DbError> {
         let dir = dir.as_ref().to_path_buf();
         fs::create_dir_all(&dir)?;
 
@@ -136,23 +169,43 @@ impl Kiban {
         let mut memtable = Memtable::new();
         let (wal, _report) = Wal::open(&wal_path, &mut memtable)?;
 
-        let mut tables = Vec::with_capacity(manifest.table_numbers.len());
-        for number in &manifest.table_numbers {
-            let path = dir.join(file_name(*number, SST_EXTENSION));
+        let mut tables = Vec::with_capacity(manifest.tables.len());
+        for tref in &manifest.tables {
+            let path = dir.join(file_name(tref.number, SST_EXTENSION));
             let bytes = fs::read(&path).map_err(|e| {
                 DbError::Corrupt(format!(
                     "manifest lists table {} which cannot be read: {e}",
-                    number
+                    tref.number
                 ))
             })?;
+            let table = SstTable::parse(bytes)?;
+            let first_key = table.smallest_key()?;
+            let last_key = table.largest_key()?;
             tables.push(TableEntry {
-                number: *number,
-                table: SstTable::parse(bytes)?,
+                level: tref.level,
+                number: tref.number,
+                first_key,
+                last_key,
+                table,
             });
+        }
+
+        // compaction.md D2: L>=1 levels must be range-disjoint and sorted.
+        for window in tables.windows(2) {
+            if window[0].level >= 1
+                && window[0].level == window[1].level
+                && window[0].last_key >= window[1].first_key
+            {
+                return Err(DbError::Corrupt(format!(
+                    "level {} tables {} and {} have overlapping ranges",
+                    window[0].level, window[0].number, window[1].number
+                )));
+            }
         }
 
         Ok(Kiban {
             dir,
+            options,
             memtable,
             wal,
             next_file_number: manifest.next_file_number,
@@ -183,7 +236,7 @@ impl Kiban {
                 continue;
             };
             let orphan = match extension {
-                SST_EXTENSION => !manifest.table_numbers.contains(&number),
+                SST_EXTENSION => !manifest.tables.iter().any(|t| t.number == number),
                 WAL_EXTENSION => number != manifest.wal_number,
                 _ => false,
             };
@@ -228,7 +281,23 @@ impl Kiban {
             Some(MemEntry::Tombstone) => return Ok(None),
             None => {}
         }
-        for entry in self.tables.iter().rev() {
+        // L0 first, newest file number wins
+        for entry in self.tables.iter().rev().filter(|t| t.level == 0) {
+            match entry.table.get(key)? {
+                Some(found) => {
+                    return Ok(match found.kind {
+                        Kind::Put => Some(found.value.to_vec()),
+                        Kind::Tombstone => None,
+                    });
+                }
+                None => continue,
+            }
+        }
+        // then L>=1 by ascending level; disjoint ranges -> one candidate
+        for entry in self.tables.iter().filter(|t| t.level >= 1) {
+            if key < entry.first_key.as_slice() || key > entry.last_key.as_slice() {
+                continue;
+            }
             match entry.table.get(key)? {
                 Some(found) => {
                     return Ok(match found.kind {
@@ -244,6 +313,11 @@ impl Kiban {
 
     pub fn dir(&self) -> &Path {
         &self.dir
+    }
+
+    /// The engine's active configuration.
+    pub fn options(&self) -> &KibanOptions {
+        &self.options
     }
 
     /// Flushes the memtable to a new sstable and retires the current WAL,
@@ -276,13 +350,23 @@ impl Kiban {
         atomic::create_durably(&new_wal_path)?;
 
         // D2 step 4: the commit point.
-        let mut table_numbers: Vec<u64> = self.tables.iter().map(|t| t.number).collect();
-        table_numbers.push(sst_number);
-        table_numbers.sort_unstable();
+        let mut table_refs: Vec<TableRef> = self
+            .tables
+            .iter()
+            .map(|t| TableRef {
+                level: t.level,
+                number: t.number,
+            })
+            .collect();
+        table_refs.push(TableRef {
+            level: 0,
+            number: sst_number,
+        });
+        table_refs.sort();
         Manifest {
             next_file_number: new_next_file_number,
             wal_number: new_wal_number,
-            table_numbers,
+            tables: table_refs,
         }
         .install(&self.dir)
         .map_err(DbError::from)?;
@@ -290,10 +374,18 @@ impl Kiban {
         // D2 step 5: everything below only runs once the commit point has
         // returned success.
         self.next_file_number = new_next_file_number;
-        self.tables.push(TableEntry {
+        let table = SstTable::parse(bytes)?;
+        let entry = TableEntry {
+            level: 0,
             number: sst_number,
-            table: SstTable::parse(bytes)?,
-        });
+            first_key: table.smallest_key()?,
+            last_key: table.largest_key()?,
+            table,
+        };
+        let pos = self
+            .tables
+            .partition_point(|t| (t.level, t.number) < (entry.level, entry.number));
+        self.tables.insert(pos, entry);
 
         let old_wal_path = self.wal.path().to_path_buf();
         let mut fresh_memtable = Memtable::new();
@@ -549,7 +641,16 @@ mod tests {
         let manifest = Manifest {
             next_file_number: 3,
             wal_number: 1,
-            table_numbers: vec![1, 2],
+            tables: vec![
+                TableRef {
+                    level: 0,
+                    number: 1,
+                },
+                TableRef {
+                    level: 0,
+                    number: 2,
+                },
+            ],
         };
         atomic::create_durably(&dir.join(file_name(1, WAL_EXTENSION))).unwrap();
         manifest.install(dir).unwrap();
@@ -575,7 +676,10 @@ mod tests {
         let manifest = Manifest {
             next_file_number: 5,
             wal_number: 1,
-            table_numbers: vec![3],
+            tables: vec![TableRef {
+                level: 0,
+                number: 3,
+            }],
         };
         atomic::create_durably(&td.path().join(file_name(1, WAL_EXTENSION))).unwrap();
         manifest.install(td.path()).unwrap();
@@ -616,7 +720,7 @@ mod flush_tests {
         let m = Manifest::load(td.path()).unwrap().unwrap();
         assert_eq!(m.wal_number, 1);
         assert_eq!(m.next_file_number, 2);
-        assert!(m.table_numbers.is_empty());
+        assert!(m.tables.is_empty());
     }
 
     #[test]
@@ -657,7 +761,13 @@ mod flush_tests {
         db.flush().unwrap();
         let m = Manifest::load(td.path()).unwrap().unwrap();
         assert_eq!(m.wal_number, 3);
-        assert_eq!(m.table_numbers, vec![2]);
+        assert_eq!(
+            m.tables,
+            vec![TableRef {
+                level: 0,
+                number: 2
+            }]
+        );
         assert!(!td.path().join(file_name(1, WAL_EXTENSION)).exists());
         // new wal is live: write, reopen without sync, still there
         db.put(b"k2", b"v2").unwrap();

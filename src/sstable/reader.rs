@@ -151,6 +151,32 @@ impl SstTable {
         }
     }
 
+    /// First key in the table (`None` only for a malformed empty index,
+    /// which parse rejects).
+    pub fn smallest_key(&self) -> Result<Vec<u8>, SstError> {
+        let block = self.block_at(&self.index[0])?;
+        match block.iter().next() {
+            Some(Ok((_, k, _))) => Ok(k),
+            Some(Err(e)) => Err(e),
+            None => Err(SstError::Corrupt(
+                "first block yielded no entry".to_string(),
+            )),
+        }
+    }
+
+    /// Last key in the table.
+    pub fn largest_key(&self) -> Result<Vec<u8>, SstError> {
+        let block = self.block_at(self.index.last().expect("parse rejects empty index"))?;
+        let mut last = None;
+        for item in block.iter() {
+            match item {
+                Ok((_, k, _)) => last = Some(k),
+                Err(e) => return Err(e),
+            }
+        }
+        last.ok_or_else(|| SstError::Corrupt("last block yielded no entry".to_string()))
+    }
+
     /// Iterates from the first key >= `target`. Positions at the right
     /// block via separators; nothing is scanned from the file start.
     pub fn iter_from(&self, target: &[u8]) -> Iter<'_> {

@@ -81,12 +81,10 @@ impl Memtable {
     /// byte-wise key order, tombstones included.
     pub fn iter_from(
         &self,
-        start: impl AsRef<[u8]>,
-    ) -> impl DoubleEndedIterator<Item = (&[u8], &Entry)> {
-        let start = start.as_ref();
-        self.map
-            .range(start.to_vec()..)
-            .map(|(k, e)| (k.as_slice(), e))
+        start: &[u8],
+    ) -> std::collections::btree_map::Range<'_, Vec<u8>, Entry> {
+        let start = start.to_vec();
+        self.map.range(start..)
     }
 
     /// Iterates live entries only (tombstones skipped), same ordering.
