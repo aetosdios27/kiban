@@ -34,6 +34,7 @@ pub struct TableBuilder {
     pending: Option<PendingBlock>,
     index: Vec<IndexEntry>,
     last_key: Vec<u8>,
+    last_seq: u64,
     has_last: bool,
     all_keys: Vec<(u64, Vec<u8>)>,
 }
@@ -50,10 +51,17 @@ impl TableBuilder {
     }
 
     pub fn add(&mut self, kind: Kind, key: &[u8], value: &[u8], seq: u64) -> Result<(), SstError> {
-        if self.has_last && key <= self.last_key.as_slice() {
-            return Err(SstError::InvalidArgument(
-                "keys must be added in strictly increasing order".to_string(),
-            ));
+        if self.has_last
+            && key <= self.last_key.as_slice()
+            && !(key == self.last_key.as_slice() && seq < self.last_seq)
+        {
+            return Err(SstError::InvalidArgument(format!(
+                "order violation: adding key={:?} seq={} after key={:?} seq={}",
+                String::from_utf8_lossy(key),
+                seq,
+                String::from_utf8_lossy(&self.last_key),
+                self.last_seq
+            )));
         }
         if kind == Kind::Tombstone && !value.is_empty() {
             return Err(SstError::InvalidArgument(
@@ -81,6 +89,7 @@ impl TableBuilder {
 
         self.last_key.clear();
         self.last_key.extend_from_slice(key);
+        self.last_seq = seq;
         self.has_last = true;
         Ok(())
     }

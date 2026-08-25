@@ -151,9 +151,9 @@ impl SstTable {
         Ok(VerifiedBlock::from_cached(cached))
     }
 
-    /// Point lookup. Returns `Ok(None)` when the key is provably absent
-    /// from this table — either by bloom filter or by probe.
-    pub fn get(&self, key: &[u8]) -> Result<Option<Found>, SstError> {
+    /// Point lookup. Returns the newest version of `key` whose sequence
+    /// number does not exceed `limit`, or `None` when provably absent.
+    pub fn get(&self, key: &[u8], limit: Option<u64>) -> Result<Option<Found>, SstError> {
         if !self.filter.may_contain(key) {
             return Ok(None);
         }
@@ -162,7 +162,7 @@ impl SstTable {
             return Ok(None);
         }
         let block = self.read_block(&self.index[idx])?;
-        Ok(block.get(key)?.map(|m| Found {
+        Ok(block.get(key, limit)?.map(|m| Found {
             kind: m.kind,
             seq: m.seq,
             value: m.value.to_vec(),

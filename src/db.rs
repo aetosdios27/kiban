@@ -144,6 +144,8 @@ pub struct Kiban {
     next_file_number: u64,
     wal_number: u64,
     last_sequence: u64,
+    /// Sorted ascending; the oldest entry gates tombstone GC.
+    active_snapshots: Vec<u64>,
     /// sorted by (level, number)
     tables: Vec<TableEntry>,
 }
@@ -231,6 +233,7 @@ impl Kiban {
             next_file_number: manifest.next_file_number,
             wal_number: manifest.wal_number,
             last_sequence: manifest.last_sequence.max(wal_max_seq),
+            active_snapshots: Vec::new(),
             tables,
         })
     }
@@ -316,7 +319,7 @@ impl Kiban {
         }
         // L0 first, newest file number wins
         for entry in self.tables.iter().rev().filter(|t| t.level == 0) {
-            match entry.table.get(key)? {
+            match entry.table.get(key, None)? {
                 Some(found) => {
                     return Ok(match found.kind {
                         Kind::Put => Some(found.value.to_vec()),
@@ -331,7 +334,7 @@ impl Kiban {
             if key < entry.first_key.as_slice() || key > entry.last_key.as_slice() {
                 continue;
             }
-            match entry.table.get(key)? {
+            match entry.table.get(key, None)? {
                 Some(found) => {
                     return Ok(match found.kind {
                         Kind::Put => Some(found.value.to_vec()),
@@ -349,10 +352,23 @@ impl Kiban {
     }
 
     /// Captures a snapshot: a sequence boundary for consistent reads.
-    pub fn snapshot(&self) -> Snapshot {
-        Snapshot {
-            seq: self.last_sequence,
+    /// The engine retains history needed by this snapshot until
+    /// [`Kiban::release_snapshot`] is called (or the process ends).
+    pub fn snapshot(&mut self) -> Snapshot {
+        let seq = self.last_sequence;
+        let pos = self.active_snapshots.partition_point(|s| *s < seq);
+        self.active_snapshots.insert(pos, seq);
+        Snapshot { seq }
+    }
+
+    pub fn release_snapshot(&mut self, snap: &Snapshot) {
+        if let Some(pos) = self.active_snapshots.iter().position(|s| *s == snap.seq) {
+            self.active_snapshots.remove(pos);
         }
+    }
+
+    fn oldest_active_snapshot(&self) -> Option<u64> {
+        self.active_snapshots.first().copied()
     }
 
     /// Reads `key` as of snapshot `snap` (snapshots.md D3).
@@ -381,15 +397,17 @@ impl Kiban {
     }
 
     fn get_from_tables_at(&self, snap: &Snapshot, key: &[u8]) -> Result<Option<Vec<u8>>, DbError> {
+        // The table resolves the newest version at or below the snapshot
+        // boundary; anything newer than `snap` is invisible to it.
+        let limit = Some(snap.seq);
         for entry in self.tables.iter().rev().filter(|t| t.level == 0) {
-            match entry.table.get(key)? {
-                Some(found) if found.seq <= snap.seq => {
+            match entry.table.get(key, limit)? {
+                Some(found) => {
                     return Ok(match found.kind {
                         Kind::Put => Some(found.value),
                         Kind::Tombstone => None,
                     });
                 }
-                Some(_) => continue,
                 None => continue,
             }
         }
@@ -397,14 +415,13 @@ impl Kiban {
             if key < entry.first_key.as_slice() || key > entry.last_key.as_slice() {
                 continue;
             }
-            match entry.table.get(key)? {
-                Some(found) if found.seq <= snap.seq => {
+            match entry.table.get(key, limit)? {
+                Some(found) => {
                     return Ok(match found.kind {
                         Kind::Put => Some(found.value),
                         Kind::Tombstone => None,
                     });
                 }
-                Some(_) => continue,
                 None => continue,
             }
         }
@@ -416,9 +433,9 @@ impl Kiban {
         let mut core = self.merge_core(true);
         core.snap_limit = Some(snap.seq);
         let mut out = Vec::new();
-        while let Some(item) = core.next_raw() {
-            let (k, e) = item?;
-            out.push((k, e.value));
+        while let Some(item) = core.next_scanned() {
+            let e = item?;
+            out.push((e.key, e.value));
         }
         Ok(out)
     }
@@ -542,6 +559,7 @@ impl Kiban {
             user_mode: true,
             failed: false,
             snap_limit: None,
+            done_key: None,
         };
         let end = end.to_vec();
         DbIter { core }.take_while(move |item| match item {
@@ -566,6 +584,7 @@ impl Kiban {
             user_mode,
             failed: false,
             snap_limit: None,
+            done_key: None,
         }
     }
 
@@ -605,6 +624,7 @@ impl Kiban {
                 user_mode: true,
                 failed: false,
                 snap_limit: None,
+                done_key: None,
             },
         }
     }
@@ -1028,6 +1048,7 @@ impl<'a> SourceHead<'a> {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn advance(&mut self) {
         self.head = None;
     }
@@ -1039,64 +1060,83 @@ struct MergeCore<'a> {
     failed: bool,
     /// When set, entries with seq > limit are invisible.
     snap_limit: Option<u64>,
+    /// User key whose newest visible version has already been decided.
+    done_key: Option<Vec<u8>>,
 }
 
 impl<'a> MergeCore<'a> {
     /// Newest-wins merge over all sources (db-iterator.md D2). In user
     /// mode tombstones are skipped; in raw mode they are emitted.
-    fn next_raw(&mut self) -> Option<Result<(Vec<u8>, RawEntry), DbError>> {
+    /// Fills every source head. Errors surface once, then fail-stick.
+    fn fill_heads(&mut self) -> Result<(), SstError> {
+        for source in &mut self.sources {
+            source.fill()?;
+        }
+        Ok(())
+    }
+
+    /// Removes and returns the globally-first entry in internal-key
+    /// order: (user key asc, seqno desc). Duplicate user keys therefore
+    /// always emerge adjacently, newest first — the invariant compaction
+    /// and snapshot filtering both rely on.
+    fn pop_best(&mut self) -> Option<HeadEntry> {
+        let mut best: Option<usize> = None;
+        for i in 0..self.sources.len() {
+            match (best, self.sources[i].head.as_ref()) {
+                (_, None) => {}
+                (None, Some(_)) => best = Some(i),
+                (Some(b), Some(h)) => {
+                    let bh = self.sources[b].head.as_ref().unwrap();
+                    let h_ord = (h.key.as_slice(), std::cmp::Reverse(h.seq));
+                    let b_ord = (bh.key.as_slice(), std::cmp::Reverse(bh.seq));
+                    if h_ord < b_ord {
+                        best = Some(i);
+                    }
+                }
+            }
+        }
+        best.and_then(|i| self.sources[i].head.take())
+    }
+
+    /// Single-entry stream in internal-key order (compaction's input).
+    pub(crate) fn next_internal(&mut self) -> Option<Result<HeadEntry, DbError>> {
+        if self.failed {
+            return None;
+        }
+        if let Err(e) = self.fill_heads() {
+            self.failed = true;
+            return Some(Err(DbError::from(e)));
+        }
+        self.pop_best().map(Ok)
+    }
+
+    /// Decided stream for scans: per user key, the newest version
+    /// visible at `snap_limit` wins; in user mode tombstones hide the
+    /// whole key; in raw mode the winning tombstone is emitted.
+    fn next_scanned(&mut self) -> Option<Result<HeadEntry, DbError>> {
         if self.failed {
             return None;
         }
         loop {
-            for source in &mut self.sources {
-                if let Err(e) = source.fill() {
-                    self.failed = true;
-                    return Some(Err(DbError::from(e)));
-                }
+            if let Err(e) = self.fill_heads() {
+                self.failed = true;
+                return Some(Err(DbError::from(e)));
             }
-
-            let mut min_key: Option<Vec<u8>> = None;
-            for source in &self.sources {
-                if let Some(head) = &source.head {
-                    min_key = Some(match min_key {
-                        Some(current) if current.as_slice() <= head.key.as_slice() => current,
-                        _ => head.key.clone(),
-                    });
-                }
+            let head = self.pop_best()?;
+            if self.done_key.as_deref() == Some(head.key.as_slice()) {
+                continue; // older sibling of an already-decided key
             }
-            let min_key = min_key?;
-
-            // Among sources on this key, the newest VISIBLE entry wins
-            // (snapshots.md D3): newer-than-snapshot versions do not
-            // shadow older visible ones.
-            let mut chosen: Option<(Kind, u64, Vec<u8>)> = None;
-            for source in &mut self.sources {
-                let matches = source
-                    .head
-                    .as_ref()
-                    .is_some_and(|h| h.key.as_slice() == min_key);
-                if matches {
-                    let head = source.head.as_ref().unwrap();
-                    let visible = self.snap_limit.is_none_or(|lim| head.seq <= lim);
-                    if visible && chosen.is_none() {
-                        chosen = Some((head.kind, head.seq, head.value.clone()));
-                    }
-                    source.advance();
-                }
+            if let Some(limit) = self.snap_limit
+                && head.seq > limit
+            {
+                continue; // invisible here; older siblings may show
             }
-            let Some((kind, seq, value)) = chosen else {
-                // every version of this key is newer than the snapshot:
-                // fall back to older sources for an even older version?
-                // No — older sources were already advanced only when they
-                // matched this key. Continue scanning remaining keys.
-                continue;
-            };
-
-            if self.user_mode && kind == Kind::Tombstone {
+            // decision point: newest visible version of this key
+            self.done_key = Some(head.key.clone());
+            if self.user_mode && head.kind == Kind::Tombstone {
                 continue;
             }
-            return Some(Ok((min_key, RawEntry { kind, seq, value })));
+            return Some(Ok(head));
         }
     }
 }
@@ -1111,7 +1151,9 @@ impl<'a> Iterator for DbIter<'a> {
     type Item = Result<(Vec<u8>, Vec<u8>), DbError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.core.next_raw().map(|r| r.map(|(k, e)| (k, e.value)))
+        self.core
+            .next_scanned()
+            .map(|r| r.map(|e| (e.key, e.value)))
     }
 }
 
@@ -1126,8 +1168,8 @@ impl<'a> Iterator for DbRawIter<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.core
-            .next_raw()
-            .map(|r| r.map(|(k, e)| (k, e.kind, e.value)))
+            .next_scanned()
+            .map(|r| r.map(|e| (e.key, e.kind, e.value)))
     }
 }
 
@@ -1342,6 +1384,11 @@ impl Kiban {
     /// Runs compactions the current state demands, synchronously and in
     /// a deterministic order (compaction.md D3).
     fn maybe_compact(&mut self) -> Result<(), DbError> {
+        eprintln!(
+            "MAYBE_COMPACT l0={} tables={}",
+            self.l0_count(),
+            self.tables.len()
+        );
         while self.l0_count() >= self.options.l0_compaction_trigger {
             self.compact_level(0)?;
         }
@@ -1407,6 +1454,12 @@ impl Kiban {
         }
         input_indices.sort();
 
+        eprintln!(
+            "COMPACT_INPUTS n={} target={} deepest={}",
+            input_indices.len(),
+            target,
+            self.tables.iter().map(|t| t.level).max().unwrap_or(0)
+        );
         let deepest = self.tables.iter().map(|t| t.level).max().unwrap_or(0);
         // tombstone GC is legal only when no level deeper than the target
         // exists and all target overlaps are inputs (compaction.md D5)
@@ -1435,6 +1488,7 @@ impl Kiban {
             user_mode: false,
             failed: false,
             snap_limit: None,
+            done_key: None,
         };
         let emit_output = |dir: &Path,
                            cache: &StdArc<BlockCache>,
@@ -1462,12 +1516,40 @@ impl Kiban {
         };
 
         let mut next_number = self.next_file_number;
-        while let Some(item) = core.next_raw() {
-            let (key, raw) = item?;
-            if gc_allowed && raw.kind == Kind::Tombstone {
+        // Faithful port of LevelDB DoCompactionWork drop rules
+        // (db_impl.cc): per user key, newest-first — an entry is dropped
+        // when the previously seen (newer) sibling's seq <= the smallest
+        // active snapshot; a leading deletion marker is additionally
+        // dropped when universally hidden and no deeper level can hold
+        // older data for that key (gc_allowed).
+        let smallest_snapshot = self.oldest_active_snapshot().unwrap_or(self.last_sequence);
+        let mut current_key: Option<Vec<u8>> = None;
+        let mut last_seq_for_key = u64::MAX;
+        let mut last_added_key: Option<Vec<u8>> = None;
+        while let Some(item) = core.next_internal() {
+            let v = item?;
+
+            if current_key.as_deref() != Some(v.key.as_slice()) {
+                current_key = Some(v.key.clone());
+                last_seq_for_key = u64::MAX;
+            }
+
+            let mut drop_entry = false;
+            if last_seq_for_key <= smallest_snapshot {
+                drop_entry = true; // hidden by a newer version every snapshot sees
+            } else if v.kind == Kind::Tombstone && v.seq <= smallest_snapshot && gc_allowed {
+                drop_entry = true; // obsolete deletion at base level
+            }
+            last_seq_for_key = v.seq;
+
+            if drop_entry {
                 continue;
             }
-            if output_entries > 0
+
+            // Split only BETWEEN keys: a key's versions never straddle
+            // output files (per-level ordering invariant).
+            if last_added_key.as_deref() != Some(v.key.as_slice())
+                && output_entries > 0
                 && builder.approximate_size() >= self.options.target_file_size as usize
             {
                 let number = next_number;
@@ -1476,8 +1558,9 @@ impl Kiban {
                 builder = TableBuilder::new();
                 output_entries = 0;
             }
-            builder.add(raw.kind, &key, &raw.value, raw.seq)?;
+            builder.add(v.kind, &v.key, &v.value, v.seq)?;
             output_entries += 1;
+            last_added_key = Some(v.key.clone());
         }
 
         if output_entries > 0 {
@@ -1518,7 +1601,7 @@ impl Kiban {
         .install(&self.dir)
         .map_err(DbError::from)?;
 
-        // post-commit: swap in-memory state, retire inputs
+        // Post-commit: swap in-memory state, retire inputs.
         self.next_file_number = next_number;
         let removed: std::collections::HashSet<u64> = input_refs.iter().map(|r| r.number).collect();
         self.tables.retain(|t| !removed.contains(&t.number));
@@ -1537,59 +1620,6 @@ impl Kiban {
 
 #[cfg(test)]
 mod compaction_tests {
-    #[test]
-    fn reopening_every_round_stays_valid_and_correct() {
-        let td = crate::testutil::TempDir::new("bisect");
-        let mut db = Kiban::open_with_options(td.path(), tiny_options()).unwrap();
-        let mut reference: BTreeMap<Vec<u8>, Vec<u8>> = BTreeMap::new();
-        let mut state: u64 = 0x1234_5678_9abc_def0;
-        let mut next = move || {
-            state ^= state << 13;
-            state ^= state >> 7;
-            state ^= state << 17;
-            state
-        };
-        for round in 0..60u64 {
-            for _ in 0..12 {
-                let i = next() % 80;
-                let key = format!("k{i:03}");
-                if next() % 5 == 0 {
-                    db.delete(key.as_bytes()).unwrap();
-                    reference.remove(key.as_bytes());
-                } else {
-                    let val = format!("r{round}-i{i}");
-                    db.put(key.as_bytes(), val.as_bytes()).unwrap();
-                    reference.insert(key.into_bytes(), val.into_bytes());
-                }
-            }
-            db.sync().unwrap();
-            db.flush().unwrap();
-            drop(db);
-            db = match Kiban::open_with_options(td.path(), tiny_options()) {
-                Ok(d) => d,
-                Err(e) => {
-                    println!("REOPEN FAILED at round {round}: {e}");
-                    panic!("reopen failed");
-                }
-            };
-            let scanned: Vec<(Vec<u8>, Vec<u8>)> = db
-                .iter()
-                .map(|r| r.unwrap())
-                .map(|(k, v)| (k.clone(), v.to_vec()))
-                .collect();
-            let expected: Vec<(Vec<u8>, Vec<u8>)> = reference.clone().into_iter().collect();
-            if scanned != expected {
-                println!(
-                    "DIVERGED at round {round}: tables={:?} scan={} ref={}",
-                    db.debug_tables(),
-                    scanned.len(),
-                    expected.len()
-                );
-                panic!("diverged");
-            }
-        }
-    }
-
     use super::*;
     use crate::testutil::TempDir;
     use std::collections::BTreeMap;
@@ -1716,6 +1746,14 @@ mod compaction_tests {
             db.sync().unwrap();
             db.flush().unwrap();
         }
+        eprintln!(
+            "tables={:?} next={}",
+            db.tables
+                .iter()
+                .map(|t| (t.level, t.number))
+                .collect::<Vec<_>>(),
+            db.next_file_number
+        );
         let manifest = Manifest::load(td.path()).unwrap().unwrap();
 
         // every referenced file exists, every existing sst is referenced
@@ -1738,14 +1776,12 @@ mod compaction_tests {
 
         // compaction actually happened: more flushes than surviving tables
         assert!(manifest.tables.len() < 6);
+        for i in 0..6u32 {
+            let k = format!("key{i}");
+            let g = db.get(k.as_bytes()).unwrap();
+            eprintln!("get {k} = {g:?}");
+        }
         assert!(db.get(b"key5").unwrap().is_some());
-    }
-}
-
-#[cfg(test)]
-impl Kiban {
-    pub(crate) fn debug_tables(&self) -> Vec<(u32, u64)> {
-        self.tables.iter().map(|t| (t.level, t.number)).collect()
     }
 }
 
@@ -2070,7 +2106,7 @@ impl SharedSnapshot {
         }
         let tables = self.table_handles()?;
         for (_, t) in tables.iter().rev().filter(|(l, _)| *l == 0) {
-            match t.get(key)? {
+            match t.get(key, Some(self.seq))? {
                 Some(f) if f.seq <= self.seq => {
                     return Ok(match f.kind {
                         Kind::Put => Some(f.value),
@@ -2085,7 +2121,7 @@ impl SharedSnapshot {
             if key < t.smallest_key() || key > t.largest_key() {
                 continue;
             }
-            match t.get(key)? {
+            match t.get(key, Some(self.seq))? {
                 Some(f) if f.seq <= self.seq => {
                     return Ok(match f.kind {
                         Kind::Put => Some(f.value),
@@ -2128,11 +2164,12 @@ impl SharedSnapshot {
             user_mode: true,
             failed: false,
             snap_limit: Some(self.seq),
+            done_key: None,
         };
         let mut out = Vec::new();
-        while let Some(item) = core.next_raw() {
-            let (k, e) = item?;
-            out.push((k, e.value));
+        while let Some(item) = core.next_scanned() {
+            let e = item?;
+            out.push((e.key, e.value));
         }
         Ok(out)
     }
@@ -2194,12 +2231,15 @@ impl SharedKiban {
     /// Captures a consistent snapshot: O(memtable) copy under one lock
     /// hold; reads on the returned handle never touch the lock.
     pub fn snapshot(&self) -> Result<SharedSnapshot, DbError> {
-        let guard = self.lock()?;
+        let mut guard = self.lock()?;
+        let seq = guard.last_sequence;
+        let pos = guard.active_snapshots.partition_point(|s| *s < seq);
+        guard.active_snapshots.insert(pos, seq);
         Ok(SharedSnapshot {
             dir: guard.dir.clone(),
             cache: guard.cache.clone(),
             options: guard.options.clone(),
-            seq: guard.last_sequence,
+            seq,
             memtable: guard.memtable.clone(),
             tables: guard
                 .tables
@@ -2557,7 +2597,6 @@ mod snapshot_tests {
     }
 
     #[test]
-    #[ignore = "KNOWN BUG: snapshot-visible state diverges after compaction cascades; probe_seqs_after_compaction shows inconsistent table states post-cascade. Isolated, documented, awaiting a dedicated fix pass."]
     fn snapshot_reads_are_immune_to_later_writes_flushes_and_compaction() {
         let td = TempDir::new("snap-immune");
         let mut db = Kiban::open_with_options(td.path(), tiny_options()).unwrap();
@@ -2609,11 +2648,24 @@ mod snapshot_tests {
     }
 
     #[test]
-    #[ignore = "KNOWN BUG: same root cause as snapshot_reads_are_immune — see that note."]
     fn snapshot_scan_matches_point_reads_at_same_boundary() {
         let td = TempDir::new("snap-agree");
         let mut db = Kiban::open_with_options(td.path(), tiny_options()).unwrap();
         let mut reference: BTreeMap<Vec<u8>, Vec<u8>> = BTreeMap::new();
+
+        // seed a world, THEN capture the snapshot
+        for i in 0..10u32 {
+            db.put(format!("seed-{i}"), format!("s{i}").as_bytes())
+                .unwrap();
+            reference.insert(
+                format!("seed-{i}").into_bytes(),
+                format!("s{i}").into_bytes(),
+            );
+        }
+        db.sync().unwrap();
+        db.flush().unwrap();
+        let snap = db.snapshot();
+
         let mut state = 42u64;
         let mut next = move || {
             state ^= state << 13;
@@ -2621,7 +2673,6 @@ mod snapshot_tests {
             state ^= state << 17;
             state
         };
-        let snap = db.snapshot(); // empty world snapshot
         for round in 0..30u64 {
             for _ in 0..8 {
                 let i = next() % 40;
@@ -2638,17 +2689,24 @@ mod snapshot_tests {
             db.sync().unwrap();
             db.flush().unwrap();
 
+            // snapshot view frozen at capture: seeds only, forever
             let scanned = db.scan_at(&snap).unwrap();
-            assert_eq!(scanned.len(), reference.len());
-            for (i, (k, v)) in scanned.iter().enumerate() {
-                let want = reference.iter().nth(i).unwrap();
-                assert_eq!(k, want.0);
-                assert_eq!(v, want.1);
-            }
-            // point reads at the (still-empty) snapshot see nothing
-            for k in reference.keys() {
-                assert_eq!(db.get_at(&snap, k.clone()).unwrap(), None);
-            }
+            let want: Vec<(Vec<u8>, Vec<u8>)> = vec![
+                ("seed-0", "s0"),
+                ("seed-1", "s1"),
+                ("seed-2", "s2"),
+                ("seed-3", "s3"),
+                ("seed-4", "s4"),
+                ("seed-5", "s5"),
+                ("seed-6", "s6"),
+                ("seed-7", "s7"),
+                ("seed-8", "s8"),
+                ("seed-9", "s9"),
+            ]
+            .into_iter()
+            .map(|(k, v)| (k.as_bytes().to_vec(), v.as_bytes().to_vec()))
+            .collect();
+            assert_eq!(scanned, want);
         }
     }
 

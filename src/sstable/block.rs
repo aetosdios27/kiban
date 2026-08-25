@@ -16,6 +16,7 @@ pub struct BlockBuilder {
     restarts: Vec<u32>,
     counter: usize,
     last_key: Vec<u8>,
+    last_seq: u64,
     entries: usize,
 }
 
@@ -26,6 +27,7 @@ impl Default for BlockBuilder {
             restarts: vec![0],
             counter: 0,
             last_key: Vec::new(),
+            last_seq: 0,
             entries: 0,
         }
     }
@@ -45,9 +47,11 @@ impl BlockBuilder {
     }
 
     pub fn add(&mut self, kind: Kind, key: &[u8], value: &[u8], seq: u64) {
+        // Equal user keys are legal while sequence numbers descend
+        // (snapshot history); anything else breaks sorted-order search.
         debug_assert!(
-            self.entries == 0 || self.last_key.as_slice() < key,
-            "block keys must strictly increase"
+            self.entries == 0 || Self::key_order(&self.last_key, self.last_seq, key, seq),
+            "entries must be added in strictly increasing key order with              descending seq for duplicate keys"
         );
         debug_assert!(kind == Kind::Put || value.is_empty());
 
@@ -76,8 +80,13 @@ impl BlockBuilder {
 
         self.last_key.clear();
         self.last_key.extend_from_slice(key);
+        self.last_seq = seq;
         self.counter += 1;
         self.entries += 1;
+    }
+
+    fn key_order(prev: &[u8], prev_seq: u64, key: &[u8], seq: u64) -> bool {
+        prev < key || (prev == key && prev_seq > seq)
     }
 
     pub fn finish(mut self) -> Vec<u8> {
@@ -183,7 +192,7 @@ impl VerifiedBlock {
         full_key_at_restart(&self.data, &self.meta, i)
     }
 
-    pub fn get(&self, target: &[u8]) -> Result<Option<Match<'_>>, SstError> {
+    pub fn get(&self, target: &[u8], limit: Option<u64>) -> Result<Option<Match<'_>>, SstError> {
         let mut lo = 0usize;
         let mut hi = self.meta.num_restarts;
         while lo < hi {
@@ -209,7 +218,12 @@ impl VerifiedBlock {
             );
             let value = entry_value(&self.data, pos, kind, non_shared, value_len);
             if key.as_slice() == target {
-                return Ok(Some(Match { kind, seq, value }));
+                // visibility limit: skip versions newer than the snapshot
+                // bound; entries for one key are seq-descending, so the
+                // first qualifying match is the newest visible version
+                if limit.is_none_or(|lim| seq <= lim) {
+                    return Ok(Some(Match { kind, seq, value }));
+                }
             }
             if key.as_slice() > target {
                 return Ok(None);
@@ -380,12 +394,12 @@ mod tests {
     fn roundtrip_small_block() {
         let raw = build(&[("a", "1"), ("b", "2"), ("c", "3")]);
         let block = VerifiedBlock::from_raw(raw.clone()).unwrap();
-        assert_eq!(block.get(b"a").unwrap().unwrap().value, b"1");
-        assert_eq!(block.get(b"b").unwrap().unwrap().value, b"2");
-        assert_eq!(block.get(b"c").unwrap().unwrap().value, b"3");
-        assert!(block.get(b"d").unwrap().is_none());
-        assert!(block.get(b"aa").unwrap().is_none());
-        assert!(block.get(b"").unwrap().is_none());
+        assert_eq!(block.get(b"a", None).unwrap().unwrap().value, b"1");
+        assert_eq!(block.get(b"b", None).unwrap().unwrap().value, b"2");
+        assert_eq!(block.get(b"c", None).unwrap().unwrap().value, b"3");
+        assert!(block.get(b"d", None).unwrap().is_none());
+        assert!(block.get(b"aa", None).unwrap().is_none());
+        assert!(block.get(b"", None).unwrap().is_none());
     }
 
     #[test]
@@ -402,7 +416,7 @@ mod tests {
         for i in 0..40 {
             let key = format!("key-{i:04}");
             assert_eq!(
-                block.get(key.as_bytes()).unwrap().unwrap().value,
+                block.get(key.as_bytes(), None).unwrap().unwrap().value,
                 b"v",
                 "missed {key}"
             );
@@ -435,10 +449,10 @@ mod tests {
         b.add(Kind::Tombstone, b"dead", b"", 2);
         let raw = b.finish();
         let block = VerifiedBlock::from_raw(raw.clone()).unwrap();
-        let dead = block.get(b"dead").unwrap().unwrap();
+        let dead = block.get(b"dead", None).unwrap().unwrap();
         assert_eq!(dead.kind, Kind::Tombstone);
         assert_eq!(dead.value, b"");
-        let alive = block.get(b"alive").unwrap().unwrap();
+        let alive = block.get(b"alive", None).unwrap().unwrap();
         assert_eq!(alive.kind, Kind::Put);
     }
 
@@ -475,9 +489,9 @@ mod tests {
                     // a flip that survives parse must still not return wrong data
                     let probe = ["key-000", "key-001", "key-002"]
                         .iter()
-                        .all(|k| matches!(block.get(k.as_bytes()), Ok(None) | Err(_)))
+                        .all(|k| matches!(block.get(k.as_bytes(), None), Ok(None) | Err(_)))
                         || std::panic::catch_unwind(|| {
-                            let _ = block.get(b"key-001").unwrap();
+                            let _ = block.get(b"key-001", None).unwrap();
                         })
                         .is_err();
                     assert!(probe, "flip at byte {i} went undetected");
