@@ -93,6 +93,17 @@ pub fn commit_file(target: &Path, contents: &[u8]) -> Result<(), CommitError> {
     }
 }
 
+pub fn create_durably(path: &Path) -> io::Result<()> {
+    let dir = match path.parent() {
+        Some(p) if !p.as_os_str().is_empty() => p.to_path_buf(),
+        _ => PathBuf::from("."),
+    };
+    let file = OpenOptions::new().create_new(true).write(true).open(path)?;
+    file.sync_all()?;
+    drop(file);
+    File::open(&dir)?.sync_all()
+}
+
 struct CleanupOnDrop<'a> {
     path: &'a Path,
     armed: bool,
@@ -198,6 +209,24 @@ mod tests {
         env::set_current_dir(prev).unwrap();
         result.unwrap();
         assert_eq!(fs::read(td.path().join("FILE")).unwrap(), b"cwd data");
+    }
+
+    #[test]
+    fn durable_creation_creates_exclusively_and_is_empty() {
+        let td = TempDir::new("durable-create");
+        let path = td.path().join("WAL");
+        create_durably(&path).unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"");
+        let err = create_durably(&path).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
+    }
+
+    #[test]
+    fn durable_creation_fails_cleanly_for_missing_directory() {
+        let td = TempDir::new("durable-create-missing");
+        let path = td.path().join("nope").join("WAL");
+        assert!(create_durably(&path).is_err());
+        assert!(!path.exists());
     }
 
     #[test]
