@@ -7,7 +7,7 @@ use crate::crc32;
 
 pub const RESTART_INTERVAL: usize = 16;
 pub const BLOCK_TYPE_NONE: u8 = 0x00;
-const ENTRY_FIXED_LEN: usize = 13;
+const ENTRY_FIXED_LEN: usize = 21;
 const TRAILER_LEN: usize = 5;
 
 #[derive(Debug)]
@@ -44,7 +44,7 @@ impl BlockBuilder {
         &self.last_key
     }
 
-    pub fn add(&mut self, kind: Kind, key: &[u8], value: &[u8]) {
+    pub fn add(&mut self, kind: Kind, key: &[u8], value: &[u8], seq: u64) {
         debug_assert!(
             self.entries == 0 || self.last_key.as_slice() < key,
             "block keys must strictly increase"
@@ -68,6 +68,7 @@ impl BlockBuilder {
             .extend_from_slice(&(non_shared as u32).to_le_bytes());
         self.buf
             .extend_from_slice(&(value.len() as u32).to_le_bytes());
+        self.buf.extend_from_slice(&seq.to_le_bytes());
         self.buf.extend_from_slice(&key[shared..]);
         if kind == Kind::Put {
             self.buf.extend_from_slice(value);
@@ -95,6 +96,7 @@ impl BlockBuilder {
 
 pub struct Match<'a> {
     pub kind: Kind,
+    pub seq: u64,
     pub value: &'a [u8],
 }
 
@@ -173,7 +175,7 @@ impl VerifiedBlock {
         restart_offset_of(&self.data, self.meta.restart_start, i)
     }
 
-    fn header(&self, pos: usize) -> Result<(Kind, usize, usize, usize), SstError> {
+    fn header(&self, pos: usize) -> Result<(Kind, u64, usize, usize, usize), SstError> {
         header_at(&self.data, &self.meta, pos)
     }
 
@@ -200,14 +202,14 @@ impl VerifiedBlock {
             if pos >= self.meta.entries_end {
                 return Ok(None);
             }
-            let (kind, shared, non_shared, value_len) = self.header(pos)?;
+            let (kind, seq, shared, non_shared, value_len) = self.header(pos)?;
             key.truncate(shared);
             key.extend_from_slice(
                 &self.data[pos + ENTRY_FIXED_LEN..pos + ENTRY_FIXED_LEN + non_shared],
             );
-            let value = entry_value(&self.data, &self.meta, pos, kind, non_shared, value_len);
+            let value = entry_value(&self.data, pos, kind, non_shared, value_len);
             if key.as_slice() == target {
-                return Ok(Some(Match { kind, value }));
+                return Ok(Some(Match { kind, seq, value }));
             }
             if key.as_slice() > target {
                 return Ok(None);
@@ -241,12 +243,13 @@ fn header_at(
     data: &[u8],
     meta: &BlockMeta,
     pos: usize,
-) -> Result<(Kind, usize, usize, usize), SstError> {
+) -> Result<(Kind, u64, usize, usize, usize), SstError> {
     let bad = |m: String| SstError::Corrupt(format!("data block entry at {pos}: {m}"));
     if pos + ENTRY_FIXED_LEN > meta.entries_end {
         return Err(bad("header runs past entries area".to_string()));
     }
     let kind = Kind::from_u8(data[pos]).ok_or_else(|| bad("unknown entry kind".to_string()))?;
+    let seq = u64::from_le_bytes(data[pos + 13..pos + 21].try_into().unwrap());
     let shared = u32::from_le_bytes(data[pos + 1..pos + 5].try_into().unwrap()) as usize;
     let non_shared = u32::from_le_bytes(data[pos + 5..pos + 9].try_into().unwrap()) as usize;
     let value_len = u32::from_le_bytes(data[pos + 9..pos + 13].try_into().unwrap()) as usize;
@@ -257,7 +260,7 @@ fn header_at(
     if end > meta.entries_end {
         return Err(bad("key/value runs past entries area".to_string()));
     }
-    Ok((kind, shared, non_shared, value_len))
+    Ok((kind, seq, shared, non_shared, value_len))
 }
 
 fn restart_offset_of(data: &[u8], restart_start: usize, i: usize) -> usize {
@@ -270,7 +273,7 @@ fn restart_offset_of(data: &[u8], restart_start: usize, i: usize) -> usize {
 
 fn full_key_at_restart(data: &[u8], meta: &BlockMeta, i: usize) -> Result<Vec<u8>, SstError> {
     let pos = restart_offset_of(data, meta.restart_start, i);
-    let (_, shared, non_shared, _) = header_at(data, meta, pos)?;
+    let (_, _, shared, non_shared, _) = header_at(data, meta, pos)?;
     if shared != 0 {
         return Err(SstError::Corrupt(
             "restart point entry has shared bytes".to_string(),
@@ -279,14 +282,7 @@ fn full_key_at_restart(data: &[u8], meta: &BlockMeta, i: usize) -> Result<Vec<u8
     Ok(data[pos + ENTRY_FIXED_LEN..pos + ENTRY_FIXED_LEN + non_shared].to_vec())
 }
 
-fn entry_value<'a>(
-    data: &'a [u8],
-    _meta: &BlockMeta,
-    pos: usize,
-    kind: Kind,
-    non_shared: usize,
-    value_len: usize,
-) -> &'a [u8] {
+fn entry_value(data: &[u8], pos: usize, kind: Kind, non_shared: usize, value_len: usize) -> &[u8] {
     match kind {
         Kind::Put => {
             let vstart = pos + ENTRY_FIXED_LEN + non_shared;
@@ -297,7 +293,7 @@ fn entry_value<'a>(
 }
 
 /// One owned entry: (kind, key, value).
-pub type Entry = (Kind, Vec<u8>, Vec<u8>);
+pub type Entry = (Kind, u64, Vec<u8>, Vec<u8>);
 
 /// Owning iterator over a verified block: yields fully-owned entries so
 /// callers never borrow from cache-managed bytes.
@@ -320,7 +316,7 @@ impl BlockIter {
 }
 
 impl Iterator for BlockIter {
-    type Item = Result<(Kind, Vec<u8>, Vec<u8>), SstError>;
+    type Item = Result<(Kind, u64, Vec<u8>, Vec<u8>), SstError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.failed || self.pos >= self.block.meta.entries_end {
@@ -340,6 +336,7 @@ impl Iterator for BlockIter {
         let shared = u32::from_le_bytes(data[pos + 1..pos + 5].try_into().unwrap()) as usize;
         let non_shared = u32::from_le_bytes(data[pos + 5..pos + 9].try_into().unwrap()) as usize;
         let value_len = u32::from_le_bytes(data[pos + 9..pos + 13].try_into().unwrap()) as usize;
+        let seq = u64::from_le_bytes(data[pos + 13..pos + 21].try_into().unwrap());
         let end = pos + ENTRY_FIXED_LEN + non_shared + value_len;
         if end > meta.entries_end || (kind == Kind::Tombstone && value_len != 0) {
             self.failed = true;
@@ -358,7 +355,7 @@ impl Iterator for BlockIter {
             Vec::new()
         };
         self.pos = end;
-        Some(Ok((kind, self.key.clone(), value)))
+        Some(Ok((kind, seq, self.key.clone(), value)))
     }
 }
 
@@ -368,8 +365,8 @@ mod tests {
 
     fn build(entries: &[(&str, &str)]) -> Vec<u8> {
         let mut b = BlockBuilder::default();
-        for (k, v) in entries {
-            b.add(Kind::Put, k.as_bytes(), v.as_bytes());
+        for (i, (k, v)) in entries.iter().enumerate() {
+            b.add(Kind::Put, k.as_bytes(), v.as_bytes(), i as u64 + 1);
         }
         b.finish()
     }
@@ -395,7 +392,7 @@ mod tests {
     fn restart_points_exist_every_interval_entries() {
         let mut b = BlockBuilder::default();
         for i in 0..40 {
-            b.add(Kind::Put, format!("key-{i:04}").as_bytes(), b"v");
+            b.add(Kind::Put, format!("key-{i:04}").as_bytes(), b"v", 1);
         }
         let raw = b.finish();
         let n_restarts = u32::from_le_bytes(raw[raw.len() - 9..raw.len() - 5].try_into().unwrap());
@@ -419,21 +416,23 @@ mod tests {
             .collect();
         let mut b = BlockBuilder::default();
         for k in &keys {
-            b.add(Kind::Put, k.as_bytes(), b"x");
+            b.add(Kind::Put, k.as_bytes(), b"x", 1);
         }
         let compressed_len = b.estimated_size();
-        let full_len: usize = keys.iter().map(|k| k.len()).sum::<usize>() + 100 * 14;
+        let full_len: usize = keys.iter().map(|k| k.len()).sum::<usize>() + 100 * 22;
+        // v3 entries carry an 8-byte seqno each; prefix compression must
+        // still win clearly overall.
         assert!(
-            compressed_len < full_len / 2,
-            "compression saved less than half: {compressed_len} vs {full_len}"
+            compressed_len * 5 < full_len * 3,
+            "compression saved too little: {compressed_len} vs {full_len}"
         );
     }
 
     #[test]
     fn tombstones_roundtrip_and_lookup_as_tombstones() {
         let mut b = BlockBuilder::default();
-        b.add(Kind::Put, b"alive", b"v");
-        b.add(Kind::Tombstone, b"dead", b"");
+        b.add(Kind::Put, b"alive", b"v", 1);
+        b.add(Kind::Tombstone, b"dead", b"", 2);
         let raw = b.finish();
         let block = VerifiedBlock::from_raw(raw.clone()).unwrap();
         let dead = block.get(b"dead").unwrap().unwrap();
@@ -447,13 +446,13 @@ mod tests {
     fn iteration_yields_all_entries_in_order_with_full_keys() {
         let mut b = BlockBuilder::default();
         for i in 0..50u32 {
-            b.add(Kind::Put, format!("k{:03}", i * 7).as_bytes(), b"v");
+            b.add(Kind::Put, format!("k{:03}", i * 7).as_bytes(), b"v", 1);
         }
         let raw = b.finish();
         let block = VerifiedBlock::from_raw(raw.clone()).unwrap();
         let got: Vec<String> = block
             .iter()
-            .map(|r| r.unwrap().1)
+            .map(|r| r.unwrap().2)
             .map(|k| String::from_utf8(k).unwrap())
             .collect();
         let want: Vec<String> = (0..50u32).map(|i| format!("k{:03}", i * 7)).collect();

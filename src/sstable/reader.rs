@@ -35,6 +35,7 @@ pub struct SstTable {
 
 pub struct Found {
     pub kind: Kind,
+    pub seq: u64,
     pub value: Vec<u8>,
 }
 
@@ -101,12 +102,12 @@ impl SstTable {
 
         // Boundary keys come from the boundary blocks (two cached reads).
         let first_block = table.read_block(&table.index[0])?;
-        let (_, first, _) = first_block
+        let (_, _, first, _) = first_block
             .first_entry()?
             .ok_or_else(|| bad("first block yielded no entry".to_string()))?;
         let last_entry_ref = table.index.last().expect("parse rejects empty index");
         let last_block = table.read_block(last_entry_ref)?;
-        let (_, last, _) = last_block
+        let (_, _, last, _) = last_block
             .last_entry()?
             .ok_or_else(|| bad("last block yielded no entry".to_string()))?;
         table.first_key = first;
@@ -163,6 +164,7 @@ impl SstTable {
         let block = self.read_block(&self.index[idx])?;
         Ok(block.get(key)?.map(|m| Found {
             kind: m.kind,
+            seq: m.seq,
             value: m.value.to_vec(),
         }))
     }
@@ -257,7 +259,7 @@ pub struct Iter<'a> {
 }
 
 impl<'a> Iterator for Iter<'a> {
-    type Item = Result<(Kind, Vec<u8>, Vec<u8>), SstError>;
+    type Item = Result<(Kind, u64, Vec<u8>, Vec<u8>), SstError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.failed {
@@ -266,14 +268,14 @@ impl<'a> Iterator for Iter<'a> {
         loop {
             if let Some(state) = &mut self.current {
                 match state.next() {
-                    Some(Ok((kind, key, value))) => {
+                    Some(Ok((kind, seq, key, value))) => {
                         if let Some(bound) = &self.lower_bound {
                             if key.as_slice() < bound.as_slice() {
                                 continue;
                             }
                             self.lower_bound = None;
                         }
-                        return Some(Ok((kind, key, value)));
+                        return Some(Ok((kind, seq, key, value)));
                     }
                     Some(Err(e)) => {
                         self.failed = true;

@@ -12,7 +12,7 @@ use crate::crc32;
 
 pub const TARGET_BLOCK_SIZE: usize = 4096;
 pub const FOOTER_LEN: usize = 44;
-pub const FORMAT_VERSION: u32 = 2;
+pub const FORMAT_VERSION: u32 = 3;
 pub const MAGIC: &[u8; 8] = b"KIBANSST";
 
 struct PendingBlock {
@@ -35,7 +35,7 @@ pub struct TableBuilder {
     index: Vec<IndexEntry>,
     last_key: Vec<u8>,
     has_last: bool,
-    all_keys: Vec<Vec<u8>>,
+    all_keys: Vec<(u64, Vec<u8>)>,
 }
 
 impl TableBuilder {
@@ -49,7 +49,7 @@ impl TableBuilder {
         self.out.len() + self.block.estimated_size()
     }
 
-    pub fn add(&mut self, kind: Kind, key: &[u8], value: &[u8]) -> Result<(), SstError> {
+    pub fn add(&mut self, kind: Kind, key: &[u8], value: &[u8], seq: u64) -> Result<(), SstError> {
         if self.has_last && key <= self.last_key.as_slice() {
             return Err(SstError::InvalidArgument(
                 "keys must be added in strictly increasing order".to_string(),
@@ -76,8 +76,8 @@ impl TableBuilder {
                 len: p.len,
             });
         }
-        self.block.add(kind, key, value);
-        self.all_keys.push(key.to_vec());
+        self.block.add(kind, key, value, seq);
+        self.all_keys.push((seq, key.to_vec()));
 
         self.last_key.clear();
         self.last_key.extend_from_slice(key);
@@ -131,7 +131,7 @@ impl TableBuilder {
 
         // Filter block (bloom.md D4): sits directly before the index;
         // carries the standard trailer.
-        let filter = BloomFilter::build(self.all_keys.iter().map(|k| k.as_slice()));
+        let filter = BloomFilter::build(self.all_keys.iter().map(|(_, k)| k.as_slice()));
         let mut filter_bytes = filter.encode();
         filter_bytes.push(BLOCK_TYPE_NONE);
         let crc = crc32::crc32(&filter_bytes);
@@ -227,22 +227,22 @@ mod tests {
     #[test]
     fn non_increasing_keys_are_rejected() {
         let mut b = TableBuilder::new();
-        b.add(Kind::Put, b"k2", b"v").unwrap();
-        assert!(b.add(Kind::Put, b"k2", b"v").is_err());
-        assert!(b.add(Kind::Put, b"k1", b"v").is_err());
+        b.add(Kind::Put, b"k2", b"v", 1).unwrap();
+        assert!(b.add(Kind::Put, b"k2", b"v", 1).is_err());
+        assert!(b.add(Kind::Put, b"k1", b"v", 1).is_err());
     }
 
     #[test]
     fn tombstones_must_not_carry_values() {
         let mut b = TableBuilder::new();
-        assert!(b.add(Kind::Tombstone, b"k", b"v").is_err());
-        b.add(Kind::Tombstone, b"k", b"").unwrap();
+        assert!(b.add(Kind::Tombstone, b"k", b"v", 1).is_err());
+        b.add(Kind::Tombstone, b"k", b"", 1).unwrap();
     }
 
     #[test]
     fn footer_is_exactly_footer_len() {
         let mut b = TableBuilder::new();
-        b.add(Kind::Put, b"k", b"v").unwrap();
+        b.add(Kind::Put, b"k", b"v", 1).unwrap();
         let data = b.finish().unwrap();
         assert_eq!(&data[data.len() - 8..], MAGIC);
         assert!(data.len() >= FOOTER_LEN);

@@ -15,7 +15,7 @@ use crate::sys;
 
 const OP_PUT: u8 = 0x01;
 const OP_DELETE: u8 = 0x02;
-const PAYLOAD_FIXED_LEN: usize = 9;
+const PAYLOAD_FIXED_LEN: usize = 17;
 
 #[derive(Debug)]
 pub enum WalError {
@@ -48,20 +48,24 @@ pub struct RecoveryReport {
     pub records_replayed: usize,
     pub torn_tail_truncated: bool,
     pub bytes_truncated: u64,
+    /// Highest sequence number seen in the replayed log.
+    pub max_sequence: u64,
 }
 
-fn encode_put(key: &[u8], value: &[u8], payload: &mut Vec<u8>) {
+fn encode_put(seq: u64, key: &[u8], value: &[u8], payload: &mut Vec<u8>) {
     payload.clear();
     payload.push(OP_PUT);
+    payload.extend_from_slice(&seq.to_le_bytes());
     payload.extend_from_slice(&(key.len() as u32).to_le_bytes());
     payload.extend_from_slice(&(value.len() as u32).to_le_bytes());
     payload.extend_from_slice(key);
     payload.extend_from_slice(value);
 }
 
-fn encode_delete(key: &[u8], payload: &mut Vec<u8>) {
+fn encode_delete(seq: u64, key: &[u8], payload: &mut Vec<u8>) {
     payload.clear();
     payload.push(OP_DELETE);
+    payload.extend_from_slice(&seq.to_le_bytes());
     payload.extend_from_slice(&(key.len() as u32).to_le_bytes());
     payload.extend_from_slice(&0u32.to_le_bytes());
     payload.extend_from_slice(key);
@@ -71,6 +75,7 @@ fn decode_into_memtable(
     payload: &[u8],
     offset: u64,
     memtable: &mut Memtable,
+    max_seq: &mut u64,
 ) -> Result<(), WalError> {
     let bad = |reason: String| WalError::Corrupt { offset, reason };
     if payload.len() < PAYLOAD_FIXED_LEN {
@@ -81,8 +86,10 @@ fn decode_into_memtable(
         )));
     }
     let op = payload[0];
-    let klen = u32::from_le_bytes(payload[1..5].try_into().unwrap()) as usize;
-    let vlen = u32::from_le_bytes(payload[5..9].try_into().unwrap()) as usize;
+    let seq = u64::from_le_bytes(payload[1..9].try_into().unwrap());
+    let klen = u32::from_le_bytes(payload[9..13].try_into().unwrap()) as usize;
+    let vlen = u32::from_le_bytes(payload[13..17].try_into().unwrap()) as usize;
+    *max_seq = (*max_seq).max(seq);
     let key_end = PAYLOAD_FIXED_LEN
         .checked_add(klen)
         .ok_or_else(|| bad("key length overflows payload".to_string()))?;
@@ -98,8 +105,8 @@ fn decode_into_memtable(
     }
     let key = &payload[PAYLOAD_FIXED_LEN..key_end];
     match op {
-        OP_PUT => memtable.put(key, &payload[key_end..value_end]),
-        OP_DELETE => memtable.delete(key),
+        OP_PUT => memtable.put(key, &payload[key_end..value_end], seq),
+        OP_DELETE => memtable.delete(key, seq),
         other => return Err(bad(format!("unknown op byte {other:#04x}"))),
     }
     Ok(())
@@ -164,13 +171,14 @@ impl Wal {
 
         let mut records_replayed = 0usize;
         let mut last_good_offset = 0u64;
+        let mut max_sequence = 0u64;
         let mut outcome = Result::<Option<u64>, ReadRecordError>::Ok(None);
 
         loop {
             let offset = reader.get_ref().pos;
             match reader.read_record() {
                 Ok(Some(payload)) => {
-                    decode_into_memtable(&payload, offset, memtable)?;
+                    decode_into_memtable(&payload, offset, memtable, &mut max_sequence)?;
                     records_replayed += 1;
                     last_good_offset = reader.get_ref().pos;
                 }
@@ -205,16 +213,22 @@ impl Wal {
             records_replayed,
             torn_tail_truncated,
             bytes_truncated,
+            max_sequence,
         })
     }
 
-    pub fn put(&mut self, key: impl AsRef<[u8]>, value: impl AsRef<[u8]>) -> io::Result<()> {
-        encode_put(key.as_ref(), value.as_ref(), &mut self.payload_scratch);
+    pub fn put(
+        &mut self,
+        seq: u64,
+        key: impl AsRef<[u8]>,
+        value: impl AsRef<[u8]>,
+    ) -> io::Result<()> {
+        encode_put(seq, key.as_ref(), value.as_ref(), &mut self.payload_scratch);
         self.append_scratch()
     }
 
-    pub fn delete(&mut self, key: impl AsRef<[u8]>) -> io::Result<()> {
-        encode_delete(key.as_ref(), &mut self.payload_scratch);
+    pub fn delete(&mut self, seq: u64, key: impl AsRef<[u8]>) -> io::Result<()> {
+        encode_delete(seq, key.as_ref(), &mut self.payload_scratch);
         self.append_scratch()
     }
 
@@ -292,7 +306,7 @@ mod tests {
         assert_eq!(report.records_replayed, 0);
         assert!(!report.torn_tail_truncated);
         assert_eq!(snapshot(&m), vec![]);
-        wal.put(b"a", b"1").unwrap();
+        wal.put(1, b"a", b"1").unwrap();
         wal.sync().unwrap();
         drop(wal);
 
@@ -309,10 +323,10 @@ mod tests {
         {
             let mut m = Memtable::new();
             let (mut wal, _) = Wal::open(&wal_path, &mut m).unwrap();
-            wal.put(b"alpha", b"value-one").unwrap();
-            wal.put(b"beta", b"value-two").unwrap();
-            wal.delete(b"alpha").unwrap();
-            wal.put(b"", b"empty-key").unwrap();
+            wal.put(2, b"alpha", b"value-one").unwrap();
+            wal.put(3, b"beta", b"value-two").unwrap();
+            wal.delete(99, b"alpha").unwrap();
+            wal.put(4, b"", b"empty-key").unwrap();
             wal.sync().unwrap();
         }
         let mut m = Memtable::new();
@@ -321,9 +335,21 @@ mod tests {
         assert_eq!(
             snapshot(&m),
             vec![
-                (b"".to_vec(), Entry::Value(b"empty-key".to_vec())),
-                (b"alpha".to_vec(), Entry::Tombstone),
-                (b"beta".to_vec(), Entry::Value(b"value-two".to_vec())),
+                (
+                    b"".to_vec(),
+                    Entry::Value {
+                        value: b"empty-key".to_vec(),
+                        seq: 4
+                    }
+                ),
+                (b"alpha".to_vec(), Entry::Tombstone { seq: 99 }),
+                (
+                    b"beta".to_vec(),
+                    Entry::Value {
+                        value: b"value-two".to_vec(),
+                        seq: 3
+                    }
+                ),
             ]
         );
     }
@@ -338,7 +364,7 @@ mod tests {
         let wal_path = td.path().join("WAL");
         let mut m = Memtable::new();
         let (mut wal, _) = Wal::open(&wal_path, &mut m).unwrap();
-        wal.put(b"k", b"v").unwrap();
+        wal.put(5, b"k", b"v").unwrap();
         wal.writer.flush().unwrap();
         drop(wal);
 
@@ -354,8 +380,8 @@ mod tests {
         {
             let mut m = Memtable::new();
             let (mut wal, _) = Wal::open(&wal_path, &mut m).unwrap();
-            wal.put(b"good1", b"v1").unwrap();
-            wal.put(b"good2", b"v2").unwrap();
+            wal.put(6, b"good1", b"v1").unwrap();
+            wal.put(7, b"good2", b"v2").unwrap();
             wal.sync().unwrap();
             // simulate a crash mid-append: partial record reaches the OS
             wal.writer.flush().unwrap();
@@ -370,7 +396,7 @@ mod tests {
         assert_eq!(m.get("good2"), Some(b"v2".to_vec()));
 
         // the truncated WAL accepts appends and reopens cleanly
-        wal.put(b"after", b"recovery").unwrap();
+        wal.put(8, b"after", b"recovery").unwrap();
         wal.sync().unwrap();
         drop(wal);
 
@@ -388,8 +414,8 @@ mod tests {
         {
             let mut m = Memtable::new();
             let (mut wal, _) = Wal::open(&wal_path, &mut m).unwrap();
-            wal.put(b"first", b"record").unwrap();
-            wal.put(b"second", b"record").unwrap();
+            wal.put(9, b"first", b"record").unwrap();
+            wal.put(10, b"second", b"record").unwrap();
             wal.sync().unwrap();
         }
         // flip one payload bit inside the first record's frame region
@@ -413,14 +439,14 @@ mod tests {
     fn unknown_op_byte_is_corruption() {
         let mut m = Memtable::new();
         let payload = [0x7Fu8, 1, 0, 0, 0, 0, 0, 0, 0];
-        let err = decode_into_memtable(&payload, 42, &mut m).unwrap_err();
+        let err = decode_into_memtable(&payload, 42, &mut m, &mut 0).unwrap_err();
         assert!(matches!(err, WalError::Corrupt { offset: 42, .. }));
     }
 
     #[test]
     fn truncated_payload_header_is_corruption() {
         let mut m = Memtable::new();
-        let err = decode_into_memtable(&[OP_PUT, 4, 0], 0, &mut m).unwrap_err();
+        let err = decode_into_memtable(&[OP_PUT, 4, 0], 0, &mut m, &mut 0).unwrap_err();
         assert!(matches!(err, WalError::Corrupt { .. }));
     }
 
@@ -431,7 +457,7 @@ mod tests {
         payload.extend_from_slice(&16u32.to_le_bytes());
         payload.extend_from_slice(&0u32.to_le_bytes());
         payload.extend_from_slice(b"short");
-        let err = decode_into_memtable(&payload, 0, &mut m).unwrap_err();
+        let err = decode_into_memtable(&payload, 0, &mut m, &mut 0).unwrap_err();
         assert!(matches!(err, WalError::Corrupt { .. }));
     }
 
@@ -444,7 +470,8 @@ mod tests {
             let (mut wal, report) = Wal::open(&wal_path, &mut m).unwrap();
             assert_eq!(report.records_replayed, round);
             assert!(!report.torn_tail_truncated);
-            wal.put(format!("key-{round}"), "val").unwrap();
+            wal.put(round as u64 + 1, format!("key-{round}"), "val")
+                .unwrap();
             wal.sync().unwrap();
         }
         let mut m = Memtable::new();

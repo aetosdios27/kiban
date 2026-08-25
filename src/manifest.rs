@@ -25,6 +25,8 @@ pub struct TableRef {
 pub struct Manifest {
     pub next_file_number: u64,
     pub wal_number: u64,
+    /// Highest sequence number durably captured by this state.
+    pub last_sequence: u64,
     pub tables: Vec<TableRef>,
 }
 
@@ -44,14 +46,16 @@ impl Manifest {
         Manifest {
             next_file_number: 2,
             wal_number: 1,
+            last_sequence: 0,
             tables: Vec::new(),
         }
     }
 
     pub fn encode(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(20 + self.tables.len() * 12);
+        let mut out = Vec::with_capacity(28 + self.tables.len() * 12);
         out.extend_from_slice(&self.next_file_number.to_le_bytes());
         out.extend_from_slice(&self.wal_number.to_le_bytes());
+        out.extend_from_slice(&self.last_sequence.to_le_bytes());
         out.extend_from_slice(&(self.tables.len() as u32).to_le_bytes());
         for t in &self.tables {
             out.extend_from_slice(&t.level.to_le_bytes());
@@ -65,13 +69,14 @@ impl Manifest {
     /// violation is corruption.
     pub fn decode(bytes: &[u8]) -> Result<Manifest, ManifestError> {
         let bad = |m: &str| ManifestError(m.to_string());
-        if bytes.len() < 20 {
+        if bytes.len() < 28 {
             return Err(bad("shorter than the fixed header"));
         }
         let next_file_number = u64::from_le_bytes(bytes[0..8].try_into().unwrap());
         let wal_number = u64::from_le_bytes(bytes[8..16].try_into().unwrap());
-        let num_tables = u32::from_le_bytes(bytes[16..20].try_into().unwrap()) as usize;
-        if bytes.len() != 20 + num_tables * 12 {
+        let last_sequence = u64::from_le_bytes(bytes[16..24].try_into().unwrap());
+        let num_tables = u32::from_le_bytes(bytes[24..28].try_into().unwrap()) as usize;
+        if bytes.len() != 28 + num_tables * 12 {
             return Err(bad("length does not match declared table count"));
         }
         if wal_number == 0 || next_file_number <= wal_number {
@@ -80,7 +85,7 @@ impl Manifest {
         let mut tables = Vec::with_capacity(num_tables);
         let mut prev: Option<TableRef> = None;
         for i in 0..num_tables {
-            let start = 20 + i * 12;
+            let start = 28 + i * 12;
             let level = u32::from_le_bytes(bytes[start..start + 4].try_into().unwrap());
             let number = u64::from_le_bytes(bytes[start + 4..start + 12].try_into().unwrap());
             if level > MAX_LEVEL {
@@ -106,6 +111,7 @@ impl Manifest {
         Ok(Manifest {
             next_file_number,
             wal_number,
+            last_sequence,
             tables,
         })
     }

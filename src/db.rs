@@ -18,6 +18,10 @@ use crate::sys;
 use crate::wal::{Wal, WalError};
 use std::sync::Arc as StdArc;
 
+/// Owned key/value pair yielded by scans.
+pub type ScanEntry = (Vec<u8>, Vec<u8>);
+pub type ScanResult = Vec<ScanEntry>;
+
 pub const SST_EXTENSION: &str = "sst";
 pub const WAL_EXTENSION: &str = "wal";
 
@@ -139,6 +143,7 @@ pub struct Kiban {
     wal: Wal,
     next_file_number: u64,
     wal_number: u64,
+    last_sequence: u64,
     /// sorted by (level, number)
     tables: Vec<TableEntry>,
 }
@@ -176,7 +181,8 @@ impl Kiban {
         }
 
         let mut memtable = Memtable::new();
-        let (wal, _report) = Wal::open(&wal_path, &mut memtable)?;
+        let (wal, report) = Wal::open(&wal_path, &mut memtable)?;
+        let wal_max_seq = report.max_sequence;
 
         let mut tables = Vec::with_capacity(manifest.tables.len());
         for tref in &manifest.tables {
@@ -224,6 +230,7 @@ impl Kiban {
             wal,
             next_file_number: manifest.next_file_number,
             wal_number: manifest.wal_number,
+            last_sequence: manifest.last_sequence.max(wal_max_seq),
             tables,
         })
     }
@@ -279,14 +286,18 @@ impl Kiban {
     }
 
     pub fn put(&mut self, key: impl AsRef<[u8]>, value: impl AsRef<[u8]>) -> io::Result<()> {
-        self.wal.put(key.as_ref(), value.as_ref())?;
-        self.memtable.put(key, value);
+        let seq = self.last_sequence + 1;
+        self.wal.put(seq, key.as_ref(), value.as_ref())?;
+        self.memtable.put(key, value, seq);
+        self.last_sequence = seq;
         Ok(())
     }
 
     pub fn delete(&mut self, key: impl AsRef<[u8]>) -> io::Result<()> {
-        self.wal.delete(key.as_ref())?;
-        self.memtable.delete(key);
+        let seq = self.last_sequence + 1;
+        self.wal.delete(seq, key.as_ref())?;
+        self.memtable.delete(key, seq);
+        self.last_sequence = seq;
         Ok(())
     }
 
@@ -299,8 +310,8 @@ impl Kiban {
     pub fn get(&self, key: impl AsRef<[u8]>) -> Result<Option<Vec<u8>>, DbError> {
         let key = key.as_ref();
         match self.memtable.entry(key) {
-            Some(MemEntry::Value(v)) => return Ok(Some(v.clone())),
-            Some(MemEntry::Tombstone) => return Ok(None),
+            Some(MemEntry::Value { value, .. }) => return Ok(Some(value.clone())),
+            Some(MemEntry::Tombstone { .. }) => return Ok(None),
             None => {}
         }
         // L0 first, newest file number wins
@@ -337,6 +348,81 @@ impl Kiban {
         &self.dir
     }
 
+    /// Captures a snapshot: a sequence boundary for consistent reads.
+    pub fn snapshot(&self) -> Snapshot {
+        Snapshot {
+            seq: self.last_sequence,
+        }
+    }
+
+    /// Reads `key` as of snapshot `snap` (snapshots.md D3).
+    pub fn get_at(
+        &self,
+        snap: &Snapshot,
+        key: impl AsRef<[u8]>,
+    ) -> Result<Option<Vec<u8>>, DbError> {
+        let key = key.as_ref();
+        match self.memtable.entry(key) {
+            Some(e @ MemEntry::Value { .. }) => {
+                if e.seq() <= snap.seq {
+                    return Ok(e.as_value().map(|v| v.to_vec()));
+                }
+                return self.get_from_tables_at(snap, key);
+            }
+            Some(MemEntry::Tombstone { seq }) => {
+                if *seq <= snap.seq {
+                    return Ok(None);
+                }
+                return self.get_from_tables_at(snap, key);
+            }
+            None => {}
+        }
+        self.get_from_tables_at(snap, key)
+    }
+
+    fn get_from_tables_at(&self, snap: &Snapshot, key: &[u8]) -> Result<Option<Vec<u8>>, DbError> {
+        for entry in self.tables.iter().rev().filter(|t| t.level == 0) {
+            match entry.table.get(key)? {
+                Some(found) if found.seq <= snap.seq => {
+                    return Ok(match found.kind {
+                        Kind::Put => Some(found.value),
+                        Kind::Tombstone => None,
+                    });
+                }
+                Some(_) => continue,
+                None => continue,
+            }
+        }
+        for entry in self.tables.iter().filter(|t| t.level >= 1) {
+            if key < entry.first_key.as_slice() || key > entry.last_key.as_slice() {
+                continue;
+            }
+            match entry.table.get(key)? {
+                Some(found) if found.seq <= snap.seq => {
+                    return Ok(match found.kind {
+                        Kind::Put => Some(found.value),
+                        Kind::Tombstone => None,
+                    });
+                }
+                Some(_) => continue,
+                None => continue,
+            }
+        }
+        Ok(None)
+    }
+
+    /// Scans live entries as of snapshot `snap`.
+    pub fn scan_at(&self, snap: &Snapshot) -> Result<ScanResult, DbError> {
+        let mut core = self.merge_core(true);
+        core.snap_limit = Some(snap.seq);
+        let mut out = Vec::new();
+        while let Some(item) = core.next_raw() {
+            let (k, e) = item?;
+            out.push((k, e.value));
+        }
+        Ok(out)
+    }
+
     /// The engine's active configuration.
     pub fn options(&self) -> &KibanOptions {
         &self.options
@@ -356,8 +442,8 @@ impl Kiban {
         let mut builder = TableBuilder::new();
         for (key, entry) in self.memtable.iter() {
             match entry {
-                MemEntry::Value(v) => builder.add(Kind::Put, key, v)?,
-                MemEntry::Tombstone => builder.add(Kind::Tombstone, key, b"")?,
+                MemEntry::Value { value, seq } => builder.add(Kind::Put, key, value, *seq)?,
+                MemEntry::Tombstone { seq } => builder.add(Kind::Tombstone, key, b"", *seq)?,
             }
         }
         let bytes = builder.finish()?;
@@ -388,6 +474,7 @@ impl Kiban {
         Manifest {
             next_file_number: new_next_file_number,
             wal_number: new_wal_number,
+            last_sequence: self.last_sequence,
             tables: table_refs,
         }
         .install(&self.dir)
@@ -454,6 +541,7 @@ impl Kiban {
             sources: self.sources_from(start),
             user_mode: true,
             failed: false,
+            snap_limit: None,
         };
         let end = end.to_vec();
         DbIter { core }.take_while(move |item| match item {
@@ -477,6 +565,7 @@ impl Kiban {
             sources: self.sources_from(b""),
             user_mode,
             failed: false,
+            snap_limit: None,
         }
     }
 
@@ -515,6 +604,7 @@ impl Kiban {
                 sources: self.sources_from(start),
                 user_mode: true,
                 failed: false,
+                snap_limit: None,
             },
         }
     }
@@ -660,16 +750,16 @@ mod tests {
         // hand-build state: table 2 holds k=tombstone and other=old;
         // table 1 holds k=v1 and solo=only-in-1
         let mut t1 = TableBuilder::new();
-        t1.add(Kind::Put, b"k", b"v1").unwrap();
-        t1.add(Kind::Put, b"solo", b"only-in-1").unwrap();
+        t1.add(Kind::Put, b"k", b"v1", 1).unwrap();
+        t1.add(Kind::Put, b"solo", b"only-in-1", 1).unwrap();
         atomic::commit_file(
             &dir.join(file_name(1, SST_EXTENSION)),
             &t1.finish().unwrap(),
         )
         .unwrap();
         let mut t2 = TableBuilder::new();
-        t2.add(Kind::Tombstone, b"k", b"").unwrap();
-        t2.add(Kind::Put, b"other", b"old").unwrap();
+        t2.add(Kind::Tombstone, b"k", b"", 1).unwrap();
+        t2.add(Kind::Put, b"other", b"old", 1).unwrap();
         atomic::commit_file(
             &dir.join(file_name(2, SST_EXTENSION)),
             &t2.finish().unwrap(),
@@ -679,6 +769,7 @@ mod tests {
         let manifest = Manifest {
             next_file_number: 3,
             wal_number: 1,
+            last_sequence: 0,
             tables: vec![
                 TableRef {
                     level: 0,
@@ -714,6 +805,7 @@ mod tests {
         let manifest = Manifest {
             next_file_number: 5,
             wal_number: 1,
+            last_sequence: 0,
             tables: vec![TableRef {
                 level: 0,
                 number: 3,
@@ -868,9 +960,17 @@ mod flush_tests {
     }
 }
 
+/// A consistent read boundary captured from the engine's sequence
+/// counter (snapshots.md D3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Snapshot {
+    pub(crate) seq: u64,
+}
+
 /// One entry as the merge sees it: the newest version of a key.
 pub struct RawEntry {
     pub kind: Kind,
+    pub seq: u64,
     pub value: Vec<u8>,
 }
 
@@ -878,6 +978,7 @@ struct HeadEntry {
     key: Vec<u8>,
     kind: Kind,
     value: Vec<u8>,
+    seq: u64,
 }
 
 enum SourceFeed<'a> {
@@ -898,19 +999,26 @@ impl<'a> SourceHead<'a> {
         }
         let next = match &mut self.feed {
             SourceFeed::Mem(it) => it.next().map(|(k, e)| match e {
-                MemEntry::Value(v) => HeadEntry {
+                MemEntry::Value { value, seq } => HeadEntry {
                     key: k.clone(),
                     kind: Kind::Put,
-                    value: v.clone(),
+                    value: value.clone(),
+                    seq: *seq,
                 },
-                MemEntry::Tombstone => HeadEntry {
+                MemEntry::Tombstone { seq } => HeadEntry {
                     key: k.clone(),
                     kind: Kind::Tombstone,
                     value: Vec::new(),
+                    seq: *seq,
                 },
             }),
             SourceFeed::Table(it) => match it.next() {
-                Some(Ok((kind, key, value))) => Some(HeadEntry { key, kind, value }),
+                Some(Ok((kind, seq, key, value))) => Some(HeadEntry {
+                    key,
+                    kind,
+                    value,
+                    seq,
+                }),
                 Some(Err(e)) => return Err(e),
                 None => None,
             },
@@ -929,6 +1037,8 @@ struct MergeCore<'a> {
     sources: Vec<SourceHead<'a>>,
     user_mode: bool,
     failed: bool,
+    /// When set, entries with seq > limit are invisible.
+    snap_limit: Option<u64>,
 }
 
 impl<'a> MergeCore<'a> {
@@ -957,26 +1067,36 @@ impl<'a> MergeCore<'a> {
             }
             let min_key = min_key?;
 
-            let mut newest: Option<(Kind, Vec<u8>)> = None;
+            // Among sources on this key, the newest VISIBLE entry wins
+            // (snapshots.md D3): newer-than-snapshot versions do not
+            // shadow older visible ones.
+            let mut chosen: Option<(Kind, u64, Vec<u8>)> = None;
             for source in &mut self.sources {
                 let matches = source
                     .head
                     .as_ref()
                     .is_some_and(|h| h.key.as_slice() == min_key);
                 if matches {
-                    if newest.is_none() {
-                        let head = source.head.as_ref().unwrap();
-                        newest = Some((head.kind, head.value.clone()));
+                    let head = source.head.as_ref().unwrap();
+                    let visible = self.snap_limit.is_none_or(|lim| head.seq <= lim);
+                    if visible && chosen.is_none() {
+                        chosen = Some((head.kind, head.seq, head.value.clone()));
                     }
                     source.advance();
                 }
             }
-            let (kind, value) = newest.expect("at least one source matched the minimum key");
+            let Some((kind, seq, value)) = chosen else {
+                // every version of this key is newer than the snapshot:
+                // fall back to older sources for an even older version?
+                // No — older sources were already advanced only when they
+                // matched this key. Continue scanning remaining keys.
+                continue;
+            };
 
             if self.user_mode && kind == Kind::Tombstone {
                 continue;
             }
-            return Some(Ok((min_key, RawEntry { kind, value })));
+            return Some(Ok((min_key, RawEntry { kind, seq, value })));
         }
     }
 }
@@ -1314,6 +1434,7 @@ impl Kiban {
                 .collect(),
             user_mode: false,
             failed: false,
+            snap_limit: None,
         };
         let emit_output = |dir: &Path,
                            cache: &StdArc<BlockCache>,
@@ -1355,7 +1476,7 @@ impl Kiban {
                 builder = TableBuilder::new();
                 output_entries = 0;
             }
-            builder.add(raw.kind, &key, &raw.value)?;
+            builder.add(raw.kind, &key, &raw.value, raw.seq)?;
             output_entries += 1;
         }
 
@@ -1391,6 +1512,7 @@ impl Kiban {
         Manifest {
             next_file_number: next_number,
             wal_number: self.wal_number,
+            last_sequence: self.last_sequence,
             tables: new_tables,
         }
         .install(&self.dir)

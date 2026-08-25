@@ -7,20 +7,27 @@ use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Entry {
-    Value(Vec<u8>),
-    Tombstone,
+    Value { value: Vec<u8>, seq: u64 },
+    Tombstone { seq: u64 },
 }
 
 impl Entry {
     pub fn as_value(&self) -> Option<&[u8]> {
         match self {
-            Entry::Value(v) => Some(v),
-            Entry::Tombstone => None,
+            Entry::Value { value, .. } => Some(value),
+            Entry::Tombstone { .. } => None,
         }
     }
 
     pub fn is_tombstone(&self) -> bool {
-        matches!(self, Entry::Tombstone)
+        matches!(self, Entry::Tombstone { .. })
+    }
+
+    /// Sequence number at which this entry was written.
+    pub fn seq(&self) -> u64 {
+        match self {
+            Entry::Value { seq, .. } | Entry::Tombstone { seq } => *seq,
+        }
     }
 }
 
@@ -36,20 +43,26 @@ impl Memtable {
         }
     }
 
-    pub fn put(&mut self, key: impl AsRef<[u8]>, value: impl AsRef<[u8]>) {
-        self.map
-            .insert(key.as_ref().to_vec(), Entry::Value(value.as_ref().to_vec()));
+    pub fn put(&mut self, key: impl AsRef<[u8]>, value: impl AsRef<[u8]>, seq: u64) {
+        self.map.insert(
+            key.as_ref().to_vec(),
+            Entry::Value {
+                value: value.as_ref().to_vec(),
+                seq,
+            },
+        );
     }
 
-    pub fn delete(&mut self, key: impl AsRef<[u8]>) {
-        self.map.insert(key.as_ref().to_vec(), Entry::Tombstone);
+    pub fn delete(&mut self, key: impl AsRef<[u8]>, seq: u64) {
+        self.map
+            .insert(key.as_ref().to_vec(), Entry::Tombstone { seq });
     }
 
     /// Returns the live value for `key`, or `None` if the key is absent
     /// or deleted.
     pub fn get(&self, key: impl AsRef<[u8]>) -> Option<Vec<u8>> {
         match self.map.get(key.as_ref()) {
-            Some(Entry::Value(v)) => Some(v.clone()),
+            Some(Entry::Value { value, .. }) => Some(value.clone()),
             _ => None,
         }
     }
@@ -102,7 +115,7 @@ mod tests {
     #[test]
     fn put_then_get() {
         let mut m = Memtable::new();
-        m.put("alpha", b"one".as_slice());
+        m.put("alpha", b"one".as_slice(), 1);
         assert_eq!(m.get("alpha"), Some(b"one".to_vec()));
     }
 
@@ -115,8 +128,8 @@ mod tests {
     #[test]
     fn overwrite_replaces_value() {
         let mut m = Memtable::new();
-        m.put("k", "v1");
-        m.put("k", "v2");
+        m.put("k", "v1", 2);
+        m.put("k", "v2", 3);
         assert_eq!(m.get("k"), Some(b"v2".to_vec()));
         assert_eq!(m.len(), 1);
     }
@@ -125,7 +138,7 @@ mod tests {
     fn get_returns_owned_copy() {
         let mut m = Memtable::new();
         let value = b"owned".to_vec();
-        m.put("k", value.clone());
+        m.put("k", value.clone(), 4);
         let mut got = m.get("k").unwrap();
         got.reverse();
         assert_eq!(m.get("k"), Some(value));
@@ -134,38 +147,38 @@ mod tests {
     #[test]
     fn delete_hides_value_but_keeps_tombstone() {
         let mut m = Memtable::new();
-        m.put("k", "v");
-        m.delete("k");
+        m.put("k", "v", 5);
+        m.delete("k", 6);
         assert_eq!(m.get("k"), None);
         assert!(!m.contains_key("k"));
         assert_eq!(m.len(), 1);
-        assert!(matches!(m.entry("k"), Some(Entry::Tombstone)));
+        assert!(matches!(m.entry("k"), Some(Entry::Tombstone { .. })));
     }
 
     #[test]
     fn delete_absent_key_still_records_tombstone() {
         let mut m = Memtable::new();
-        m.delete("ghost");
+        m.delete("ghost", 7);
         assert_eq!(m.get("ghost"), None);
-        assert!(matches!(m.entry("ghost"), Some(Entry::Tombstone)));
+        assert!(matches!(m.entry("ghost"), Some(Entry::Tombstone { .. })));
     }
 
     #[test]
     fn reinsert_after_delete_is_live_again() {
         let mut m = Memtable::new();
-        m.put("k", "v1");
-        m.delete("k");
-        m.put("k", "v2");
+        m.put("k", "v1", 8);
+        m.delete("k", 9);
+        m.put("k", "v2", 10);
         assert_eq!(m.get("k"), Some(b"v2".to_vec()));
-        assert!(matches!(m.entry("k"), Some(Entry::Value(_))));
+        assert!(matches!(m.entry("k"), Some(Entry::Value { .. })));
     }
 
     #[test]
     fn empty_keys_and_values_are_legal() {
         let mut m = Memtable::new();
-        m.put("", "");
+        m.put("", "", 11);
         assert_eq!(m.get(""), Some(Vec::new()));
-        m.delete("");
+        m.delete("", 12);
         assert_eq!(m.get(""), None);
     }
 
@@ -173,7 +186,7 @@ mod tests {
     fn iteration_is_byte_wise_ordered() {
         let mut m = Memtable::new();
         for key in [b"\xff".as_slice(), b"b", b"", b"a", b"\x00"] {
-            m.put(key, "v");
+            m.put(key, "v", 13);
         }
         let keys: Vec<&[u8]> = m.iter().map(|(k, _)| k).collect();
         assert_eq!(keys, vec![&b""[..], b"\x00", b"a", b"b", b"\xff"]);
@@ -182,10 +195,10 @@ mod tests {
     #[test]
     fn iter_includes_tombstones_iter_live_skips_them() {
         let mut m = Memtable::new();
-        m.put("a", "1");
-        m.put("b", "2");
-        m.delete("a");
-        m.put("c", "3");
+        m.put("a", "1", 14);
+        m.put("b", "2", 15);
+        m.delete("a", 16);
+        m.put("c", "3", 17);
 
         let raw: Vec<(&[u8], bool)> = m.iter().map(|(k, e)| (k, e.is_tombstone())).collect();
         assert_eq!(
@@ -201,7 +214,7 @@ mod tests {
     fn iterators_reverse_traverse() {
         let mut m = Memtable::new();
         for key in ["a", "b", "c"] {
-            m.put(key, "v");
+            m.put(key, "v", 18);
         }
         let rev: Vec<&[u8]> = m.iter_live().rev().map(|(k, _)| k).collect();
         assert_eq!(rev, vec![&b"c"[..], b"b", b"a"]);
