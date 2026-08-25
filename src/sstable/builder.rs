@@ -1,16 +1,18 @@
 //! Table builder: ordered entries in, one atomic byte blob out.
 //!
-//! Per `docs/design/sstable.md`: soft 4 KiB block cutting, delayed index
-//! entries with shortest separators, fixed 28-byte footer with trailing
+//! Per `docs/design/sstable.md` and `docs/design/bloom.md`: soft 4 KiB
+//! block cutting, delayed index entries with shortest separators, a
+//! whole-table bloom filter block, fixed 44-byte footer with trailing
 //! magic.
 
 use super::block::{BLOCK_TYPE_NONE, BlockBuilder};
 use super::{Kind, SstError};
+use crate::bloom::BloomFilter;
 use crate::crc32;
 
 pub const TARGET_BLOCK_SIZE: usize = 4096;
-pub const FOOTER_LEN: usize = 28;
-pub const FORMAT_VERSION: u32 = 1;
+pub const FOOTER_LEN: usize = 44;
+pub const FORMAT_VERSION: u32 = 2;
 pub const MAGIC: &[u8; 8] = b"KIBANSST";
 
 struct PendingBlock {
@@ -33,6 +35,7 @@ pub struct TableBuilder {
     index: Vec<IndexEntry>,
     last_key: Vec<u8>,
     has_last: bool,
+    all_keys: Vec<Vec<u8>>,
 }
 
 impl TableBuilder {
@@ -52,6 +55,13 @@ impl TableBuilder {
             ));
         }
 
+        // Flush first if the current block has met the size target; then,
+        // if we are about to write the first entry of a fresh block, the
+        // incoming key IS that block's first key and completes the pending
+        // separator pair.
+        if !self.block.is_empty() && self.block.estimated_size() >= TARGET_BLOCK_SIZE {
+            self.flush_block();
+        }
         if let Some(p) = self.pending.take() {
             let separator = find_shortest_separator(&p.last_key, key);
             self.index.push(IndexEntry {
@@ -60,11 +70,8 @@ impl TableBuilder {
                 len: p.len,
             });
         }
-
-        if !self.block.is_empty() && self.block.estimated_size() >= TARGET_BLOCK_SIZE {
-            self.flush_block();
-        }
         self.block.add(kind, key, value);
+        self.all_keys.push(key.to_vec());
 
         self.last_key.clear();
         self.last_key.extend_from_slice(key);
@@ -116,6 +123,17 @@ impl TableBuilder {
         let crc = crc32::crc32(&idx);
         idx.extend_from_slice(&crc.to_le_bytes());
 
+        // Filter block (bloom.md D4): sits directly before the index;
+        // carries the standard trailer.
+        let filter = BloomFilter::build(self.all_keys.iter().map(|k| k.as_slice()));
+        let mut filter_bytes = filter.encode();
+        filter_bytes.push(BLOCK_TYPE_NONE);
+        let crc = crc32::crc32(&filter_bytes);
+        filter_bytes.extend_from_slice(&crc.to_le_bytes());
+        let filter_offset = self.out.len() as u64;
+        let filter_len = filter_bytes.len() as u64;
+        self.out.extend_from_slice(&filter_bytes);
+
         let index_offset = self.out.len() as u64;
         let index_len = idx.len() as u64;
         self.out.extend_from_slice(&idx);
@@ -123,7 +141,10 @@ impl TableBuilder {
         self.out.extend_from_slice(&index_offset.to_le_bytes());
         self.out.extend_from_slice(&index_len.to_le_bytes());
         self.out.extend_from_slice(&FORMAT_VERSION.to_le_bytes());
+        self.out.extend_from_slice(&filter_offset.to_le_bytes());
+        self.out.extend_from_slice(&filter_len.to_le_bytes());
         self.out.extend_from_slice(MAGIC);
+        debug_assert_eq!(filter_offset + filter_len, index_offset);
         debug_assert_eq!(
             self.out.len() as u64,
             index_offset + index_len + FOOTER_LEN as u64

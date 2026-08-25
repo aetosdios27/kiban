@@ -6,6 +6,7 @@
 use super::block::Block;
 use super::builder::{FOOTER_LEN, FORMAT_VERSION, MAGIC};
 use super::{Kind, SstError};
+use crate::bloom::BloomFilter;
 use crate::crc32;
 
 struct IndexEntry {
@@ -17,6 +18,7 @@ struct IndexEntry {
 pub struct SstTable {
     buf: Vec<u8>,
     index: Vec<IndexEntry>,
+    filter: BloomFilter,
 }
 
 pub struct Found<'a> {
@@ -31,7 +33,7 @@ impl SstTable {
             return Err(bad("file is smaller than the footer".to_string()));
         }
         let footer = &buf[buf.len() - FOOTER_LEN..];
-        if &footer[20..28] != MAGIC {
+        if &footer[36..44] != MAGIC {
             return Err(bad("bad magic number; not a kiban sstable".to_string()));
         }
         let version = u32::from_le_bytes(footer[16..20].try_into().unwrap());
@@ -40,10 +42,28 @@ impl SstTable {
         }
         let index_offset = u64::from_le_bytes(footer[0..8].try_into().unwrap());
         let index_len = u64::from_le_bytes(footer[8..16].try_into().unwrap());
+        let filter_offset = u64::from_le_bytes(footer[20..28].try_into().unwrap());
+        let filter_len = u64::from_le_bytes(footer[28..36].try_into().unwrap());
         let data_end = buf.len() as u64 - FOOTER_LEN as u64;
         if index_offset > data_end || index_len == 0 || index_offset + index_len > data_end {
             return Err(bad("index block out of file bounds".to_string()));
         }
+        if filter_offset + filter_len != index_offset || filter_len < 10 {
+            return Err(bad(
+                "filter block does not sit directly before the index".to_string()
+            ));
+        }
+
+        let filter_raw = &buf[filter_offset as usize..(filter_offset + filter_len) as usize];
+        if filter_raw[filter_raw.len() - 5] != super::block::BLOCK_TYPE_NONE {
+            return Err(bad("unknown filter block type".to_string()));
+        }
+        let stored_crc = u32::from_le_bytes(filter_raw[filter_raw.len() - 4..].try_into().unwrap());
+        if crc32::crc32(&filter_raw[..filter_raw.len() - 4]) != stored_crc {
+            return Err(bad("filter block checksum mismatch".to_string()));
+        }
+        let filter = BloomFilter::decode(&filter_raw[..filter_raw.len() - 5])
+            .ok_or_else(|| bad("filter block payload is malformed".to_string()))?;
 
         let index_raw = &buf[index_offset as usize..(index_offset + index_len) as usize];
         if index_raw[index_raw.len() - 5] != super::block::BLOCK_TYPE_NONE {
@@ -97,7 +117,7 @@ impl SstTable {
             return Err(bad("index block has trailing garbage".to_string()));
         }
 
-        Ok(SstTable { buf, index })
+        Ok(SstTable { buf, index, filter })
     }
 
     fn block_at(&self, e: &IndexEntry) -> Result<Block<'_>, SstError> {
@@ -105,8 +125,11 @@ impl SstTable {
     }
 
     /// Point lookup. Returns `Ok(None)` when the key is provably absent
-    /// from this table.
+    /// from this table — either by bloom filter or by probe.
     pub fn get(&self, key: &[u8]) -> Result<Option<Found<'_>>, SstError> {
+        if !self.filter.may_contain(key) {
+            return Ok(None);
+        }
         let idx = self.index.partition_point(|e| e.separator.as_slice() < key);
         if idx == self.index.len() {
             return Ok(None);
