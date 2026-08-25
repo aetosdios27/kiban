@@ -4,6 +4,7 @@
 
 mod block;
 pub mod builder;
+pub mod reader;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
@@ -51,4 +52,4 @@ fn common_prefix_len(a: &[u8], b: &[u8]) -> usize {
 
 pub use block::{Block, BlockIter};
 pub use builder::TableBuilder;
-
+pub use reader::{Found, Iter, SstTable};
