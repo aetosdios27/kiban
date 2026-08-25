@@ -2015,6 +2015,9 @@ pub struct SharedKiban {
     inner: std::sync::Arc<std::sync::Mutex<Kiban>>,
 }
 
+/// Owned key/value pair yielded by snapshot scans.
+type SnapEntry = (Vec<u8>, Vec<u8>);
+
 /// A consistent point-in-time view captured from a [`SharedKiban`].
 ///
 /// Capture copies the memtable (O(its size)) and the table metadata list
@@ -2060,10 +2063,10 @@ impl SharedSnapshot {
     #[allow(dead_code)]
     pub fn get(&self, key: impl AsRef<[u8]>) -> Result<Option<Vec<u8>>, DbError> {
         let key = key.as_ref();
-        if let Some(e) = self.memtable.entry(key) {
-            if e.seq() <= self.seq {
-                return Ok(e.as_value().map(|v| v.to_vec()));
-            }
+        if let Some(e) = self.memtable.entry(key)
+            && e.seq() <= self.seq
+        {
+            return Ok(e.as_value().map(|v| v.to_vec()));
         }
         let tables = self.table_handles()?;
         for (_, t) in tables.iter().rev().filter(|(l, _)| *l == 0) {
@@ -2098,7 +2101,7 @@ impl SharedSnapshot {
 
     /// Scans all live entries visible at this snapshot.
     #[allow(dead_code)]
-    pub fn scan(&self) -> Result<Vec<(Vec<u8>, Vec<u8>)>, DbError> {
+    pub fn scan(&self) -> Result<Vec<SnapEntry>, DbError> {
         let mut sources: Vec<SourceHead<'_>> = Vec::new();
         sources.push(SourceHead {
             feed: SourceFeed::Mem(self.memtable.iter_from(b"")),
@@ -2675,7 +2678,7 @@ mod snapshot_tests {
         assert_eq!(snap.scan().unwrap().len(), 50);
         assert_eq!(snap.get(b"s049").unwrap(), Some(b"base-49".to_vec()));
         assert_eq!(db.get(b"s000").unwrap(), None);
-        assert_eq!(db.get(b"t000").unwrap().is_some(), true);
+        assert!(db.get(b"t000").unwrap().is_some());
     }
 }
 
