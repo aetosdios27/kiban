@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use crate::atomic;
 use crate::manifest::{MANIFEST_NAME, Manifest, ManifestError};
 use crate::memtable::{Entry as MemEntry, Memtable};
-use crate::sstable::{Kind, SstError, SstTable};
+use crate::sstable::{Kind, SstError, SstTable, TableBuilder};
 use crate::wal::{Wal, WalError};
 
 pub const SST_EXTENSION: &str = "sst";
@@ -246,6 +246,66 @@ impl Kiban {
         &self.dir
     }
 
+    /// Flushes the memtable to a new sstable and retires the current WAL,
+    /// following db-layout D2's single-commit-point pipeline.
+    pub fn flush(&mut self) -> Result<(), DbError> {
+        if self.memtable.is_empty() {
+            return Ok(());
+        }
+
+        let sst_number = self.next_file_number;
+        let new_wal_number = self.next_file_number + 1;
+        let new_next_file_number = self.next_file_number + 2;
+
+        let mut builder = TableBuilder::new();
+        for (key, entry) in self.memtable.iter() {
+            match entry {
+                MemEntry::Value(v) => builder.add(Kind::Put, key, v)?,
+                MemEntry::Tombstone => builder.add(Kind::Tombstone, key, b"")?,
+            }
+        }
+        let bytes = builder.finish()?;
+
+        // D2 step 2: publish the table. Crash here leaves an orphan the
+        // sweep removes; the old MANIFEST still rules.
+        atomic::commit_file(&self.dir.join(file_name(sst_number, SST_EXTENSION)), &bytes)?;
+
+        // D2 step 3: the WAL named by the upcoming MANIFEST must exist
+        // durably before that MANIFEST does.
+        let new_wal_path = self.dir.join(file_name(new_wal_number, WAL_EXTENSION));
+        atomic::create_durably(&new_wal_path)?;
+
+        // D2 step 4: the commit point.
+        let mut table_numbers: Vec<u64> = self.tables.iter().map(|t| t.number).collect();
+        table_numbers.push(sst_number);
+        table_numbers.sort_unstable();
+        Manifest {
+            next_file_number: new_next_file_number,
+            wal_number: new_wal_number,
+            table_numbers,
+        }
+        .install(&self.dir)
+        .map_err(DbError::from)?;
+
+        // D2 step 5: everything below only runs once the commit point has
+        // returned success.
+        self.next_file_number = new_next_file_number;
+        self.tables.push(TableEntry {
+            number: sst_number,
+            table: SstTable::parse(bytes)?,
+        });
+
+        let old_wal_path = self.wal.path().to_path_buf();
+        let mut fresh_memtable = Memtable::new();
+        let (wal, _report) = Wal::open(&new_wal_path, &mut fresh_memtable)?;
+        self.wal = wal;
+        self.memtable = fresh_memtable;
+
+        // Best-effort deletion; recovery's sweep owns stragglers (D2).
+        let _ = fs::remove_file(old_wal_path);
+        Ok(())
+    }
+
     #[cfg(test)]
     pub(crate) fn wal_for_test(&mut self) -> &mut Wal {
         &mut self.wal
@@ -462,5 +522,127 @@ mod tests {
         assert!(parse_artifact_name("12x.sst").is_none());
         assert!(parse_artifact_name("12.txt").is_none());
         assert!(parse_artifact_name("-1.sst").is_none());
+    }
+}
+
+#[cfg(test)]
+mod flush_tests {
+    use super::*;
+    use crate::testutil::TempDir;
+
+    fn fresh_db(label: &str) -> (TempDir, Kiban) {
+        let td = TempDir::new(label);
+        let db = Kiban::open(td.path()).unwrap();
+        (td, db)
+    }
+
+    #[test]
+    fn empty_flush_is_a_noop() {
+        let (td, mut db) = fresh_db("flush-empty");
+        db.flush().unwrap();
+        let m = Manifest::load(td.path()).unwrap().unwrap();
+        assert_eq!(m.wal_number, 1);
+        assert_eq!(m.next_file_number, 2);
+        assert!(m.table_numbers.is_empty());
+    }
+
+    #[test]
+    fn full_pipeline_across_two_flushes_and_reopen() {
+        let (td, mut db) = fresh_db("flush-pipeline");
+        db.put(b"a", b"1").unwrap();
+        db.put(b"b", b"2").unwrap();
+        db.sync().unwrap();
+        db.flush().unwrap();
+
+        assert_eq!(db.get("a").unwrap(), Some(b"1".to_vec()));
+        db.delete(b"a").unwrap();
+        db.put(b"c", b"3").unwrap();
+        db.sync().unwrap();
+        db.flush().unwrap();
+
+        // a is now tombstoned in table 4; b survives in table 2
+        assert_eq!(db.get("a").unwrap(), None);
+        assert_eq!(db.get("b").unwrap(), Some(b"2".to_vec()));
+        assert_eq!(db.live_table_numbers(), vec![2, 4]);
+
+        drop(db);
+        let mut db = Kiban::open(td.path()).unwrap();
+        assert_eq!(db.get("a").unwrap(), None);
+        assert_eq!(db.get("b").unwrap(), Some(b"2".to_vec()));
+        assert_eq!(db.get("c").unwrap(), Some(b"3".to_vec()));
+
+        // memtable writes after recovery still outrank tables
+        db.put(b"a", b"back").unwrap();
+        assert_eq!(db.get("a").unwrap(), Some(b"back".to_vec()));
+    }
+
+    #[test]
+    fn memtable_is_empty_after_flush_and_wal_rotated() {
+        let (td, mut db) = fresh_db("flush-rotation");
+        db.put(b"k", b"v").unwrap();
+        db.sync().unwrap();
+        db.flush().unwrap();
+        let m = Manifest::load(td.path()).unwrap().unwrap();
+        assert_eq!(m.wal_number, 3);
+        assert_eq!(m.table_numbers, vec![2]);
+        assert!(!td.path().join(file_name(1, WAL_EXTENSION)).exists());
+        // new wal is live: write, reopen without sync, still there
+        db.put(b"k2", b"v2").unwrap();
+        drop(db);
+        let db = Kiban::open(td.path()).unwrap();
+        assert_eq!(db.get("k2").unwrap(), Some(b"v2".to_vec()));
+    }
+
+    #[test]
+    fn crash_before_commit_point_loses_nothing_and_sweeps_orphan() {
+        // simulate a crash between D2 steps 2 and 4: an sst file exists,
+        // but the MANIFEST still names the old wal holding all writes.
+        let (td, mut db) = fresh_db("crash-before-commit");
+        db.put(b"k", b"v").unwrap();
+        db.sync().unwrap();
+        drop(db);
+
+        let manifest = Manifest::load(td.path()).unwrap().unwrap();
+        assert_eq!(manifest.wal_number, 1);
+        fs::write(td.path().join(file_name(5, SST_EXTENSION)), b"orphan").unwrap();
+
+        let db = Kiban::open(td.path()).unwrap();
+        assert_eq!(db.get("k").unwrap(), Some(b"v".to_vec()));
+        assert!(!td.path().join(file_name(5, SST_EXTENSION)).exists());
+    }
+
+    #[test]
+    fn crash_after_commit_point_but_before_wal_deletion() {
+        // real flush completes through the commit point, then we pretend
+        // the process died before removing the retired wal
+        let (td, mut db) = fresh_db("crash-after-commit");
+        db.put(b"k", b"v").unwrap();
+        db.sync().unwrap();
+        db.flush().unwrap();
+        fs::write(
+            td.path().join(file_name(1, WAL_EXTENSION)),
+            b"retired-but-present",
+        )
+        .unwrap();
+        drop(db);
+
+        let db = Kiban::open(td.path()).unwrap();
+        assert_eq!(db.get("k").unwrap(), Some(b"v".to_vec()));
+        assert!(!td.path().join(file_name(1, WAL_EXTENSION)).exists());
+    }
+
+    #[test]
+    fn flushed_tombstones_shadow_older_table_values_after_reopen() {
+        let (td, mut db) = fresh_db("flush-tombstone-shadow");
+        db.put(b"k", b"old").unwrap();
+        db.sync().unwrap();
+        db.flush().unwrap(); // table 2 holds k=old
+        db.delete(b"k").unwrap();
+        db.sync().unwrap();
+        db.flush().unwrap(); // table 4 holds k=tombstone
+        drop(db);
+
+        let db = Kiban::open(td.path()).unwrap();
+        assert_eq!(db.get("k").unwrap(), None);
     }
 }
