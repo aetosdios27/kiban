@@ -194,15 +194,22 @@ impl Kiban {
             });
         }
 
-        // compaction.md D2: L>=1 levels must be range-disjoint and sorted.
-        for window in tables.windows(2) {
-            if window[0].level >= 1
-                && window[0].level == window[1].level
-                && window[0].last_key >= window[1].first_key
-            {
+        // compaction.md D2: L>=1 levels must be range-disjoint. Within a
+        // level, files are checked in KEY order — file numbers record
+        // creation time, which need not match keyspace position.
+        let mut level_view: Vec<&TableEntry> = tables.iter().filter(|t| t.level >= 1).collect();
+        level_view.sort_by(|a, b| a.first_key.cmp(&b.first_key));
+        for window in level_view.windows(2) {
+            if window[0].level == window[1].level && window[0].last_key >= window[1].first_key {
                 return Err(DbError::Corrupt(format!(
-                    "level {} tables {} and {} have overlapping ranges",
-                    window[0].level, window[0].number, window[1].number
+                    "level {} tables {} and {} have overlapping ranges: [{:?}..{:?}] vs [{:?}..{:?}]",
+                    window[0].level,
+                    window[0].number,
+                    window[1].number,
+                    String::from_utf8_lossy(&window[0].first_key),
+                    String::from_utf8_lossy(&window[0].last_key),
+                    String::from_utf8_lossy(&window[1].first_key),
+                    String::from_utf8_lossy(&window[1].last_key),
                 )));
             }
         }
@@ -462,14 +469,23 @@ impl Kiban {
 
     fn sources_from<'a>(&'a self, start: &[u8]) -> Vec<SourceHead<'a>> {
         let mut sources = Vec::with_capacity(self.tables.len() + 1);
-        // newest first: the memtable outranks every table; tables then
-        // run by descending file number (ascending storage, hence rev)
+        // newest first: memtable, then L0 by descending number, then
+        // deeper levels ascending (within a level, higher number = newer
+        // for L0; deeper levels are disjoint so order is irrelevant but
+        // kept deterministic)
         sources.push(SourceHead {
             feed: SourceFeed::Mem(self.memtable.iter_from(start)),
             head: None,
             exhausted: false,
         });
-        for table in self.tables.iter().rev() {
+        for table in self.tables.iter().rev().filter(|t| t.level == 0) {
+            sources.push(SourceHead {
+                feed: SourceFeed::Table(table.table.iter_from(start)),
+                head: None,
+                exhausted: false,
+            });
+        }
+        for table in self.tables.iter().filter(|t| t.level >= 1) {
             sources.push(SourceHead {
                 feed: SourceFeed::Table(table.table.iter_from(start)),
                 head: None,
@@ -1265,10 +1281,13 @@ impl Kiban {
         // exists and all target overlaps are inputs (compaction.md D5)
         let gc_allowed = target > deepest;
 
-        // merge inputs newest-first; collapse via raw mode
+        // merge inputs newest-first; collapse via raw mode.
+        // Newest = shallower level first; within a level, higher file
+        // number first. (Getting this backwards lets stale deep-level
+        // values resurrect over fresh ones.)
         let mut ordered: Vec<&TableEntry> =
             input_indices.iter().map(|i| &self.tables[*i]).collect();
-        ordered.sort_by_key(|t| std::cmp::Reverse((t.level, t.number)));
+        ordered.sort_by(|a, b| a.level.cmp(&b.level).then(b.number.cmp(&a.number)));
 
         let mut outputs: Vec<TableEntry> = Vec::new();
         let mut builder = TableBuilder::new();
@@ -1376,5 +1395,218 @@ impl Kiban {
             let _ = fs::remove_file(self.dir.join(file_name(r.number, SST_EXTENSION)));
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod compaction_tests {
+    #[test]
+    fn reopening_every_round_stays_valid_and_correct() {
+        let td = crate::testutil::TempDir::new("bisect");
+        let mut db = Kiban::open_with_options(td.path(), tiny_options()).unwrap();
+        let mut reference: BTreeMap<Vec<u8>, Vec<u8>> = BTreeMap::new();
+        let mut state: u64 = 0x1234_5678_9abc_def0;
+        let mut next = move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        for round in 0..60u64 {
+            for _ in 0..12 {
+                let i = next() % 80;
+                let key = format!("k{i:03}");
+                if next() % 5 == 0 {
+                    db.delete(key.as_bytes()).unwrap();
+                    reference.remove(key.as_bytes());
+                } else {
+                    let val = format!("r{round}-i{i}");
+                    db.put(key.as_bytes(), val.as_bytes()).unwrap();
+                    reference.insert(key.into_bytes(), val.into_bytes());
+                }
+            }
+            db.sync().unwrap();
+            db.flush().unwrap();
+            drop(db);
+            db = match Kiban::open_with_options(td.path(), tiny_options()) {
+                Ok(d) => d,
+                Err(e) => {
+                    println!("REOPEN FAILED at round {round}: {e}");
+                    panic!("reopen failed");
+                }
+            };
+            let scanned: Vec<(Vec<u8>, Vec<u8>)> = db
+                .iter()
+                .map(|r| r.unwrap())
+                .map(|(k, v)| (k.clone(), v.to_vec()))
+                .collect();
+            let expected: Vec<(Vec<u8>, Vec<u8>)> = reference.clone().into_iter().collect();
+            if scanned != expected {
+                println!(
+                    "DIVERGED at round {round}: tables={:?} scan={} ref={}",
+                    db.debug_tables(),
+                    scanned.len(),
+                    expected.len()
+                );
+                panic!("diverged");
+            }
+        }
+    }
+
+    use super::*;
+    use crate::testutil::TempDir;
+    use std::collections::BTreeMap;
+
+    fn tiny_options() -> KibanOptions {
+        KibanOptions {
+            l0_compaction_trigger: 2,
+            base_level_bytes: 300,
+            level_multiplier: 4,
+            target_file_size: 250,
+        }
+    }
+
+    #[test]
+    fn compactions_keep_reads_and_scans_correct_over_many_generations() {
+        let td = TempDir::new("compact-longrun");
+        let mut db = Kiban::open_with_options(td.path(), tiny_options()).unwrap();
+        let mut reference: BTreeMap<Vec<u8>, Vec<u8>> = BTreeMap::new();
+
+        // deterministic pseudo-random workload
+        let mut state: u64 = 0x1234_5678_9abc_def0;
+        let mut next = move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+
+        for round in 0..60u64 {
+            for _ in 0..12 {
+                let i = next() % 80;
+                let key = format!("k{i:03}");
+                if next() % 5 == 0 {
+                    db.delete(key.as_bytes()).unwrap();
+                    reference.remove(key.as_bytes());
+                } else {
+                    let val = format!("r{round}-i{i}");
+                    db.put(key.as_bytes(), val.as_bytes()).unwrap();
+                    reference.insert(key.into_bytes(), val.into_bytes());
+                }
+            }
+            db.sync().unwrap();
+            db.flush().unwrap();
+        }
+
+        // reference equality through everything compaction did
+        let scanned: Vec<(Vec<u8>, Vec<u8>)> = db
+            .iter()
+            .map(|r| r.unwrap())
+            .map(|(k, v)| (k, v.to_vec()))
+            .collect();
+        assert_eq!(scanned, reference.clone().into_iter().collect::<Vec<_>>());
+
+        // per-key get agreement
+        for (k, v) in &reference {
+            assert_eq!(db.get(k.as_slice()).unwrap().as_deref(), Some(v.as_slice()));
+        }
+
+        // bounded structure: L0 stays short, deeper levels exist
+        assert!(db.l0_count() < 2);
+        assert!(db.tables.iter().any(|t| t.level >= 2));
+
+        // invariant survives reopen (open re-validates disjointness)
+        drop(db);
+        let db = Kiban::open_with_options(td.path(), tiny_options()).unwrap();
+        let rescanned: Vec<(Vec<u8>, Vec<u8>)> = db
+            .iter()
+            .map(|r| r.unwrap())
+            .map(|(k, v)| (k, v.to_vec()))
+            .collect();
+        assert_eq!(rescanned, scanned);
+    }
+
+    #[test]
+    fn tombstones_are_fully_reclaimed_at_the_deepest_level() {
+        let td = TempDir::new("compact-gc");
+        let mut db = Kiban::open_with_options(td.path(), tiny_options()).unwrap();
+        db.put(b"doomed", b"value").unwrap();
+        db.sync().unwrap();
+        db.flush().unwrap();
+        db.delete(b"doomed").unwrap();
+        db.sync().unwrap();
+        db.flush().unwrap(); // triggers L0->L1; L1 may be deepest -> GC legal
+
+        // keep pushing data until the tombstone either reaches the deepest
+        // level and vanishes or provably remains shadowed correctly
+        for round in 0..10 {
+            db.put(format!("filler{round}"), b"x").unwrap();
+            db.sync().unwrap();
+            db.flush().unwrap();
+        }
+
+        // get agrees regardless
+        assert_eq!(db.get(b"doomed").unwrap(), None);
+
+        // eventually no trace: neither value nor tombstone in any table
+        let raw_keys: Vec<Vec<u8>> = db.iter_internal().map(|r| r.unwrap().0).collect();
+        assert!(
+            !raw_keys.contains(&b"doomed".to_vec()),
+            "doomed key still physically present after deep compaction"
+        );
+
+        // and the deleted VALUE bytes are gone from every file on disk
+        for entry in fs::read_dir(td.path()).unwrap().flatten() {
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else { continue };
+            if name.ends_with(SST_EXTENSION) {
+                let bytes = fs::read(entry.path()).unwrap();
+                assert!(
+                    !bytes.windows(5).any(|w| w == b"value"),
+                    "deleted value still on disk in {name}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn compaction_retires_inputs_and_never_leaves_garbage_in_manifest() {
+        let td = TempDir::new("compact-retire");
+        let mut db = Kiban::open_with_options(td.path(), tiny_options()).unwrap();
+        for round in 0..6u32 {
+            db.put(format!("key{round}"), b"v").unwrap();
+            db.sync().unwrap();
+            db.flush().unwrap();
+        }
+        let manifest = Manifest::load(td.path()).unwrap().unwrap();
+
+        // every referenced file exists, every existing sst is referenced
+        for tref in &manifest.tables {
+            assert!(
+                td.path()
+                    .join(file_name(tref.number, SST_EXTENSION))
+                    .exists()
+            );
+        }
+        let on_disk: Vec<u64> = fs::read_dir(td.path())
+            .unwrap()
+            .flatten()
+            .filter_map(|e| {
+                let n = e.file_name().to_str()?.to_string();
+                n.strip_suffix(".sst").and_then(|s| s.parse().ok())
+            })
+            .collect();
+        assert_eq!(on_disk.len(), manifest.tables.len());
+
+        // compaction actually happened: more flushes than surviving tables
+        assert!(manifest.tables.len() < 6);
+        assert!(db.get(b"key5").unwrap().is_some());
+    }
+}
+
+#[cfg(test)]
+impl Kiban {
+    pub(crate) fn debug_tables(&self) -> Vec<(u32, u64)> {
+        self.tables.iter().map(|t| (t.level, t.number)).collect()
     }
 }
