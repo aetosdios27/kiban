@@ -73,12 +73,12 @@ impl Memtable {
 
     /// Iterates all entries in ascending byte-wise key order, tombstones
     /// included.
-    pub fn iter(&self) -> impl Iterator<Item = (&[u8], &Entry)> + DoubleEndedIterator {
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = (&[u8], &Entry)> {
         self.map.iter().map(|(k, e)| (k.as_slice(), e))
     }
 
     /// Iterates live entries only (tombstones skipped), same ordering.
-    pub fn iter_live(&self) -> impl Iterator<Item = (&[u8], &[u8])> + DoubleEndedIterator {
+    pub fn iter_live(&self) -> impl DoubleEndedIterator<Item = (&[u8], &[u8])> {
         self.map
             .iter()
             .filter_map(|(k, e)| e.as_value().map(|v| (k.as_slice(), v)))
