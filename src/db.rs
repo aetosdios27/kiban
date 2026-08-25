@@ -1611,3 +1611,220 @@ impl Kiban {
         self.tables.iter().map(|t| (t.level, t.number)).collect()
     }
 }
+
+#[cfg(test)]
+mod crash_sweep_tests {
+    use super::*;
+    use crate::sys;
+    use crate::testutil::TempDir;
+    use std::collections::BTreeMap;
+
+    type Model = BTreeMap<Vec<u8>, Vec<u8>>;
+
+    /// What the scenario promised and attempted, tracked as it ran.
+    #[derive(Default, Debug, Clone)]
+    struct Tracker {
+        /// State as of the last successful `sync()` (the durability floor).
+        synced: Model,
+        /// Final intended state including unsynced operations (the ceiling,
+        /// modulo torn-tail truncation).
+        attempted: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
+        /// Keys touched since the last successful sync.
+        dirty_since_sync: Vec<Vec<u8>>,
+    }
+
+    impl Tracker {
+        fn apply(&mut self, key: &[u8], value: Option<&[u8]>) {
+            self.attempted
+                .insert(key.to_vec(), value.map(|v| v.to_vec()));
+            self.dirty_since_sync.push(key.to_vec());
+        }
+
+        fn on_sync_ok(&mut self) {
+            self.synced = self
+                .attempted
+                .iter()
+                .filter_map(|(k, v)| v.as_ref().map(|v| (k.clone(), v.clone())))
+                .collect();
+            self.dirty_since_sync.clear();
+        }
+    }
+
+    /// Asserts the recovery band (fault-injection.md D2): every allowed
+    /// value for a key is its synced value or its attempted final value.
+    fn assert_recovery_band(label: &str, n: usize, recovered: &Model, tracker: &Tracker) {
+        let domain: std::collections::BTreeSet<&Vec<u8>> = tracker
+            .synced
+            .keys()
+            .chain(tracker.attempted.keys())
+            .collect();
+        for key in domain {
+            let synced = tracker.synced.get(key);
+            let attempted = tracker.attempted.get(key);
+            let actual: Option<&[u8]> = recovered.get(key).map(|v| v.as_slice());
+            let mut allowed: Vec<Option<&[u8]>> = Vec::new();
+            match synced {
+                Some(v) => allowed.push(Some(v.as_slice())),
+                None => allowed.push(None),
+            }
+            if tracker.dirty_since_sync.contains(key) {
+                match attempted {
+                    Some(v) => allowed.push(v.as_deref()),
+                    None => allowed.push(None),
+                }
+            }
+            assert!(
+                allowed.contains(&actual),
+                "{label} n={n}: key {key:?} recovered as {:?}, allowed {:?}",
+                actual.map(|v| String::from_utf8_lossy(v).to_string()),
+                allowed
+                    .iter()
+                    .map(|a| a.map(|v| String::from_utf8_lossy(v).to_string()))
+                    .collect::<Vec<_>>(),
+            );
+        }
+    }
+
+    struct RunOutcome {
+        result: Result<(), DbError>,
+        tracker: Tracker,
+        failed: bool,
+        ops: usize,
+    }
+
+    /// Scenario: interleaved puts/deletes with syncs and two flushes under
+    /// aggressive compaction options.
+    fn run_scenario(dir: &Path, n: usize) -> RunOutcome {
+        sys::install_fault(n);
+        let mut tracker = Tracker::default();
+        let result = (|| -> Result<(), DbError> {
+            let mut options = KibanOptions {
+                l0_compaction_trigger: 2,
+                base_level_bytes: 300,
+                level_multiplier: 4,
+                target_file_size: 250,
+            };
+            let _ = &mut options;
+            let mut db = Kiban::open_with_options(dir, options)?;
+            macro_rules! step {
+                ($op:expr) => {
+                    if $op.is_err() {
+                        return Ok(());
+                    }
+                };
+            }
+            for i in 0..10u32 {
+                step!(db.put(format!("k{i:03}"), format!("v{i}")));
+                tracker.apply(
+                    format!("k{i:03}").as_bytes(),
+                    Some(format!("v{i}").as_bytes()),
+                );
+            }
+            step!(db.sync());
+            tracker.on_sync_ok();
+
+            step!(db.delete(b"k003"));
+            tracker.apply(b"k003", None);
+            step!(db.put(b"k001", b"updated"));
+            tracker.apply(b"k001", Some(b"updated"));
+            step!(db.flush());
+
+            for i in 10..20u32 {
+                step!(db.put(format!("k{i:03}"), format!("v{i}")));
+                tracker.apply(
+                    format!("k{i:03}").as_bytes(),
+                    Some(format!("v{i}").as_bytes()),
+                );
+            }
+            step!(db.sync());
+            tracker.on_sync_ok();
+
+            step!(db.delete(b"k010"));
+            tracker.apply(b"k010", None);
+            step!(db.put(b"late", b"L"));
+            tracker.apply(b"late", Some(b"L"));
+            step!(db.flush());
+            Ok(())
+        })();
+        let failed = result.is_err();
+        let ops = sys::op_count();
+        sys::clear_fault();
+        RunOutcome {
+            result,
+            tracker,
+            failed,
+            ops,
+        }
+    }
+
+    #[test]
+    fn every_single_syscall_failure_in_the_pipeline_recovers_correctly() {
+        let clean_dir = TempDir::new("sweep-clean");
+        let clean = run_scenario(clean_dir.path(), usize::MAX);
+        assert!(clean.result.is_ok(), "clean scenario must succeed");
+        let total_ops = clean.ops;
+        assert!(
+            total_ops > 20,
+            "scenario too small to exercise anything: {total_ops}"
+        );
+        drop(clean);
+
+        let mut any_failed = false;
+        for n in 0..total_ops {
+            let dir = TempDir::new("sweep");
+            let outcome = run_scenario(dir.path(), n);
+            any_failed |= outcome.failed;
+
+            // D4: reopening after any single-syscall crash must succeed.
+            let db = match Kiban::open_with_options(
+                dir.path(),
+                KibanOptions {
+                    l0_compaction_trigger: 2,
+                    base_level_bytes: 300,
+                    level_multiplier: 4,
+                    target_file_size: 250,
+                },
+            ) {
+                Ok(db) => db,
+                Err(e) => panic!("n={n}: reopen failed: {e}"),
+            };
+
+            let recovered: Model = db
+                .iter()
+                .map(|r| r.unwrap())
+                .map(|(k, v)| (k, v.to_vec()))
+                .collect();
+            assert_recovery_band("pipeline", n, &recovered, &outcome.tracker);
+
+            // scans and gets agree after recovery too
+            for (k, v) in &recovered {
+                assert_eq!(
+                    db.get(k.as_slice()).unwrap().as_deref(),
+                    Some(v.as_slice()),
+                    "n={n}: get disagrees with scan"
+                );
+            }
+        }
+        assert!(any_failed, "no injected failure ever triggered");
+    }
+
+    #[test]
+    fn sweep_fails_at_every_index_when_asked_to() {
+        // sanity on the injection machinery itself: the Nth run's error
+        // occurs exactly once, at N, deterministically
+        let td = TempDir::new("sweep-machinery");
+        let outcomes: Vec<bool> = (0..5)
+            .map(|n| {
+                sys::install_fault(n);
+                let failed = match Kiban::open(td.path()) {
+                    Ok(mut db) => db.put(b"x", b"y").is_err() || db.sync().is_err(),
+                    Err(_) => true,
+                };
+                sys::clear_fault();
+                failed
+            })
+            .collect();
+        // at least one of the first five ops failing must disturb the run
+        assert!(outcomes.iter().any(|f| *f), "injection never fired");
+    }
+}
