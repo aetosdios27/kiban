@@ -1828,3 +1828,170 @@ mod crash_sweep_tests {
         assert!(outcomes.iter().any(|f| *f), "injection never fired");
     }
 }
+
+/// A clonable, thread-safe handle to one engine.
+///
+/// Concurrency model per `docs/design/concurrency.md`: one mutex, group
+/// commit falls out of the two-step WAL contract (every `sync` flushes
+/// all pending records from all writers in one fdatasync).
+#[derive(Clone)]
+pub struct SharedKiban {
+    inner: std::sync::Arc<std::sync::Mutex<Kiban>>,
+}
+
+impl SharedKiban {
+    pub fn open(dir: impl AsRef<Path>) -> Result<SharedKiban, DbError> {
+        Self::open_with_options(dir, KibanOptions::default())
+    }
+
+    pub fn open_with_options(
+        dir: impl AsRef<Path>,
+        options: KibanOptions,
+    ) -> Result<SharedKiban, DbError> {
+        Ok(SharedKiban {
+            inner: std::sync::Arc::new(std::sync::Mutex::new(Kiban::open_with_options(
+                dir, options,
+            )?)),
+        })
+    }
+
+    fn lock(&self) -> Result<std::sync::MutexGuard<'_, Kiban>, DbError> {
+        self.inner.lock().map_err(|_| {
+            DbError::Corrupt(
+                "engine lock poisoned: a panic occurred while an operation was in flight"
+                    .to_string(),
+            )
+        })
+    }
+
+    /// Buffered WAL append + memtable write. Not durable until `sync`.
+    pub fn put(&self, key: impl AsRef<[u8]>, value: impl AsRef<[u8]>) -> io::Result<()> {
+        match self.lock() {
+            Ok(mut guard) => guard.put(key, value),
+            Err(e) => Err(io::Error::other(e.to_string())),
+        }
+    }
+
+    pub fn delete(&self, key: impl AsRef<[u8]>) -> io::Result<()> {
+        match self.lock() {
+            Ok(mut guard) => guard.delete(key),
+            Err(e) => Err(io::Error::other(e.to_string())),
+        }
+    }
+
+    pub fn get(&self, key: impl AsRef<[u8]>) -> Result<Option<Vec<u8>>, DbError> {
+        self.lock()?.get(key)
+    }
+
+    /// Makes every record appended by *any* thread so far durable in one
+    /// device flush (group commit).
+    pub fn sync(&self) -> io::Result<()> {
+        match self.lock() {
+            Ok(mut guard) => guard.sync(),
+            Err(e) => Err(io::Error::other(e.to_string())),
+        }
+    }
+
+    pub fn flush(&self) -> Result<(), DbError> {
+        self.lock()?.flush()
+    }
+}
+
+#[cfg(test)]
+mod shared_tests {
+    use super::*;
+    use crate::testutil::TempDir;
+    use std::collections::BTreeMap;
+    use std::sync::Arc as StdArc;
+
+    #[test]
+    fn handles_are_clonable_and_share_state() {
+        let td = TempDir::new("shared-clone");
+        let db = SharedKiban::open(td.path()).unwrap();
+        let clone = db.clone();
+        db.put(b"a", b"1").unwrap();
+        assert_eq!(clone.get(b"a").unwrap(), Some(b"1".to_vec()));
+    }
+
+    #[test]
+    fn concurrent_writers_all_land_with_one_group_sync() {
+        let td = TempDir::new("shared-group-commit");
+        let db = StdArc::new(SharedKiban::open(td.path()).unwrap());
+        let mut expected: BTreeMap<Vec<u8>, Vec<u8>> = BTreeMap::new();
+
+        let threads: Vec<_> = (0..4)
+            .map(|t| {
+                let db = db.clone();
+                std::thread::spawn(move || {
+                    for i in 0..50u32 {
+                        let key = format!("t{t}-k{i:03}");
+                        let val = format!("v{t}-{i}");
+                        db.put(&key, &val).unwrap();
+                    }
+                    db.sync().unwrap();
+                })
+            })
+            .collect();
+        for th in threads {
+            th.join().unwrap();
+        }
+        // rebuild expectation deterministically (threads wrote disjoint ranges)
+        for t in 0..4u32 {
+            for i in 0..50u32 {
+                expected.insert(
+                    format!("t{t}-k{i:03}").into_bytes(),
+                    format!("v{t}-{i}").into_bytes(),
+                );
+            }
+        }
+
+        let scanned: Vec<(Vec<u8>, Vec<u8>)> = {
+            let guard = db.lock().unwrap();
+            guard
+                .iter()
+                .map(|r| r.unwrap())
+                .map(|(k, v)| (k.clone(), v.to_vec()))
+                .collect()
+        };
+        assert_eq!(scanned.len(), expected.len());
+        for (k, v) in &scanned {
+            assert_eq!(expected.get(k).map(|e| e.as_slice()), Some(v.as_slice()));
+        }
+    }
+
+    #[test]
+    fn concurrent_readers_never_see_torn_state() {
+        let td = TempDir::new("shared-readers");
+        let db = StdArc::new(SharedKiban::open(td.path()).unwrap());
+        db.put(b"anchor", b"stable").unwrap();
+        db.sync().unwrap();
+
+        let writer = {
+            let db = db.clone();
+            std::thread::spawn(move || {
+                for i in 0..200u32 {
+                    db.put(format!("key{i:04}"), format!("val{i}")).unwrap();
+                    if i % 25 == 0 {
+                        db.sync().unwrap();
+                    }
+                }
+                db.flush().unwrap();
+            })
+        };
+        let readers: Vec<_> = (0..2)
+            .map(|_| {
+                let db = db.clone();
+                std::thread::spawn(move || {
+                    for _ in 0..100 {
+                        assert_eq!(db.get(b"anchor").unwrap(), Some(b"stable".to_vec()));
+                    }
+                })
+            })
+            .collect();
+        writer.join().unwrap();
+        for r in readers {
+            r.join().unwrap();
+        }
+        assert_eq!(db.get(b"anchor").unwrap(), Some(b"stable".to_vec()));
+    }
+}
