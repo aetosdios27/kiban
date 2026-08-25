@@ -9,6 +9,7 @@
 
 pub mod atomic;
 pub mod crc32;
+pub mod db;
 pub mod frame;
 pub mod manifest;
 pub mod memtable;

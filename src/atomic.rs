@@ -11,6 +11,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
+pub const TEMP_MARKER: &str = ".kiban-tmp.";
+
 #[derive(Debug)]
 pub enum CommitError {
     Failed(io::Error),
@@ -50,7 +52,7 @@ fn temp_path(dir: &Path, target: &Path) -> PathBuf {
         .and_then(|n| n.to_str())
         .unwrap_or("target");
     let n = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-    dir.join(format!(".{name}.kiban-tmp.{}.{}", std::process::id(), n))
+    dir.join(format!(".{name}{TEMP_MARKER}{}.{}", std::process::id(), n))
 }
 
 fn remove_temp(temp: &Path) {

@@ -240,6 +240,16 @@ impl Wal {
     pub fn path(&self) -> &Path {
         &self.path
     }
+
+    #[cfg(test)]
+    pub(crate) fn writer_flush_for_test(&mut self) {
+        self.writer.flush().unwrap();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn writer_get_mut_for_test(&mut self) -> &mut File {
+        self.writer.get_mut()
+    }
 }
 
 #[cfg(test)]
