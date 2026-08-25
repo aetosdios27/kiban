@@ -315,6 +315,76 @@ impl Kiban {
     pub(crate) fn live_table_numbers(&self) -> Vec<u64> {
         self.tables.iter().map(|t| t.number).collect()
     }
+
+    /// Iterates all live entries in ascending byte-wise key order.
+    pub fn iter(&self) -> DbIter<'_> {
+        DbIter {
+            core: self.merge_core(true),
+        }
+    }
+
+    /// Iterates the half-open key range `[start, end)` of live entries.
+    pub fn range<'a>(
+        &'a self,
+        start: &'a [u8],
+        end: &'a [u8],
+    ) -> impl Iterator<Item = Result<(Vec<u8>, &'a [u8]), DbError>> + 'a {
+        let core = MergeCore {
+            sources: self.sources_from(start),
+            user_mode: true,
+            failed: false,
+        };
+        let end = end.to_vec();
+        DbIter { core }.take_while(move |item| match item {
+            Ok((k, _)) => k.as_slice() < end.as_slice(),
+            Err(_) => true,
+        })
+    }
+
+    /// Internal iteration (raw mode) — newest entry per key, tombstones
+    /// included. Compaction's input stream.
+    pub(crate) fn iter_internal(&self) -> DbRawIter<'_> {
+        DbRawIter {
+            core: self.merge_core(false),
+        }
+    }
+
+    fn merge_core<'a>(&'a self, user_mode: bool) -> MergeCore<'a> {
+        MergeCore {
+            sources: self.sources_from(b""),
+            user_mode,
+            failed: false,
+        }
+    }
+
+    fn sources_from<'a>(&'a self, start: &[u8]) -> Vec<SourceHead<'a>> {
+        let mut sources = Vec::with_capacity(self.tables.len() + 1);
+        // newest first: the memtable outranks every table; tables then
+        // run by descending file number (ascending storage, hence rev)
+        sources.push(SourceHead {
+            feed: SourceFeed::Mem(self.memtable.iter_from(start)),
+            head: None,
+            exhausted: false,
+        });
+        for table in self.tables.iter().rev() {
+            sources.push(SourceHead {
+                feed: SourceFeed::Table(table.table.iter_from(start)),
+                head: None,
+                exhausted: false,
+            });
+        }
+        sources
+    }
+
+    pub(crate) fn iter_from<'a>(&'a self, start: &[u8]) -> DbIter<'a> {
+        DbIter {
+            core: MergeCore {
+                sources: self.sources_from(start),
+                user_mode: true,
+                failed: false,
+            },
+        }
+    }
 }
 
 fn parse_artifact_name(name: &str) -> Option<(u64, &str)> {
@@ -644,5 +714,336 @@ mod flush_tests {
 
         let db = Kiban::open(td.path()).unwrap();
         assert_eq!(db.get("k").unwrap(), None);
+    }
+}
+
+/// One entry as the merge sees it: the newest version of a key.
+pub struct RawEntry<'a> {
+    pub kind: Kind,
+    pub value: &'a [u8],
+}
+
+struct HeadEntry<'a> {
+    key: Vec<u8>,
+    kind: Kind,
+    value: &'a [u8],
+}
+
+enum SourceFeed<'a> {
+    Mem(std::collections::btree_map::Range<'a, Vec<u8>, MemEntry>),
+    Table(crate::sstable::Iter<'a>),
+}
+
+struct SourceHead<'a> {
+    feed: SourceFeed<'a>,
+    head: Option<HeadEntry<'a>>,
+    exhausted: bool,
+}
+
+impl<'a> SourceHead<'a> {
+    fn fill(&mut self) -> Result<(), SstError> {
+        if self.head.is_some() || self.exhausted {
+            return Ok(());
+        }
+        let next = match &mut self.feed {
+            SourceFeed::Mem(it) => it.next().map(|(k, e)| match e {
+                MemEntry::Value(v) => HeadEntry {
+                    key: k.clone(),
+                    kind: Kind::Put,
+                    value: v,
+                },
+                MemEntry::Tombstone => HeadEntry {
+                    key: k.clone(),
+                    kind: Kind::Tombstone,
+                    value: &[],
+                },
+            }),
+            SourceFeed::Table(it) => match it.next() {
+                Some(Ok((kind, key, value))) => Some(HeadEntry { key, kind, value }),
+                Some(Err(e)) => return Err(e),
+                None => None,
+            },
+        };
+        self.head = next;
+        self.exhausted = self.head.is_none();
+        Ok(())
+    }
+
+    fn advance(&mut self) {
+        self.head = None;
+    }
+}
+
+struct MergeCore<'a> {
+    sources: Vec<SourceHead<'a>>,
+    user_mode: bool,
+    failed: bool,
+}
+
+impl<'a> MergeCore<'a> {
+    /// Newest-wins merge over all sources (db-iterator.md D2). In user
+    /// mode tombstones are skipped; in raw mode they are emitted.
+    fn next_raw(&mut self) -> Option<Result<(Vec<u8>, RawEntry<'a>), DbError>> {
+        if self.failed {
+            return None;
+        }
+        loop {
+            for source in &mut self.sources {
+                if let Err(e) = source.fill() {
+                    self.failed = true;
+                    return Some(Err(DbError::from(e)));
+                }
+            }
+
+            let mut min_key: Option<Vec<u8>> = None;
+            for source in &self.sources {
+                if let Some(head) = &source.head {
+                    min_key = Some(match min_key {
+                        Some(current) if current.as_slice() <= head.key.as_slice() => current,
+                        _ => head.key.clone(),
+                    });
+                }
+            }
+            let min_key = min_key?;
+
+            let mut newest: Option<(Kind, &'a [u8])> = None;
+            for source in &mut self.sources {
+                let matches = source
+                    .head
+                    .as_ref()
+                    .is_some_and(|h| h.key.as_slice() == min_key);
+                if matches {
+                    if newest.is_none() {
+                        let head = source.head.as_ref().unwrap();
+                        newest = Some((head.kind, head.value));
+                    }
+                    source.advance();
+                }
+            }
+            let (kind, value) = newest.expect("at least one source matched the minimum key");
+
+            if self.user_mode && kind == Kind::Tombstone {
+                continue;
+            }
+            return Some(Ok((min_key, RawEntry { kind, value })));
+        }
+    }
+}
+
+/// User-visible iteration: live data only (tombstones and shadowed
+/// versions invisible). Agrees exactly with `get` by construction.
+pub struct DbIter<'a> {
+    core: MergeCore<'a>,
+}
+
+impl<'a> Iterator for DbIter<'a> {
+    type Item = Result<(Vec<u8>, &'a [u8]), DbError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.core
+            .next_raw()
+            .map(|r| r.map(|(k, e)| (k.to_vec(), e.value)))
+    }
+}
+
+/// Internal iteration: newest entry per key including tombstones.
+/// This is the stream compaction will consume.
+pub struct DbRawIter<'a> {
+    core: MergeCore<'a>,
+}
+
+impl<'a> Iterator for DbRawIter<'a> {
+    type Item = Result<(Vec<u8>, Kind, &'a [u8]), DbError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.core
+            .next_raw()
+            .map(|r| r.map(|(k, e)| (k.to_vec(), e.kind, e.value)))
+    }
+}
+
+#[cfg(test)]
+mod scan_tests {
+    use super::*;
+    use crate::testutil::TempDir;
+    use std::collections::BTreeMap;
+
+    /// Builds a database across three generations with an operation log,
+    /// and returns it plus the reference model of live data.
+    fn build_three_generations(label: &str) -> (TempDir, Kiban, BTreeMap<Vec<u8>, Vec<u8>>) {
+        let td = TempDir::new(label);
+        let mut db = Kiban::open(td.path()).unwrap();
+        let mut reference: BTreeMap<Vec<u8>, Vec<u8>> = BTreeMap::new();
+        let apply =
+            |db: &mut Kiban, r: &mut BTreeMap<Vec<u8>, Vec<u8>>, k: &[u8], v: Option<&[u8]>| {
+                if let Some(v) = v {
+                    db.put(k, v).unwrap();
+                    r.insert(k.to_vec(), v.to_vec());
+                } else {
+                    db.delete(k).unwrap();
+                    r.remove(k);
+                }
+            };
+
+        for i in 0..300u32 {
+            apply(
+                &mut db,
+                &mut reference,
+                format!("key-{i:06}").as_bytes(),
+                Some(format!("gen1-{i}").as_bytes()),
+            );
+        }
+        db.sync().unwrap();
+        db.flush().unwrap();
+
+        // generation 2: overwrite evens, delete multiples of 10, add new keys
+        for i in 0..300u32 {
+            if i % 2 == 0 {
+                apply(
+                    &mut db,
+                    &mut reference,
+                    format!("key-{i:06}").as_bytes(),
+                    Some(format!("gen2-{i}").as_bytes()),
+                );
+            }
+            if i % 10 == 0 {
+                apply(
+                    &mut db,
+                    &mut reference,
+                    format!("key-{i:06}").as_bytes(),
+                    None,
+                );
+            }
+            apply(
+                &mut db,
+                &mut reference,
+                format!("extra-{i:06}").as_bytes(),
+                Some(format!("e{i}").as_bytes()),
+            );
+        }
+        db.sync().unwrap();
+        db.flush().unwrap();
+
+        // generation 3 lives in the memtable
+        for i in 0..50u32 {
+            apply(
+                &mut db,
+                &mut reference,
+                format!("key-{i:06}").as_bytes(),
+                Some(format!("mem-{i}").as_bytes()),
+            );
+            apply(
+                &mut db,
+                &mut reference,
+                format!("extra-{i:06}").as_bytes(),
+                None,
+            );
+        }
+
+        (td, db, reference)
+    }
+
+    #[test]
+    fn full_scan_matches_reference_model_across_generations() {
+        let (_td, db, reference) = build_three_generations("scan-full");
+        let scanned: Vec<(Vec<u8>, Vec<u8>)> = db
+            .iter()
+            .map(|r| r.unwrap())
+            .map(|(k, v)| (k, v.to_vec()))
+            .collect();
+        let expected: Vec<(Vec<u8>, Vec<u8>)> = reference.into_iter().collect();
+        assert_eq!(scanned.len(), expected.len());
+        assert_eq!(scanned, expected);
+    }
+
+    #[test]
+    fn point_gets_agree_with_scan_contents() {
+        let (_td, db, _reference) = build_three_generations("scan-agrees");
+        let from_scan: BTreeMap<Vec<u8>, Vec<u8>> = db
+            .iter()
+            .map(|r| r.unwrap())
+            .map(|(k, v)| (k.clone(), v.to_vec()))
+            .collect();
+        // every scan entry must be retrievable by get with identical value
+        for (k, v) in &from_scan {
+            assert_eq!(
+                db.get(k.as_slice()).unwrap().as_deref(),
+                Some(v.as_slice()),
+                "get disagrees with scan on {k:?}"
+            );
+        }
+        // spot-check keys absent from the scan are truly gone
+        assert_eq!(db.get(b"extra-000000").unwrap(), None); // deleted in memtable
+        // and one re-added in the memtable beats its table tombstone
+        assert_eq!(db.get(b"key-000000").unwrap(), Some(b"mem-0".to_vec()));
+    }
+
+    #[test]
+    fn raw_iteration_exposes_tombstones_and_newest_only() {
+        let (_td, db, _) = build_three_generations("scan-raw");
+        let entries: Vec<(Vec<u8>, Kind)> = db
+            .iter_internal()
+            .map(|r| {
+                let (k, kind, _) = r.unwrap();
+                (k, kind)
+            })
+            .collect();
+
+        // strictly ascending, unique keys
+        for w in entries.windows(2) {
+            assert!(w[0].0 < w[1].0);
+        }
+        // extra-000000 exists as a tombstone (written to a table in
+        // gen2, deleted by the memtable in gen3)
+        let zero = entries.iter().find(|(k, _)| k == b"extra-000000").unwrap();
+        assert_eq!(zero.1, Kind::Tombstone);
+        // key-000000's newest version is the memtable re-add
+        let zero = entries.iter().find(|(k, _)| k == b"key-000000").unwrap();
+        assert_eq!(zero.1, Kind::Put);
+        // no duplicate keys anywhere
+        assert_eq!(
+            entries
+                .iter()
+                .map(|(k, _)| k)
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
+            entries.len()
+        );
+    }
+
+    #[test]
+    fn seek_positions_at_first_key_ge_target() {
+        let (_td, db, reference) = build_three_generations("scan-seek");
+        for probe in ["", "a", "key-000049", "key-000050", "key-000123x", "zzzz"] {
+            let got: Vec<Vec<u8>> = db
+                .iter_from(probe.as_bytes())
+                .map(|r| r.unwrap().0)
+                .take(5)
+                .collect();
+            let want: Vec<Vec<u8>> = reference
+                .range(probe.as_bytes().to_vec()..)
+                .take(5)
+                .map(|(k, _)| k.clone())
+                .collect();
+            assert_eq!(got, want, "seek from {probe:?}");
+        }
+    }
+
+    #[test]
+    fn range_is_half_open_subspace_of_full_scan() {
+        let (_td, db, reference) = build_three_generations("scan-range");
+        let ranged: Vec<Vec<u8>> = db
+            .range(b"key-000100".as_slice(), b"key-000200".as_slice())
+            .map(|r| r.unwrap().0)
+            .collect();
+        let expected: Vec<Vec<u8>> = reference
+            .range(b"key-000100".to_vec()..b"key-000200".to_vec())
+            .map(|(k, _)| k.clone())
+            .collect();
+        assert_eq!(ranged, expected);
+
+        // inverted/empty ranges yield nothing
+        assert_eq!(db.range(b"z", b"a").count(), 0);
+        assert_eq!(db.range(b"x", b"x").count(), 0);
     }
 }
