@@ -1,0 +1,5 @@
+/target
+
+# Design/research notes are kept local-only and must never be pushed to
+# GitHub or any shared remote.
+/docs
