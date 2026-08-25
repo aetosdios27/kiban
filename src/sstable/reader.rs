@@ -147,7 +147,19 @@ impl SstTable {
             next_block: 0,
             current: None,
             failed: false,
+            lower_bound: None,
         }
+    }
+
+    /// Iterates from the first key >= `target`. Positions at the right
+    /// block via separators; nothing is scanned from the file start.
+    pub fn iter_from(&self, target: &[u8]) -> Iter<'_> {
+        let mut it = self.iter();
+        it.next_block = self
+            .index
+            .partition_point(|e| e.separator.as_slice() < target);
+        it.lower_bound = Some(target.to_vec());
+        it
     }
 }
 
@@ -156,6 +168,7 @@ pub struct Iter<'a> {
     next_block: usize,
     current: Option<BlockIterState<'a>>,
     failed: bool,
+    lower_bound: Option<Vec<u8>>,
 }
 
 struct BlockIterState<'a> {
@@ -172,7 +185,15 @@ impl<'a> Iterator for Iter<'a> {
         loop {
             if let Some(state) = &mut self.current {
                 match state.inner.next() {
-                    Some(Ok(item)) => return Some(Ok(item)),
+                    Some(Ok((kind, key, value))) => {
+                        if let Some(bound) = &self.lower_bound {
+                            if key.as_slice() < bound.as_slice() {
+                                continue;
+                            }
+                            self.lower_bound = None;
+                        }
+                        return Some(Ok((kind, key, value)));
+                    }
                     Some(Err(e)) => {
                         self.failed = true;
                         return Some(Err(e));

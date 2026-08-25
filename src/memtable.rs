@@ -77,6 +77,18 @@ impl Memtable {
         self.map.iter().map(|(k, e)| (k.as_slice(), e))
     }
 
+    /// Iterates all entries from `start` (inclusive) in ascending
+    /// byte-wise key order, tombstones included.
+    pub fn iter_from(
+        &self,
+        start: impl AsRef<[u8]>,
+    ) -> impl DoubleEndedIterator<Item = (&[u8], &Entry)> {
+        let start = start.as_ref();
+        self.map
+            .range(start.to_vec()..)
+            .map(|(k, e)| (k.as_slice(), e))
+    }
+
     /// Iterates live entries only (tombstones skipped), same ordering.
     pub fn iter_live(&self) -> impl DoubleEndedIterator<Item = (&[u8], &[u8])> {
         self.map
