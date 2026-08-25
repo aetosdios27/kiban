@@ -5,3 +5,4 @@
 //! (`atomic`). See `docs/design/` for the decisions behind each component.
 
 pub mod atomic;
+pub mod crc32;
