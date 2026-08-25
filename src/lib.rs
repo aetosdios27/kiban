@@ -15,6 +15,7 @@ pub mod frame;
 pub mod manifest;
 pub mod memtable;
 pub mod sstable;
+pub mod sys;
 #[cfg(test)]
 pub mod testutil;
 pub mod wal;

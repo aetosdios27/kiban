@@ -5,13 +5,13 @@
 //! data durable; only a successful `sync()` does.
 
 use std::fmt;
-use std::fs::{File, OpenOptions};
 use std::io::{self, BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 use crate::atomic;
 use crate::frame::{FrameReader, FrameWriter, ReadRecordError};
 use crate::memtable::Memtable;
+use crate::sys;
 
 const OP_PUT: u8 = 0x01;
 const OP_DELETE: u8 = 0x02;
@@ -119,7 +119,7 @@ impl<R: Read> Read for Counting<R> {
 }
 
 pub struct Wal {
-    writer: BufWriter<File>,
+    writer: BufWriter<sys::File>,
     path: PathBuf,
     payload_scratch: Vec<u8>,
 }
@@ -139,11 +139,7 @@ impl Wal {
             atomic::create_durably(&path).map_err(WalError::Io)?;
         }
 
-        let file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(&path)
-            .map_err(WalError::Io)?;
+        let file = sys::File::open_rw(&path).map_err(WalError::Io)?;
 
         let report = Self::recover(&file, memtable)?;
 
@@ -160,7 +156,7 @@ impl Wal {
         ))
     }
 
-    fn recover(file: &File, memtable: &mut Memtable) -> Result<RecoveryReport, WalError> {
+    fn recover(file: &sys::File, memtable: &mut Memtable) -> Result<RecoveryReport, WalError> {
         let mut reader = FrameReader::new(Counting {
             inner: BufReader::new(file.try_clone().map_err(WalError::Io)?),
             pos: 0,
@@ -247,7 +243,7 @@ impl Wal {
     }
 
     #[cfg(test)]
-    pub(crate) fn writer_get_mut_for_test(&mut self) -> &mut File {
+    pub(crate) fn writer_get_mut_for_test(&mut self) -> &mut sys::File {
         self.writer.get_mut()
     }
 }
@@ -256,7 +252,8 @@ impl Wal {
 mod tests {
     use super::*;
     use crate::memtable::Entry;
-    use std::{env, fs};
+    use std::env;
+    use std::fs;
 
     static DIR_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 

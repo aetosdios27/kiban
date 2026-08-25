@@ -13,6 +13,7 @@ use crate::atomic;
 use crate::manifest::{MANIFEST_NAME, Manifest, ManifestError, TableRef};
 use crate::memtable::{Entry as MemEntry, Memtable};
 use crate::sstable::{Kind, SstError, SstTable, TableBuilder};
+use crate::sys;
 use crate::wal::{Wal, WalError};
 
 pub const SST_EXTENSION: &str = "sst";
@@ -174,7 +175,7 @@ impl Kiban {
         let mut tables = Vec::with_capacity(manifest.tables.len());
         for tref in &manifest.tables {
             let path = dir.join(file_name(tref.number, SST_EXTENSION));
-            let bytes = fs::read(&path).map_err(|e| {
+            let bytes = sys::read(&path).map_err(|e| {
                 DbError::Corrupt(format!(
                     "manifest lists table {} which cannot be read: {e}",
                     tref.number
@@ -1392,7 +1393,7 @@ impl Kiban {
             self.tables.insert(pos, out);
         }
         for r in &input_refs {
-            let _ = fs::remove_file(self.dir.join(file_name(r.number, SST_EXTENSION)));
+            let _ = sys::remove_file(&self.dir.join(file_name(r.number, SST_EXTENSION)));
         }
         Ok(())
     }

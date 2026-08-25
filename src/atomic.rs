@@ -4,10 +4,11 @@
 //! temp-file write, fsync, rename, directory fsync.
 
 use std::fmt;
-use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+
+use crate::sys;
 
 static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -56,7 +57,7 @@ fn temp_path(dir: &Path, target: &Path) -> PathBuf {
 }
 
 fn remove_temp(temp: &Path) {
-    let _ = fs::remove_file(temp);
+    let _ = sys::remove_file(temp);
 }
 
 pub fn commit_file(target: &Path, contents: &[u8]) -> Result<(), CommitError> {
@@ -71,15 +72,12 @@ pub fn commit_file(target: &Path, contents: &[u8]) -> Result<(), CommitError> {
             path: &temp,
             armed: true,
         };
-        let mut file = OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(&temp)?;
+        let mut file = sys::File::create_new(&temp)?;
         file.write_all(contents)?;
         file.sync_all()?;
         drop(file);
         cleanup_guard.disarm();
-        fs::rename(&temp, target)?;
+        sys::rename(&temp, target)?;
         Ok(())
     };
 
@@ -88,7 +86,7 @@ pub fn commit_file(target: &Path, contents: &[u8]) -> Result<(), CommitError> {
         Err(e) => return Err(CommitError::Failed(e)),
     }
 
-    let dir_handle = File::open(&dir).and_then(|d| d.sync_all());
+    let dir_handle = sys::File::open_read(&dir).and_then(|d| d.sync_all());
     match dir_handle {
         Ok(()) => Ok(()),
         Err(e) => Err(CommitError::RenamedNotDurable(e)),
@@ -100,10 +98,10 @@ pub fn create_durably(path: &Path) -> io::Result<()> {
         Some(p) if !p.as_os_str().is_empty() => p.to_path_buf(),
         _ => PathBuf::from("."),
     };
-    let file = OpenOptions::new().create_new(true).write(true).open(path)?;
+    let file = sys::File::create_new(path)?;
     file.sync_all()?;
     drop(file);
-    File::open(&dir)?.sync_all()
+    sys::File::open_read(&dir)?.sync_all()
 }
 
 struct CleanupOnDrop<'a> {
@@ -129,6 +127,7 @@ impl Drop for CleanupOnDrop<'_> {
 mod tests {
     use super::*;
     use std::env;
+    use std::fs;
 
     static DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
 
