@@ -1465,7 +1465,7 @@ mod compaction_tests {
     use crate::testutil::TempDir;
     use std::collections::BTreeMap;
 
-    fn tiny_options() -> KibanOptions {
+    pub(crate) fn tiny_options() -> KibanOptions {
         KibanOptions {
             l0_compaction_trigger: 2,
             base_level_bytes: 300,
@@ -1631,7 +1631,7 @@ mod crash_sweep_tests {
 
     /// What the scenario promised and attempted, tracked as it ran.
     #[derive(Default, Debug, Clone)]
-    struct Tracker {
+    pub(crate) struct Tracker {
         /// State as of the last successful `sync()` (the durability floor).
         synced: Model,
         /// Final intended state including unsynced operations (the ceiling,
@@ -1660,7 +1660,7 @@ mod crash_sweep_tests {
 
     /// Asserts the recovery band (fault-injection.md D2): every allowed
     /// value for a key is its synced value or its attempted final value.
-    fn assert_recovery_band(label: &str, n: usize, recovered: &Model, tracker: &Tracker) {
+    pub(crate) fn assert_band(label: &str, n: &[usize], recovered: &Model, tracker: &Tracker) {
         let domain: std::collections::BTreeSet<&Vec<u8>> = tracker
             .synced
             .keys()
@@ -1683,7 +1683,7 @@ mod crash_sweep_tests {
             }
             assert!(
                 allowed.contains(&actual),
-                "{label} n={n}: key {key:?} recovered as {:?}, allowed {:?}",
+                "{label} n={n:?}: key {key:?} recovered as {:?}, allowed {:?}",
                 actual.map(|v| String::from_utf8_lossy(v).to_string()),
                 allowed
                     .iter()
@@ -1693,17 +1693,29 @@ mod crash_sweep_tests {
         }
     }
 
-    struct RunOutcome {
+    pub(crate) struct RunOutcome {
         result: Result<(), DbError>,
-        tracker: Tracker,
+        pub(crate) tracker: Tracker,
         failed: bool,
         ops: usize,
     }
 
+    impl RunOutcome {
+        pub(crate) fn failed(&self) -> bool {
+            self.failed
+        }
+    }
+
+    pub(crate) fn run_scenario_for_sweep(dir: &Path, n: usize) -> (Result<(), DbError>, usize) {
+        let idx = [n];
+        let outcome = run_scenario_with_faults(dir, &idx);
+        (outcome.result, outcome.ops)
+    }
+
     /// Scenario: interleaved puts/deletes with syncs and two flushes under
     /// aggressive compaction options.
-    fn run_scenario(dir: &Path, n: usize) -> RunOutcome {
-        sys::install_fault(n);
+    pub(crate) fn run_scenario_with_faults(dir: &Path, n: &[usize]) -> RunOutcome {
+        sys::install_faults(n);
         let mut tracker = Tracker::default();
         let result = (|| -> Result<(), DbError> {
             let mut options = KibanOptions {
@@ -1769,7 +1781,7 @@ mod crash_sweep_tests {
     #[test]
     fn every_single_syscall_failure_in_the_pipeline_recovers_correctly() {
         let clean_dir = TempDir::new("sweep-clean");
-        let clean = run_scenario(clean_dir.path(), usize::MAX);
+        let clean = run_scenario_with_faults(clean_dir.path(), &[]);
         assert!(clean.result.is_ok(), "clean scenario must succeed");
         let total_ops = clean.ops;
         assert!(
@@ -1781,7 +1793,7 @@ mod crash_sweep_tests {
         let mut any_failed = false;
         for n in 0..total_ops {
             let dir = TempDir::new("sweep");
-            let outcome = run_scenario(dir.path(), n);
+            let outcome = run_scenario_with_faults(dir.path(), &[n]);
             any_failed |= outcome.failed;
 
             // D4: reopening after any single-syscall crash must succeed.
@@ -1804,7 +1816,7 @@ mod crash_sweep_tests {
                 .map(|r| r.unwrap())
                 .map(|(k, v)| (k, v.to_vec()))
                 .collect();
-            assert_recovery_band("pipeline", n, &recovered, &outcome.tracker);
+            assert_band("pipeline", &[n], &recovered, &outcome.tracker);
 
             // scans and gets agree after recovery too
             for (k, v) in &recovered {
@@ -2087,5 +2099,58 @@ mod cache_scaling_tests {
         assert_eq!(db.get(b"t12-k010").unwrap(), Some(b"v12-10".to_vec()));
         assert_eq!(db.get(b"t23-k019").unwrap(), Some(b"v23-19".to_vec()));
         assert_eq!(db.get(b"missing").unwrap(), None);
+    }
+}
+
+#[cfg(test)]
+mod crash_pair_sweep_tests {
+    use super::*;
+    use crate::testutil::TempDir;
+    use std::collections::BTreeMap;
+
+    type Model = BTreeMap<Vec<u8>, Vec<u8>>;
+
+    /// Two injected failures per run: the interaction space between
+    /// crash points (e.g. a failed WAL sync followed by a failed
+    /// manifest install) gets actual coverage, not just prefixes.
+    #[test]
+    fn every_pair_of_syscall_failures_recovers_correctly() {
+        let clean_dir = TempDir::new("pair-clean");
+        let (clean, total) =
+            super::crash_sweep_tests::run_scenario_for_sweep(clean_dir.path(), usize::MAX);
+        assert!(clean.is_ok(), "clean scenario must succeed");
+        assert!(total > 20, "scenario too small: {total}");
+
+        let mut ran = 0usize;
+        for a in 0..total {
+            for b in (a + 1)..total {
+                let dir = TempDir::new("pair-sweep");
+                let outcome =
+                    super::crash_sweep_tests::run_scenario_with_faults(dir.path(), &[a, b]);
+                if !outcome.failed() {
+                    continue; // neither index fired within this run's op count
+                }
+                ran += 1;
+                let tracker = outcome.tracker.clone();
+                drop(outcome);
+
+                let db = match Kiban::open_with_options(
+                    dir.path(),
+                    super::compaction_tests::tiny_options(),
+                ) {
+                    Ok(db) => db,
+                    Err(e) => panic!("faults {a},{b}: reopen failed: {e}"),
+                };
+                let recovered: Model =
+                    db.iter()
+                        .map(|r| r.unwrap())
+                        .fold(BTreeMap::new(), |mut m, (k, v)| {
+                            m.insert(k, v);
+                            m
+                        });
+                super::crash_sweep_tests::assert_band("pair-sweep", &[a, b], &recovered, &tracker);
+            }
+        }
+        assert!(ran > 100, "pair sweep barely exercised anything: {ran}");
     }
 }

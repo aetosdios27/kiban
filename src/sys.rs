@@ -9,10 +9,12 @@ use std::path::Path;
 
 use std::cell::RefCell;
 
+use std::collections::HashSet;
+
 #[derive(Debug)]
 struct FaultState {
-    /// Fail once the operation counter reaches this value.
-    fail_at: usize,
+    /// Fail when the operation counter hits any of these values.
+    fail_at: HashSet<usize>,
     counter: usize,
 }
 
@@ -22,9 +24,14 @@ thread_local! {
 
 /// Fails the `index`-th checked operation (0-based) of this thread.
 pub fn install_fault(index: usize) {
+    install_faults(&[index]);
+}
+
+/// Fails every checked operation whose index appears in `indices`.
+pub fn install_faults(indices: &[usize]) {
     FAULT.with(|f| {
         *f.borrow_mut() = Some(FaultState {
-            fail_at: index,
+            fail_at: indices.iter().copied().collect(),
             counter: 0,
         });
     });
@@ -49,7 +56,7 @@ fn check() -> io::Result<()> {
             Some(state) => {
                 let n = state.counter;
                 state.counter += 1;
-                if n == state.fail_at {
+                if state.fail_at.contains(&n) {
                     Err(io::Error::other("injected i/o failure"))
                 } else {
                     Ok(())
