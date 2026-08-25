@@ -9,6 +9,7 @@
 
 pub mod atomic;
 pub mod bloom;
+pub mod cache;
 pub mod crc32;
 pub mod db;
 pub mod frame;
