@@ -168,7 +168,7 @@ impl Kiban {
         Self::sweep_orphans(&dir, &manifest)?;
 
         let wal_path = dir.join(file_name(manifest.wal_number, WAL_EXTENSION));
-        if !wal_path.exists() {
+        if !sys::exists(&wal_path) {
             return Err(DbError::Corrupt(format!(
                 "manifest names wal {} which does not exist",
                 manifest.wal_number
@@ -229,14 +229,21 @@ impl Kiban {
     }
 
     fn initialize_fresh(dir: &Path) -> Result<Manifest, DbError> {
-        let _ = fs::read_dir(dir).map(|entries| {
-            for entry in entries.flatten() {
-                let name = entry.file_name();
-                if is_recognized_artifact(name.to_str().unwrap_or("")) {
-                    let _ = fs::remove_file(entry.path());
-                }
+        // In device-sim mode the real directory is not authoritative;
+        // enumerate the simulated namespace instead.
+        let mut paths: Vec<PathBuf> = sys::simulated_files_under(dir);
+        if paths.is_empty()
+            && !sys::device_sim_active()
+            && let Ok(entries) = fs::read_dir(dir)
+        {
+            paths = entries.flatten().map(|e| e.path()).collect();
+        }
+        for path in &paths {
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if is_recognized_artifact(name) {
+                let _ = sys::remove_file(path);
             }
-        });
+        }
         let manifest = Manifest::fresh();
         atomic::create_durably(&dir.join(file_name(manifest.wal_number, WAL_EXTENSION)))?;
         manifest.install(dir).map_err(DbError::from)?;
@@ -256,7 +263,7 @@ impl Kiban {
                 _ => false,
             };
             if orphan {
-                fs::remove_file(entry.path())?;
+                sys::remove_file(&entry.path())?;
             }
         }
         for entry in fs::read_dir(dir)?.flatten() {
@@ -265,7 +272,7 @@ impl Kiban {
                 .to_str()
                 .is_some_and(|n| n.contains(atomic::TEMP_MARKER))
             {
-                fs::remove_file(entry.path())?;
+                sys::remove_file(&entry.path())?;
             }
         }
         Ok(())
@@ -1632,8 +1639,12 @@ mod crash_sweep_tests {
     /// What the scenario promised and attempted, tracked as it ran.
     #[derive(Default, Debug, Clone)]
     pub(crate) struct Tracker {
+        /// Set when a flush returned Err: the commit point may or may not
+        /// have passed, so the durable floor becomes ambiguous (atomic-
+        /// commit.md D5) and only the banded assertion applies.
+        pub(crate) ambiguous: bool,
         /// State as of the last successful `sync()` (the durability floor).
-        synced: Model,
+        pub(crate) synced: Model,
         /// Final intended state including unsynced operations (the ceiling,
         /// modulo torn-tail truncation).
         attempted: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
@@ -1648,7 +1659,20 @@ mod crash_sweep_tests {
             self.dirty_since_sync.push(key.to_vec());
         }
 
+        /// A successful `sync` makes all prior operations durable.
         fn on_sync_ok(&mut self) {
+            self.mark_durable();
+        }
+
+        /// A successful `flush` ALSO advances the durability floor: it
+        /// publishes the entire memtable (synced or not) through its
+        /// commit point. This is what the exact-durability sweep taught
+        /// us.
+        fn on_flush_ok(&mut self) {
+            self.mark_durable();
+        }
+
+        fn mark_durable(&mut self) {
             self.synced = self
                 .attempted
                 .iter()
@@ -1697,7 +1721,7 @@ mod crash_sweep_tests {
         result: Result<(), DbError>,
         pub(crate) tracker: Tracker,
         failed: bool,
-        ops: usize,
+        pub(crate) ops: usize,
     }
 
     impl RunOutcome {
@@ -1748,7 +1772,11 @@ mod crash_sweep_tests {
             tracker.apply(b"k003", None);
             step!(db.put(b"k001", b"updated"));
             tracker.apply(b"k001", Some(b"updated"));
-            step!(db.flush());
+            if db.flush().is_err() {
+                tracker.ambiguous = true;
+                return Ok(());
+            }
+            tracker.on_flush_ok();
 
             for i in 10..20u32 {
                 step!(db.put(format!("k{i:03}"), format!("v{i}")));
@@ -1764,7 +1792,11 @@ mod crash_sweep_tests {
             tracker.apply(b"k010", None);
             step!(db.put(b"late", b"L"));
             tracker.apply(b"late", Some(b"L"));
-            step!(db.flush());
+            if db.flush().is_err() {
+                tracker.ambiguous = true;
+                return Ok(());
+            }
+            tracker.on_flush_ok();
             Ok(())
         })();
         let failed = result.is_err();
@@ -2152,5 +2184,95 @@ mod crash_pair_sweep_tests {
             }
         }
         assert!(ran > 100, "pair sweep barely exercised anything: {ran}");
+    }
+}
+
+#[cfg(test)]
+mod power_loss_tests {
+    use super::*;
+    use crate::sys;
+    use crate::testutil::TempDir;
+    use std::collections::BTreeMap;
+
+    /// The strongest durability claim available: with a simulated
+    /// volatile device, a crash discards exactly the unsynced bytes.
+    /// After power loss the recovered state must EQUAL the last synced
+    /// state — not merely fall within a band. Every single- and
+    /// two-fault crash point in the pipeline is checked.
+    #[test]
+    fn power_loss_recovers_exactly_the_last_synced_state() {
+        let clean_dir = TempDir::new("pl-clean");
+        let (clean, total) =
+            super::crash_sweep_tests::run_scenario_for_sweep(clean_dir.path(), usize::MAX);
+        assert!(clean.is_ok(), "clean scenario must succeed");
+        assert!(total > 20);
+
+        let mut ran = 0usize;
+        let mut checked_exact = 0usize;
+        for a in 0..total {
+            for b in 0..total {
+                if a == b {
+                    continue;
+                }
+                let dir = TempDir::new("pl-sweep");
+                sys::enable_device_sim();
+                let outcome =
+                    super::crash_sweep_tests::run_scenario_with_faults(dir.path(), &[a, b]);
+                let terminated_early = outcome.ops < total;
+                let tracker = outcome.tracker.clone();
+                sys::clear_fault();
+
+                // simulated power loss: overlays vanish, committed stays
+                sys::power_loss();
+
+                let db = match Kiban::open_with_options(
+                    dir.path(),
+                    super::compaction_tests::tiny_options(),
+                ) {
+                    Ok(db) => db,
+                    Err(e) => {
+                        sys::disable_device_sim();
+                        panic!("faults {a},{b}: reopen after power loss failed: {e:?}");
+                    }
+                };
+                let recovered: BTreeMap<Vec<u8>, Vec<u8>> =
+                    db.iter()
+                        .map(|r| r.unwrap())
+                        .fold(BTreeMap::new(), |mut m, (k, v)| {
+                            m.insert(k, v);
+                            m
+                        });
+                drop(db);
+                sys::disable_device_sim();
+
+                if tracker.ambiguous {
+                    // A failed flush leaves the durable floor ambiguous:
+                    // its commit point may have passed before the failure.
+                    super::crash_sweep_tests::assert_band(
+                        "power-loss-ambiguous",
+                        &[a, b],
+                        &recovered,
+                        &tracker,
+                    );
+                } else {
+                    // EXACT equality with the last acknowledged state
+                    assert_eq!(
+                        recovered, tracker.synced,
+                        "faults {a},{b}: post-power-loss state diverged from last synced state"
+                    );
+                }
+                checked_exact += 1;
+                if a < 3 && b < 6 {
+                    eprintln!("DBG ({a},{b}): ops={} total={}", outcome.ops, total);
+                }
+                if terminated_early {
+                    ran += 1;
+                }
+            }
+        }
+        assert!(
+            ran > 100 && checked_exact > 100,
+            "power-loss sweep barely exercised anything: ran={ran} checked={checked_exact}"
+        );
     }
 }

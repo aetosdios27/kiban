@@ -6,11 +6,11 @@
 //! axis carries recency between levels, file numbers within L0.
 
 use std::fmt;
-use std::fs;
 use std::io;
 use std::path::Path;
 
 use crate::atomic;
+use crate::sys;
 
 pub const MANIFEST_NAME: &str = "MANIFEST";
 pub const MAX_LEVEL: u32 = 1_000;
@@ -116,7 +116,7 @@ impl Manifest {
 
     /// `Ok(None)` when no MANIFEST exists (fresh or crashed-first-open).
     pub fn load(dir: &Path) -> Result<Option<Manifest>, ManifestError> {
-        match fs::read(dir.join(MANIFEST_NAME)) {
+        match sys::read(&dir.join(MANIFEST_NAME)) {
             Ok(bytes) => Manifest::decode(&bytes).map(Some),
             Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
             Err(e) => Err(ManifestError(format!("reading manifest failed: {e}"))),

@@ -135,7 +135,7 @@ impl Wal {
     ) -> Result<(Wal, RecoveryReport), WalError> {
         let path = path.as_ref().to_path_buf();
 
-        if !path.exists() {
+        if !sys::exists(&path) {
             atomic::create_durably(&path).map_err(WalError::Io)?;
         }
 
@@ -192,7 +192,7 @@ impl Wal {
             }
         }
 
-        let end = file.metadata().map_err(WalError::Io)?.len();
+        let end = file.len().map_err(WalError::Io)?;
         let bytes_truncated = end.saturating_sub(last_good_offset);
         let torn_tail_truncated = outcome.is_err();
 

@@ -4,17 +4,16 @@
 //! index, and bloom filter; data blocks load on demand through the
 //! shared LRU. Corruption is detected and reported, never repaired.
 
-use std::os::unix::fs::FileExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use super::block::{BlockIter, VerifiedBlock};
 use super::builder::{FOOTER_LEN, FORMAT_VERSION, MAGIC};
 use super::{Kind, SstError};
 use crate::bloom::BloomFilter;
-use crate::cache::{ArcBlock, BlockCache, CachedBlock};
+use crate::cache::{BlockCache, CachedBlock};
 use crate::crc32;
-use std::fs::File;
+use crate::sys;
 
 struct IndexEntry {
     separator: Vec<u8>,
@@ -24,7 +23,8 @@ struct IndexEntry {
 
 pub struct SstTable {
     number: u64,
-    file: File,
+    file: sys::File,
+    path: PathBuf,
     file_len: u64,
     index: Vec<IndexEntry>,
     filter: BloomFilter,
@@ -43,16 +43,17 @@ impl SstTable {
     /// demand through `cache`.
     pub fn open(number: u64, path: &Path, cache: Arc<BlockCache>) -> Result<SstTable, SstError> {
         let bad = |m: String| SstError::Corrupt(m);
-        let file = File::open(path)
+        let file = sys::File::open_read(path)
             .map_err(|e| SstError::Corrupt(format!("table {number} cannot be opened: {e}")))?;
-        let file_len = file.metadata().map_err(|e| bad(e.to_string()))?.len();
+        let file_len = file.len().map_err(|e| bad(e.to_string()))?;
         if file_len < FOOTER_LEN as u64 {
             return Err(bad("file is smaller than the footer".to_string()));
         }
 
-        let mut footer = vec![0u8; FOOTER_LEN];
-        file.read_exact_at(&mut footer, file_len - FOOTER_LEN as u64)
+        let footer = file
+            .read_range_at(path, file_len - FOOTER_LEN as u64, FOOTER_LEN as u64)
             .map_err(|e| bad(e.to_string()))?;
+        let footer = &footer[..];
         if &footer[36..44] != MAGIC {
             return Err(bad("bad magic number; not a kiban sstable".to_string()));
         }
@@ -74,23 +75,22 @@ impl SstTable {
             ));
         }
 
-        let filter_raw = read_range_at(&file, filter_offset, filter_len)?;
-        if filter_raw[filter_raw.len() - 5] != super::block::BLOCK_TYPE_NONE {
-            return Err(bad("unknown filter block type".to_string()));
-        }
-        let stored_crc = u32::from_le_bytes(filter_raw[filter_raw.len() - 4..].try_into().unwrap());
-        if crc32::crc32(&filter_raw[..filter_raw.len() - 4]) != stored_crc {
-            return Err(bad("filter block checksum mismatch".to_string()));
-        }
+        let filter_raw = file
+            .read_range_at(path, filter_offset, filter_len)
+            .map_err(|e| bad(e.to_string()))?;
+        verify_trailer(&filter_raw, "filter")?;
         let filter = BloomFilter::decode(&filter_raw[..filter_raw.len() - 5])
             .ok_or_else(|| bad("filter block payload is malformed".to_string()))?;
 
-        let index_raw = read_range_at(&file, index_offset, index_len)?;
+        let index_raw = file
+            .read_range_at(path, index_offset, index_len)
+            .map_err(|e| bad(e.to_string()))?;
         let index = parse_index(&index_raw, data_end)?;
 
         let mut table = SstTable {
             number,
             file,
+            path: path.to_path_buf(),
             file_len,
             index,
             filter,
@@ -98,14 +98,14 @@ impl SstTable {
             last_key: Vec::new(),
             cache,
         };
-        // Boundary keys come from the boundary blocks (one cached read each).
+
         // Boundary keys come from the boundary blocks (two cached reads).
         let first_block = table.read_block(&table.index[0])?;
         let (_, first, _) = first_block
             .first_entry()?
             .ok_or_else(|| bad("first block yielded no entry".to_string()))?;
-        let last_block =
-            table.read_block(table.index.last().expect("parse rejects empty index"))?;
+        let last_entry_ref = table.index.last().expect("parse rejects empty index");
+        let last_block = table.read_block(last_entry_ref)?;
         let (_, last, _) = last_block
             .last_entry()?
             .ok_or_else(|| bad("last block yielded no entry".to_string()))?;
@@ -135,23 +135,19 @@ impl SstTable {
         if let Some(cached) = self.cache.get(&key) {
             return Ok(VerifiedBlock::from_cached(cached));
         }
-        let raw = read_range_at(&self.file, entry.offset, entry.len)?;
-        let meta = VerifiedBlock::verify(&raw)?;
+        let data = self
+            .file
+            .read_range_at(&self.path, entry.offset, entry.len)
+            .map_err(|e| {
+                SstError::Corrupt(format!("read failed at offset {}: {e}", entry.offset))
+            })?;
+        let meta = VerifiedBlock::verify(&data)?;
         let cached = CachedBlock {
-            data: ArcBlock::from(raw),
+            data: Arc::from(data),
             meta,
         };
         self.cache.insert(key, cached.clone());
         Ok(VerifiedBlock::from_cached(cached))
-    }
-
-    fn block_index_for(&self, key: &[u8]) -> Option<usize> {
-        let idx = self.index.partition_point(|e| e.separator.as_slice() < key);
-        if idx == self.index.len() {
-            None
-        } else {
-            Some(idx)
-        }
     }
 
     /// Point lookup. Returns `Ok(None)` when the key is provably absent
@@ -160,9 +156,10 @@ impl SstTable {
         if !self.filter.may_contain(key) {
             return Ok(None);
         }
-        let Some(idx) = self.block_index_for(key) else {
+        let idx = self.index.partition_point(|e| e.separator.as_slice() < key);
+        if idx == self.index.len() {
             return Ok(None);
-        };
+        }
         let block = self.read_block(&self.index[idx])?;
         Ok(block.get(key)?.map(|m| Found {
             kind: m.kind,
@@ -190,13 +187,6 @@ impl SstTable {
             lower_bound: None,
         }
     }
-}
-
-fn read_range_at(file: &File, offset: u64, len: u64) -> Result<Vec<u8>, SstError> {
-    let mut buf = vec![0u8; len as usize];
-    file.read_exact_at(&mut buf, offset)
-        .map_err(|e| SstError::Corrupt(format!("read failed at offset {offset}: {e}")))?;
-    Ok(buf)
 }
 
 fn verify_trailer(raw: &[u8], what: &str) -> Result<(), SstError> {
