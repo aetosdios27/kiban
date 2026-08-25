@@ -277,6 +277,7 @@ fn is_recognized_artifact(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sstable::TableBuilder;
     use crate::testutil::TempDir;
 
     fn fresh_db(label: &str) -> (TempDir, Kiban) {
