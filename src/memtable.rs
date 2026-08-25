@@ -31,7 +31,7 @@ impl Entry {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Memtable {
     map: BTreeMap<Vec<u8>, Entry>,
 }
