@@ -1,5 +1,7 @@
-//! Kiban is a storage engine, currently in its bootstrap phase.
+//! Kiban is a storage engine, currently in phase 1: durable file
+//! primitives.
 //!
-//! No storage engine functionality has been implemented yet. See
-//! `docs/design/` and `docs/research/` for the project's direction and
-//! governing principles.
+//! Implemented so far: atomic, durable publication of file contents
+//! (`atomic`). See `docs/design/` for the decisions behind each component.
+
+pub mod atomic;
