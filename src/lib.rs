@@ -10,4 +10,5 @@ pub mod atomic;
 pub mod crc32;
 pub mod frame;
 pub mod memtable;
+pub mod sstable;
 pub mod wal;
