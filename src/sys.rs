@@ -50,7 +50,7 @@ fn check() -> io::Result<()> {
                 let n = state.counter;
                 state.counter += 1;
                 if n == state.fail_at {
-                    Err(io::Error::new(io::ErrorKind::Other, "injected i/o failure"))
+                    Err(io::Error::other("injected i/o failure"))
                 } else {
                     Ok(())
                 }
