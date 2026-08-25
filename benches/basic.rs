@@ -105,7 +105,7 @@ fn main() {
         measure("get, sstable hit", hits, "gets", || {
             let end = i + hits;
             while i < end {
-                let _ = db.get(format!("k{:08}", i % N as usize)).unwrap();
+                let _ = db.get(format!("k{:08}", i % N)).unwrap();
                 i += 1;
             }
         });
