@@ -43,6 +43,12 @@ impl TableBuilder {
         TableBuilder::default()
     }
 
+    /// Bytes written to the output so far, including the open block —
+    /// a lower bound on the finished file size.
+    pub fn approximate_size(&self) -> usize {
+        self.out.len() + self.block.estimated_size()
+    }
+
     pub fn add(&mut self, kind: Kind, key: &[u8], value: &[u8]) -> Result<(), SstError> {
         if self.has_last && key <= self.last_key.as_slice() {
             return Err(SstError::InvalidArgument(

@@ -99,6 +99,7 @@ fn file_name(number: u64, extension: &str) -> String {
 struct TableEntry {
     level: u32,
     number: u64,
+    size: u64,
     first_key: Vec<u8>,
     last_key: Vec<u8>,
     table: SstTable,
@@ -131,6 +132,7 @@ pub struct Kiban {
     memtable: Memtable,
     wal: Wal,
     next_file_number: u64,
+    wal_number: u64,
     /// sorted by (level, number)
     tables: Vec<TableEntry>,
 }
@@ -178,12 +180,14 @@ impl Kiban {
                     tref.number
                 ))
             })?;
+            let size = bytes.len() as u64;
             let table = SstTable::parse(bytes)?;
             let first_key = table.smallest_key()?;
             let last_key = table.largest_key()?;
             tables.push(TableEntry {
                 level: tref.level,
                 number: tref.number,
+                size,
                 first_key,
                 last_key,
                 table,
@@ -209,6 +213,7 @@ impl Kiban {
             memtable,
             wal,
             next_file_number: manifest.next_file_number,
+            wal_number: manifest.wal_number,
             tables,
         })
     }
@@ -374,10 +379,13 @@ impl Kiban {
         // D2 step 5: everything below only runs once the commit point has
         // returned success.
         self.next_file_number = new_next_file_number;
+        self.wal_number = new_wal_number;
+        let size = bytes.len() as u64;
         let table = SstTable::parse(bytes)?;
         let entry = TableEntry {
             level: 0,
             number: sst_number,
+            size,
             first_key: table.smallest_key()?,
             last_key: table.largest_key()?,
             table,
@@ -395,7 +403,8 @@ impl Kiban {
 
         // Best-effort deletion; recovery's sweep owns stragglers (D2).
         let _ = fs::remove_file(old_wal_path);
-        Ok(())
+
+        self.maybe_compact()
     }
 
     #[cfg(test)]
@@ -1158,5 +1167,214 @@ mod scan_tests {
         // inverted/empty ranges yield nothing
         assert_eq!(db.range(b"z", b"a").count(), 0);
         assert_eq!(db.range(b"x", b"x").count(), 0);
+    }
+}
+
+impl Kiban {
+    fn l0_count(&self) -> usize {
+        self.tables.iter().filter(|t| t.level == 0).count()
+    }
+
+    fn level_bytes(&self, level: u32) -> u64 {
+        self.tables
+            .iter()
+            .filter(|t| t.level == level)
+            .map(|t| t.size)
+            .sum()
+    }
+
+    fn level_budget(&self, level: u32) -> Option<u64> {
+        if level < 1 {
+            return None;
+        }
+        self.options
+            .base_level_bytes
+            .checked_mul(self.options.level_multiplier.pow(level - 1))
+    }
+
+    /// Runs compactions the current state demands, synchronously and in
+    /// a deterministic order (compaction.md D3).
+    fn maybe_compact(&mut self) -> Result<(), DbError> {
+        while self.l0_count() >= self.options.l0_compaction_trigger {
+            self.compact_level(0)?;
+        }
+        let mut level = 1;
+        loop {
+            match self.level_budget(level) {
+                Some(budget) if self.level_bytes(level) > budget => {
+                    // nothing to compact from an empty/missing level
+                    if self.tables.iter().any(|t| t.level == level) {
+                        self.compact_level(level)?;
+                    } else {
+                        break;
+                    }
+                    level += 1;
+                }
+                _ => break,
+            }
+        }
+        Ok(())
+    }
+
+    /// Compacts one level into the next, per compaction.md D3-D6.
+    fn compact_level(&mut self, level: u32) -> Result<(), DbError> {
+        debug_assert!(self.tables.iter().any(|t| t.level == level));
+
+        // choose inputs (compaction.md D3)
+        let mut input_indices: Vec<usize> = Vec::new();
+        let range_lo: Vec<u8>;
+        let range_hi: Vec<u8>;
+        if level == 0 {
+            for (i, t) in self.tables.iter().enumerate() {
+                if t.level == 0 {
+                    input_indices.push(i);
+                }
+            }
+            range_lo = input_indices
+                .iter()
+                .map(|i| self.tables[*i].first_key.clone())
+                .min()
+                .expect("level 0 nonempty");
+            range_hi = input_indices
+                .iter()
+                .map(|i| self.tables[*i].last_key.clone())
+                .max()
+                .expect("level 0 nonempty");
+        } else {
+            let seed = self
+                .tables
+                .iter()
+                .enumerate()
+                .filter(|(_, t)| t.level == level)
+                .min_by_key(|(_, t)| t.number)
+                .expect("seed exists");
+            input_indices.push(seed.0);
+            range_lo = seed.1.first_key.clone();
+            range_hi = seed.1.last_key.clone();
+        }
+        let target = level + 1;
+        for (i, t) in self.tables.iter().enumerate() {
+            if t.level == target && t.first_key <= range_hi && t.last_key >= range_lo {
+                input_indices.push(i);
+            }
+        }
+        input_indices.sort();
+
+        let deepest = self.tables.iter().map(|t| t.level).max().unwrap_or(0);
+        // tombstone GC is legal only when no level deeper than the target
+        // exists and all target overlaps are inputs (compaction.md D5)
+        let gc_allowed = target > deepest;
+
+        // merge inputs newest-first; collapse via raw mode
+        let mut ordered: Vec<&TableEntry> =
+            input_indices.iter().map(|i| &self.tables[*i]).collect();
+        ordered.sort_by_key(|t| std::cmp::Reverse((t.level, t.number)));
+
+        let mut outputs: Vec<TableEntry> = Vec::new();
+        let mut builder = TableBuilder::new();
+        let mut output_entries = 0usize;
+        let mut core = MergeCore {
+            sources: ordered
+                .iter()
+                .map(|t| SourceHead {
+                    feed: SourceFeed::Table(t.table.iter_from(b"")),
+                    head: None,
+                    exhausted: false,
+                })
+                .collect(),
+            user_mode: false,
+            failed: false,
+        };
+        let emit_output = |dir: &Path,
+                           builder: TableBuilder,
+                           number: u64,
+                           outputs: &mut Vec<TableEntry>|
+         -> Result<(), DbError> {
+            let bytes = builder.finish()?;
+            atomic::commit_file(&dir.join(file_name(number, SST_EXTENSION)), &bytes)?;
+            let size = bytes.len() as u64;
+            let table = SstTable::parse(bytes)?;
+            let entry = TableEntry {
+                level: target,
+                number,
+                size,
+                first_key: table.smallest_key()?,
+                last_key: table.largest_key()?,
+                table,
+            };
+            outputs.push(entry);
+            Ok(())
+        };
+
+        let mut next_number = self.next_file_number;
+        while let Some(item) = core.next_raw() {
+            let (key, raw) = item?;
+            if gc_allowed && raw.kind == Kind::Tombstone {
+                continue;
+            }
+            if output_entries > 0
+                && builder.approximate_size() >= self.options.target_file_size as usize
+            {
+                let number = next_number;
+                next_number += 1;
+                emit_output(&self.dir, builder, number, &mut outputs)?;
+                builder = TableBuilder::new();
+                output_entries = 0;
+            }
+            builder.add(raw.kind, &key, raw.value)?;
+            output_entries += 1;
+        }
+
+        if output_entries > 0 {
+            let number = next_number;
+            next_number += 1;
+            emit_output(&self.dir, builder, number, &mut outputs)?;
+        }
+
+        // D6 step 4: the commit point — outputs in, inputs out.
+        let input_refs: Vec<TableRef> = input_indices
+            .iter()
+            .map(|i| TableRef {
+                level: self.tables[*i].level,
+                number: self.tables[*i].number,
+            })
+            .collect();
+        let mut new_tables: Vec<TableRef> = self
+            .tables
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| !input_indices.contains(i))
+            .map(|(_, t)| TableRef {
+                level: t.level,
+                number: t.number,
+            })
+            .collect();
+        new_tables.extend(outputs.iter().map(|o| TableRef {
+            level: o.level,
+            number: o.number,
+        }));
+        new_tables.sort();
+        Manifest {
+            next_file_number: next_number,
+            wal_number: self.wal_number,
+            tables: new_tables,
+        }
+        .install(&self.dir)
+        .map_err(DbError::from)?;
+
+        // post-commit: swap in-memory state, retire inputs
+        self.next_file_number = next_number;
+        let removed: std::collections::HashSet<u64> = input_refs.iter().map(|r| r.number).collect();
+        self.tables.retain(|t| !removed.contains(&t.number));
+        for out in outputs {
+            let pos = self
+                .tables
+                .partition_point(|t| (t.level, t.number) < (out.level, out.number));
+            self.tables.insert(pos, out);
+        }
+        for r in &input_refs {
+            let _ = fs::remove_file(self.dir.join(file_name(r.number, SST_EXTENSION)));
+        }
+        Ok(())
     }
 }
