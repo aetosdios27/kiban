@@ -162,7 +162,10 @@ mod tests {
         };
         assert!(Manifest::decode(&mk(1, 1, vec![]).encode()).is_err());
         assert!(Manifest::decode(&mk(5, 9, vec![]).encode()).is_err());
-        assert!(Manifest::decode(&mk(5, 4, vec![4]).encode()).is_err());
+        // a table sharing the wal's number is legal (different extensions);
+        // but a table at or above next_file_number never is
+        assert!(Manifest::decode(&mk(5, 4, vec![4]).encode()).is_ok());
+        assert!(Manifest::decode(&mk(5, 4, vec![5]).encode()).is_err());
         assert!(Manifest::decode(&mk(6, 1, vec![1, 1]).encode()).is_err());
         assert!(Manifest::decode(&mk(6, 1, vec![3, 2]).encode()).is_err());
         assert!(Manifest::decode(&mk(6, 1, vec![0]).encode()).is_err());
