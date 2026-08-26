@@ -22,6 +22,7 @@ struct IndexEntry {
 }
 
 pub struct SstTable {
+    // Debug is implemented manually below because sys::File isn't Debug.
     number: u64,
     file: sys::File,
     path: PathBuf,
@@ -31,6 +32,16 @@ pub struct SstTable {
     first_key: Vec<u8>,
     last_key: Vec<u8>,
     cache: Arc<BlockCache>,
+}
+
+impl std::fmt::Debug for SstTable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SstTable")
+            .field("number", &self.number)
+            .field("file_len", &self.file_len)
+            .field("tables", &self.index.len())
+            .finish()
+    }
 }
 
 pub struct Found {

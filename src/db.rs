@@ -135,13 +135,66 @@ fn file_name(number: u64, extension: &str) -> String {
     format!("{number}.{extension}")
 }
 
-struct TableEntry {
-    level: u32,
-    number: u64,
-    size: u64,
-    first_key: Vec<u8>,
-    last_key: Vec<u8>,
-    table: SstTable,
+#[derive(Debug)]
+pub(crate) struct TableEntry {
+    pub(crate) level: u32,
+    pub(crate) number: u64,
+    pub(crate) size: u64,
+    pub(crate) first_key: Vec<u8>,
+    pub(crate) last_key: Vec<u8>,
+    pub(crate) table: SstTable,
+}
+
+impl TableEntry {
+    pub(crate) fn key_range_covers(&self, key: &[u8]) -> bool {
+        key >= self.first_key.as_slice() && key <= self.last_key.as_slice()
+    }
+}
+
+/// An immutable published table topology. Readers/snapshots pin an
+/// `Arc<Version>` so files it references outlive compactions
+/// (engine-poisoning.md / phase-11.3).
+#[derive(Debug)]
+pub(crate) struct Version {
+    /// Monotonic; odd/even has no meaning, only ordering.
+    pub(crate) id: u64,
+    /// Sorted by (level, number). Immutable once published.
+    pub(crate) tables: Vec<StdArc<TableEntry>>,
+}
+
+impl Version {
+    pub(crate) fn l0_count(&self) -> usize {
+        self.tables.iter().filter(|t| t.level == 0).count()
+    }
+
+    pub(crate) fn level_bytes(&self, level: u32) -> u64 {
+        self.tables
+            .iter()
+            .filter(|t| t.level == level)
+            .map(|t| t.size)
+            .sum()
+    }
+
+    pub(crate) fn max_level(&self) -> u32 {
+        self.tables.iter().map(|t| t.level).max().unwrap_or(0)
+    }
+
+    pub(crate) fn contains_number(&self, number: u64) -> bool {
+        self.tables.iter().any(|t| t.number == number)
+    }
+
+    /// Tables visible to point lookups at this version: L0 newest-first,
+    /// then deeper levels ascending.
+    pub fn read_order(&self) -> impl Iterator<Item = &StdArc<TableEntry>> + '_ {
+        let mut out: Vec<&StdArc<TableEntry>> = Vec::with_capacity(self.tables.len());
+        for t in self.tables.iter().filter(|t| t.level == 0).rev() {
+            out.push(t);
+        }
+        for t in self.tables.iter().filter(|t| t.level >= 1) {
+            out.push(t);
+        }
+        out.into_iter()
+    }
 }
 
 /// Tunables for flush/compaction behavior (compaction.md configuration).
@@ -215,8 +268,13 @@ pub struct Kiban {
     last_sequence: u64,
     /// Sorted ascending; the oldest entry gates tombstone GC.
     active_snapshots: Vec<u64>,
-    /// sorted by (level, number)
-    tables: Vec<TableEntry>,
+    /// The authoritative published topology (MANIFEST-committed).
+    version: StdArc<Version>,
+    /// Versions pinned by snapshots; strong refs keep their files alive.
+    pinned_versions: Vec<(u64, StdArc<Version>)>,
+    /// Files removed from the live topology awaiting provable-unreferenced
+    /// reclamation.
+    obsolete: Vec<(u64, PathBuf)>,
     /// Set when a durability-relevant failure makes future
     /// acknowledgement unsafe (engine-poisoning.md D1/D2).
     poisoned: Option<PoisonCause>,
@@ -265,20 +323,24 @@ impl Kiban {
             let size = table.size_on_disk();
             let first_key = table.smallest_key().to_vec();
             let last_key = table.largest_key().to_vec();
-            tables.push(TableEntry {
+            tables.push(StdArc::new(TableEntry {
                 level: tref.level,
                 number: tref.number,
                 size,
                 first_key,
                 last_key,
                 table,
-            });
+            }));
         }
 
         // compaction.md D2: L>=1 levels must be range-disjoint. Within a
         // level, files are checked in KEY order — file numbers record
         // creation time, which need not match keyspace position.
-        let mut level_view: Vec<&TableEntry> = tables.iter().filter(|t| t.level >= 1).collect();
+        let mut level_view: Vec<&TableEntry> = tables
+            .iter()
+            .map(|t| &**t)
+            .filter(|t| t.level >= 1)
+            .collect();
         level_view.sort_by(|a, b| a.first_key.cmp(&b.first_key));
         for window in level_view.windows(2) {
             if window[0].level == window[1].level && window[0].last_key >= window[1].first_key {
@@ -306,7 +368,9 @@ impl Kiban {
             wal_number: manifest.wal_number,
             last_sequence: manifest.last_sequence.max(wal_max_seq),
             active_snapshots: Vec::new(),
-            tables,
+            version: StdArc::new(Version { id: 0, tables }),
+            pinned_versions: Vec::new(),
+            obsolete: Vec::new(),
             poisoned: None,
         })
     }
@@ -363,6 +427,14 @@ impl Kiban {
 
     /// Returns Err(Poisoned) when the engine may no longer acknowledge
     /// mutations; Ok(()) otherwise (engine-poisoning.md D1).
+    fn l0_count(&self) -> usize {
+        self.version.l0_count()
+    }
+
+    fn level_bytes(&self, level: u32) -> u64 {
+        self.version.level_bytes(level)
+    }
+
     fn check_poisoned(&self) -> Result<(), DbError> {
         match &self.poisoned {
             Some(cause) => Err(DbError::Poisoned(cause.clone())),
@@ -460,7 +532,7 @@ impl Kiban {
             None => {}
         }
         // L0 first, newest file number wins
-        for entry in self.tables.iter().rev().filter(|t| t.level == 0) {
+        for entry in self.version.tables.iter().rev().filter(|t| t.level == 0) {
             match entry.table.get(key, None)? {
                 Some(found) => {
                     return Ok(match found.kind {
@@ -472,7 +544,7 @@ impl Kiban {
             }
         }
         // then L>=1 by ascending level; disjoint ranges -> one candidate
-        for entry in self.tables.iter().filter(|t| t.level >= 1) {
+        for entry in self.version.tables.iter().filter(|t| t.level >= 1) {
             if key < entry.first_key.as_slice() || key > entry.last_key.as_slice() {
                 continue;
             }
@@ -500,7 +572,10 @@ impl Kiban {
         let seq = self.last_sequence;
         let pos = self.active_snapshots.partition_point(|s| *s < seq);
         self.active_snapshots.insert(pos, seq);
-        Snapshot { seq }
+        Snapshot {
+            seq,
+            version: StdArc::clone(&self.version),
+        }
     }
 
     pub fn release_snapshot(&mut self, snap: &Snapshot) {
@@ -536,7 +611,7 @@ impl Kiban {
         // The table resolves the newest version at or below the snapshot
         // boundary; anything newer than `snap` is invisible to it.
         let limit = Some(snap.seq);
-        for entry in self.tables.iter().rev().filter(|t| t.level == 0) {
+        for entry in self.version.tables.iter().rev().filter(|t| t.level == 0) {
             match entry.table.get(key, limit)? {
                 Some(found) => {
                     return Ok(match found.kind {
@@ -547,7 +622,7 @@ impl Kiban {
                 None => continue,
             }
         }
-        for entry in self.tables.iter().filter(|t| t.level >= 1) {
+        for entry in self.version.tables.iter().filter(|t| t.level >= 1) {
             if key < entry.first_key.as_slice() || key > entry.last_key.as_slice() {
                 continue;
             }
@@ -564,10 +639,36 @@ impl Kiban {
         Ok(None)
     }
 
-    /// Scans live entries as of snapshot `snap`.
+    /// Scans live entries as of snapshot `snap`, reading the pinned
+    /// version's tables.
     pub fn scan_at(&self, snap: &Snapshot) -> Result<ScanResult, DbError> {
-        let mut core = self.merge_core(true);
-        core.snap_limit = Some(snap.seq);
+        let mut sources: Vec<SourceHead<'_>> = Vec::new();
+        sources.push(SourceHead {
+            feed: SourceFeed::Mem(Box::new(self.memtable.iter_from(b""))),
+            head: None,
+            exhausted: false,
+        });
+        for t in snap.version.tables.iter().rev().filter(|t| t.level == 0) {
+            sources.push(SourceHead {
+                feed: SourceFeed::Table(t.table.iter_from(b"")),
+                head: None,
+                exhausted: false,
+            });
+        }
+        for t in snap.version.tables.iter().filter(|t| t.level >= 1) {
+            sources.push(SourceHead {
+                feed: SourceFeed::Table(t.table.iter_from(b"")),
+                head: None,
+                exhausted: false,
+            });
+        }
+        let mut core = MergeCore {
+            sources,
+            user_mode: true,
+            failed: false,
+            snap_limit: Some(snap.seq),
+            done_key: None,
+        };
         let mut out = Vec::new();
         while let Some(item) = core.next_scanned() {
             let e = item?;
@@ -623,6 +724,7 @@ impl Kiban {
 
         // D2 step 4: the commit point.
         let mut table_refs: Vec<TableRef> = self
+            .version
             .tables
             .iter()
             .map(|t| TableRef {
@@ -661,18 +763,23 @@ impl Kiban {
             &self.dir.join(file_name(sst_number, SST_EXTENSION)),
             self.cache.clone(),
         )?;
-        let entry = TableEntry {
+        let entry = StdArc::new(TableEntry {
             level: 0,
             number: sst_number,
             size: table.size_on_disk(),
             first_key: table.smallest_key().to_vec(),
             last_key: table.largest_key().to_vec(),
             table,
-        };
-        let pos = self
-            .tables
-            .partition_point(|t| (t.level, t.number) < (entry.level, entry.number));
-        self.tables.insert(pos, entry);
+        });
+        // Publish Version N+1: current tables + the flushed sstable.
+        let mut new_tables = self.version.tables.clone();
+        let pos = new_tables.partition_point(|t| (t.level, t.number) < (entry.level, entry.number));
+        new_tables.insert(pos, entry.clone());
+        let next_version_id = self.version.id + 1;
+        self.version = StdArc::new(Version {
+            id: next_version_id,
+            tables: new_tables,
+        });
 
         let old_wal_path = self.wal.path().to_path_buf();
         let mut fresh_memtable = Memtable::new();
@@ -698,7 +805,7 @@ impl Kiban {
 
     #[cfg(test)]
     pub(crate) fn live_table_numbers(&self) -> Vec<u64> {
-        self.tables.iter().map(|t| t.number).collect()
+        self.version.tables.iter().map(|t| t.number).collect()
     }
 
     /// Iterates all live entries in ascending byte-wise key order.
@@ -749,7 +856,7 @@ impl Kiban {
     }
 
     fn sources_from<'a>(&'a self, start: &[u8]) -> Vec<SourceHead<'a>> {
-        let mut sources = Vec::with_capacity(self.tables.len() + 1);
+        let mut sources = Vec::with_capacity(self.version.tables.len() + 1);
         // newest first: memtable, then L0 by descending number, then
         // deeper levels ascending (within a level, higher number = newer
         // for L0; deeper levels are disjoint so order is irrelevant but
@@ -759,14 +866,14 @@ impl Kiban {
             head: None,
             exhausted: false,
         });
-        for table in self.tables.iter().rev().filter(|t| t.level == 0) {
+        for table in self.version.tables.iter().rev().filter(|t| t.level == 0) {
             sources.push(SourceHead {
                 feed: SourceFeed::Table(table.table.iter_from(start)),
                 head: None,
                 exhausted: false,
             });
         }
-        for table in self.tables.iter().filter(|t| t.level >= 1) {
+        for table in self.version.tables.iter().filter(|t| t.level >= 1) {
             sources.push(SourceHead {
                 feed: SourceFeed::Table(table.table.iter_from(start)),
                 head: None,
@@ -1141,10 +1248,12 @@ mod flush_tests {
 }
 
 /// A consistent read boundary captured from the engine's sequence
-/// counter (snapshots.md D3).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// counter (snapshots.md D3). Pins the [`Version`] that was current at
+/// capture time so compaction cannot reclaim files it may read.
+#[derive(Debug, Clone)]
 pub struct Snapshot {
     pub(crate) seq: u64,
+    pub(crate) version: StdArc<Version>,
 }
 
 /// One entry as the merge sees it: the newest version of a key.
@@ -1520,18 +1629,6 @@ mod scan_tests {
 }
 
 impl Kiban {
-    fn l0_count(&self) -> usize {
-        self.tables.iter().filter(|t| t.level == 0).count()
-    }
-
-    fn level_bytes(&self, level: u32) -> u64 {
-        self.tables
-            .iter()
-            .filter(|t| t.level == level)
-            .map(|t| t.size)
-            .sum()
-    }
-
     fn level_budget(&self, level: u32) -> Option<u64> {
         if level < 1 {
             return None;
@@ -1544,11 +1641,6 @@ impl Kiban {
     /// Runs compactions the current state demands, synchronously and in
     /// a deterministic order (compaction.md D3).
     fn maybe_compact(&mut self) -> Result<(), DbError> {
-        eprintln!(
-            "MAYBE_COMPACT l0={} tables={}",
-            self.l0_count(),
-            self.tables.len()
-        );
         while self.l0_count() >= self.options.l0_compaction_trigger {
             self.compact_level(0)?;
         }
@@ -1557,7 +1649,7 @@ impl Kiban {
             match self.level_budget(level) {
                 Some(budget) if self.level_bytes(level) > budget => {
                     // nothing to compact from an empty/missing level
-                    if self.tables.iter().any(|t| t.level == level) {
+                    if self.version.tables.iter().any(|t| t.level == level) {
                         self.compact_level(level)?;
                     } else {
                         break;
@@ -1572,30 +1664,31 @@ impl Kiban {
 
     /// Compacts one level into the next, per compaction.md D3-D6.
     fn compact_level(&mut self, level: u32) -> Result<(), DbError> {
-        debug_assert!(self.tables.iter().any(|t| t.level == level));
+        debug_assert!(self.version.tables.iter().any(|t| t.level == level));
 
         // choose inputs (compaction.md D3)
         let mut input_indices: Vec<usize> = Vec::new();
         let range_lo: Vec<u8>;
         let range_hi: Vec<u8>;
         if level == 0 {
-            for (i, t) in self.tables.iter().enumerate() {
+            for (i, t) in self.version.tables.iter().enumerate() {
                 if t.level == 0 {
                     input_indices.push(i);
                 }
             }
             range_lo = input_indices
                 .iter()
-                .map(|i| self.tables[*i].first_key.clone())
+                .map(|i| self.version.tables[*i].first_key.clone())
                 .min()
                 .expect("level 0 nonempty");
             range_hi = input_indices
                 .iter()
-                .map(|i| self.tables[*i].last_key.clone())
+                .map(|i| self.version.tables[*i].last_key.clone())
                 .max()
                 .expect("level 0 nonempty");
         } else {
             let seed = self
+                .version
                 .tables
                 .iter()
                 .enumerate()
@@ -1607,40 +1700,38 @@ impl Kiban {
             range_hi = seed.1.last_key.clone();
         }
         let target = level + 1;
-        for (i, t) in self.tables.iter().enumerate() {
+        for (i, t) in self.version.tables.iter().enumerate() {
             if t.level == target && t.first_key <= range_hi && t.last_key >= range_lo {
                 input_indices.push(i);
             }
         }
         input_indices.sort();
 
-        let deepest = self.tables.iter().map(|t| t.level).max().unwrap_or(0);
+        let deepest = self
+            .version
+            .tables
+            .iter()
+            .map(|t| t.level)
+            .max()
+            .unwrap_or(0);
         // tombstone GC is legal only when no level deeper than the target
         // exists and all target overlaps are inputs (compaction.md D5)
         let gc_allowed = target > deepest;
 
-        // merge inputs newest-first; collapse via raw mode.
-        // Newest = shallower level first; within a level, higher file
-        // number first. (Getting this backwards lets stale deep-level
-        // values resurrect over fresh ones.)
-        // merge inputs newest-first by source priority; the k-way merge
-        // itself orders entries globally by internal key (key asc,
-        // seq desc), so duplicate user keys across inputs always emerge
-        // adjacent and newest first.
-        // merge inputs newest-first by source priority; the k-way merge
-        // itself orders entries globally by internal key (key asc,
-        // seq desc), so duplicate user keys across inputs always emerge
-        // adjacent and newest first.
+        // The k-way merge orders entries globally by internal key
+        // (user key asc, seqno desc), so duplicate user keys across
+        // inputs always emerge adjacent and newest first. Source order
+        // only breaks ties identically — global seqnos make it moot.
         let mut ordered_idx: Vec<usize> = input_indices.clone();
         ordered_idx.sort_by(|&a, &b| {
-            let ta = &self.tables[a];
-            let tb = &self.tables[b];
+            let ta = &self.version.tables[a];
+            let tb = &self.version.tables[b];
             ta.level.cmp(&tb.level).then(tb.number.cmp(&ta.number))
         });
 
         let mut sources: Vec<SourceHead<'_>> = Vec::with_capacity(ordered_idx.len());
         for &ti in &ordered_idx {
-            let t = &self.tables[ti];
+            let t = &self.version.tables[ti];
             sources.push(SourceHead {
                 feed: SourceFeed::Table(t.table.iter_from(b"")),
                 head: None,
@@ -1746,11 +1837,12 @@ impl Kiban {
         let input_refs: Vec<TableRef> = input_indices
             .iter()
             .map(|i| TableRef {
-                level: self.tables[*i].level,
-                number: self.tables[*i].number,
+                level: self.version.tables[*i].level,
+                number: self.version.tables[*i].number,
             })
             .collect();
-        let mut new_tables: Vec<TableRef> = self
+        let mut new_table_refs: Vec<TableRef> = self
+            .version
             .tables
             .iter()
             .enumerate()
@@ -1760,16 +1852,16 @@ impl Kiban {
                 number: t.number,
             })
             .collect();
-        new_tables.extend(outputs.iter().map(|o| TableRef {
+        new_table_refs.extend(outputs.iter().map(|o| TableRef {
             level: o.level,
             number: o.number,
         }));
-        new_tables.sort();
+        new_table_refs.sort();
         Manifest {
             next_file_number: next_number,
             wal_number: self.wal_number,
             last_sequence: self.last_sequence,
-            tables: new_tables,
+            tables: new_table_refs,
         }
         .install(&self.dir)
         .map_err(|e| match e {
@@ -1780,20 +1872,49 @@ impl Kiban {
             }
         })?;
 
-        // Post-commit: swap in-memory state, retire inputs.
+        // Post-commit: publish Version N+1 and queue retired files.
         self.next_file_number = next_number;
-        let removed: std::collections::HashSet<u64> = input_refs.iter().map(|r| r.number).collect();
-        self.tables.retain(|t| !removed.contains(&t.number));
+        let removed_numbers: std::collections::HashSet<u64> =
+            input_refs.iter().map(|r| r.number).collect();
+        let mut new_version_tables = self.version.tables.clone();
+        new_version_tables.retain(|t| !removed_numbers.contains(&t.number));
         for out in outputs {
-            let pos = self
-                .tables
+            let pos = new_version_tables
                 .partition_point(|t| (t.level, t.number) < (out.level, out.number));
-            self.tables.insert(pos, out);
+            new_version_tables.insert(pos, StdArc::new(out));
         }
+        self.version = StdArc::new(Version {
+            id: self.version.id + 1,
+            tables: new_version_tables,
+        });
+
+        // Obsolete files are reclaimable only when no pinned version
+        // still references them (11.3); until then they stay on disk.
         for r in &input_refs {
-            let _ = sys::remove_file(&self.dir.join(file_name(r.number, SST_EXTENSION)));
+            self.obsolete
+                .push((r.number, self.dir.join(file_name(r.number, SST_EXTENSION))));
         }
+        self.reclaim_obsolete();
         Ok(())
+    }
+
+    /// Deletes obsolete files that no pinned version references. Files
+    /// referenced by any pinned Version stay on disk until that pin dies
+    /// (11.3 file-lifetime rules).
+    fn reclaim_obsolete(&mut self) {
+        let mut kept = Vec::new();
+        for (number, path) in std::mem::take(&mut self.obsolete) {
+            let pinned = self
+                .pinned_versions
+                .iter()
+                .any(|(_, v)| v.contains_number(number));
+            if pinned {
+                kept.push((number, path));
+            } else {
+                let _ = sys::remove_file(&path);
+            }
+        }
+        self.obsolete = kept;
     }
 }
 
@@ -1860,7 +1981,7 @@ mod compaction_tests {
 
         // bounded structure: L0 stays short, deeper levels exist
         assert!(db.l0_count() < 2);
-        assert!(db.tables.iter().any(|t| t.level >= 2));
+        assert!(db.version.tables.iter().any(|t| t.level >= 2));
 
         // invariant survives reopen (open re-validates disjointness)
         drop(db);
@@ -1927,7 +2048,8 @@ mod compaction_tests {
         }
         eprintln!(
             "tables={:?} next={}",
-            db.tables
+            db.version
+                .tables
                 .iter()
                 .map(|t| (t.level, t.number))
                 .collect::<Vec<_>>(),
@@ -2441,6 +2563,7 @@ impl SharedKiban {
             seq,
             memtable: guard.memtable.clone(),
             tables: guard
+                .version
                 .tables
                 .iter()
                 .map(|t| CapturedTable {
@@ -2956,7 +3079,7 @@ mod dbg_seq_probe {
         db.sync().unwrap();
         db.flush().unwrap();
         println!("--- after first flush ---");
-        for t in &db.tables {
+        for t in &db.version.tables {
             println!("table L{} #{}:", t.level, t.number);
             for r in t.table.iter().take(3) {
                 match r {
@@ -2982,7 +3105,7 @@ mod dbg_seq_probe {
         }
         db.sync().unwrap();
         db.flush().unwrap();
-        for t in &db.tables {
+        for t in &db.version.tables {
             println!("table L{} #{}:", t.level, t.number);
             for r in t.table.iter().take(3) {
                 match r {
