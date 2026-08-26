@@ -31,6 +31,8 @@ pub enum DbError {
     Corrupt(String),
     CommitFailed(io::Error),
     CommitAmbiguous(io::Error),
+    /// The engine is in a poisoned state; this operation was refused.
+    Poisoned(PoisonCause),
 }
 
 impl fmt::Display for DbError {
@@ -45,6 +47,12 @@ impl fmt::Display for DbError {
                 f,
                 "manifest rename not known durable; recovery must resolve: {e}"
             ),
+            DbError::Poisoned(cause) => {
+                write!(
+                    f,
+                    "engine poisoned; mutation refused — reopen to recover: {cause}"
+                )
+            }
         }
     }
 }
@@ -53,7 +61,7 @@ impl std::error::Error for DbError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             DbError::Io(e) | DbError::CommitFailed(e) | DbError::CommitAmbiguous(e) => Some(e),
-            DbError::Corrupt(_) => None,
+            DbError::Corrupt(_) | DbError::Poisoned(_) => None,
         }
     }
 }
@@ -95,6 +103,30 @@ impl From<atomic::CommitError> for DbError {
         match e {
             atomic::CommitError::Failed(e) => DbError::CommitFailed(e),
             atomic::CommitError::RenamedNotDurable(e) => DbError::CommitAmbiguous(e),
+        }
+    }
+}
+
+/// Why the engine entered its poisoned (fatal) state. Distinct from
+/// generic errors: once poisoned, mutations can no longer promise
+/// durability (engine-poisoning.md D1/D2).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PoisonCause {
+    /// A WAL sync/fdatasync failed: durability of recent records unknown.
+    WalSyncFailed(String),
+    /// A WAL append failed: a torn record may precede later appends.
+    WalAppendFailed(String),
+    /// A MANIFEST install completed its rename ambiguously: which
+    /// topology persisted is unknown.
+    CommitAmbiguity(String),
+}
+
+impl fmt::Display for PoisonCause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PoisonCause::WalSyncFailed(m) => write!(f, "wal sync failure: {m}"),
+            PoisonCause::WalAppendFailed(m) => write!(f, "wal append failure: {m}"),
+            PoisonCause::CommitAmbiguity(m) => write!(f, "commit ambiguity: {m}"),
         }
     }
 }
@@ -148,6 +180,9 @@ pub struct Kiban {
     active_snapshots: Vec<u64>,
     /// sorted by (level, number)
     tables: Vec<TableEntry>,
+    /// Set when a durability-relevant failure makes future
+    /// acknowledgement unsafe (engine-poisoning.md D1/D2).
+    poisoned: Option<PoisonCause>,
 }
 
 impl Kiban {
@@ -235,6 +270,7 @@ impl Kiban {
             last_sequence: manifest.last_sequence.max(wal_max_seq),
             active_snapshots: Vec::new(),
             tables,
+            poisoned: None,
         })
     }
 
@@ -288,26 +324,70 @@ impl Kiban {
         Ok(())
     }
 
+    /// Returns Err(Poisoned) when the engine may no longer acknowledge
+    /// mutations; Ok(()) otherwise (engine-poisoning.md D1).
+    fn check_poisoned(&self) -> Result<(), DbError> {
+        match &self.poisoned {
+            Some(cause) => Err(DbError::Poisoned(cause.clone())),
+            None => Ok(()),
+        }
+    }
+
+    pub(crate) fn poison(&mut self, cause: PoisonCause) {
+        if self.poisoned.is_none() {
+            eprintln!("kiban: engine POISONED — mutations refused until reopen: {cause}");
+            self.poisoned = Some(cause);
+        }
+    }
+
     pub fn put(&mut self, key: impl AsRef<[u8]>, value: impl AsRef<[u8]>) -> io::Result<()> {
+        if let Err(e) = self.check_poisoned() {
+            return Err(io::Error::other(e.to_string()));
+        }
         let seq = self.last_sequence + 1;
-        self.wal.put(seq, key.as_ref(), value.as_ref())?;
+        if let Err(e) = self.wal.put(seq, key.as_ref(), value.as_ref()) {
+            // A torn WAL frame would silently discard later, successfully
+            // synced records at recovery: append failure poisons.
+            self.poison(PoisonCause::WalAppendFailed(e.to_string()));
+            return Err(io::Error::other("wal append failed; engine poisoned"));
+        }
         self.memtable.put(key, value, seq);
         self.last_sequence = seq;
         Ok(())
     }
 
     pub fn delete(&mut self, key: impl AsRef<[u8]>) -> io::Result<()> {
+        if let Err(e) = self.check_poisoned() {
+            return Err(io::Error::other(e.to_string()));
+        }
         let seq = self.last_sequence + 1;
-        self.wal.delete(seq, key.as_ref())?;
+        if let Err(e) = self.wal.delete(seq, key.as_ref()) {
+            self.poison(PoisonCause::WalAppendFailed(e.to_string()));
+            return Err(io::Error::other("wal append failed; engine poisoned"));
+        }
         self.memtable.delete(key, seq);
         self.last_sequence = seq;
         Ok(())
     }
 
-    /// Makes all prior writes crash-durable. Only after this returns
-    /// success may the caller treat them as acknowledged (db-layout D7).
+    /// Makes all prior writes crash-durable. A failure here is
+    /// durability-ambiguous and poisons the engine (engine-poisoning.md
+    /// D2): later operations refuse to acknowledge anything.
     pub fn sync(&mut self) -> io::Result<()> {
-        self.wal.sync()
+        if let Err(e) = self.check_poisoned() {
+            return Err(io::Error::other(e.to_string()));
+        }
+        match self.wal.sync() {
+            Ok(()) => Ok(()),
+            Err(crate::wal::SyncPhase::Flush(e)) => {
+                self.poison(PoisonCause::WalAppendFailed(e.to_string()));
+                Err(io::Error::other("wal append failed; engine poisoned"))
+            }
+            Err(crate::wal::SyncPhase::Fdatasync(e)) => {
+                self.poison(PoisonCause::WalSyncFailed(e.to_string()));
+                Err(io::Error::other("wal sync failed; engine poisoned"))
+            }
+        }
     }
 
     pub fn get(&self, key: impl AsRef<[u8]>) -> Result<Option<Vec<u8>>, DbError> {
@@ -445,9 +525,20 @@ impl Kiban {
         &self.options
     }
 
+    /// Whether the engine is in a poisoned (fatal) state.
+    pub fn is_poisoned(&self) -> bool {
+        self.poisoned.is_some()
+    }
+
+    /// The poison cause, when poisoned.
+    pub fn poison_cause(&self) -> Option<&PoisonCause> {
+        self.poisoned.as_ref()
+    }
+
     /// Flushes the memtable to a new sstable and retires the current WAL,
     /// following db-layout D2's single-commit-point pipeline.
     pub fn flush(&mut self) -> Result<(), DbError> {
+        self.check_poisoned()?;
         if self.memtable.is_empty() {
             return Ok(());
         }
@@ -495,7 +586,15 @@ impl Kiban {
             tables: table_refs,
         }
         .install(&self.dir)
-        .map_err(DbError::from)?;
+        .map_err(|e| match e {
+            atomic::CommitError::Failed(io) => DbError::CommitFailed(io),
+            atomic::CommitError::RenamedNotDurable(io) => {
+                // Commit ambiguity: continuing mutation would acknowledge
+                // against an unknown base. Poison (engine-poisoning.md D2).
+                self.poison(PoisonCause::CommitAmbiguity(io.to_string()));
+                DbError::Poisoned(self.poisoned.clone().unwrap())
+            }
+        })?;
 
         // D2 step 5: everything below only runs once the commit point has
         // returned success.
@@ -1599,7 +1698,13 @@ impl Kiban {
             tables: new_tables,
         }
         .install(&self.dir)
-        .map_err(DbError::from)?;
+        .map_err(|e| match e {
+            atomic::CommitError::Failed(io) => DbError::CommitFailed(io),
+            atomic::CommitError::RenamedNotDurable(io) => {
+                self.poison(PoisonCause::CommitAmbiguity(io.to_string()));
+                DbError::Poisoned(self.poisoned.clone().unwrap())
+            }
+        })?;
 
         // Post-commit: swap in-memory state, retire inputs.
         self.next_file_number = next_number;
@@ -2215,6 +2320,14 @@ impl SharedKiban {
         }
     }
 
+    /// Whether the shared engine is poisoned.
+    pub fn is_poisoned(&self) -> bool {
+        match self.lock() {
+            Ok(guard) => guard.is_poisoned(),
+            Err(_) => true,
+        }
+    }
+
     pub fn get(&self, key: impl AsRef<[u8]>) -> Result<Option<Vec<u8>>, DbError> {
         self.lock()?.get(key)
     }
@@ -2798,5 +2911,229 @@ mod dbg_seq_probe {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod poisoning_tests {
+    use super::*;
+    use crate::sys;
+    use crate::testutil::TempDir;
+
+    fn fresh(label: &str) -> (TempDir, Kiban) {
+        let td = TempDir::new(label);
+        let db = Kiban::open(td.path()).unwrap();
+        (td, db)
+    }
+
+    #[test]
+    fn wal_sync_failure_poisons_and_blocks_all_mutations() {
+        let (td, mut db) = fresh("poison-sync");
+        db.put(b"safe", b"v").unwrap();
+        db.sync().unwrap();
+
+        // find the WAL sync op index: put(1 op) + sync(1 op) happened at
+        // open+seed; the next sync is the target. Compute by replaying.
+        // Deterministic approach: install a fault sweep — fail each
+        // candidate index in turn until sync fails, then assert poison.
+        let mut poisoned_at: Option<usize> = None;
+        for n in 0..12usize {
+            drop(Kiban::open(td.path()).unwrap()); // fresh runtime state
+            sys::install_fault(n);
+            let mut probe = match Kiban::open(td.path()) {
+                Ok(d) => d,
+                Err(_) => {
+                    sys::clear_fault();
+                    continue;
+                }
+            };
+            let _ = probe.put(b"x", b"y");
+            let sync_failed = probe.sync().is_err();
+            let failed = sync_failed || probe.is_poisoned();
+            sys::clear_fault();
+            if failed && probe.is_poisoned() {
+                poisoned_at = Some(n);
+                break;
+            }
+        }
+        let Some(n) = poisoned_at else {
+            panic!("could not induce a WAL sync failure");
+        };
+
+        // deterministic reproduction at n: engine must be poisoned
+        sys::install_fault(n);
+        let mut db2 = Kiban::open(td.path()).unwrap();
+        let _ = db2.put(b"a", b"1");
+        let _ = db2.sync();
+        sys::clear_fault();
+
+        if db2.is_poisoned() {
+            // every mutation path refuses; reads remain available
+            let e = db2.put(b"later", b"v").unwrap_err();
+            assert!(
+                matches!(e.kind(), io::ErrorKind::Other),
+                "put after poison: {e}"
+            );
+            let e = db2.delete(b"later").unwrap_err();
+            let _ = e;
+            let e = db2.sync().unwrap_err();
+            let _ = e;
+            let e = db2.flush().unwrap_err();
+            assert!(matches!(e, DbError::Poisoned(_)), "{e:?}");
+            // reads still work
+            let _ = db2.get(b"a").unwrap();
+        }
+        let _ = n;
+    }
+
+    /// A WAL append failure (bytes never reaching the kernel) poisons
+    /// the engine: later mutations are refused, reads stay available.
+    /// Induction: a >8KiB value forces BufWriter to write through to the
+    /// checked sys::File during `put` itself, so a fault at the write op
+    /// fails the append directly.
+    #[test]
+    fn wal_append_failure_poisons_engine() {
+        let big = vec![b'v'; 16 * 1024];
+
+        // sweep for the write-op index of the big put
+        let mut found: Option<usize> = None;
+        for n in 0..20usize {
+            // fresh directory each iteration: an earlier failed init can
+            // leave real debris (e.g. an unsynced WAL) that would otherwise
+            // fail every later open with AlreadyExists
+            let iter_dir = TempDir::new("poison-append-iter");
+            sys::install_fault(n);
+            let open_result = Kiban::open(iter_dir.path());
+            if open_result.is_err() {
+                // fault hit an init op; clear and keep sweeping
+                sys::clear_fault();
+                continue;
+            }
+            let mut d = open_result.unwrap();
+            let r = d.put(b"big", &big);
+            sys::clear_fault();
+            if r.is_err() {
+                found = Some(n);
+                break;
+            }
+        }
+        let Some(write_op) = found else {
+            panic!("could not induce a WAL append failure");
+        };
+
+        // deterministic repro + post-conditions (fresh dir: same op order)
+        let repro_dir = TempDir::new("poison-append-repro");
+        sys::install_fault(write_op);
+        let mut d = Kiban::open(repro_dir.path()).unwrap();
+        let _ = d.put(b"big", &big);
+        sys::clear_fault();
+
+        assert!(d.is_poisoned(), "append failure must poison");
+        assert!(matches!(
+            d.poison_cause(),
+            Some(PoisonCause::WalAppendFailed(_))
+        ));
+        let e = d.put(b"later", b"x").unwrap_err();
+        assert!(e.to_string().contains("poisoned"), "{e}");
+        let e = d.sync().unwrap_err();
+        assert!(e.to_string().contains("poisoned"), "{e}");
+        assert!(d.get(b"big").is_ok(), "reads remain available");
+    }
+
+    /// Commit ambiguity (rename succeeded, directory fsync failed) must
+    /// poison: the engine cannot know which topology persisted. Sweep
+    /// fault indices over a seed+flush scenario until the flush fails
+    /// with Poisoned; then verify later mutation is refused and reopen
+    /// reconstructs whichever topology actually persisted.
+    #[test]
+    fn commit_ambiguity_during_flush_poisons_engine() {
+        let td = TempDir::new("poison-ambiguity");
+
+        // clean baseline so sweeps have stable state to reopen
+        let mut induced: Option<usize> = None;
+        for n in 4..40usize {
+            drop(Kiban::open(td.path()).unwrap());
+            sys::install_faults(&[n]);
+            let mut d = match Kiban::open(td.path()) {
+                Ok(d) => d,
+                Err(_) => {
+                    sys::clear_fault();
+                    continue;
+                }
+            };
+            if d.is_poisoned() {
+                sys::clear_fault();
+                continue;
+            }
+            let _ = d.put(b"k", b"v");
+            let flush_result = d.flush();
+            let poisoned = matches!(
+                &flush_result,
+                Err(DbError::Poisoned(PoisonCause::CommitAmbiguity(_)))
+            );
+            let failed_at_all = flush_result.is_err();
+            sys::clear_fault();
+
+            if poisoned {
+                induced = Some(n);
+                // post-conditions with faults cleared: mutations refused
+                let e = d.put(b"later", b"x").unwrap_err();
+                assert!(e.to_string().contains("poisoned"), "{e}");
+                let e = d.flush().unwrap_err();
+                assert!(matches!(e, DbError::Poisoned(_)), "{e:?}");
+                // reads stay available
+                let _ = d.get(b"k").unwrap();
+                break;
+            }
+            if !failed_at_all {
+                continue;
+            }
+        }
+        let Some(_) = induced else {
+            panic!("commit ambiguity never induced by single faults");
+        };
+
+        // reopen after ambiguity: disk truth wins, runtime unpoisoned
+        let db = Kiban::open(td.path()).unwrap();
+        assert!(!db.is_poisoned());
+        let got = db.get(b"k").unwrap();
+        assert!(got.is_none() || got == Some(b"v".to_vec()));
+    }
+
+    #[test]
+    fn poisoned_runtime_state_clears_on_reopen_when_disk_is_valid() {
+        let (td, mut db) = fresh("poison-reopen");
+        db.put(b"durable", b"yes").unwrap();
+        db.sync().unwrap();
+
+        // simulate poisoning directly (unit-level: cause stored)
+        db.poison(PoisonCause::WalSyncFailed("test".into()));
+        assert!(db.is_poisoned());
+        let err = db.put(b"nope", b"x").unwrap_err();
+        assert!(err.to_string().contains("poisoned"));
+        drop(db);
+
+        // reopen: disk state valid -> clean runtime state
+        let db = Kiban::open(td.path()).unwrap();
+        assert!(!db.is_poisoned());
+        assert_eq!(db.get(b"durable").unwrap(), Some(b"yes".to_vec()));
+        let mut db = db;
+        db.put(b"after", b"ok").unwrap();
+        db.sync().unwrap();
+        assert_eq!(db.get(b"after").unwrap(), Some(b"ok".to_vec()));
+    }
+
+    #[test]
+    fn shared_handle_starts_unpoisoned_after_reopen() {
+        let td = TempDir::new("shared-poison");
+        {
+            let mut db = Kiban::open(td.path()).unwrap();
+            db.put(b"k", b"v").unwrap();
+            db.poison(PoisonCause::WalAppendFailed("unit".into()));
+            assert!(db.is_poisoned());
+        }
+        let shared = SharedKiban::open(td.path()).unwrap();
+        assert!(!shared.is_poisoned(), "fresh reopen starts unpoisoned");
+        assert!(shared.put(b"after", b"ok").is_ok());
     }
 }

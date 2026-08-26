@@ -43,7 +43,17 @@ impl std::error::Error for WalError {
     }
 }
 
+/// Which phase of [`Wal::sync`] failed.
 #[derive(Debug)]
+pub enum SyncPhase {
+    /// Bytes never left process buffering; nothing reached the kernel
+    /// on their behalf (append-phase failure).
+    Flush(io::Error),
+    /// Bytes reached the kernel; the fdatasync itself failed and
+    /// durability is ambiguous (engine-poisoning.md D2).
+    Fdatasync(io::Error),
+}
+
 pub struct RecoveryReport {
     pub records_replayed: usize,
     pub torn_tail_truncated: bool,
@@ -242,9 +252,12 @@ impl Wal {
     /// then fdatasyncs. Only after this returns success may the write be
     /// acknowledged; per docs/design/wal.md D6, a failure here must not
     /// be retried into oblivion — treat it as fatal upstream.
-    pub fn sync(&mut self) -> io::Result<()> {
-        self.writer.flush()?;
-        self.writer.get_ref().sync_data()
+    pub fn sync(&mut self) -> Result<(), SyncPhase> {
+        self.writer.flush().map_err(SyncPhase::Flush)?;
+        self.writer
+            .get_ref()
+            .sync_data()
+            .map_err(SyncPhase::Fdatasync)
     }
 
     pub fn path(&self) -> &Path {
