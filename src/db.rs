@@ -145,11 +145,7 @@ pub(crate) struct TableEntry {
     pub(crate) table: SstTable,
 }
 
-impl TableEntry {
-    pub(crate) fn key_range_covers(&self, key: &[u8]) -> bool {
-        key >= self.first_key.as_slice() && key <= self.last_key.as_slice()
-    }
-}
+
 
 /// An immutable published table topology. Readers/snapshots pin an
 /// `Arc<Version>` so files it references outlive compactions
@@ -167,6 +163,7 @@ impl Version {
         self.tables.iter().filter(|t| t.level == 0).count()
     }
 
+    #[allow(dead_code)]
     pub(crate) fn level_bytes(&self, level: u32) -> u64 {
         self.tables
             .iter()
@@ -175,6 +172,7 @@ impl Version {
             .sum()
     }
 
+    #[allow(dead_code)]
     pub(crate) fn max_level(&self) -> u32 {
         self.tables.iter().map(|t| t.level).max().unwrap_or(0)
     }
