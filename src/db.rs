@@ -145,8 +145,6 @@ pub(crate) struct TableEntry {
     pub(crate) table: SstTable,
 }
 
-
-
 /// An immutable published table topology. Readers/snapshots pin an
 /// `Arc<Version>` so files it references outlive compactions
 /// (engine-poisoning.md / phase-11.3).
@@ -179,19 +177,6 @@ impl Version {
 
     pub(crate) fn contains_number(&self, number: u64) -> bool {
         self.tables.iter().any(|t| t.number == number)
-    }
-
-    /// Tables visible to point lookups at this version: L0 newest-first,
-    /// then deeper levels ascending.
-    pub fn read_order(&self) -> impl Iterator<Item = &StdArc<TableEntry>> + '_ {
-        let mut out: Vec<&StdArc<TableEntry>> = Vec::with_capacity(self.tables.len());
-        for t in self.tables.iter().filter(|t| t.level == 0).rev() {
-            out.push(t);
-        }
-        for t in self.tables.iter().filter(|t| t.level >= 1) {
-            out.push(t);
-        }
-        out.into_iter()
     }
 }
 
