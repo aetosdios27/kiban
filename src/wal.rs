@@ -124,10 +124,10 @@ pub(crate) fn encode_batch(
 }
 
 /// Decodes a batch payload, applying every operation with its derived
-/// sequence number. Strict validation:
-/// - count and per-op headers must exactly consume the payload
-/// - sequence numbers must be contiguous from first_seq
-/// A violation is corruption, never a partial application.
+/// sequence number. Strict validation: count and per-op headers must
+/// exactly consume the payload, and sequence numbers must be contiguous
+/// from `first_seq`. A violation is corruption, never a partial
+/// application.
 pub(crate) fn decode_batch_into_memtable(
     payload: &[u8],
     offset: u64,

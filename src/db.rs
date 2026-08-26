@@ -1694,7 +1694,7 @@ impl Kiban {
         let mut current_key: Option<Vec<u8>> = None;
         let mut last_seq_for_key = u64::MAX;
         let mut last_added_key: Option<Vec<u8>> = None;
-        let (mut outputs, next_number) = {
+        let (outputs, next_number) = {
             while let Some(item) = core.next_internal() {
                 let v = item?;
 
@@ -3247,7 +3247,7 @@ mod write_batch_tests {
         assert_eq!(db.get(b"b2").unwrap(), Some(b"v2".to_vec()));
         drop(db);
 
-        let mut db = Kiban::open_with_options(td.path(), tiny_options()).unwrap();
+        let db = Kiban::open_with_options(td.path(), tiny_options()).unwrap();
         assert_eq!(db.get(b"b1").unwrap(), None, "tombstone must survive");
         assert_eq!(db.get(b"b3").unwrap(), Some(b"v3".to_vec()));
     }
@@ -3406,7 +3406,7 @@ mod write_batch_tests {
 
     #[test]
     fn fault_during_batch_append_poisons_never_partial_applies() {
-        let td = TempDir::new("batch-fault");
+        let _td = TempDir::new("batch-fault");
         let opts = tiny_options();
         // sweep fault indices over seed+batch-write; when the batch append
         // fails, the engine must poison and later mutation must be refused

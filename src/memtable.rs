@@ -71,10 +71,7 @@ impl Memtable {
     }
 
     fn insert_entry(&mut self, key: &[u8], new: Entry) {
-        let slot = self
-            .map
-            .entry(key.to_vec())
-            .or_insert_with(KeyVersions::default);
+        let slot = self.map.entry(key.to_vec()).or_default();
         debug_assert!(
             slot.live.seq() < new.seq(),
             "memtable inserts must be seq-ascending per key"
