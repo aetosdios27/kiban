@@ -167,6 +167,43 @@ impl Default for KibanOptions {
     }
 }
 
+/// An atomic group of mutations submitted via [`Kiban::write`] or
+/// [`SharedKiban::write`].
+///
+/// The batch receives one contiguous sequence-number interval and is
+/// committed as a single WAL record: recovery applies every mutation
+/// or none — never a prefix. Ordering within the batch is preserved.
+/// This is atomic write grouping only: no transactions, rollback, or
+/// conflict detection.
+#[derive(Debug, Default)]
+pub struct WriteBatch {
+    ops: Vec<(Kind, Vec<u8>, Vec<u8>)>,
+}
+
+impl WriteBatch {
+    pub fn new() -> WriteBatch {
+        WriteBatch::default()
+    }
+
+    pub fn put(&mut self, key: impl Into<Vec<u8>>, value: impl Into<Vec<u8>>) -> &mut Self {
+        self.ops.push((Kind::Put, key.into(), value.into()));
+        self
+    }
+
+    pub fn delete(&mut self, key: impl Into<Vec<u8>>) -> &mut Self {
+        self.ops.push((Kind::Tombstone, key.into(), Vec::new()));
+        self
+    }
+
+    pub fn len(&self) -> usize {
+        self.ops.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.ops.is_empty()
+    }
+}
+
 pub struct Kiban {
     dir: PathBuf,
     options: KibanOptions,
@@ -373,6 +410,31 @@ impl Kiban {
     /// Makes all prior writes crash-durable. A failure here is
     /// durability-ambiguous and poisons the engine (engine-poisoning.md
     /// D2): later operations refuse to acknowledge anything.
+    /// Commits a batch atomically: one contiguous sequence interval,
+    /// one WAL record, one memtable application. A successful return
+    /// means every mutation is applied in memory; call `sync` to make
+    /// the whole batch durable. A WAL append failure poisons the engine.
+    pub fn write(&mut self, batch: WriteBatch) -> Result<(), DbError> {
+        self.check_poisoned()?;
+        if batch.ops.is_empty() {
+            return Ok(());
+        }
+        let first_seq = self.last_sequence + 1;
+        if let Err(e) = self.wal.append_batch(first_seq, &batch.ops) {
+            self.poison(PoisonCause::WalAppendFailed(e.to_string()));
+            return Err(DbError::Poisoned(self.poisoned.clone().unwrap()));
+        }
+        for (i, (kind, key, value)) in batch.ops.iter().enumerate() {
+            let seq = first_seq + i as u64;
+            match kind {
+                Kind::Put => self.memtable.put(key, value, seq),
+                Kind::Tombstone => self.memtable.delete(key, seq),
+            }
+        }
+        self.last_sequence = first_seq + batch.ops.len() as u64 - 1;
+        Ok(())
+    }
+
     pub fn sync(&mut self) -> io::Result<()> {
         if let Err(e) = self.check_poisoned() {
             return Err(io::Error::other(e.to_string()));
@@ -458,20 +520,14 @@ impl Kiban {
         key: impl AsRef<[u8]>,
     ) -> Result<Option<Vec<u8>>, DbError> {
         let key = key.as_ref();
-        match self.memtable.entry(key) {
-            Some(e @ MemEntry::Value { .. }) => {
-                if e.seq() <= snap.seq {
-                    return Ok(e.as_value().map(|v| v.to_vec()));
-                }
-                return self.get_from_tables_at(snap, key);
-            }
-            Some(MemEntry::Tombstone { seq }) => {
-                if *seq <= snap.seq {
-                    return Ok(None);
-                }
-                return self.get_from_tables_at(snap, key);
-            }
-            None => {}
+        // The memtable retains superseded versions while a snapshot needs
+        // them, so the newest version at-or-below snap may live here even
+        // when newer invisible versions exist.
+        if let Some(entry) = self.memtable.entry_at(key, snap.seq) {
+            return Ok(match entry {
+                MemEntry::Value { value, .. } => Some(value.clone()),
+                MemEntry::Tombstone { .. } => None,
+            });
         }
         self.get_from_tables_at(snap, key)
     }
@@ -631,6 +687,11 @@ impl Kiban {
     }
 
     #[cfg(test)]
+    pub(crate) fn last_sequence_for_test(&self) -> u64 {
+        self.last_sequence
+    }
+
+    #[cfg(test)]
     pub(crate) fn wal_for_test(&mut self) -> &mut Wal {
         &mut self.wal
     }
@@ -694,7 +755,7 @@ impl Kiban {
         // for L0; deeper levels are disjoint so order is irrelevant but
         // kept deterministic)
         sources.push(SourceHead {
-            feed: SourceFeed::Mem(self.memtable.iter_from(start)),
+            feed: SourceFeed::Mem(Box::new(self.memtable.iter_from(start))),
             head: None,
             exhausted: false,
         });
@@ -1101,7 +1162,7 @@ struct HeadEntry {
 }
 
 enum SourceFeed<'a> {
-    Mem(std::collections::btree_map::Range<'a, Vec<u8>, MemEntry>),
+    Mem(Box<dyn DoubleEndedIterator<Item = (&'a [u8], &'a MemEntry)> + 'a>),
     Table(crate::sstable::Iter<'a>),
 }
 
@@ -1119,13 +1180,13 @@ impl<'a> SourceHead<'a> {
         let next = match &mut self.feed {
             SourceFeed::Mem(it) => it.next().map(|(k, e)| match e {
                 MemEntry::Value { value, seq } => HeadEntry {
-                    key: k.clone(),
+                    key: k.to_vec(),
                     kind: Kind::Put,
                     value: value.clone(),
                     seq: *seq,
                 },
                 MemEntry::Tombstone { seq } => HeadEntry {
-                    key: k.clone(),
+                    key: k.to_vec(),
                     kind: Kind::Tombstone,
                     value: Vec::new(),
                     seq: *seq,
@@ -1553,12 +1614,6 @@ impl Kiban {
         }
         input_indices.sort();
 
-        eprintln!(
-            "COMPACT_INPUTS n={} target={} deepest={}",
-            input_indices.len(),
-            target,
-            self.tables.iter().map(|t| t.level).max().unwrap_or(0)
-        );
         let deepest = self.tables.iter().map(|t| t.level).max().unwrap_or(0);
         // tombstone GC is legal only when no level deeper than the target
         // exists and all target overlaps are inputs (compaction.md D5)
@@ -1568,22 +1623,36 @@ impl Kiban {
         // Newest = shallower level first; within a level, higher file
         // number first. (Getting this backwards lets stale deep-level
         // values resurrect over fresh ones.)
-        let mut ordered: Vec<&TableEntry> =
-            input_indices.iter().map(|i| &self.tables[*i]).collect();
-        ordered.sort_by(|a, b| a.level.cmp(&b.level).then(b.number.cmp(&a.number)));
+        // merge inputs newest-first by source priority; the k-way merge
+        // itself orders entries globally by internal key (key asc,
+        // seq desc), so duplicate user keys across inputs always emerge
+        // adjacent and newest first.
+        // merge inputs newest-first by source priority; the k-way merge
+        // itself orders entries globally by internal key (key asc,
+        // seq desc), so duplicate user keys across inputs always emerge
+        // adjacent and newest first.
+        let mut ordered_idx: Vec<usize> = input_indices.clone();
+        ordered_idx.sort_by(|&a, &b| {
+            let ta = &self.tables[a];
+            let tb = &self.tables[b];
+            ta.level.cmp(&tb.level).then(tb.number.cmp(&ta.number))
+        });
+
+        let mut sources: Vec<SourceHead<'_>> = Vec::with_capacity(ordered_idx.len());
+        for &ti in &ordered_idx {
+            let t = &self.tables[ti];
+            sources.push(SourceHead {
+                feed: SourceFeed::Table(t.table.iter_from(b"")),
+                head: None,
+                exhausted: false,
+            });
+        }
 
         let mut outputs: Vec<TableEntry> = Vec::new();
         let mut builder = TableBuilder::new();
         let mut output_entries = 0usize;
         let mut core = MergeCore {
-            sources: ordered
-                .iter()
-                .map(|t| SourceHead {
-                    feed: SourceFeed::Table(t.table.iter_from(b"")),
-                    head: None,
-                    exhausted: false,
-                })
-                .collect(),
+            sources,
             user_mode: false,
             failed: false,
             snap_limit: None,
@@ -1625,48 +1694,53 @@ impl Kiban {
         let mut current_key: Option<Vec<u8>> = None;
         let mut last_seq_for_key = u64::MAX;
         let mut last_added_key: Option<Vec<u8>> = None;
-        while let Some(item) = core.next_internal() {
-            let v = item?;
+        let (mut outputs, next_number) = {
+            while let Some(item) = core.next_internal() {
+                let v = item?;
 
-            if current_key.as_deref() != Some(v.key.as_slice()) {
-                current_key = Some(v.key.clone());
-                last_seq_for_key = u64::MAX;
+                if current_key.as_deref() != Some(v.key.as_slice()) {
+                    current_key = Some(v.key.clone());
+                    last_seq_for_key = u64::MAX;
+                }
+
+                let mut drop_entry = false;
+                if last_seq_for_key <= smallest_snapshot {
+                    drop_entry = true; // hidden by a newer version every snapshot sees
+                } else if v.kind == Kind::Tombstone && v.seq <= smallest_snapshot && gc_allowed {
+                    drop_entry = true; // obsolete deletion at base level
+                }
+                last_seq_for_key = v.seq;
+
+                if drop_entry {
+                    continue;
+                }
+
+                // Split only BETWEEN keys: a key's versions never straddle
+                // output files (per-level ordering invariant).
+                if last_added_key.as_deref() != Some(v.key.as_slice())
+                    && output_entries > 0
+                    && builder.approximate_size() >= self.options.target_file_size as usize
+                {
+                    let number = next_number;
+                    next_number += 1;
+                    emit_output(&self.dir, &self.cache, builder, number, &mut outputs)?;
+                    builder = TableBuilder::new();
+                    output_entries = 0;
+                }
+                builder.add(v.kind, &v.key, &v.value, v.seq)?;
+                output_entries += 1;
+                last_added_key = Some(v.key.clone());
             }
 
-            let mut drop_entry = false;
-            if last_seq_for_key <= smallest_snapshot {
-                drop_entry = true; // hidden by a newer version every snapshot sees
-            } else if v.kind == Kind::Tombstone && v.seq <= smallest_snapshot && gc_allowed {
-                drop_entry = true; // obsolete deletion at base level
-            }
-            last_seq_for_key = v.seq;
-
-            if drop_entry {
-                continue;
-            }
-
-            // Split only BETWEEN keys: a key's versions never straddle
-            // output files (per-level ordering invariant).
-            if last_added_key.as_deref() != Some(v.key.as_slice())
-                && output_entries > 0
-                && builder.approximate_size() >= self.options.target_file_size as usize
-            {
+            if output_entries > 0 {
                 let number = next_number;
                 next_number += 1;
                 emit_output(&self.dir, &self.cache, builder, number, &mut outputs)?;
-                builder = TableBuilder::new();
-                output_entries = 0;
             }
-            builder.add(v.kind, &v.key, &v.value, v.seq)?;
-            output_entries += 1;
-            last_added_key = Some(v.key.clone());
-        }
 
-        if output_entries > 0 {
-            let number = next_number;
-            next_number += 1;
-            emit_output(&self.dir, &self.cache, builder, number, &mut outputs)?;
-        }
+            drop(core);
+            (outputs, next_number)
+        };
 
         // D6 step 4: the commit point — outputs in, inputs out.
         let input_refs: Vec<TableRef> = input_indices
@@ -2243,13 +2317,15 @@ impl SharedSnapshot {
     /// Scans all live entries visible at this snapshot.
     #[allow(dead_code)]
     pub fn scan(&self) -> Result<Vec<SnapEntry>, DbError> {
+        // declared before `sources` so the memtable feed (which borrows
+        // nothing from `tables`) drops in a safe order
+        let tables = self.table_handles()?;
         let mut sources: Vec<SourceHead<'_>> = Vec::new();
         sources.push(SourceHead {
-            feed: SourceFeed::Mem(self.memtable.iter_from(b"")),
+            feed: SourceFeed::Mem(Box::new(self.memtable.iter_from(b""))),
             head: None,
             exhausted: false,
         });
-        let tables = self.table_handles()?;
         for (_, t) in tables.iter().rev().filter(|(l, _)| *l == 0) {
             sources.push(SourceHead {
                 feed: SourceFeed::Table(t.iter_from(b"")),
@@ -2338,6 +2414,16 @@ impl SharedKiban {
         match self.lock() {
             Ok(mut guard) => guard.sync(),
             Err(e) => Err(io::Error::other(e.to_string())),
+        }
+    }
+
+    /// Commits a batch atomically under the engine lock. One `sync`
+    /// afterwards makes the entire batch durable together — group
+    /// commit applies.
+    pub fn write(&self, batch: WriteBatch) -> Result<(), DbError> {
+        match self.lock() {
+            Ok(mut guard) => guard.write(batch),
+            Err(poison_err) => Err(poison_err),
         }
     }
 
@@ -3135,5 +3221,218 @@ mod poisoning_tests {
         let shared = SharedKiban::open(td.path()).unwrap();
         assert!(!shared.is_poisoned(), "fresh reopen starts unpoisoned");
         assert!(shared.put(b"after", b"ok").is_ok());
+    }
+}
+
+#[cfg(test)]
+mod write_batch_tests {
+    use super::*;
+    use crate::sys;
+    use crate::testutil::TempDir;
+
+    fn tiny_options() -> KibanOptions {
+        super::compaction_tests::tiny_options()
+    }
+
+    #[test]
+    fn batch_roundtrip_through_recovery() {
+        let td = TempDir::new("batch-roundtrip");
+        let mut db = Kiban::open_with_options(td.path(), tiny_options()).unwrap();
+        let mut b = WriteBatch::new();
+        b.put(b"b1", b"v1").put(b"b2", b"v2");
+        b.delete(b"b1");
+        b.put(b"b3", b"v3");
+        db.write(b).unwrap();
+        assert_eq!(db.get(b"b1").unwrap(), None);
+        assert_eq!(db.get(b"b2").unwrap(), Some(b"v2".to_vec()));
+        drop(db);
+
+        let mut db = Kiban::open_with_options(td.path(), tiny_options()).unwrap();
+        assert_eq!(db.get(b"b1").unwrap(), None, "tombstone must survive");
+        assert_eq!(db.get(b"b3").unwrap(), Some(b"v3".to_vec()));
+    }
+
+    #[test]
+    fn batch_sequence_interval_is_contiguous_and_monotonic() {
+        let td = TempDir::new("batch-seqs");
+        let mut db = Kiban::open_with_options(td.path(), tiny_options()).unwrap();
+        db.put(b"a", b"x").unwrap(); // seq 1
+        let mut b = WriteBatch::new();
+        b.put(b"s1", b"1")
+            .delete(b"s1")
+            .put(b"s2", b"2")
+            .put(b"s3", b"3");
+        db.write(b).unwrap();
+        // seqs 2..=5 consumed; next put gets seq 6
+        db.put(b"after", b"z").unwrap();
+
+        // reopen: replay must reproduce exactly; a discontinuity would
+        // have failed decode validation
+        drop(db);
+        let mut db = Kiban::open_with_options(td.path(), tiny_options()).unwrap();
+        assert_eq!(db.get(b"s1").unwrap(), None);
+        assert_eq!(db.get(b"s2").unwrap(), Some(b"2".to_vec()));
+        assert_eq!(db.get(b"s3").unwrap(), Some(b"3".to_vec()));
+        assert_eq!(db.get(b"after").unwrap(), Some(b"z".to_vec()));
+        // engine continues from the right sequence point
+        db.put(b"post", b"p").unwrap();
+        assert_eq!(db.get(b"post").unwrap(), Some(b"p".to_vec()));
+    }
+
+    /// A torn WAL tail that cuts INTO a batch record must not apply any
+    /// of the batch — atomicity comes from frame integrity.
+    #[test]
+    fn torn_tail_inside_batch_drops_the_whole_batch() {
+        let td = TempDir::new("batch-torn");
+        let opts = tiny_options();
+        {
+            let mut db = Kiban::open_with_options(td.path(), opts.clone()).unwrap();
+            db.put(b"committed", b"yes").unwrap();
+            db.sync().unwrap();
+            let mut b = WriteBatch::new();
+            for i in 0..50u32 {
+                b.put(format!("victim{i}"), format!("v{i}"));
+            }
+            db.write(b).unwrap(); // buffered, NOT synced
+            // simulate crash mid-write: truncate the buffered tail away
+            let wal = db.wal_for_test();
+            wal.writer_flush_for_test();
+            let path = wal.path().to_path_buf();
+            let len = std::fs::metadata(&path).unwrap().len();
+            std::fs::File::options()
+                .write(true)
+                .open(&path)
+                .unwrap()
+                .set_len(len - 30)
+                .unwrap();
+        }
+
+        let db = Kiban::open_with_options(td.path(), opts).unwrap();
+        assert_eq!(db.get(b"committed").unwrap(), Some(b"yes".to_vec()));
+        for i in 0..50u32 {
+            assert_eq!(
+                db.get(format!("victim{i}").as_bytes()).unwrap(),
+                None,
+                "partial batch leaked victim{i}"
+            );
+        }
+    }
+
+    /// A corrupted batch payload (bad op byte) is corruption, not a
+    /// partial apply.
+    #[test]
+    fn corrupted_batch_payload_is_rejected_at_open() {
+        let td = TempDir::new("batch-corrupt");
+        let opts = tiny_options();
+        {
+            let mut db = Kiban::open_with_options(td.path(), opts.clone()).unwrap();
+            let mut b = WriteBatch::new();
+            b.put(b"k1", b"v1").put(b"k2", b"v2");
+            db.write(b).unwrap();
+            db.sync().unwrap();
+        }
+        // corrupt the first batch-op's kind byte inside the frame
+        let dir = td.path();
+        for e in std::fs::read_dir(dir).unwrap().flatten() {
+            let p = e.path();
+            if p.extension().and_then(|x| x.to_str()) == Some(WAL_EXTENSION) && sys::exists(&p) {
+                let mut raw = std::fs::read(&p).unwrap();
+                if raw.len() > 40 {
+                    raw[30] ^= 0xFF; // inside the batch payload region
+                    std::fs::write(&p, &raw).unwrap();
+                    break;
+                }
+            }
+        }
+        // Either defense is valid: frame CRC rejection OR batch decode
+        // rejection. What matters is refusal, never partial application.
+        match Kiban::open_with_options(dir, opts) {
+            Err(DbError::Corrupt(_)) => {}
+            other => panic!(
+                "expected corruption at open, got {:?}",
+                other.err().map(|e| e.to_string())
+            ),
+        }
+    }
+
+    #[test]
+    fn snapshot_visibility_across_batch_sequences() {
+        let td = TempDir::new("batch-snap");
+        let mut db = Kiban::open_with_options(td.path(), tiny_options()).unwrap();
+        db.put(b"hold", b"orig").unwrap();
+        db.sync().unwrap();
+        let snap = db.snapshot();
+
+        // one batch: overwrite hold, add news
+        let mut b = WriteBatch::new();
+        b.put(b"hold", b"changed")
+            .put(b"n1", b"1")
+            .delete(b"gone-pre");
+        db.write(b).unwrap();
+        db.sync().unwrap();
+
+        // latest view sees the whole batch
+        assert_eq!(db.get(b"hold").unwrap(), Some(b"changed".to_vec()));
+        assert_eq!(db.get(b"n1").unwrap(), Some(b"1".to_vec()));
+
+        // snapshot predates every seq in the batch: sees nothing of it,
+        // and still sees the pre-batch world
+        assert_eq!(db.get_at(&snap, b"hold").unwrap(), Some(b"orig".to_vec()));
+        assert_eq!(db.get_at(&snap, b"n1").unwrap(), None);
+        let scanned = db.scan_at(&snap).unwrap();
+        assert!(scanned.contains(&(b"hold".to_vec(), b"orig".to_vec())));
+        assert!(!scanned.iter().any(|(k, _)| k == b"n1"));
+    }
+
+    #[test]
+    fn empty_batch_is_a_noop() {
+        let td = TempDir::new("batch-empty");
+        let mut db = Kiban::open(td.path()).unwrap();
+        db.write(WriteBatch::new()).unwrap();
+        assert_eq!(db.last_sequence_for_test(), 0);
+    }
+
+    #[test]
+    fn shared_handle_writes_batch_atomically() {
+        let td = TempDir::new("batch-shared");
+        let db = SharedKiban::open_with_options(td.path(), tiny_options()).unwrap();
+        let mut b = WriteBatch::new();
+        b.put(b"x", b"1").put(b"y", b"2");
+        db.write(b).unwrap();
+        db.sync().unwrap();
+        assert_eq!(db.get(b"x").unwrap(), Some(b"1".to_vec()));
+        assert_eq!(db.get(b"y").unwrap(), Some(b"2".to_vec()));
+    }
+
+    #[test]
+    fn fault_during_batch_append_poisons_never_partial_applies() {
+        let td = TempDir::new("batch-fault");
+        let opts = tiny_options();
+        // sweep fault indices over seed+batch-write; when the batch append
+        // fails, the engine must poison and later mutation must be refused
+        let mut induced = false;
+        for n in 0..25usize {
+            let iter_dir = TempDir::new("batch-fault-iter");
+            sys::install_fault(n);
+            let opened = Kiban::open_with_options(iter_dir.path(), opts.clone());
+            let Ok(mut d) = opened else {
+                sys::clear_fault();
+                continue;
+            };
+            let mut b = WriteBatch::new();
+            let big = vec![b'x'; 16 * 1024];
+            b.put(b"bk", big).delete(b"none");
+            let r = d.write(b);
+            let poisoned_after = d.is_poisoned();
+            sys::clear_fault();
+            if r.is_err() && poisoned_after {
+                induced = true;
+                let later = d.write(WriteBatch::new());
+                assert!(later.is_err(), "mutation accepted after poison");
+                break;
+            }
+            assert!(r.is_ok(), "write failed without poisoning: {r:?}");
+        }
+        assert!(induced, "batch append failure never induced");
     }
 }

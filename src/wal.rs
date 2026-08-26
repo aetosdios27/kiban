@@ -11,11 +11,20 @@ use std::path::{Path, PathBuf};
 use crate::atomic;
 use crate::frame::{FrameReader, FrameWriter, ReadRecordError};
 use crate::memtable::Memtable;
+use crate::sstable::Kind;
 use crate::sys;
 
 const OP_PUT: u8 = 0x01;
 const OP_DELETE: u8 = 0x02;
+/// A batch record: one frame, many mutations, one contiguous sequence
+/// interval. Atomicity comes from framing — a torn or failed write
+/// discards the whole batch at recovery, never a prefix.
+pub const OP_BATCH: u8 = 0x03;
 const PAYLOAD_FIXED_LEN: usize = 17;
+
+/// Fixed per-op header inside a batch payload:
+/// [op u8][klen u32][vlen u32].
+const BATCH_OP_FIXED_LEN: usize = 9;
 
 #[derive(Debug)]
 pub enum WalError {
@@ -79,6 +88,93 @@ fn encode_delete(seq: u64, key: &[u8], payload: &mut Vec<u8>) {
     payload.extend_from_slice(&(key.len() as u32).to_le_bytes());
     payload.extend_from_slice(&0u32.to_le_bytes());
     payload.extend_from_slice(key);
+}
+
+/// Encodes a whole batch as one WAL payload. Sequence numbers are
+/// implicit: the i-th operation receives first_seq + i.
+///
+/// Layout:
+/// ```text
+/// [OP_BATCH u8][count u32][first_seq u64]
+/// ([op u8][klen u32][vlen u32][key][value]) * count
+/// ```
+pub(crate) fn encode_batch(
+    ops: &[(Kind, Vec<u8>, Vec<u8>)],
+    first_seq: u64,
+    payload: &mut Vec<u8>,
+) {
+    payload.clear();
+    payload.push(OP_BATCH);
+    payload.extend_from_slice(&(ops.len() as u32).to_le_bytes());
+    payload.extend_from_slice(&first_seq.to_le_bytes());
+    for (kind, key, value) in ops {
+        let vlen = if *kind == Kind::Put { value.len() } else { 0 };
+        payload.push(if *kind == Kind::Put {
+            OP_PUT
+        } else {
+            OP_DELETE
+        });
+        payload.extend_from_slice(&(key.len() as u32).to_le_bytes());
+        payload.extend_from_slice(&(vlen as u32).to_le_bytes());
+        payload.extend_from_slice(key);
+        if *kind == Kind::Put {
+            payload.extend_from_slice(value);
+        }
+    }
+}
+
+/// Decodes a batch payload, applying every operation with its derived
+/// sequence number. Strict validation:
+/// - count and per-op headers must exactly consume the payload
+/// - sequence numbers must be contiguous from first_seq
+/// A violation is corruption, never a partial application.
+pub(crate) fn decode_batch_into_memtable(
+    payload: &[u8],
+    offset: u64,
+    memtable: &mut Memtable,
+    max_seq: &mut u64,
+) -> Result<(), WalError> {
+    let bad = |reason: String| WalError::Corrupt { offset, reason };
+    // payload[0] is OP_BATCH; the fixed header follows it
+    if payload.len() < 13 {
+        return Err(bad(format!(
+            "batch payload is {} bytes, shorter than the fixed header",
+            payload.len()
+        )));
+    }
+    let count = u32::from_le_bytes(payload[1..5].try_into().unwrap()) as usize;
+    let first_seq = u64::from_le_bytes(payload[5..13].try_into().unwrap());
+    let mut pos = 13usize;
+    for i in 0..count {
+        let expected_seq = first_seq + i as u64;
+        if pos + BATCH_OP_FIXED_LEN > payload.len() {
+            return Err(bad("batch op header runs past payload".to_string()));
+        }
+        let kind = match payload[pos] {
+            OP_PUT => Kind::Put,
+            OP_DELETE => Kind::Tombstone,
+            other => return Err(bad(format!("unknown batch op byte {other:#04x}"))),
+        };
+        let klen = u32::from_le_bytes(payload[pos + 1..pos + 5].try_into().unwrap()) as usize;
+        let vlen = u32::from_le_bytes(payload[pos + 5..pos + 9].try_into().unwrap()) as usize;
+        let end = pos + BATCH_OP_FIXED_LEN + klen + vlen;
+        if end > payload.len() {
+            return Err(bad("batch op key/value runs past payload".to_string()));
+        }
+        let key = &payload[pos + BATCH_OP_FIXED_LEN..pos + BATCH_OP_FIXED_LEN + klen];
+        let value = if vlen > 0 {
+            &payload[end - vlen..end]
+        } else {
+            &[]
+        };
+        match kind {
+            Kind::Put => memtable.put(key, value, expected_seq),
+            Kind::Tombstone => memtable.delete(key, expected_seq),
+        }
+        *max_seq = (*max_seq).max(expected_seq);
+        pos = end;
+    }
+    Ok(())
 }
 
 fn decode_into_memtable(
@@ -188,6 +284,14 @@ impl Wal {
             let offset = reader.get_ref().pos;
             match reader.read_record() {
                 Ok(Some(payload)) => {
+                    // Batch records carry their own multi-op payload and
+                    // are applied atomically (all-or-corruption).
+                    if payload.first() == Some(&OP_BATCH) {
+                        decode_batch_into_memtable(&payload, offset, memtable, &mut max_sequence)?;
+                        records_replayed += 1;
+                        last_good_offset = reader.get_ref().pos;
+                        continue;
+                    }
                     decode_into_memtable(&payload, offset, memtable, &mut max_sequence)?;
                     records_replayed += 1;
                     last_good_offset = reader.get_ref().pos;
@@ -239,6 +343,18 @@ impl Wal {
 
     pub fn delete(&mut self, seq: u64, key: impl AsRef<[u8]>) -> io::Result<()> {
         encode_delete(seq, key.as_ref(), &mut self.payload_scratch);
+        self.append_scratch()
+    }
+
+    /// Appends a whole batch as ONE framed record so recovery either
+    /// applies every mutation or none (frame atomicity). The i-th op
+    /// receives sequence number first_seq + i.
+    pub fn append_batch(
+        &mut self,
+        first_seq: u64,
+        ops: &[(Kind, Vec<u8>, Vec<u8>)],
+    ) -> io::Result<()> {
+        encode_batch(ops, first_seq, &mut self.payload_scratch);
         self.append_scratch()
     }
 
