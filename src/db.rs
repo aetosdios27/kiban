@@ -4,12 +4,14 @@
 //! recoverable database, per `docs/design/db-layout.md`. Single-threaded
 //! by decision D7; only `sync()` earns a durability claim.
 
+use std::collections::HashSet;
 use std::fmt;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::atomic;
+use crate::background::{Maintenance, MaintenanceError};
 use crate::cache::BlockCache;
 use crate::manifest::{MANIFEST_NAME, Manifest, ManifestError, TableRef};
 use crate::memtable::{Entry as MemEntry, Memtable};
@@ -676,8 +678,23 @@ impl Kiban {
     }
 
     /// Flushes the memtable to a new sstable and retires the current WAL,
-    /// following db-layout D2's single-commit-point pipeline.
+    /// then runs whatever compaction that now demands, following
+    /// db-layout D2's single-commit-point pipeline. `Kiban` stays
+    /// synchronous and deterministic (11.4): compaction happens inline,
+    /// on this call, before returning. `SharedKiban::flush` instead
+    /// hands compaction to its background worker — see
+    /// [`Kiban::flush_without_compaction`].
     pub fn flush(&mut self) -> Result<(), DbError> {
+        self.flush_without_compaction()?;
+        self.maybe_compact()
+    }
+
+    /// Everything `flush` does except running compaction afterwards:
+    /// publishes the memtable as a new, durable L0 sstable and rotates
+    /// the WAL. Used directly by `SharedKiban::flush`, which wakes the
+    /// background compaction worker instead of running it inline so the
+    /// caller isn't blocked behind maintenance it merely triggered.
+    fn flush_without_compaction(&mut self) -> Result<(), DbError> {
         self.check_poisoned()?;
         if self.memtable.is_empty() {
             return Ok(());
@@ -773,7 +790,7 @@ impl Kiban {
         // Best-effort deletion; recovery's sweep owns stragglers (D2).
         let _ = fs::remove_file(old_wal_path);
 
-        self.maybe_compact()
+        Ok(())
     }
 
     #[cfg(test)]
@@ -1611,6 +1628,150 @@ mod scan_tests {
     }
 }
 
+/// A compaction job's plan (11.4): everything BUILD needs, captured
+/// while the engine lock was held and owned independently of `Kiban`'s
+/// locked state, so BUILD can run without borrowing it. The captured
+/// `inputs` pin their files exactly like a snapshot's `Arc<Version>`
+/// does; committing this plan must still apply as a delta against
+/// whatever the *current* Version is when COMMIT runs, not overwrite it
+/// with this stale view (see `Kiban::commit_compaction`).
+pub(crate) struct CompactionPlan {
+    inputs: Vec<StdArc<TableEntry>>,
+    input_numbers: HashSet<u64>,
+    output_level: u32,
+    smallest_snapshot: u64,
+    gc_allowed: bool,
+    /// Reserved output file numbers, in the order BUILD may use them.
+    /// Reserved generously at PLAN time (a cheap counter bump) so BUILD
+    /// never needs the lock to allocate one.
+    output_numbers: Vec<u64>,
+    dir: PathBuf,
+    cache: StdArc<BlockCache>,
+    target_file_size: u64,
+}
+
+impl CompactionPlan {
+    /// BUILD (compaction.md D3-D6, minus the commit point): the k-way
+    /// merge and output sstable construction. No engine lock is held or
+    /// needed here — this is the expensive part background compaction
+    /// moves off the foreground mutex. Semantics are unchanged from the
+    /// synchronous path: same drop rules, same split policy, same
+    /// output durability (each output is committed via
+    /// `atomic::commit_file` as it's produced, so a failure partway
+    /// through leaves at most orphan sst files, cleaned by the next
+    /// reopen's sweep — never anything the MANIFEST references).
+    pub(crate) fn build(&self) -> Result<Vec<TableEntry>, DbError> {
+        let mut sources: Vec<SourceHead<'_>> = Vec::with_capacity(self.inputs.len());
+        for entry in &self.inputs {
+            sources.push(SourceHead {
+                feed: SourceFeed::Table(entry.table.iter_from(b"")),
+                head: None,
+                exhausted: false,
+            });
+        }
+
+        let mut outputs: Vec<TableEntry> = Vec::new();
+        let mut builder = TableBuilder::new();
+        let mut output_entries = 0usize;
+        let mut core = MergeCore {
+            sources,
+            user_mode: false,
+            failed: false,
+            snap_limit: None,
+            done_key: None,
+        };
+
+        // Faithful port of LevelDB DoCompactionWork drop rules
+        // (db_impl.cc): per user key, newest-first — an entry is dropped
+        // when the previously seen (newer) sibling's seq <= the smallest
+        // active snapshot; a leading deletion marker is additionally
+        // dropped when universally hidden and no deeper level can hold
+        // older data for that key (gc_allowed).
+        let mut next_output = 0usize;
+        let mut current_key: Option<Vec<u8>> = None;
+        let mut last_seq_for_key = u64::MAX;
+        let mut last_added_key: Option<Vec<u8>> = None;
+
+        while let Some(item) = core.next_internal() {
+            let v = item?;
+
+            if current_key.as_deref() != Some(v.key.as_slice()) {
+                current_key = Some(v.key.clone());
+                last_seq_for_key = u64::MAX;
+            }
+
+            let mut drop_entry = false;
+            if last_seq_for_key <= self.smallest_snapshot {
+                drop_entry = true; // hidden by a newer version every snapshot sees
+            } else if v.kind == Kind::Tombstone
+                && v.seq <= self.smallest_snapshot
+                && self.gc_allowed
+            {
+                drop_entry = true; // obsolete deletion at base level
+            }
+            last_seq_for_key = v.seq;
+
+            if drop_entry {
+                continue;
+            }
+
+            // Split only BETWEEN keys: a key's versions never straddle
+            // output files (per-level ordering invariant).
+            if last_added_key.as_deref() != Some(v.key.as_slice())
+                && output_entries > 0
+                && builder.approximate_size() >= self.target_file_size as usize
+            {
+                let number = self.next_output_number(&mut next_output)?;
+                self.emit_output(builder, number, &mut outputs)?;
+                builder = TableBuilder::new();
+                output_entries = 0;
+            }
+            builder.add(v.kind, &v.key, &v.value, v.seq)?;
+            output_entries += 1;
+            last_added_key = Some(v.key.clone());
+        }
+
+        if output_entries > 0 {
+            let number = self.next_output_number(&mut next_output)?;
+            self.emit_output(builder, number, &mut outputs)?;
+        }
+
+        Ok(outputs)
+    }
+
+    fn next_output_number(&self, next_output: &mut usize) -> Result<u64, DbError> {
+        let number = *self.output_numbers.get(*next_output).ok_or_else(|| {
+            DbError::Corrupt(
+                "compaction exhausted its reserved output file numbers (reservation bug)"
+                    .to_string(),
+            )
+        })?;
+        *next_output += 1;
+        Ok(number)
+    }
+
+    fn emit_output(
+        &self,
+        builder: TableBuilder,
+        number: u64,
+        outputs: &mut Vec<TableEntry>,
+    ) -> Result<(), DbError> {
+        let bytes = builder.finish()?;
+        let path = self.dir.join(file_name(number, SST_EXTENSION));
+        atomic::commit_file(&path, &bytes)?;
+        let table = SstTable::open(number, &path, self.cache.clone())?;
+        outputs.push(TableEntry {
+            level: self.output_level,
+            number,
+            size: table.size_on_disk(),
+            first_key: table.smallest_key().to_vec(),
+            last_key: table.largest_key().to_vec(),
+            table,
+        });
+        Ok(())
+    }
+}
+
 impl Kiban {
     fn level_budget(&self, level: u32) -> Option<u64> {
         if level < 1 {
@@ -1622,38 +1783,69 @@ impl Kiban {
     }
 
     /// Runs compactions the current state demands, synchronously and in
-    /// a deterministic order (compaction.md D3).
+    /// a deterministic order (compaction.md D3). `Kiban` stays
+    /// single-threaded: PLAN, BUILD, and COMMIT all run back-to-back
+    /// under the one `&mut self` borrow, so this is unchanged in
+    /// behavior from before the PLAN/BUILD/COMMIT split — see
+    /// `background::Maintenance` for the version of this same loop that
+    /// runs BUILD off the lock.
     fn maybe_compact(&mut self) -> Result<(), DbError> {
-        while self.l0_count() >= self.options.l0_compaction_trigger {
-            self.compact_level(0)?;
-        }
-        let mut level = 1;
-        loop {
-            match self.level_budget(level) {
-                Some(budget) if self.level_bytes(level) > budget => {
-                    // nothing to compact from an empty/missing level
-                    if self.version.tables.iter().any(|t| t.level == level) {
-                        self.compact_level(level)?;
-                    } else {
-                        break;
-                    }
-                    level += 1;
-                }
-                _ => break,
-            }
+        let mut cascade_level = 1u32;
+        while let Some(plan) = self.plan_next_compaction(&mut cascade_level) {
+            let outputs = plan.build()?;
+            self.commit_compaction(plan, outputs)?;
         }
         Ok(())
     }
 
-    /// Compacts one level into the next, per compaction.md D3-D6.
-    fn compact_level(&mut self, level: u32) -> Result<(), DbError> {
-        debug_assert!(self.version.tables.iter().any(|t| t.level == level));
+    /// PLAN, in `maybe_compact`'s fixed priority order: drain L0 first,
+    /// then cascade levels 1, 2, 3... stopping at the first level found
+    /// within its budget. `cascade_level` carries the cascade position
+    /// across calls, exactly mirroring the original single-threaded
+    /// loop's `level` variable — L0 is rechecked every call (compaction
+    /// there always takes priority), the level cascade only ever
+    /// advances past a level once it has actually been compacted.
+    pub(crate) fn plan_next_compaction(
+        &mut self,
+        cascade_level: &mut u32,
+    ) -> Option<CompactionPlan> {
+        if self.poisoned.is_some() {
+            return None;
+        }
+        if self.l0_count() >= self.options.l0_compaction_trigger {
+            return self.plan_compaction_at_level(0);
+        }
+        match self.level_budget(*cascade_level) {
+            Some(budget) if self.level_bytes(*cascade_level) > budget => {
+                if !self
+                    .version
+                    .tables
+                    .iter()
+                    .any(|t| t.level == *cascade_level)
+                {
+                    return None;
+                }
+                let plan = self.plan_compaction_at_level(*cascade_level);
+                *cascade_level += 1;
+                plan
+            }
+            _ => None,
+        }
+    }
 
-        // choose inputs (compaction.md D3)
+    /// PLAN for one level (compaction.md D3-D4): choose inputs, choose
+    /// the output level, and reserve output file numbers — a bounded,
+    /// cheap amount of work done under the engine lock. `None` only
+    /// when the level turns out to have nothing to compact (callers
+    /// already check this; kept as a safe fallback here too).
+    fn plan_compaction_at_level(&mut self, level: u32) -> Option<CompactionPlan> {
         let mut input_indices: Vec<usize> = Vec::new();
         let range_lo: Vec<u8>;
         let range_hi: Vec<u8>;
         if level == 0 {
+            if self.l0_count() == 0 {
+                return None;
+            }
             for (i, t) in self.version.tables.iter().enumerate() {
                 if t.level == 0 {
                     input_indices.push(i);
@@ -1676,15 +1868,14 @@ impl Kiban {
                 .iter()
                 .enumerate()
                 .filter(|(_, t)| t.level == level)
-                .min_by_key(|(_, t)| t.number)
-                .expect("seed exists");
+                .min_by_key(|(_, t)| t.number)?;
             input_indices.push(seed.0);
             range_lo = seed.1.first_key.clone();
             range_hi = seed.1.last_key.clone();
         }
-        let target = level + 1;
+        let output_level = level + 1;
         for (i, t) in self.version.tables.iter().enumerate() {
-            if t.level == target && t.first_key <= range_hi && t.last_key >= range_lo {
+            if t.level == output_level && t.first_key <= range_hi && t.last_key >= range_lo {
                 input_indices.push(i);
             }
         }
@@ -1699,7 +1890,7 @@ impl Kiban {
             .unwrap_or(0);
         // tombstone GC is legal only when no level deeper than the target
         // exists and all target overlaps are inputs (compaction.md D5)
-        let gc_allowed = target > deepest;
+        let gc_allowed = output_level > deepest;
 
         // The k-way merge orders entries globally by internal key
         // (user key asc, seqno desc), so duplicate user keys across
@@ -1711,126 +1902,69 @@ impl Kiban {
             let tb = &self.version.tables[b];
             ta.level.cmp(&tb.level).then(tb.number.cmp(&ta.number))
         });
+        let inputs: Vec<StdArc<TableEntry>> = ordered_idx
+            .iter()
+            .map(|&i| self.version.tables[i].clone())
+            .collect();
+        let input_numbers: HashSet<u64> = inputs.iter().map(|t| t.number).collect();
 
-        let mut sources: Vec<SourceHead<'_>> = Vec::with_capacity(ordered_idx.len());
-        for &ti in &ordered_idx {
-            let t = &self.version.tables[ti];
-            sources.push(SourceHead {
-                feed: SourceFeed::Table(t.table.iter_from(b"")),
-                head: None,
-                exhausted: false,
-            });
+        // Reserve a generous bound on output file numbers now, while we
+        // hold the lock, so BUILD never needs it to allocate one. Output
+        // bytes are bounded by input bytes (drop rules only remove
+        // data); the file count that produces is bounded by
+        // input_bytes/target_file_size, plus slack for the tail file and
+        // rounding.
+        let total_input_bytes: u64 = inputs.iter().map(|t| t.size).sum();
+        let target_file_size = self.options.target_file_size.max(1);
+        let max_outputs = (total_input_bytes / target_file_size) + 8;
+        let start = self.next_file_number;
+        self.next_file_number += max_outputs;
+        let output_numbers: Vec<u64> = (start..self.next_file_number).collect();
+
+        let smallest_snapshot = self.oldest_active_snapshot().unwrap_or(self.last_sequence);
+
+        Some(CompactionPlan {
+            inputs,
+            input_numbers,
+            output_level,
+            smallest_snapshot,
+            gc_allowed,
+            output_numbers,
+            dir: self.dir.clone(),
+            cache: self.cache.clone(),
+            target_file_size: self.options.target_file_size,
+        })
+    }
+
+    /// COMMIT (compaction.md D6 step 4): publish BUILD's output. Runs
+    /// under the engine lock (the caller already holds `&mut self`).
+    /// Applies the plan as a delta against the *current* topology —
+    /// current tables minus this job's inputs, plus its outputs — never
+    /// against the stale `Version` PLAN happened to see. That is what
+    /// keeps a foreground flush that published a new L0 table while
+    /// BUILD was running from ever being lost (11.4).
+    pub(crate) fn commit_compaction(
+        &mut self,
+        plan: CompactionPlan,
+        outputs: Vec<TableEntry>,
+    ) -> Result<(), DbError> {
+        // The one worker means no other compaction can have touched
+        // these inputs meanwhile; this just makes that assumption
+        // explicit rather than silently trusting it.
+        for n in &plan.input_numbers {
+            if !self.version.contains_number(*n) {
+                return Err(DbError::Corrupt(format!(
+                    "compaction commit: input table {n} is no longer in the current version"
+                )));
+            }
         }
 
-        let mut outputs: Vec<TableEntry> = Vec::new();
-        let mut builder = TableBuilder::new();
-        let mut output_entries = 0usize;
-        let mut core = MergeCore {
-            sources,
-            user_mode: false,
-            failed: false,
-            snap_limit: None,
-            done_key: None,
-        };
-        let emit_output = |dir: &Path,
-                           cache: &StdArc<BlockCache>,
-                           builder: TableBuilder,
-                           number: u64,
-                           outputs: &mut Vec<TableEntry>|
-         -> Result<(), DbError> {
-            let bytes = builder.finish()?;
-            atomic::commit_file(&dir.join(file_name(number, SST_EXTENSION)), &bytes)?;
-            let table = SstTable::open(
-                number,
-                &dir.join(file_name(number, SST_EXTENSION)),
-                cache.clone(),
-            )?;
-            let entry = TableEntry {
-                level: target,
-                number,
-                size: table.size_on_disk(),
-                first_key: table.smallest_key().to_vec(),
-                last_key: table.largest_key().to_vec(),
-                table,
-            };
-            outputs.push(entry);
-            Ok(())
-        };
-
-        let mut next_number = self.next_file_number;
-        // Faithful port of LevelDB DoCompactionWork drop rules
-        // (db_impl.cc): per user key, newest-first — an entry is dropped
-        // when the previously seen (newer) sibling's seq <= the smallest
-        // active snapshot; a leading deletion marker is additionally
-        // dropped when universally hidden and no deeper level can hold
-        // older data for that key (gc_allowed).
-        let smallest_snapshot = self.oldest_active_snapshot().unwrap_or(self.last_sequence);
-        let mut current_key: Option<Vec<u8>> = None;
-        let mut last_seq_for_key = u64::MAX;
-        let mut last_added_key: Option<Vec<u8>> = None;
-        let (outputs, next_number) = {
-            while let Some(item) = core.next_internal() {
-                let v = item?;
-
-                if current_key.as_deref() != Some(v.key.as_slice()) {
-                    current_key = Some(v.key.clone());
-                    last_seq_for_key = u64::MAX;
-                }
-
-                let mut drop_entry = false;
-                if last_seq_for_key <= smallest_snapshot {
-                    drop_entry = true; // hidden by a newer version every snapshot sees
-                } else if v.kind == Kind::Tombstone && v.seq <= smallest_snapshot && gc_allowed {
-                    drop_entry = true; // obsolete deletion at base level
-                }
-                last_seq_for_key = v.seq;
-
-                if drop_entry {
-                    continue;
-                }
-
-                // Split only BETWEEN keys: a key's versions never straddle
-                // output files (per-level ordering invariant).
-                if last_added_key.as_deref() != Some(v.key.as_slice())
-                    && output_entries > 0
-                    && builder.approximate_size() >= self.options.target_file_size as usize
-                {
-                    let number = next_number;
-                    next_number += 1;
-                    emit_output(&self.dir, &self.cache, builder, number, &mut outputs)?;
-                    builder = TableBuilder::new();
-                    output_entries = 0;
-                }
-                builder.add(v.kind, &v.key, &v.value, v.seq)?;
-                output_entries += 1;
-                last_added_key = Some(v.key.clone());
-            }
-
-            if output_entries > 0 {
-                let number = next_number;
-                next_number += 1;
-                emit_output(&self.dir, &self.cache, builder, number, &mut outputs)?;
-            }
-
-            drop(core);
-            (outputs, next_number)
-        };
-
-        // D6 step 4: the commit point — outputs in, inputs out.
-        let input_refs: Vec<TableRef> = input_indices
-            .iter()
-            .map(|i| TableRef {
-                level: self.version.tables[*i].level,
-                number: self.version.tables[*i].number,
-            })
-            .collect();
         let mut new_table_refs: Vec<TableRef> = self
             .version
             .tables
             .iter()
-            .enumerate()
-            .filter(|(i, _)| !input_indices.contains(i))
-            .map(|(_, t)| TableRef {
+            .filter(|t| !plan.input_numbers.contains(&t.number))
+            .map(|t| TableRef {
                 level: t.level,
                 number: t.number,
             })
@@ -1840,8 +1974,9 @@ impl Kiban {
             number: o.number,
         }));
         new_table_refs.sort();
+
         Manifest {
-            next_file_number: next_number,
+            next_file_number: self.next_file_number,
             wal_number: self.wal_number,
             last_sequence: self.last_sequence,
             tables: new_table_refs,
@@ -1850,17 +1985,16 @@ impl Kiban {
         .map_err(|e| match e {
             atomic::CommitError::Failed(io) => DbError::CommitFailed(io),
             atomic::CommitError::RenamedNotDurable(io) => {
+                // Ambiguous rename is fatal regardless of which thread
+                // triggered it (11.4: no second interpretation for
+                // "background").
                 self.poison(PoisonCause::CommitAmbiguity(io.to_string()));
                 DbError::Poisoned(self.poisoned.clone().unwrap())
             }
         })?;
 
-        // Post-commit: publish Version N+1 and queue retired files.
-        self.next_file_number = next_number;
-        let removed_numbers: std::collections::HashSet<u64> =
-            input_refs.iter().map(|r| r.number).collect();
         let mut new_version_tables = self.version.tables.clone();
-        new_version_tables.retain(|t| !removed_numbers.contains(&t.number));
+        new_version_tables.retain(|t| !plan.input_numbers.contains(&t.number));
         for out in outputs {
             let pos = new_version_tables
                 .partition_point(|t| (t.level, t.number) < (out.level, out.number));
@@ -1873,9 +2007,9 @@ impl Kiban {
 
         // Obsolete files are reclaimable only when no pinned version
         // still references them (11.3); until then they stay on disk.
-        for r in &input_refs {
+        for n in &plan.input_numbers {
             self.obsolete
-                .push((r.number, self.dir.join(file_name(r.number, SST_EXTENSION))));
+                .push((*n, self.dir.join(file_name(*n, SST_EXTENSION))));
         }
         self.reclaim_obsolete();
         Ok(())
@@ -2329,10 +2463,31 @@ mod crash_sweep_tests {
 ///
 /// Concurrency model per `docs/design/concurrency.md`: one mutex, group
 /// commit falls out of the two-step WAL contract (every `sync` flushes
-/// all pending records from all writers in one fdatasync).
-#[derive(Clone)]
+/// all pending records from all writers in one fdatasync). Compaction
+/// runs on a single background worker (11.4): foreground `put`/`get`/
+/// `sync`/`flush` never wait behind it, only behind each other.
 pub struct SharedKiban {
     inner: std::sync::Arc<std::sync::Mutex<Kiban>>,
+    maintenance: std::sync::Arc<Maintenance>,
+}
+
+impl Clone for SharedKiban {
+    fn clone(&self) -> Self {
+        self.maintenance.add_handle();
+        SharedKiban {
+            inner: self.inner.clone(),
+            maintenance: self.maintenance.clone(),
+        }
+    }
+}
+
+impl Drop for SharedKiban {
+    fn drop(&mut self) {
+        // The last handle to go stops and joins the worker (see
+        // `Maintenance::drop_handle`) — no immortal thread survives the
+        // engine it was maintaining.
+        self.maintenance.drop_handle();
+    }
 }
 
 /// Owned key/value pair yielded by snapshot scans.
@@ -2340,43 +2495,40 @@ type SnapEntry = (Vec<u8>, Vec<u8>);
 
 /// A consistent point-in-time view captured from a [`SharedKiban`].
 ///
-/// Capture copies the memtable (O(its size)) and the table metadata list
-/// under one lock hold; reads afterwards never touch the engine lock
-/// (concurrency.md D6).
+/// Capture copies the memtable (O(its size)) under one lock hold and
+/// clones `Arc<TableEntry>` for every currently-live table; reads
+/// afterwards never touch the engine lock (concurrency.md D6). Pinning
+/// the table `Arc`s directly (rather than remembering paths to reopen
+/// later) is what keeps a `SharedSnapshot` correct across a compaction
+/// that reclaims one of its tables' files (11.4): the file's directory
+/// entry can disappear, but this snapshot's open handle to it does not.
+///
+/// Dropping a `SharedSnapshot` releases its hold on the engine's
+/// `smallest_snapshot` boundary (compaction's tombstone/old-version GC),
+/// mirroring `Kiban::release_snapshot` for the direct API — without
+/// this, a `SharedSnapshot` would suppress GC for the engine's entire
+/// remaining lifetime, not just while it's live.
 #[allow(dead_code)]
 pub struct SharedSnapshot {
-    dir: PathBuf,
-    cache: StdArc<BlockCache>,
-    options: KibanOptions,
+    engine: std::sync::Arc<std::sync::Mutex<Kiban>>,
     seq: u64,
     memtable: Memtable,
-    tables: Vec<CapturedTable>,
+    tables: Vec<StdArc<TableEntry>>,
 }
 
-#[allow(dead_code)]
-#[derive(Clone)]
-struct CapturedTable {
-    level: u32,
-    number: u64,
-    path: PathBuf,
-    first_key: Vec<u8>,
-    last_key: Vec<u8>,
+impl Drop for SharedSnapshot {
+    fn drop(&mut self) {
+        if let Ok(mut guard) = self.engine.lock()
+            && let Some(pos) = guard.active_snapshots.iter().position(|s| *s == self.seq)
+        {
+            guard.active_snapshots.remove(pos);
+        }
+    }
 }
 
 impl SharedSnapshot {
     pub fn seq(&self) -> u64 {
         self.seq
-    }
-
-    fn table_handles(&self) -> Result<Vec<(u32, SstTable)>, DbError> {
-        self.tables
-            .iter()
-            .map(|t| {
-                SstTable::open(t.number, &t.path, self.cache.clone())
-                    .map(|h| (t.level, h))
-                    .map_err(DbError::from)
-            })
-            .collect::<Result<Vec<(u32, SstTable)>, DbError>>()
     }
 
     /// Reads `key` as of this snapshot.
@@ -2388,9 +2540,8 @@ impl SharedSnapshot {
         {
             return Ok(e.as_value().map(|v| v.to_vec()));
         }
-        let tables = self.table_handles()?;
-        for (_, t) in tables.iter().rev().filter(|(l, _)| *l == 0) {
-            match t.get(key, Some(self.seq))? {
+        for t in self.tables.iter().rev().filter(|t| t.level == 0) {
+            match t.table.get(key, Some(self.seq))? {
                 Some(f) if f.seq <= self.seq => {
                     return Ok(match f.kind {
                         Kind::Put => Some(f.value),
@@ -2401,11 +2552,11 @@ impl SharedSnapshot {
                 None => continue,
             }
         }
-        for (_, t) in tables.iter().filter(|(l, _)| *l >= 1) {
-            if key < t.smallest_key() || key > t.largest_key() {
+        for t in self.tables.iter().filter(|t| t.level >= 1) {
+            if key < t.first_key.as_slice() || key > t.last_key.as_slice() {
                 continue;
             }
-            match t.get(key, Some(self.seq))? {
+            match t.table.get(key, Some(self.seq))? {
                 Some(f) if f.seq <= self.seq => {
                     return Ok(match f.kind {
                         Kind::Put => Some(f.value),
@@ -2422,25 +2573,22 @@ impl SharedSnapshot {
     /// Scans all live entries visible at this snapshot.
     #[allow(dead_code)]
     pub fn scan(&self) -> Result<Vec<SnapEntry>, DbError> {
-        // declared before `sources` so the memtable feed (which borrows
-        // nothing from `tables`) drops in a safe order
-        let tables = self.table_handles()?;
         let mut sources: Vec<SourceHead<'_>> = Vec::new();
         sources.push(SourceHead {
             feed: SourceFeed::Mem(Box::new(self.memtable.iter_from(b""))),
             head: None,
             exhausted: false,
         });
-        for (_, t) in tables.iter().rev().filter(|(l, _)| *l == 0) {
+        for t in self.tables.iter().rev().filter(|t| t.level == 0) {
             sources.push(SourceHead {
-                feed: SourceFeed::Table(t.iter_from(b"")),
+                feed: SourceFeed::Table(t.table.iter_from(b"")),
                 head: None,
                 exhausted: false,
             });
         }
-        for (_, t) in tables.iter().filter(|(l, _)| *l >= 1) {
+        for t in self.tables.iter().filter(|t| t.level >= 1) {
             sources.push(SourceHead {
-                feed: SourceFeed::Table(t.iter_from(b"")),
+                feed: SourceFeed::Table(t.table.iter_from(b"")),
                 head: None,
                 exhausted: false,
             });
@@ -2470,11 +2618,30 @@ impl SharedKiban {
         dir: impl AsRef<Path>,
         options: KibanOptions,
     ) -> Result<SharedKiban, DbError> {
-        Ok(SharedKiban {
-            inner: std::sync::Arc::new(std::sync::Mutex::new(Kiban::open_with_options(
-                dir, options,
-            )?)),
-        })
+        let inner = std::sync::Arc::new(std::sync::Mutex::new(Kiban::open_with_options(
+            dir, options,
+        )?));
+        let maintenance = Maintenance::spawn(inner.clone());
+        Ok(SharedKiban { inner, maintenance })
+    }
+
+    /// The most recent background compaction failure, if any (11.4:
+    /// background failures must never be silently ignored). Sticky:
+    /// once a job fails, the worker stops attempting more compaction
+    /// until the engine is reopened, so this stays set. This is
+    /// distinct from [`SharedKiban::is_poisoned`]: a durability-fatal
+    /// commit ambiguity poisons the engine itself (refusing further
+    /// mutation) *and* is reported here; a lesser failure (e.g. a
+    /// corrupt compaction input) is reported here without poisoning the
+    /// engine, since it does not put any acknowledged durability claim
+    /// in doubt.
+    pub fn maintenance_error(&self) -> Option<MaintenanceError> {
+        self.maintenance.error()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn maintenance_for_test(&self) -> &Maintenance {
+        &self.maintenance
     }
 
     fn lock(&self) -> Result<std::sync::MutexGuard<'_, Kiban>, DbError> {
@@ -2540,28 +2707,22 @@ impl SharedKiban {
         let pos = guard.active_snapshots.partition_point(|s| *s < seq);
         guard.active_snapshots.insert(pos, seq);
         Ok(SharedSnapshot {
-            dir: guard.dir.clone(),
-            cache: guard.cache.clone(),
-            options: guard.options.clone(),
+            engine: self.inner.clone(),
             seq,
             memtable: guard.memtable.clone(),
-            tables: guard
-                .version
-                .tables
-                .iter()
-                .map(|t| CapturedTable {
-                    level: t.level,
-                    number: t.number,
-                    path: guard.dir.join(file_name(t.number, SST_EXTENSION)),
-                    first_key: t.first_key.clone(),
-                    last_key: t.last_key.clone(),
-                })
-                .collect(),
+            tables: guard.version.tables.clone(),
         })
     }
 
+    /// Durably publishes the memtable as a new L0 sstable — the same
+    /// guarantee `Kiban::flush` makes — then hands compaction off to
+    /// the background worker instead of running it inline (11.4): the
+    /// caller returns as soon as its own flush is durable, not after
+    /// whatever compaction that flush happens to trigger.
     pub fn flush(&self) -> Result<(), DbError> {
-        self.lock()?.flush()
+        self.lock()?.flush_without_compaction()?;
+        self.maintenance.wake();
+        Ok(())
     }
 }
 
@@ -3540,5 +3701,323 @@ mod write_batch_tests {
             assert!(r.is_ok(), "write failed without poisoning: {r:?}");
         }
         assert!(induced, "batch append failure never induced");
+    }
+}
+
+/// 11.4: background compaction. Tests 1-6 from the phase spec live here.
+/// "Test 7 — crash tests still pass" has no new test of its own: it is
+/// the existing suite (crash_sweep_tests, crash_pair_sweep_tests,
+/// power_loss_tests, poisoning_tests, ...) still passing unchanged,
+/// since the direct `Kiban` path is untouched by this phase.
+#[cfg(test)]
+mod background_tests {
+    use super::*;
+    use crate::sys;
+    use crate::testutil::TempDir;
+
+    fn tiny_options() -> KibanOptions {
+        super::compaction_tests::tiny_options()
+    }
+
+    /// Puts `rounds` generations of `k000..k019` through `db`, syncing
+    /// and flushing each — enough L0 tables (tiny_options triggers at 2)
+    /// to make compaction necessary.
+    fn seed_for_compaction(db: &SharedKiban, rounds: u32, label: &str) {
+        for round in 0..rounds {
+            for i in 0..20u32 {
+                db.put(format!("k{i:03}"), format!("{label}{round}-{i}"))
+                    .unwrap();
+            }
+            db.sync().unwrap();
+            db.flush().unwrap();
+        }
+    }
+
+    /// Test 1: a compaction deliberately frozen mid-flight must not
+    /// block unrelated foreground work — the central proof of this
+    /// phase, and also its performance proof (deterministic, not timed):
+    /// the freeze is real (the worker announces it via the checkpoint,
+    /// not a guessed sleep), and foreground put/get complete while it
+    /// holds.
+    #[test]
+    fn foreground_work_continues_while_compaction_build_is_paused() {
+        let td = TempDir::new("bg-foreground-continues");
+        let db = SharedKiban::open_with_options(td.path(), tiny_options()).unwrap();
+        let m = db.maintenance_for_test();
+        m.arm_before_build();
+
+        seed_for_compaction(&db, 3, "r");
+        m.wait_before_build_reached(); // PLAN is done; BUILD has not started
+
+        // foreground work must complete without waiting for BUILD
+        db.put(b"during-freeze", b"v").unwrap();
+        assert_eq!(db.get(b"during-freeze").unwrap(), Some(b"v".to_vec()));
+
+        m.release_before_build();
+        m.wait_settled();
+        assert!(
+            db.maintenance_error().is_none(),
+            "{:?}",
+            db.maintenance_error()
+        );
+        assert_eq!(db.get(b"during-freeze").unwrap(), Some(b"v".to_vec()));
+    }
+
+    /// Test 2: the critical one. A compaction plan is frozen right after
+    /// PLAN (before BUILD, so before COMMIT); while it's frozen, a fresh
+    /// flush publishes a brand-new L0 table. That table must survive:
+    /// COMMIT must apply as a delta against the CURRENT Version, not
+    /// overwrite it with the stale one PLAN captured.
+    #[test]
+    fn flush_published_during_paused_compaction_survives_commit_and_reopen() {
+        let td = TempDir::new("bg-new-flush-survives");
+        let opts = tiny_options();
+        let db = SharedKiban::open_with_options(td.path(), opts.clone()).unwrap();
+        let m = db.maintenance_for_test();
+        m.arm_before_build();
+
+        seed_for_compaction(&db, 3, "old");
+        m.wait_before_build_reached();
+
+        // a fresh flush lands WHILE that old compaction plan is frozen
+        for i in 0..20u32 {
+            db.put(format!("k{i:03}"), b"new").unwrap();
+        }
+        db.sync().unwrap();
+        db.flush().unwrap();
+
+        m.release_before_build();
+        m.wait_settled();
+        assert!(
+            db.maintenance_error().is_none(),
+            "{:?}",
+            db.maintenance_error()
+        );
+
+        for i in 0..20u32 {
+            let key = format!("k{i:03}");
+            assert_eq!(
+                db.get(key.as_bytes()).unwrap(),
+                Some(b"new".to_vec()),
+                "key {key} lost"
+            );
+        }
+
+        drop(db);
+        let reopened = Kiban::open_with_options(td.path(), opts).unwrap();
+        for i in 0..20u32 {
+            let key = format!("k{i:03}");
+            assert_eq!(
+                reopened.get(key.as_bytes()).unwrap(),
+                Some(b"new".to_vec()),
+                "key {key} lost after reopen"
+            );
+        }
+    }
+
+    /// Test 3: a `SharedSnapshot` pins the files it needs (via
+    /// `Arc<TableEntry>`, not a path it hopes still exists) so it keeps
+    /// reading correctly even after background compaction reclaims —
+    /// unlinks — the file it originally opened.
+    #[test]
+    fn shared_snapshot_survives_background_compaction() {
+        let td = TempDir::new("bg-snapshot-survives");
+        let db = SharedKiban::open_with_options(td.path(), tiny_options()).unwrap();
+
+        for i in 0..10u32 {
+            db.put(format!("s{i:03}"), format!("orig-{i}")).unwrap();
+        }
+        db.sync().unwrap();
+        db.flush().unwrap();
+
+        let snap = db.snapshot().unwrap();
+
+        // enough further writes elsewhere to force the table `snap`
+        // pinned (still the only L0 table so far) into a real compaction
+        seed_for_compaction(&db, 4, "r");
+        db.maintenance_for_test().wait_settled();
+        assert!(
+            db.maintenance_error().is_none(),
+            "{:?}",
+            db.maintenance_error()
+        );
+
+        // the snapshot still sees exactly its original world
+        for i in 0..10u32 {
+            let key = format!("s{i:03}");
+            assert_eq!(
+                snap.get(key.as_bytes()).unwrap(),
+                Some(format!("orig-{i}").into_bytes())
+            );
+        }
+        let scanned = snap.scan().unwrap();
+        assert_eq!(scanned.len(), 10);
+
+        // only after the snapshot is released does anything change about
+        // its file lifetime guarantee — current state has moved on
+        // regardless
+        drop(snap);
+        assert!(db.get(b"k000").unwrap().is_some());
+    }
+
+    /// Test 4: point reads and scans keep agreeing through `SharedKiban`
+    /// while background compaction runs freely (no pausing) — the same
+    /// invariant the synchronous engine has always held, now checked
+    /// under concurrency.
+    #[test]
+    fn point_reads_and_scans_agree_through_shared_kiban_under_compaction() {
+        let td = TempDir::new("bg-agreement");
+        let db = SharedKiban::open_with_options(td.path(), tiny_options()).unwrap();
+
+        let mut state: u64 = 0xC0FF_EE00;
+        let mut next = move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+
+        for round in 0..40u64 {
+            for _ in 0..10 {
+                let i = next() % 60;
+                let key = format!("k{i:03}");
+                if next() % 5 == 0 {
+                    db.delete(key.as_bytes()).unwrap();
+                } else {
+                    db.put(key.as_bytes(), format!("r{round}-{i}")).unwrap();
+                }
+            }
+            db.sync().unwrap();
+            db.flush().unwrap();
+
+            let snap = db.snapshot().unwrap();
+            let scanned = snap.scan().unwrap();
+            for (k, v) in &scanned {
+                assert_eq!(
+                    snap.get(k).unwrap().as_deref(),
+                    Some(v.as_slice()),
+                    "round {round}: get disagrees with scan for {k:?}"
+                );
+            }
+            for i in 0..60u32 {
+                let key = format!("k{i:03}");
+                if let Some(v) = snap.get(key.as_bytes()).unwrap() {
+                    assert!(
+                        scanned
+                            .iter()
+                            .any(|(k, sv)| k == key.as_bytes() && sv == &v),
+                        "round {round}: scan missing live key {key}"
+                    );
+                }
+            }
+        }
+
+        db.maintenance_for_test().wait_settled();
+        assert!(
+            db.maintenance_error().is_none(),
+            "{:?}",
+            db.maintenance_error()
+        );
+    }
+
+    /// Test 5: a fault at the very first checked I/O op on the worker
+    /// thread — necessarily inside BUILD's first output write, since
+    /// PLAN does no I/O and COMMIT only runs after BUILD returns Ok —
+    /// must fail cleanly: no manifest touched, no Version touched, the
+    /// failure visible, and a reopen fully correct.
+    #[test]
+    fn background_build_failure_leaves_current_version_untouched() {
+        let td = TempDir::new("bg-build-fail");
+        let opts = tiny_options();
+        let db = SharedKiban::open_with_options(td.path(), opts.clone()).unwrap();
+        let m = db.maintenance_for_test();
+        m.inject_on_worker(|| sys::install_fault(0));
+
+        seed_for_compaction(&db, 3, "r");
+        m.wait_settled();
+
+        let err = db.maintenance_error();
+        assert!(err.is_some(), "no background failure was induced");
+        assert!(
+            !db.is_poisoned(),
+            "a build failure (never reaching the manifest) must not poison: {err:?}"
+        );
+
+        // reads still agree with what was actually flushed (the last of
+        // 3 seeded rounds, labeled "r0".."r2")
+        for i in 0..20u32 {
+            let key = format!("k{i:03}");
+            assert_eq!(
+                db.get(key.as_bytes()).unwrap(),
+                Some(format!("r2-{i}").into_bytes())
+            );
+        }
+
+        drop(db);
+        let reopened = Kiban::open_with_options(td.path(), opts).unwrap();
+        for i in 0..20u32 {
+            let key = format!("k{i:03}");
+            assert_eq!(
+                reopened.get(key.as_bytes()).unwrap(),
+                Some(format!("r2-{i}").into_bytes())
+            );
+        }
+    }
+
+    /// Test 6: an ambiguous MANIFEST rename (directory fsync fails after
+    /// the rename lands) during *background* publication must poison
+    /// the engine exactly like the foreground path does — no separate
+    /// interpretation for "it happened on a worker thread". Swept over
+    /// fault indices like the foreground
+    /// `commit_ambiguity_during_flush_poisons_engine` test, since the
+    /// exact op offset depends on how many output files this run's
+    /// compactions happen to produce.
+    #[test]
+    fn commit_ambiguity_during_background_publication_poisons_engine() {
+        let mut induced = false;
+        for n in 0..60usize {
+            let td = TempDir::new("bg-ambiguity-iter");
+            let db = SharedKiban::open_with_options(td.path(), tiny_options()).unwrap();
+            let m = db.maintenance_for_test();
+            m.inject_on_worker(move || sys::install_faults(&[n]));
+
+            seed_for_compaction(&db, 3, "r");
+            m.wait_settled();
+
+            if !db.is_poisoned() {
+                continue;
+            }
+            induced = true;
+
+            // mutation refused, same as the foreground poisoning path
+            assert!(db.put(b"later", b"x").is_err());
+            // reads stay available
+            let _ = db.get(b"k000").unwrap();
+            // the failure is also visible through maintenance_error
+            assert!(db.maintenance_error().is_some());
+
+            drop(db);
+            // reopen resolves disk truth normally — same as foreground
+            let reopened = Kiban::open_with_options(td.path(), tiny_options()).unwrap();
+            assert!(!reopened.is_poisoned());
+            break;
+        }
+        assert!(
+            induced,
+            "commit ambiguity during background publication never induced"
+        );
+    }
+
+    /// Shutdown: the worker thread does not outlive its last handle.
+    #[test]
+    fn last_handle_drop_stops_the_worker_thread() {
+        let td = TempDir::new("bg-shutdown");
+        let db = SharedKiban::open_with_options(td.path(), tiny_options()).unwrap();
+        let clone = db.clone();
+        db.put(b"a", b"1").unwrap();
+        drop(db);
+        // the clone alone keeps the worker alive; engine still usable
+        assert_eq!(clone.get(b"a").unwrap(), Some(b"1".to_vec()));
+        drop(clone); // last handle: worker is stopped and joined here
     }
 }

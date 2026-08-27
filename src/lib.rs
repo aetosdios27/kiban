@@ -8,6 +8,7 @@
 //! each component.
 
 pub mod atomic;
+pub mod background;
 pub mod bloom;
 pub mod cache;
 pub mod crc32;
