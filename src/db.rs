@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 use crate::atomic;
 use crate::background::{Maintenance, MaintenanceError};
 use crate::cache::BlockCache;
+use crate::file_cache::TableFileCache;
 use crate::manifest::{MANIFEST_NAME, Manifest, ManifestError, TableRef};
 use crate::memtable::{Entry as MemEntry, Memtable};
 use crate::sstable::{Kind, SstError, SstTable, TableBuilder};
@@ -35,6 +36,10 @@ pub enum DbError {
     CommitAmbiguous(io::Error),
     /// The engine is in a poisoned state; this operation was refused.
     Poisoned(PoisonCause),
+    /// Background maintenance has failed and a `SharedKiban` caller was
+    /// waiting on it — for backpressure (11.5), waiting for write room
+    /// that will now never open up, since nothing is compacting anymore.
+    Maintenance(MaintenanceError),
 }
 
 impl fmt::Display for DbError {
@@ -55,6 +60,7 @@ impl fmt::Display for DbError {
                     "engine poisoned; mutation refused — reopen to recover: {cause}"
                 )
             }
+            DbError::Maintenance(e) => write!(f, "{e}"),
         }
     }
 }
@@ -63,6 +69,7 @@ impl std::error::Error for DbError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             DbError::Io(e) | DbError::CommitFailed(e) | DbError::CommitAmbiguous(e) => Some(e),
+            DbError::Maintenance(e) => Some(e),
             DbError::Corrupt(_) | DbError::Poisoned(_) => None,
         }
     }
@@ -186,10 +193,33 @@ impl Version {
 #[derive(Debug, Clone)]
 pub struct KibanOptions {
     pub l0_compaction_trigger: usize,
+    /// Hard L0 safety ceiling (11.5): once the live L0 file count
+    /// reaches this, `SharedKiban` stalls new mutation-producing work
+    /// (`put`/`delete`/`write`/`flush`) until background compaction
+    /// brings it back down. Must be strictly greater than
+    /// `l0_compaction_trigger` — otherwise writers would stall while
+    /// nothing has even started trying to compact yet. Direct `Kiban`
+    /// ignores this entirely; its synchronous compaction already keeps
+    /// L0 bounded.
+    pub l0_write_stall_trigger: usize,
     pub base_level_bytes: u64,
     pub level_multiplier: u64,
     pub target_file_size: u64,
     pub block_cache_bytes: usize,
+    /// Hard bound on simultaneously open SST file descriptors (11.6),
+    /// enforced by a shared `TableFileCache` — not a target or a soft
+    /// threshold. `SstTable` does not keep a descriptor of its own; a
+    /// read leases one from this cache for just its own duration, so
+    /// this number really is the ceiling.
+    pub max_open_table_files: usize,
+    /// Flush trigger (11.8): once the active memtable's
+    /// [`Memtable::logical_bytes`] reaches this, `SharedKiban` freezes
+    /// it and continues writing against a fresh memtable/WAL while the
+    /// frozen one flushes to L0 in the background. A deliberately
+    /// boring, untuned default — not a claim of measurement. Direct
+    /// `Kiban` ignores this entirely, exactly like
+    /// `l0_write_stall_trigger` (11.5).
+    pub write_buffer_bytes: usize,
 }
 
 impl Default for KibanOptions {
@@ -197,11 +227,38 @@ impl Default for KibanOptions {
         const MIB: u64 = 1 << 20;
         KibanOptions {
             l0_compaction_trigger: 4,
+            l0_write_stall_trigger: 8,
             base_level_bytes: 4 * MIB,
             level_multiplier: 10,
             target_file_size: 4 * MIB,
             block_cache_bytes: 32 * MIB as usize,
+            max_open_table_files: 128,
+            write_buffer_bytes: 4 * MIB as usize,
         }
+    }
+}
+
+impl KibanOptions {
+    /// Rejects configurations backpressure (11.5) or the file-cache
+    /// bound (11.6) cannot reason about.
+    fn validate(&self) -> Result<(), DbError> {
+        if self.l0_write_stall_trigger <= self.l0_compaction_trigger {
+            return Err(DbError::Corrupt(format!(
+                "invalid options: l0_write_stall_trigger ({}) must be greater than l0_compaction_trigger ({})",
+                self.l0_write_stall_trigger, self.l0_compaction_trigger
+            )));
+        }
+        if self.max_open_table_files == 0 {
+            return Err(DbError::Corrupt(
+                "invalid options: max_open_table_files must be greater than zero".to_string(),
+            ));
+        }
+        if self.write_buffer_bytes == 0 {
+            return Err(DbError::Corrupt(
+                "invalid options: write_buffer_bytes must be greater than zero".to_string(),
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -242,12 +299,38 @@ impl WriteBatch {
     }
 }
 
+/// The one frozen memtable phase 11.8 allows: not yet an SST, but its
+/// WAL number stays MANIFEST-live (and its file undeleted) until the
+/// flush that supersedes it with an SST commits. `memtable` is shared
+/// (`Arc`, never mutated again after freeze), not cloned, so BUILD —
+/// off the engine lock — and any snapshot captured after the freeze
+/// can reference the exact same frozen data cheaply.
+struct Immutable {
+    memtable: StdArc<Memtable>,
+    wal_number: u64,
+    /// Monotonic, assigned at freeze time. Lets `SharedKiban::flush()`
+    /// wait for its OWN freeze's flush to commit — never satisfied by
+    /// an unrelated earlier or later flush completing first.
+    generation: u64,
+}
+
 pub struct Kiban {
     dir: PathBuf,
     options: KibanOptions,
     cache: StdArc<BlockCache>,
+    /// Bounds simultaneously open SST descriptors (11.6): one instance
+    /// per database, shared by every `SstTable` — recovered at open,
+    /// created by flush, created by compaction. No accidental islands.
+    file_cache: StdArc<TableFileCache>,
     memtable: Memtable,
     wal: Wal,
+    /// The one frozen memtable pending background flush (11.8). `None`
+    /// means nothing is frozen right now.
+    immutable: Option<Immutable>,
+    /// Next generation number a freeze will assign. Monotonic.
+    next_flush_generation: u64,
+    /// Highest flush generation whose SST has actually committed.
+    last_completed_flush_generation: u64,
     next_file_number: u64,
     wal_number: u64,
     last_sequence: u64,
@@ -255,11 +338,12 @@ pub struct Kiban {
     active_snapshots: Vec<u64>,
     /// The authoritative published topology (MANIFEST-committed).
     version: StdArc<Version>,
-    /// Versions pinned by snapshots; strong refs keep their files alive.
-    pinned_versions: Vec<(u64, StdArc<Version>)>,
-    /// Files removed from the live topology awaiting provable-unreferenced
-    /// reclamation.
-    obsolete: Vec<(u64, PathBuf)>,
+    /// Retired-from-the-current-Version tables, not yet provably safe
+    /// to delete: each is an `Arc<TableEntry>` clone, so
+    /// `Arc::strong_count == 1` means nothing else (a snapshot, most
+    /// likely) still references it (11.3 file-lifetime rules, made
+    /// real in 11.6 — see `reclaim_obsolete`).
+    obsolete: Vec<StdArc<TableEntry>>,
     /// Set when a durability-relevant failure makes future
     /// acknowledgement unsafe (engine-poisoning.md D1/D2).
     poisoned: Option<PoisonCause>,
@@ -276,9 +360,14 @@ impl Kiban {
         dir: impl AsRef<Path>,
         options: KibanOptions,
     ) -> Result<Kiban, DbError> {
+        options.validate()?;
         let dir = dir.as_ref().to_path_buf();
         fs::create_dir_all(&dir)?;
+        // Exactly one of each, constructed once, shared by every table
+        // this Kiban ever opens or creates (11.6) — recovered tables
+        // below, and later anything flush/compaction produces.
         let cache = StdArc::new(BlockCache::new(options.block_cache_bytes));
+        let file_cache = StdArc::new(TableFileCache::new(options.max_open_table_files));
 
         let manifest = match Manifest::load(&dir)? {
             Some(m) => m,
@@ -289,22 +378,103 @@ impl Kiban {
         // garbage by definition (D3 step 4).
         Self::sweep_orphans(&dir, &manifest)?;
 
-        let wal_path = dir.join(file_name(manifest.wal_number, WAL_EXTENSION));
-        if !sys::exists(&wal_path) {
-            return Err(DbError::Corrupt(format!(
-                "manifest names wal {} which does not exist",
-                manifest.wal_number
-            )));
+        for &n in &manifest.wal_numbers {
+            if !sys::exists(&dir.join(file_name(n, WAL_EXTENSION))) {
+                return Err(DbError::Corrupt(format!(
+                    "manifest names wal {n} which does not exist"
+                )));
+            }
         }
 
+        // Phase 11.8: replay every live WAL, oldest generation first —
+        // `wal_numbers` is strictly ascending (Manifest::decode/fresh
+        // enforce it) and numeric order equals recency order here,
+        // exactly like sstable file numbers within L0 (db-layout.md
+        // D5): the freeze protocol only ever creates a new WAL after
+        // the old one stops accepting writes, so no record in an older
+        // generation can outrank any record in a newer one. Replaying
+        // in this order keeps every key's versions seq-ascending as
+        // they land in the memtable, which `Memtable::insert_entry`
+        // requires. There is no in-memory "immutable memtable" to
+        // reconstruct — recovery only needs the resulting logical
+        // state (see docs); everything replays into one active
+        // memtable.
         let mut memtable = Memtable::new();
-        let (wal, report) = Wal::open(&wal_path, &mut memtable)?;
-        let wal_max_seq = report.max_sequence;
+        let mut wal_max_seq = 0u64;
+        let mut active_wal: Option<Wal> = None;
+        for &n in &manifest.wal_numbers {
+            let path = dir.join(file_name(n, WAL_EXTENSION));
+            let (w, report) = Wal::open(&path, &mut memtable)?;
+            wal_max_seq = wal_max_seq.max(report.max_sequence);
+            // Only the newest generation's handle is kept for future
+            // writes; older ones just needed replaying and can close.
+            active_wal = Some(w);
+        }
+        let mut wal =
+            active_wal.expect("Manifest::decode/fresh guarantee wal_numbers is non-empty");
+        let mut wal_number = *manifest
+            .wal_numbers
+            .last()
+            .expect("wal_numbers is non-empty");
+        let mut next_file_number = manifest.next_file_number;
+
+        // If the crashed engine had a freeze in flight (two live WALs),
+        // consolidate back to exactly one now, before any new mutation
+        // is accepted, restoring the single-active/zero-immutable
+        // invariant every other invariant in this phase assumes.
+        // Reusing the newest replayed WAL as-is is not an option: it
+        // only holds the newer generation's records, and the merged
+        // memtable also contains the older generation's — a single
+        // fresh WAL, rewritten from the merged memtable in strict
+        // seq order, is durably equivalent to both combined. A crash
+        // mid-consolidation is safe to retry: the old MANIFEST (and
+        // both old WALs, untouched until the new one commits) remain
+        // authoritative until this install succeeds, and any half
+        // -written retry artifact is exactly the kind of
+        // MANIFEST-unreferenced garbage `sweep_orphans` already cleans
+        // up on the next open attempt.
+        if manifest.wal_numbers.len() > 1 {
+            let consolidated_number = next_file_number;
+            next_file_number += 1;
+            let consolidated_path = dir.join(file_name(consolidated_number, WAL_EXTENSION));
+            let mut throwaway = Memtable::new();
+            let (mut consolidated_wal, _) = Wal::open(&consolidated_path, &mut throwaway)?;
+            // `iter_all_versions` yields, per key, newest first — the
+            // opposite of what a WAL must contain, since replay requires
+            // each key's records to arrive in strictly ascending seq
+            // order (`Memtable::insert_entry`'s own invariant). Sort by
+            // seq globally first; seq is already unique per mutation, so
+            // this alone restores a valid replay order across all keys.
+            let mut ordered: Vec<(&[u8], &MemEntry)> = memtable.iter_all_versions().collect();
+            ordered.sort_by_key(|(_, e)| e.seq());
+            for (key, entry) in ordered {
+                match entry {
+                    MemEntry::Value { value, seq } => consolidated_wal.put(*seq, key, value)?,
+                    MemEntry::Tombstone { seq } => consolidated_wal.delete(*seq, key)?,
+                }
+            }
+            consolidated_wal.sync().map_err(|e| match e {
+                crate::wal::SyncPhase::Flush(e) => DbError::Io(e),
+                crate::wal::SyncPhase::Fdatasync(e) => DbError::Io(e),
+            })?;
+            Manifest {
+                next_file_number,
+                wal_numbers: vec![consolidated_number],
+                last_sequence: manifest.last_sequence.max(wal_max_seq),
+                tables: manifest.tables.clone(),
+            }
+            .install(&dir)?;
+            for &old in &manifest.wal_numbers {
+                let _ = sys::remove_file(&dir.join(file_name(old, WAL_EXTENSION)));
+            }
+            wal = consolidated_wal;
+            wal_number = consolidated_number;
+        }
 
         let mut tables = Vec::with_capacity(manifest.tables.len());
         for tref in &manifest.tables {
             let path = dir.join(file_name(tref.number, SST_EXTENSION));
-            let table = SstTable::open(tref.number, &path, cache.clone())?;
+            let table = SstTable::open(tref.number, &path, cache.clone(), file_cache.clone())?;
             let size = table.size_on_disk();
             let first_key = table.smallest_key().to_vec();
             let last_key = table.largest_key().to_vec();
@@ -342,19 +512,26 @@ impl Kiban {
             }
         }
 
-        let cache = StdArc::new(BlockCache::new(options.block_cache_bytes));
         Ok(Kiban {
             dir,
             options,
             cache,
+            file_cache,
             memtable,
             wal,
-            next_file_number: manifest.next_file_number,
-            wal_number: manifest.wal_number,
+            immutable: None,
+            // 1-indexed, deliberately: generation 0 must never be a
+            // real freeze's generation, since `last_completed_flush_
+            // generation`'s own "nothing has committed yet" value is
+            // 0 — colliding would make the very first flush's
+            // `wait_for_flush_generation` a silent no-op.
+            next_flush_generation: 1,
+            last_completed_flush_generation: 0,
+            next_file_number,
+            wal_number,
             last_sequence: manifest.last_sequence.max(wal_max_seq),
             active_snapshots: Vec::new(),
             version: StdArc::new(Version { id: 0, tables }),
-            pinned_versions: Vec::new(),
             obsolete: Vec::new(),
             poisoned: None,
         })
@@ -377,7 +554,9 @@ impl Kiban {
             }
         }
         let manifest = Manifest::fresh();
-        atomic::create_durably(&dir.join(file_name(manifest.wal_number, WAL_EXTENSION)))?;
+        for &n in &manifest.wal_numbers {
+            atomic::create_durably(&dir.join(file_name(n, WAL_EXTENSION)))?;
+        }
         manifest.install(dir).map_err(DbError::from)?;
         Ok(manifest)
     }
@@ -391,7 +570,9 @@ impl Kiban {
             };
             let orphan = match extension {
                 SST_EXTENSION => !manifest.tables.iter().any(|t| t.number == number),
-                WAL_EXTENSION => number != manifest.wal_number,
+                // Phase 11.8: multiple WAL generations can be live at
+                // once (a freeze in flight) — membership, not equality.
+                WAL_EXTENSION => !manifest.wal_numbers.contains(&number),
                 _ => false,
             };
             if orphan {
@@ -516,6 +697,15 @@ impl Kiban {
             Some(MemEntry::Tombstone { .. }) => return Ok(None),
             None => {}
         }
+        // 11.8: the frozen memtable, if any, is older than active but
+        // may not have reached an SST yet — check it before tables.
+        if let Some(im) = &self.immutable {
+            match im.memtable.entry(key) {
+                Some(MemEntry::Value { value, .. }) => return Ok(Some(value.clone())),
+                Some(MemEntry::Tombstone { .. }) => return Ok(None),
+                None => {}
+            }
+        }
         // L0 first, newest file number wins
         for entry in self.version.tables.iter().rev().filter(|t| t.level == 0) {
             match entry.table.get(key, None)? {
@@ -589,6 +779,17 @@ impl Kiban {
                 MemEntry::Tombstone { .. } => None,
             });
         }
+        // 11.8: same fallthrough-on-None chaining as memtable -> tables
+        // already used below, with the frozen memtable (if any) as one
+        // more, older source in between.
+        if let Some(im) = &self.immutable
+            && let Some(entry) = im.memtable.entry_at(key, snap.seq)
+        {
+            return Ok(match entry {
+                MemEntry::Value { value, .. } => Some(value.clone()),
+                MemEntry::Tombstone { .. } => None,
+            });
+        }
         self.get_from_tables_at(snap, key)
     }
 
@@ -633,6 +834,13 @@ impl Kiban {
             head: None,
             exhausted: false,
         });
+        if let Some(im) = &self.immutable {
+            sources.push(SourceHead {
+                feed: SourceFeed::Mem(Box::new(im.memtable.iter_from(b""))),
+                head: None,
+                exhausted: false,
+            });
+        }
         for t in snap.version.tables.iter().rev().filter(|t| t.level == 0) {
             sources.push(SourceHead {
                 feed: SourceFeed::Table(t.table.iter_from(b"")),
@@ -705,7 +913,15 @@ impl Kiban {
         let new_next_file_number = self.next_file_number + 2;
 
         let mut builder = TableBuilder::new();
-        for (key, entry) in self.memtable.iter() {
+        // `iter_all_versions` (not `iter`, which is live-only): a
+        // snapshot may need an older, superseded version that only
+        // exists in this memtable's retained history. Its own ordering
+        // — per key, live then history newest-first, i.e. seq
+        // descending — is exactly the (key asc, seq desc) order
+        // `TableBuilder::add` requires, so multiple versions of one
+        // key land in the output table correctly, the same way
+        // compaction output already can.
+        for (key, entry) in self.memtable.iter_all_versions() {
             match entry {
                 MemEntry::Value { value, seq } => builder.add(Kind::Put, key, value, *seq)?,
                 MemEntry::Tombstone { seq } => builder.add(Kind::Tombstone, key, b"", *seq)?,
@@ -739,7 +955,7 @@ impl Kiban {
         table_refs.sort();
         Manifest {
             next_file_number: new_next_file_number,
-            wal_number: new_wal_number,
+            wal_numbers: vec![new_wal_number],
             last_sequence: self.last_sequence,
             tables: table_refs,
         }
@@ -762,6 +978,7 @@ impl Kiban {
             sst_number,
             &self.dir.join(file_name(sst_number, SST_EXTENSION)),
             self.cache.clone(),
+            self.file_cache.clone(),
         )?;
         let entry = StdArc::new(TableEntry {
             level: 0,
@@ -791,6 +1008,215 @@ impl Kiban {
         let _ = fs::remove_file(old_wal_path);
 
         Ok(())
+    }
+
+    /// The WAL numbers currently live, ascending: just the active WAL,
+    /// or the active WAL plus the frozen immutable memtable's old WAL
+    /// while a flush is pending (11.8). Compaction's own MANIFEST
+    /// writes must use this rather than assuming one WAL — a freeze
+    /// can land while a compaction BUILD is running unlocked, so by
+    /// the time COMMIT reacquires the lock, `immutable` may already be
+    /// occupied by work compaction knows nothing about.
+    fn live_wal_numbers(&self) -> Vec<u64> {
+        match &self.immutable {
+            Some(im) => {
+                let mut v = vec![im.wal_number, self.wal_number];
+                v.sort_unstable();
+                v
+            }
+            None => vec![self.wal_number],
+        }
+    }
+
+    /// The synchronous half of the freeze handoff (11.8): allocates
+    /// and durably creates a fresh WAL, then installs a MANIFEST naming
+    /// BOTH the old and new WAL as live — the commit point. Only after
+    /// that succeeds does the in-memory swap happen: RAM must never
+    /// know something disk does not. Building the frozen memtable's
+    /// SST happens later, off the engine lock, in `plan_flush`/
+    /// `FlushPlan::build`/`commit_flush`.
+    ///
+    /// A no-op if the active memtable is empty (nothing to freeze) or
+    /// the one immutable slot this phase allows is already occupied —
+    /// callers must wait for that slot to free first (`SharedKiban`'s
+    /// backpressure wait, mirroring 11.5's L0 wait exactly).
+    fn freeze(&mut self) -> Result<(), DbError> {
+        self.check_poisoned()?;
+        if self.memtable.is_empty() || self.immutable.is_some() {
+            return Ok(());
+        }
+
+        let new_wal_number = self.next_file_number;
+        let new_next_file_number = self.next_file_number + 1;
+        let new_wal_path = self.dir.join(file_name(new_wal_number, WAL_EXTENSION));
+
+        // The WAL a MANIFEST names must exist durably before that
+        // MANIFEST does — same rule as every flush (D2 step 3).
+        atomic::create_durably(&new_wal_path)?;
+        let mut throwaway = Memtable::new();
+        let (new_wal, _report) = Wal::open(&new_wal_path, &mut throwaway)?;
+
+        let mut wal_numbers = vec![self.wal_number, new_wal_number];
+        wal_numbers.sort_unstable();
+        let tables: Vec<TableRef> = self
+            .version
+            .tables
+            .iter()
+            .map(|t| TableRef {
+                level: t.level,
+                number: t.number,
+            })
+            .collect();
+
+        // The commit point: from here, recovery knows both WALs are
+        // live, so foreground writes may safely enter the new one.
+        Manifest {
+            next_file_number: new_next_file_number,
+            wal_numbers,
+            last_sequence: self.last_sequence,
+            tables,
+        }
+        .install(&self.dir)
+        .map_err(|e| match e {
+            atomic::CommitError::Failed(io) => DbError::CommitFailed(io),
+            atomic::CommitError::RenamedNotDurable(io) => {
+                // Ambiguous: do not guess whether the one-WAL or
+                // two-WAL topology survived. Same rule as everywhere
+                // else (engine-poisoning.md D2).
+                self.poison(PoisonCause::CommitAmbiguity(io.to_string()));
+                DbError::Poisoned(self.poisoned.clone().unwrap())
+            }
+        })?;
+
+        // Only now: disk truth confirms both WALs are live, so the RAM
+        // handoff can happen. Never before — never publish RAM state
+        // ahead of what the MANIFEST actually says.
+        let old_memtable = std::mem::replace(&mut self.memtable, Memtable::new());
+        let old_wal_number = self.wal_number;
+        self.wal = new_wal;
+        self.wal_number = new_wal_number;
+        self.next_file_number = new_next_file_number;
+        let generation = self.next_flush_generation;
+        self.next_flush_generation += 1;
+        self.immutable = Some(Immutable {
+            memtable: StdArc::new(old_memtable),
+            wal_number: old_wal_number,
+            generation,
+        });
+        Ok(())
+    }
+
+    /// PLAN for the pending immutable memtable's flush, if any: reserves
+    /// an output file number and captures everything BUILD needs —
+    /// cheap, done under the engine lock. Mirrors compaction's own
+    /// PLAN/BUILD/COMMIT split (11.4).
+    pub(crate) fn plan_flush(&mut self) -> Option<FlushPlan> {
+        let im = self.immutable.as_ref()?;
+        let output_number = self.next_file_number;
+        self.next_file_number += 1;
+        Some(FlushPlan {
+            memtable: im.memtable.clone(),
+            old_wal_number: im.wal_number,
+            generation: im.generation,
+            output_number,
+            dir: self.dir.clone(),
+            cache: self.cache.clone(),
+            file_cache: self.file_cache.clone(),
+        })
+    }
+
+    /// COMMIT for a flush (11.8): publish the output SST, retire the
+    /// frozen memtable's WAL, and clear the immutable slot. Applied
+    /// against the *current* topology, not a stale view PLAN happened
+    /// to see — mirrors `commit_compaction` exactly.
+    pub(crate) fn commit_flush(
+        &mut self,
+        plan: FlushPlan,
+        output: TableEntry,
+    ) -> Result<(), DbError> {
+        let Some(im) = &self.immutable else {
+            return Err(DbError::Corrupt(
+                "flush commit: no immutable memtable pending (logic bug)".to_string(),
+            ));
+        };
+        if im.generation != plan.generation {
+            return Err(DbError::Corrupt(
+                "flush commit: immutable generation mismatch (logic bug)".to_string(),
+            ));
+        }
+
+        let mut table_refs: Vec<TableRef> = self
+            .version
+            .tables
+            .iter()
+            .map(|t| TableRef {
+                level: t.level,
+                number: t.number,
+            })
+            .collect();
+        table_refs.push(TableRef {
+            level: 0,
+            number: output.number,
+        });
+        table_refs.sort();
+
+        // The commit point: only the active WAL remains live — the
+        // frozen memtable's old WAL is superseded by `output`.
+        Manifest {
+            next_file_number: self.next_file_number,
+            wal_numbers: vec![self.wal_number],
+            last_sequence: self.last_sequence,
+            tables: table_refs,
+        }
+        .install(&self.dir)
+        .map_err(|e| match e {
+            atomic::CommitError::Failed(io) => DbError::CommitFailed(io),
+            atomic::CommitError::RenamedNotDurable(io) => {
+                self.poison(PoisonCause::CommitAmbiguity(io.to_string()));
+                DbError::Poisoned(self.poisoned.clone().unwrap())
+            }
+        })?;
+
+        // Only now: publish Version, clear the immutable slot, retire
+        // the old WAL. Never delete it before this point (D2 step 5's
+        // rule, unchanged): a crash before commit must still find it
+        // MANIFEST-live and replayable.
+        self.immutable = None;
+        let mut new_tables = self.version.tables.clone();
+        let entry = StdArc::new(output);
+        let pos = new_tables.partition_point(|t| (t.level, t.number) < (entry.level, entry.number));
+        new_tables.insert(pos, entry);
+        self.version = StdArc::new(Version {
+            id: self.version.id + 1,
+            tables: new_tables,
+        });
+        self.last_completed_flush_generation =
+            self.last_completed_flush_generation.max(plan.generation);
+
+        // Best-effort deletion; recovery's sweep owns stragglers.
+        let _ = sys::remove_file(&self.dir.join(file_name(plan.old_wal_number, WAL_EXTENSION)));
+
+        Ok(())
+    }
+
+    /// Auto-freeze trigger (11.8), called by `SharedKiban` after a
+    /// successful mutation, still holding the same lock the mutation
+    /// itself used. Returns whether a freeze happened, so the caller
+    /// knows whether it's worth waking the maintenance worker.
+    ///
+    /// A no-op when the immutable slot is already occupied: the one-
+    /// immutable-memtable rule means this simply declines rather than
+    /// queuing a second one. Bounding growth in that case is the
+    /// caller's job (`SharedKiban::wait_for_write_room`'s own
+    /// immutable-slot wait), not this method silently trying forever.
+    pub(crate) fn maybe_freeze(&mut self) -> Result<bool, DbError> {
+        if self.immutable.is_some()
+            || self.memtable.logical_bytes() < self.options.write_buffer_bytes
+        {
+            return Ok(false);
+        }
+        self.freeze()?;
+        Ok(true)
     }
 
     #[cfg(test)]
@@ -866,6 +1292,16 @@ impl Kiban {
             head: None,
             exhausted: false,
         });
+        // 11.8: the merge is a proper (key asc, seq desc) merge — the
+        // frozen memtable slots in as just one more source; where it
+        // sits in this Vec doesn't affect correctness, only tidiness.
+        if let Some(im) = &self.immutable {
+            sources.push(SourceHead {
+                feed: SourceFeed::Mem(Box::new(im.memtable.iter_from(start))),
+                head: None,
+                exhausted: false,
+            });
+        }
         for table in self.version.tables.iter().rev().filter(|t| t.level == 0) {
             sources.push(SourceHead {
                 feed: SourceFeed::Table(table.table.iter_from(start)),
@@ -929,7 +1365,10 @@ mod tests {
     #[test]
     fn fresh_open_creates_layout_and_survives_reopen() {
         let (td, mut db) = fresh_db("fresh");
-        assert_eq!(Manifest::load(td.path()).unwrap().unwrap().wal_number, 1);
+        assert_eq!(
+            Manifest::load(td.path()).unwrap().unwrap().wal_numbers,
+            vec![1]
+        );
         db.put(b"a", b"1").unwrap();
         db.sync().unwrap();
         drop(db);
@@ -1008,7 +1447,7 @@ mod tests {
         assert!(td.path().join("README.txt").exists());
         assert!(
             td.path()
-                .join(file_name(manifest.wal_number, WAL_EXTENSION))
+                .join(file_name(manifest.wal_numbers[0], WAL_EXTENSION))
                 .exists()
         );
     }
@@ -1055,7 +1494,7 @@ mod tests {
 
         let manifest = Manifest {
             next_file_number: 3,
-            wal_number: 1,
+            wal_numbers: vec![1],
             last_sequence: 0,
             tables: vec![
                 TableRef {
@@ -1091,7 +1530,7 @@ mod tests {
         let td = TempDir::new("missing-sst");
         let manifest = Manifest {
             next_file_number: 5,
-            wal_number: 1,
+            wal_numbers: vec![1],
             last_sequence: 0,
             tables: vec![TableRef {
                 level: 0,
@@ -1135,7 +1574,7 @@ mod flush_tests {
         let (td, mut db) = fresh_db("flush-empty");
         db.flush().unwrap();
         let m = Manifest::load(td.path()).unwrap().unwrap();
-        assert_eq!(m.wal_number, 1);
+        assert_eq!(m.wal_numbers, vec![1]);
         assert_eq!(m.next_file_number, 2);
         assert!(m.tables.is_empty());
     }
@@ -1177,7 +1616,7 @@ mod flush_tests {
         db.sync().unwrap();
         db.flush().unwrap();
         let m = Manifest::load(td.path()).unwrap().unwrap();
-        assert_eq!(m.wal_number, 3);
+        assert_eq!(m.wal_numbers, vec![3]);
         assert_eq!(
             m.tables,
             vec![TableRef {
@@ -1203,7 +1642,7 @@ mod flush_tests {
         drop(db);
 
         let manifest = Manifest::load(td.path()).unwrap().unwrap();
-        assert_eq!(manifest.wal_number, 1);
+        assert_eq!(manifest.wal_numbers, vec![1]);
         fs::write(td.path().join(file_name(5, SST_EXTENSION)), b"orphan").unwrap();
 
         let db = Kiban::open(td.path()).unwrap();
@@ -1635,6 +2074,15 @@ mod scan_tests {
 /// does; committing this plan must still apply as a delta against
 /// whatever the *current* Version is when COMMIT runs, not overwrite it
 /// with this stale view (see `Kiban::commit_compaction`).
+/// Raw byte totals from one completed compaction (phase 11.7), reported
+/// straight from already-known plan/output metadata — no extra disk
+/// I/O to compute them.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct CompactionOutcome {
+    pub(crate) input_bytes: u64,
+    pub(crate) output_bytes: u64,
+}
+
 pub(crate) struct CompactionPlan {
     inputs: Vec<StdArc<TableEntry>>,
     input_numbers: HashSet<u64>,
@@ -1647,6 +2095,7 @@ pub(crate) struct CompactionPlan {
     output_numbers: Vec<u64>,
     dir: PathBuf,
     cache: StdArc<BlockCache>,
+    file_cache: StdArc<TableFileCache>,
     target_file_size: u64,
 }
 
@@ -1759,7 +2208,7 @@ impl CompactionPlan {
         let bytes = builder.finish()?;
         let path = self.dir.join(file_name(number, SST_EXTENSION));
         atomic::commit_file(&path, &bytes)?;
-        let table = SstTable::open(number, &path, self.cache.clone())?;
+        let table = SstTable::open(number, &path, self.cache.clone(), self.file_cache.clone())?;
         outputs.push(TableEntry {
             level: self.output_level,
             number,
@@ -1769,6 +2218,57 @@ impl CompactionPlan {
             table,
         });
         Ok(())
+    }
+}
+
+/// A flush job's plan (11.8): everything BUILD needs to turn one
+/// frozen immutable memtable into an L0 sstable, captured under the
+/// engine lock. Mirrors `CompactionPlan` exactly — same PLAN/BUILD/
+/// COMMIT split, same reason (BUILD is the expensive part; moving it
+/// off the lock is the entire point of a background worker).
+pub(crate) struct FlushPlan {
+    memtable: StdArc<Memtable>,
+    /// The frozen memtable's WAL — stays MANIFEST-live until this
+    /// plan's `commit_flush` retires it.
+    old_wal_number: u64,
+    generation: u64,
+    output_number: u64,
+    dir: PathBuf,
+    cache: StdArc<BlockCache>,
+    file_cache: StdArc<TableFileCache>,
+}
+
+impl FlushPlan {
+    /// BUILD: identical table-construction rules to every other flush
+    /// path (`Kiban::flush_without_compaction`) — same `TableBuilder`,
+    /// same `iter_all_versions` ordering so a snapshot-visible older
+    /// version isn't lost, same atomic publication. No engine lock is
+    /// held here.
+    pub(crate) fn build(&self) -> Result<TableEntry, DbError> {
+        let mut builder = TableBuilder::new();
+        for (key, entry) in self.memtable.iter_all_versions() {
+            match entry {
+                MemEntry::Value { value, seq } => builder.add(Kind::Put, key, value, *seq)?,
+                MemEntry::Tombstone { seq } => builder.add(Kind::Tombstone, key, b"", *seq)?,
+            }
+        }
+        let bytes = builder.finish()?;
+        let path = self.dir.join(file_name(self.output_number, SST_EXTENSION));
+        atomic::commit_file(&path, &bytes)?;
+        let table = SstTable::open(
+            self.output_number,
+            &path,
+            self.cache.clone(),
+            self.file_cache.clone(),
+        )?;
+        Ok(TableEntry {
+            level: 0,
+            number: self.output_number,
+            size: table.size_on_disk(),
+            first_key: table.smallest_key().to_vec(),
+            last_key: table.largest_key().to_vec(),
+            table,
+        })
     }
 }
 
@@ -1932,6 +2432,7 @@ impl Kiban {
             output_numbers,
             dir: self.dir.clone(),
             cache: self.cache.clone(),
+            file_cache: self.file_cache.clone(),
             target_file_size: self.options.target_file_size,
         })
     }
@@ -1947,7 +2448,12 @@ impl Kiban {
         &mut self,
         plan: CompactionPlan,
         outputs: Vec<TableEntry>,
-    ) -> Result<(), DbError> {
+    ) -> Result<CompactionOutcome, DbError> {
+        // Raw facts for the stats surface (11.7), read from metadata
+        // already in hand — never a reread of file bytes.
+        let input_bytes: u64 = plan.inputs.iter().map(|t| t.size).sum();
+        let output_bytes: u64 = outputs.iter().map(|o| o.size).sum();
+
         // The one worker means no other compaction can have touched
         // these inputs meanwhile; this just makes that assumption
         // explicit rather than silently trusting it.
@@ -1977,7 +2483,11 @@ impl Kiban {
 
         Manifest {
             next_file_number: self.next_file_number,
-            wal_number: self.wal_number,
+            // 11.8: a freeze can land while this compaction's BUILD ran
+            // unlocked, so the currently-live WAL set may already
+            // include a pending immutable memtable's WAL by the time
+            // this COMMIT runs — never assume just one.
+            wal_numbers: self.live_wal_numbers(),
             last_sequence: self.last_sequence,
             tables: new_table_refs,
         }
@@ -2005,30 +2515,46 @@ impl Kiban {
             tables: new_version_tables,
         });
 
-        // Obsolete files are reclaimable only when no pinned version
-        // still references them (11.3); until then they stay on disk.
-        for n in &plan.input_numbers {
-            self.obsolete
-                .push((*n, self.dir.join(file_name(*n, SST_EXTENSION))));
+        // Obsolete files are reclaimable only when nothing still
+        // references them (11.3); until then they stay on disk. Each
+        // input's `Arc<TableEntry>` moves here directly — `self.version`
+        // no longer holds one (replaced above), so whether anything
+        // else (a snapshot, most likely) still does is exactly what
+        // `reclaim_obsolete`'s refcount check answers.
+        for entry in plan.inputs {
+            self.obsolete.push(entry);
         }
         self.reclaim_obsolete();
-        Ok(())
+        Ok(CompactionOutcome {
+            input_bytes,
+            output_bytes,
+        })
     }
 
-    /// Deletes obsolete files that no pinned version references. Files
-    /// referenced by any pinned Version stay on disk until that pin dies
-    /// (11.3 file-lifetime rules).
+    /// Deletes obsolete files that nothing still references. An entry
+    /// in `self.obsolete` is an `Arc<TableEntry>` no longer reachable
+    /// from `self.version`; `Arc::strong_count == 1` means this is the
+    /// only reference left (no snapshot pins it), so it's provably
+    /// safe to reclaim (11.3 file-lifetime rules). Safe to check this
+    /// way without racing a concurrent snapshot capture: the only
+    /// paths that could add a new reference to a table already absent
+    /// from `self.version` are `Kiban::snapshot`/`SharedKiban::snapshot`,
+    /// and both require the same engine lock `reclaim_obsolete` already
+    /// runs under.
+    ///
+    /// Before physically unlinking, the file cache's own idle
+    /// descriptor for that number (if any) is invalidated first
+    /// (11.6): otherwise the directory entry would disappear while a
+    /// cached-but-unleased descriptor still held the inode open,
+    /// leaving disk space pinned by a handle nothing can reach anymore.
     fn reclaim_obsolete(&mut self) {
         let mut kept = Vec::new();
-        for (number, path) in std::mem::take(&mut self.obsolete) {
-            let pinned = self
-                .pinned_versions
-                .iter()
-                .any(|(_, v)| v.contains_number(number));
-            if pinned {
-                kept.push((number, path));
+        for entry in std::mem::take(&mut self.obsolete) {
+            if StdArc::strong_count(&entry) == 1 {
+                self.file_cache.invalidate(entry.number);
+                let _ = sys::remove_file(&self.dir.join(file_name(entry.number, SST_EXTENSION)));
             } else {
-                let _ = sys::remove_file(&path);
+                kept.push(entry);
             }
         }
         self.obsolete = kept;
@@ -2044,10 +2570,26 @@ mod compaction_tests {
     pub(crate) fn tiny_options() -> KibanOptions {
         KibanOptions {
             l0_compaction_trigger: 2,
+            // High enough that no existing (pre-11.5) test — several of
+            // which deliberately freeze the worker while seeding a
+            // handful of L0 tables — ever stalls on it by accident.
+            // Tests that specifically exercise backpressure use their
+            // own tight `stall_options()` instead.
+            l0_write_stall_trigger: 20,
             base_level_bytes: 300,
             level_multiplier: 4,
             target_file_size: 250,
             block_cache_bytes: 1 << 20,
+            // High enough that no existing (pre-11.6) test — none of
+            // which exercise the file-cache bound deliberately — ever
+            // waits on it by accident. Tests that specifically exercise
+            // the file-cache bound use their own tight options.
+            max_open_table_files: 64,
+            // High enough that no existing (pre-11.8) test — none of
+            // which write anywhere near this much — ever auto-freezes
+            // by accident. Tests that specifically exercise freeze/
+            // flush use their own tight `write_buffer_bytes`.
+            write_buffer_bytes: 1 << 20,
         }
     }
 
@@ -2229,22 +2771,27 @@ mod crash_sweep_tests {
     }
 
     impl Tracker {
-        fn apply(&mut self, key: &[u8], value: Option<&[u8]>) {
+        // pub(crate): reused directly by `flush_pipeline_tests`' own
+        // sweep (11.8), which exercises `Kiban::freeze`/`commit_flush`
+        // rather than this module's `flush()` scenario but needs the
+        // exact same durability-floor bookkeeping.
+        pub(crate) fn apply(&mut self, key: &[u8], value: Option<&[u8]>) {
             self.attempted
                 .insert(key.to_vec(), value.map(|v| v.to_vec()));
             self.dirty_since_sync.push(key.to_vec());
         }
 
         /// A successful `sync` makes all prior operations durable.
-        fn on_sync_ok(&mut self) {
+        pub(crate) fn on_sync_ok(&mut self) {
             self.mark_durable();
         }
 
-        /// A successful `flush` ALSO advances the durability floor: it
-        /// publishes the entire memtable (synced or not) through its
-        /// commit point. This is what the exact-durability sweep taught
-        /// us.
-        fn on_flush_ok(&mut self) {
+        /// A successful `flush` (or, in `flush_pipeline_tests`, a
+        /// successful `commit_flush`) ALSO advances the durability
+        /// floor: it publishes the entire memtable (synced or not)
+        /// through its commit point. This is what the exact-durability
+        /// sweep taught us.
+        pub(crate) fn on_flush_ok(&mut self) {
             self.mark_durable();
         }
 
@@ -2320,10 +2867,13 @@ mod crash_sweep_tests {
         let result = (|| -> Result<(), DbError> {
             let mut options = KibanOptions {
                 l0_compaction_trigger: 2,
+                l0_write_stall_trigger: 20,
                 base_level_bytes: 300,
                 level_multiplier: 4,
                 target_file_size: 250,
                 block_cache_bytes: 1 << 20,
+                max_open_table_files: 64,
+                write_buffer_bytes: 1 << 20,
             };
             let _ = &mut options;
             let mut db = Kiban::open_with_options(dir, options)?;
@@ -2409,10 +2959,13 @@ mod crash_sweep_tests {
                 dir.path(),
                 KibanOptions {
                     l0_compaction_trigger: 2,
+                    l0_write_stall_trigger: 20,
                     base_level_bytes: 300,
                     level_multiplier: 4,
                     target_file_size: 250,
                     block_cache_bytes: 1 << 20,
+                    max_open_table_files: 64,
+                    write_buffer_bytes: 1 << 20,
                 },
             ) {
                 Ok(db) => db,
@@ -2513,6 +3066,12 @@ pub struct SharedSnapshot {
     engine: std::sync::Arc<std::sync::Mutex<Kiban>>,
     seq: u64,
     memtable: Memtable,
+    /// The frozen immutable memtable at capture time, if any (11.8) —
+    /// an `Arc` clone, cheap, and correct precisely because a frozen
+    /// memtable is never mutated again: whatever this snapshot saw at
+    /// capture stays exactly what it sees, unaffected by the live
+    /// engine later flushing it away.
+    immutable: Option<StdArc<Memtable>>,
     tables: Vec<StdArc<TableEntry>>,
 }
 
@@ -2536,6 +3095,12 @@ impl SharedSnapshot {
     pub fn get(&self, key: impl AsRef<[u8]>) -> Result<Option<Vec<u8>>, DbError> {
         let key = key.as_ref();
         if let Some(e) = self.memtable.entry(key)
+            && e.seq() <= self.seq
+        {
+            return Ok(e.as_value().map(|v| v.to_vec()));
+        }
+        if let Some(im) = &self.immutable
+            && let Some(e) = im.entry(key)
             && e.seq() <= self.seq
         {
             return Ok(e.as_value().map(|v| v.to_vec()));
@@ -2579,6 +3144,13 @@ impl SharedSnapshot {
             head: None,
             exhausted: false,
         });
+        if let Some(im) = &self.immutable {
+            sources.push(SourceHead {
+                feed: SourceFeed::Mem(Box::new(im.iter_from(b""))),
+                head: None,
+                exhausted: false,
+            });
+        }
         for t in self.tables.iter().rev().filter(|t| t.level == 0) {
             sources.push(SourceHead {
                 feed: SourceFeed::Table(t.table.iter_from(b"")),
@@ -2607,6 +3179,66 @@ impl SharedSnapshot {
         }
         Ok(out)
     }
+}
+
+/// Table count and byte total for one level, read straight from the
+/// currently published [`Version`] — never from the filesystem.
+#[derive(Debug, Clone, Copy)]
+pub struct LevelStats {
+    pub level: u32,
+    pub tables: usize,
+    pub bytes: u64,
+}
+
+/// A cheap, observation-only snapshot of engine state (phase 11.7) —
+/// enough to answer "what is Kiban doing right now?" without disk I/O,
+/// cache activity, or waking maintenance. Raw facts only: Kiban does
+/// not grade its own health (no "good"/"under pressure" verdicts) —
+/// the caller decides what a number means.
+///
+/// This is an observational snapshot, not a transactional one: each
+/// field group is read under its own lock (the engine, the block
+/// cache, the file cache, the maintenance worker) with no single lock
+/// spanning all of them, so e.g. `levels` and `maintenance` may
+/// disagree by one compaction commit that landed between the two
+/// reads. Freezing the whole engine to make telemetry perfectly
+/// synchronized would cost far more than the guarantee is worth.
+#[derive(Debug, Clone)]
+pub struct KibanStats {
+    pub memtable_entries: usize,
+    /// Active memtable's [`Memtable::logical_bytes`] (11.8) — the
+    /// signal `write_buffer_bytes` thresholds against.
+    pub memtable_logical_bytes: usize,
+    /// Whether one frozen memtable is currently pending background
+    /// flush (11.8). At most one, ever, this phase.
+    pub immutable_present: bool,
+    /// The frozen memtable's own logical bytes, when present.
+    pub immutable_logical_bytes: usize,
+    pub active_snapshots: usize,
+    pub obsolete_files_pending: usize,
+    /// One entry per level that currently holds at least one table,
+    /// ascending by level. An empty database yields an empty vec.
+    pub levels: Vec<LevelStats>,
+    pub block_cache: crate::cache::BlockCacheStats,
+    pub table_files: crate::file_cache::TableFileCacheStats,
+    pub maintenance: crate::background::MaintenanceStats,
+}
+
+fn levels_from_version(version: &Version) -> Vec<LevelStats> {
+    let mut by_level: std::collections::BTreeMap<u32, (usize, u64)> = Default::default();
+    for t in &version.tables {
+        let e = by_level.entry(t.level).or_insert((0, 0));
+        e.0 += 1;
+        e.1 += t.size;
+    }
+    by_level
+        .into_iter()
+        .map(|(level, (tables, bytes))| LevelStats {
+            level,
+            tables,
+            bytes,
+        })
+        .collect()
 }
 
 impl SharedKiban {
@@ -2644,6 +3276,22 @@ impl SharedKiban {
         &self.maintenance
     }
 
+    /// Test-only (11.8): publishes the memtable synchronously,
+    /// bypassing the shared maintenance worker entirely — the exact
+    /// shape `SharedKiban::flush` had before 11.8 moved flushing onto
+    /// that worker. Pre-11.8 tests that use a flush purely to get data
+    /// onto disk or trigger a compaction attempt (not to exercise
+    /// freeze/immutable machinery itself) use this: going through the
+    /// real, worker-mediated `flush` would let a compaction the test
+    /// deliberately froze (`arm_before_build`) transitively block an
+    /// unrelated flush queued behind it on that same one worker.
+    #[cfg(test)]
+    pub(crate) fn flush_sync_for_test(&self) -> Result<(), DbError> {
+        self.lock()?.flush_without_compaction()?;
+        self.maintenance.wake();
+        Ok(())
+    }
+
     fn lock(&self) -> Result<std::sync::MutexGuard<'_, Kiban>, DbError> {
         self.inner.lock().map_err(|_| {
             DbError::Corrupt(
@@ -2653,19 +3301,184 @@ impl SharedKiban {
         })
     }
 
-    /// Buffered WAL append + memtable write. Not durable until `sync`.
-    pub fn put(&self, key: impl AsRef<[u8]>, value: impl AsRef<[u8]>) -> io::Result<()> {
-        match self.lock() {
-            Ok(mut guard) => guard.put(key, value),
-            Err(e) => Err(io::Error::other(e.to_string())),
+    /// Blocks (never holding the engine mutex while doing so) until
+    /// neither of two independent write-pressure reasons hold: L0 at
+    /// its hard ceiling (11.5), or the one immutable-memtable slot
+    /// already occupied *and* the active memtable has itself also
+    /// crossed the write-buffer threshold (11.8) — i.e. a second freeze
+    /// is wanted but the one slot this phase allows is taken. Called
+    /// before every operation that would grow that debt — `put`,
+    /// `delete`, `write` — never before `get`/`scan`/`sync`/snapshot
+    /// reads, which must keep working while writers stall.
+    /// `SharedKiban::flush()` uses its own, stricter wait (unconditional
+    /// on the immutable slot, since an explicit flush always wants to
+    /// freeze right now — see `wait_for_immutable_slot`).
+    ///
+    /// The epoch is captured *while still holding the engine lock*,
+    /// immediately after observing pressure: any commit that could
+    /// relieve it — a compaction commit, or a flush commit clearing the
+    /// immutable slot — must itself take that same lock, so a commit
+    /// can never land in the gap between "still under pressure" and
+    /// "start waiting on this epoch" — closing the classic check-then-
+    /// sleep missed-wakeup race.
+    fn wait_for_write_room(&self) -> Result<(), DbError> {
+        // Set once this call has genuinely had to wait at least once,
+        // so a call that loops through several wake/recheck cycles
+        // before getting room still counts as exactly one write stall
+        // (11.7) — one blocked mutation, one stall event.
+        let mut stalled = false;
+        loop {
+            if let Some(err) = self.maintenance.error() {
+                return Err(DbError::Maintenance(err));
+            }
+            if self.maintenance.is_stopped() {
+                return Err(DbError::Maintenance(MaintenanceError(
+                    "maintenance worker is shutting down".to_string(),
+                )));
+            }
+            let epoch = {
+                let guard = self.lock()?;
+                guard.check_poisoned()?;
+                let l0_ok = guard.l0_count() < guard.options().l0_write_stall_trigger;
+                let immutable_ok = guard.immutable.is_none()
+                    || guard.memtable.logical_bytes() < guard.options().write_buffer_bytes;
+                if l0_ok && immutable_ok {
+                    return Ok(());
+                }
+                self.maintenance.progress_epoch()
+            };
+            if !stalled {
+                self.maintenance.record_write_stall();
+                stalled = true;
+            }
+            self.maintenance.wake();
+            self.maintenance.writer_started_waiting();
+            self.maintenance.wait_for_progress(epoch);
+            self.maintenance.writer_stopped_waiting();
         }
     }
 
-    pub fn delete(&self, key: impl AsRef<[u8]>) -> io::Result<()> {
-        match self.lock() {
-            Ok(mut guard) => guard.delete(key),
-            Err(e) => Err(io::Error::other(e.to_string())),
+    /// Blocks until `generation`'s flush has actually committed —
+    /// `SharedKiban::flush()`'s own wait, distinct from
+    /// `wait_for_write_room`: it waits for one specific, already-
+    /// frozen generation, never satisfied by an unrelated earlier or
+    /// later flush completing first (never bare `immutable.is_none()`,
+    /// which could be true because a *different* generation finished).
+    /// Not counted as a write stall — this is a caller waiting on its
+    /// own requested durability, the same shape as `sync()` blocking on
+    /// its own fdatasync, not backpressure from write pressure.
+    fn wait_for_flush_generation(&self, generation: u64) -> Result<(), DbError> {
+        loop {
+            if let Some(err) = self.maintenance.error() {
+                return Err(DbError::Maintenance(err));
+            }
+            if self.maintenance.is_stopped() {
+                return Err(DbError::Maintenance(MaintenanceError(
+                    "maintenance worker is shutting down".to_string(),
+                )));
+            }
+            let epoch = {
+                let guard = self.lock()?;
+                guard.check_poisoned()?;
+                if guard.last_completed_flush_generation >= generation {
+                    return Ok(());
+                }
+                self.maintenance.progress_epoch()
+            };
+            self.maintenance.wait_for_progress(epoch);
         }
+    }
+
+    /// A cheap, observation-only snapshot of engine state (phase
+    /// 11.7) — see [`KibanStats`]. Never touches disk, never triggers
+    /// a block-cache or file-cache access, never wakes or waits on
+    /// maintenance: it briefly locks the engine to copy a few small
+    /// facts, then reads the block cache, file cache, and maintenance
+    /// worker each under their own lock, with the engine lock already
+    /// released — no new lock ordering beyond what already exists
+    /// elsewhere (engine lock, if held, is always released before a
+    /// file-cache wait; this path never nests them at all).
+    pub fn stats(&self) -> Result<KibanStats, DbError> {
+        let (
+            memtable_entries,
+            memtable_logical_bytes,
+            immutable_present,
+            immutable_logical_bytes,
+            active_snapshots,
+            obsolete_files_pending,
+            levels,
+            cache,
+            file_cache,
+        ) = {
+            let guard = self.lock()?;
+            (
+                guard.memtable.len(),
+                guard.memtable.logical_bytes(),
+                guard.immutable.is_some(),
+                guard
+                    .immutable
+                    .as_ref()
+                    .map(|im| im.memtable.logical_bytes())
+                    .unwrap_or(0),
+                guard.active_snapshots.len(),
+                guard.obsolete.len(),
+                levels_from_version(&guard.version),
+                guard.cache.clone(),
+                guard.file_cache.clone(),
+            )
+        };
+        Ok(KibanStats {
+            memtable_entries,
+            memtable_logical_bytes,
+            immutable_present,
+            immutable_logical_bytes,
+            active_snapshots,
+            obsolete_files_pending,
+            levels,
+            block_cache: cache.stats(),
+            table_files: file_cache.stats(),
+            maintenance: self.maintenance.stats(),
+        })
+    }
+
+    /// Buffered WAL append + memtable write. Not durable until `sync`.
+    /// May freeze the active memtable afterward if it has crossed
+    /// `write_buffer_bytes` (11.8) — same lock hold as the write
+    /// itself, so the check and the freeze are atomic together.
+    pub fn put(&self, key: impl AsRef<[u8]>, value: impl AsRef<[u8]>) -> io::Result<()> {
+        self.wait_for_write_room()
+            .map_err(|e| io::Error::other(e.to_string()))?;
+        let froze = match self.lock() {
+            Ok(mut guard) => {
+                guard.put(key, value)?;
+                guard
+                    .maybe_freeze()
+                    .map_err(|e| io::Error::other(e.to_string()))?
+            }
+            Err(e) => return Err(io::Error::other(e.to_string())),
+        };
+        if froze {
+            self.maintenance.wake();
+        }
+        Ok(())
+    }
+
+    pub fn delete(&self, key: impl AsRef<[u8]>) -> io::Result<()> {
+        self.wait_for_write_room()
+            .map_err(|e| io::Error::other(e.to_string()))?;
+        let froze = match self.lock() {
+            Ok(mut guard) => {
+                guard.delete(key)?;
+                guard
+                    .maybe_freeze()
+                    .map_err(|e| io::Error::other(e.to_string()))?
+            }
+            Err(e) => return Err(io::Error::other(e.to_string())),
+        };
+        if froze {
+            self.maintenance.wake();
+        }
+        Ok(())
     }
 
     /// Whether the shared engine is poisoned.
@@ -2681,7 +3494,10 @@ impl SharedKiban {
     }
 
     /// Makes every record appended by *any* thread so far durable in one
-    /// device flush (group commit).
+    /// device flush (group commit). Never subject to backpressure:
+    /// `sync` durably persists WAL state already accepted, it does not
+    /// publish another L0 table, so durability must never depend on
+    /// compaction catching up (11.5).
     pub fn sync(&self) -> io::Result<()> {
         match self.lock() {
             Ok(mut guard) => guard.sync(),
@@ -2691,16 +3507,25 @@ impl SharedKiban {
 
     /// Commits a batch atomically under the engine lock. One `sync`
     /// afterwards makes the entire batch durable together — group
-    /// commit applies.
+    /// commit applies. May freeze the active memtable afterward,
+    /// exactly like `put`/`delete` (11.8).
     pub fn write(&self, batch: WriteBatch) -> Result<(), DbError> {
-        match self.lock() {
-            Ok(mut guard) => guard.write(batch),
-            Err(poison_err) => Err(poison_err),
+        self.wait_for_write_room()?;
+        let froze = {
+            let mut guard = self.lock()?;
+            guard.write(batch)?;
+            guard.maybe_freeze()?
+        };
+        if froze {
+            self.maintenance.wake();
         }
+        Ok(())
     }
 
     /// Captures a consistent snapshot: O(memtable) copy under one lock
-    /// hold; reads on the returned handle never touch the lock.
+    /// hold; reads on the returned handle never touch the lock. Never
+    /// subject to backpressure — a read must not stall because writers
+    /// are stalled.
     pub fn snapshot(&self) -> Result<SharedSnapshot, DbError> {
         let mut guard = self.lock()?;
         let seq = guard.last_sequence;
@@ -2710,18 +3535,69 @@ impl SharedKiban {
             engine: self.inner.clone(),
             seq,
             memtable: guard.memtable.clone(),
+            immutable: guard.immutable.as_ref().map(|im| im.memtable.clone()),
             tables: guard.version.tables.clone(),
         })
     }
 
-    /// Durably publishes the memtable as a new L0 sstable — the same
-    /// guarantee `Kiban::flush` makes — then hands compaction off to
-    /// the background worker instead of running it inline (11.4): the
-    /// caller returns as soon as its own flush is durable, not after
-    /// whatever compaction that flush happens to trigger.
+    /// Durably publishes the memtable as a new L0 sstable, waiting only
+    /// for its OWN requested flush to commit — not for whatever
+    /// compaction or unrelated later flush happens to follow (11.8;
+    /// superseding 11.4's inline-compaction wording, since flush itself
+    /// moved off the lock too). A no-op if the active memtable is
+    /// empty, exactly as before — flushing nothing would spend a WAL/
+    /// MANIFEST revision on nothing.
+    ///
+    /// Subject to the same L0 backpressure as `put`/`delete`/`write`
+    /// (11.5, unchanged): a flush's eventual commit publishes another
+    /// L0 table, which is exactly what must wait when L0 is already at
+    /// its hard ceiling. Also waits for the one immutable slot to be
+    /// free, unconditionally (11.8) — unlike `put`/`delete`/`write`'s
+    /// own softer check, an explicit flush always wants to freeze the
+    /// current memtable right now, even one still below the automatic
+    /// threshold. Both checks and the freeze itself happen under the
+    /// same lock hold, so no other caller can steal L0 room or the
+    /// just-freed slot in between — the same race `wait_for_write_room`
+    /// closes elsewhere.
     pub fn flush(&self) -> Result<(), DbError> {
-        self.lock()?.flush_without_compaction()?;
+        let mut stalled = false;
+        let generation = loop {
+            if let Some(err) = self.maintenance.error() {
+                return Err(DbError::Maintenance(err));
+            }
+            if self.maintenance.is_stopped() {
+                return Err(DbError::Maintenance(MaintenanceError(
+                    "maintenance worker is shutting down".to_string(),
+                )));
+            }
+            let epoch = {
+                let mut guard = self.lock()?;
+                guard.check_poisoned()?;
+                let l0_ok = guard.l0_count() < guard.options().l0_write_stall_trigger;
+                if l0_ok && guard.immutable.is_none() {
+                    if guard.memtable.is_empty() {
+                        return Ok(());
+                    }
+                    guard.freeze()?;
+                    break guard
+                        .immutable
+                        .as_ref()
+                        .expect("freeze just populated it")
+                        .generation;
+                }
+                self.maintenance.progress_epoch()
+            };
+            if !stalled {
+                self.maintenance.record_write_stall();
+                stalled = true;
+            }
+            self.maintenance.wake();
+            self.maintenance.writer_started_waiting();
+            self.maintenance.wait_for_progress(epoch);
+            self.maintenance.writer_stopped_waiting();
+        };
         self.maintenance.wake();
+        self.wait_for_flush_generation(generation)?;
         Ok(())
     }
 }
@@ -2834,10 +3710,15 @@ mod cache_scaling_tests {
     fn small_cache_options() -> KibanOptions {
         KibanOptions {
             l0_compaction_trigger: 8, // keep many tables alive
+            l0_write_stall_trigger: 16,
             base_level_bytes: u64::MAX,
             level_multiplier: 10,
             target_file_size: 64 * 1024,
-            block_cache_bytes: 4096, // tiny: far smaller than the data
+            block_cache_bytes: 4096,  // tiny: far smaller than the data
+            max_open_table_files: 64, // this module tests the block cache, not the file cache
+            // Irrelevant here: this module uses direct `Kiban`, which
+            // never auto-freezes (11.8 auto-freeze is SharedKiban-only).
+            write_buffer_bytes: 1 << 20,
         }
     }
 
@@ -3729,7 +4610,30 @@ mod background_tests {
                     .unwrap();
             }
             db.sync().unwrap();
-            db.flush().unwrap();
+            db.flush_sync_for_test().unwrap();
+        }
+    }
+
+    /// Like `seed_for_compaction`, but tolerates `put`/`sync`/`flush`
+    /// failing partway through instead of panicking — for tests that
+    /// deliberately induce a background failure: once that failure is
+    /// sticky, `put`/`flush` correctly start refusing too (11.5 checks
+    /// maintenance failure before anything else, unconditionally of L0
+    /// count), so exactly how many rounds land before that happens is
+    /// timing-dependent and not something the test should assume.
+    fn seed_until_maintenance_stops_accepting(db: &SharedKiban, rounds: u32, label: &str) {
+        'rounds: for round in 0..rounds {
+            for i in 0..20u32 {
+                if db
+                    .put(format!("k{i:03}"), format!("{label}{round}-{i}"))
+                    .is_err()
+                {
+                    break 'rounds;
+                }
+            }
+            if db.sync().is_err() || db.flush().is_err() {
+                break;
+            }
         }
     }
 
@@ -3780,11 +4684,13 @@ mod background_tests {
         m.wait_before_build_reached();
 
         // a fresh flush lands WHILE that old compaction plan is frozen
+        // — via the sync bypass, since the real `flush` would itself
+        // need this same frozen worker to ever commit (11.8).
         for i in 0..20u32 {
             db.put(format!("k{i:03}"), b"new").unwrap();
         }
         db.sync().unwrap();
-        db.flush().unwrap();
+        db.flush_sync_for_test().unwrap();
 
         m.release_before_build();
         m.wait_settled();
@@ -3933,7 +4839,11 @@ mod background_tests {
         let m = db.maintenance_for_test();
         m.inject_on_worker(|| sys::install_fault(0));
 
-        seed_for_compaction(&db, 3, "r");
+        // Once this failure lands, 11.5's maintenance-failure check
+        // (unconditional, ahead of the L0 check) correctly starts
+        // refusing further mutation — so exactly how many of these 3
+        // rounds land is timing-dependent, not something to assert on.
+        seed_until_maintenance_stops_accepting(&db, 3, "r");
         m.wait_settled();
 
         let err = db.maintenance_error();
@@ -3943,23 +4853,20 @@ mod background_tests {
             "a build failure (never reaching the manifest) must not poison: {err:?}"
         );
 
-        // reads still agree with what was actually flushed (the last of
-        // 3 seeded rounds, labeled "r0".."r2")
-        for i in 0..20u32 {
-            let key = format!("k{i:03}");
-            assert_eq!(
-                db.get(key.as_bytes()).unwrap(),
-                Some(format!("r2-{i}").into_bytes())
-            );
-        }
+        // whatever WAS durably flushed before maintenance failed reads
+        // back identically, live and after reopen
+        let before: Vec<Option<Vec<u8>>> = (0..20u32)
+            .map(|i| db.get(format!("k{i:03}").as_bytes()).unwrap())
+            .collect();
 
         drop(db);
         let reopened = Kiban::open_with_options(td.path(), opts).unwrap();
-        for i in 0..20u32 {
+        for (i, want) in before.iter().enumerate() {
             let key = format!("k{i:03}");
             assert_eq!(
                 reopened.get(key.as_bytes()).unwrap(),
-                Some(format!("r2-{i}").into_bytes())
+                *want,
+                "key {key} disagrees after reopen"
             );
         }
     }
@@ -3981,7 +4888,7 @@ mod background_tests {
             let m = db.maintenance_for_test();
             m.inject_on_worker(move || sys::install_faults(&[n]));
 
-            seed_for_compaction(&db, 3, "r");
+            seed_until_maintenance_stops_accepting(&db, 3, "r");
             m.wait_settled();
 
             if !db.is_poisoned() {
@@ -4019,5 +4926,1718 @@ mod background_tests {
         // the clone alone keeps the worker alive; engine still usable
         assert_eq!(clone.get(b"a").unwrap(), Some(b"1".to_vec()));
         drop(clone); // last handle: worker is stopped and joined here
+    }
+}
+
+/// 11.5: hard L0 write backpressure. `SharedKiban` stalls mutation-
+/// producing work (`put`/`delete`/`write`/`flush`) once L0 reaches its
+/// configured hard ceiling, until background compaction relieves it.
+#[cfg(test)]
+mod backpressure_tests {
+    use super::*;
+    use crate::sys;
+    use crate::testutil::TempDir;
+
+    /// A tight, deterministic hard L0 ceiling — small enough to reach in
+    /// a handful of frozen-worker flushes, comfortably above
+    /// `l0_compaction_trigger` per the configuration rule (11.5).
+    fn stall_options() -> KibanOptions {
+        KibanOptions {
+            l0_compaction_trigger: 2,
+            l0_write_stall_trigger: 4,
+            ..super::compaction_tests::tiny_options()
+        }
+    }
+
+    /// Publishes `rounds` single-key L0 tables through `db`, reaching
+    /// exactly `rounds` live L0 tables (never more — nothing commits
+    /// while the worker is frozen at `before_build`). Uses the sync
+    /// bypass (11.8): the real `flush` now shares the one maintenance
+    /// worker with compaction, so a compaction this module deliberately
+    /// freezes via `arm_before_build` would otherwise transitively
+    /// block these seeding flushes too.
+    fn seed_l0_tables(db: &SharedKiban, rounds: u32) {
+        for round in 0..rounds {
+            db.put(format!("seed{round}"), format!("v{round}")).unwrap();
+            db.sync().unwrap();
+            db.flush_sync_for_test().unwrap();
+        }
+    }
+
+    /// Test 1: a writer genuinely stalls once L0 reaches the hard
+    /// ceiling — the central proof of this phase.
+    #[test]
+    fn writer_stalls_when_l0_reaches_the_hard_ceiling() {
+        let td = TempDir::new("bp-stall");
+        let db = SharedKiban::open_with_options(td.path(), stall_options()).unwrap();
+        let m = db.maintenance_for_test();
+        m.arm_before_build();
+
+        seed_l0_tables(&db, 4); // == l0_write_stall_trigger
+        m.wait_before_build_reached(); // worker frozen; nothing has committed
+
+        let writer_db = db.clone();
+        let handle = std::thread::spawn(move || writer_db.put(b"blocked", b"v"));
+
+        m.wait_until_writer_waiting();
+        assert_eq!(m.waiting_writers(), 1);
+        assert!(
+            !handle.is_finished(),
+            "writer completed without waiting for L0 room"
+        );
+
+        m.release_before_build();
+        handle.join().unwrap().unwrap();
+        assert_eq!(db.get(b"blocked").unwrap(), Some(b"v".to_vec()));
+    }
+
+    /// Test 2: once a compaction COMMIT actually reduces L0 below the
+    /// ceiling, the stalled writer wakes, rechecks, and proceeds — and
+    /// its mutation survives a reopen.
+    #[test]
+    fn compaction_commit_releases_a_stalled_writer() {
+        let td = TempDir::new("bp-release");
+        let opts = stall_options();
+        let db = SharedKiban::open_with_options(td.path(), opts.clone()).unwrap();
+        let m = db.maintenance_for_test();
+        m.arm_before_build();
+
+        seed_l0_tables(&db, 4);
+        m.wait_before_build_reached();
+
+        let writer_db = db.clone();
+        let handle = std::thread::spawn(move || {
+            writer_db.put(b"blocked", b"v").unwrap();
+            writer_db.sync().unwrap();
+        });
+        m.wait_until_writer_waiting();
+        assert!(!handle.is_finished());
+
+        m.release_before_build();
+        handle.join().unwrap();
+
+        assert_eq!(db.get(b"blocked").unwrap(), Some(b"v".to_vec()));
+
+        drop(db);
+        let reopened = Kiban::open_with_options(td.path(), opts).unwrap();
+        assert_eq!(reopened.get(b"blocked").unwrap(), Some(b"v".to_vec()));
+    }
+
+    /// Test 3: reads keep working while a writer is stalled —
+    /// backpressure controls ingestion, it must not freeze the database.
+    #[test]
+    fn reads_continue_while_a_writer_stalls() {
+        let td = TempDir::new("bp-reads");
+        let db = SharedKiban::open_with_options(td.path(), stall_options()).unwrap();
+        let m = db.maintenance_for_test();
+        m.arm_before_build();
+
+        seed_l0_tables(&db, 4);
+        m.wait_before_build_reached();
+
+        let writer_db = db.clone();
+        let handle = std::thread::spawn(move || writer_db.put(b"blocked", b"v"));
+        m.wait_until_writer_waiting();
+
+        assert_eq!(db.get(b"seed0").unwrap(), Some(b"v0".to_vec()));
+        let snap = db.snapshot().unwrap();
+        assert_eq!(snap.get(b"seed1").unwrap(), Some(b"v1".to_vec()));
+        let scanned = snap.scan().unwrap();
+        assert!(scanned.iter().any(|(k, _)| k == b"seed2"));
+
+        assert!(!handle.is_finished(), "writer must still be stalled");
+
+        m.release_before_build();
+        handle.join().unwrap().unwrap();
+    }
+
+    /// Test 4: `sync()` must complete even while a writer is stalled and
+    /// the worker is frozen — durability of already-accepted writes
+    /// must never depend on compaction catching up.
+    #[test]
+    fn sync_completes_while_a_writer_stalls() {
+        let td = TempDir::new("bp-sync");
+        let opts = stall_options();
+        let db = SharedKiban::open_with_options(td.path(), opts.clone()).unwrap();
+        let m = db.maintenance_for_test();
+
+        db.put(b"early", b"durable-me").unwrap();
+
+        m.arm_before_build();
+        seed_l0_tables(&db, 4);
+        m.wait_before_build_reached();
+
+        let writer_db = db.clone();
+        let handle = std::thread::spawn(move || writer_db.put(b"blocked", b"v"));
+        m.wait_until_writer_waiting();
+
+        db.sync().unwrap();
+
+        m.release_before_build();
+        handle.join().unwrap().unwrap();
+
+        drop(db);
+        let reopened = Kiban::open_with_options(td.path(), opts).unwrap();
+        assert_eq!(
+            reopened.get(b"early").unwrap(),
+            Some(b"durable-me".to_vec())
+        );
+    }
+
+    /// Test 5: `flush()` itself respects the ceiling — a fresh flush
+    /// must not publish yet another L0 table once L0 is already at the
+    /// hard limit; it waits for room like everything else, then
+    /// proceeds once compaction has made some.
+    #[test]
+    fn flush_stalls_at_the_ceiling_and_proceeds_after_room() {
+        let td = TempDir::new("bp-flush-stalls");
+        let db = SharedKiban::open_with_options(td.path(), stall_options()).unwrap();
+        let m = db.maintenance_for_test();
+        m.arm_before_build();
+
+        seed_l0_tables(&db, 4);
+        m.wait_before_build_reached();
+
+        let writer_db = db.clone();
+        let handle = std::thread::spawn(move || writer_db.flush());
+        m.wait_until_writer_waiting();
+        assert!(
+            !handle.is_finished(),
+            "flush completed without waiting for L0 room"
+        );
+
+        m.release_before_build();
+        handle.join().unwrap().unwrap();
+
+        for round in 0..4u32 {
+            let key = format!("seed{round}");
+            assert_eq!(
+                db.get(key.as_bytes()).unwrap(),
+                Some(format!("v{round}").into_bytes())
+            );
+        }
+    }
+
+    /// Test 6: a background build failure must wake a stalled writer
+    /// with an error, not hang it forever.
+    #[test]
+    fn maintenance_failure_wakes_a_stalled_writer_with_an_error() {
+        let td = TempDir::new("bp-maint-fail");
+        let opts = stall_options();
+        let db = SharedKiban::open_with_options(td.path(), opts.clone()).unwrap();
+        let m = db.maintenance_for_test();
+        m.arm_before_build();
+        m.inject_on_worker(|| sys::install_fault(0)); // BUILD's first checked op
+
+        seed_l0_tables(&db, 4);
+        m.wait_before_build_reached();
+
+        let writer_db = db.clone();
+        let handle = std::thread::spawn(move || writer_db.put(b"blocked", b"v"));
+        m.wait_until_writer_waiting();
+        assert!(!handle.is_finished());
+
+        m.release_before_build();
+        let result = handle.join().unwrap();
+
+        assert!(
+            result.is_err(),
+            "a stalled writer must wake with an error, not hang, on maintenance failure"
+        );
+        assert!(db.maintenance_error().is_some());
+        assert!(
+            !db.is_poisoned(),
+            "a build failure (never reaching the manifest) must not poison"
+        );
+
+        for round in 0..4u32 {
+            let key = format!("seed{round}");
+            assert_eq!(
+                db.get(key.as_bytes()).unwrap(),
+                Some(format!("v{round}").into_bytes())
+            );
+        }
+
+        drop(db);
+        let reopened = Kiban::open_with_options(td.path(), opts).unwrap();
+        for round in 0..4u32 {
+            let key = format!("seed{round}");
+            assert_eq!(
+                reopened.get(key.as_bytes()).unwrap(),
+                Some(format!("v{round}").into_bytes())
+            );
+        }
+    }
+
+    /// Test 7: commit ambiguity during background publication (while a
+    /// writer is stalled) must poison the engine exactly like the
+    /// foreground path, waking the writer to refuse mutation.
+    #[test]
+    fn poisoning_wakes_a_stalled_writer_and_refuses_mutation() {
+        let mut induced = false;
+        for n in 0..60usize {
+            let td = TempDir::new("bp-poison-iter");
+            let opts = stall_options();
+            let db = SharedKiban::open_with_options(td.path(), opts.clone()).unwrap();
+            let m = db.maintenance_for_test();
+            m.arm_before_build();
+
+            seed_l0_tables(&db, 4);
+            m.wait_before_build_reached();
+
+            m.inject_on_worker(move || sys::install_faults(&[n]));
+
+            let writer_db = db.clone();
+            let handle = std::thread::spawn(move || writer_db.put(b"blocked", b"v"));
+            m.wait_until_writer_waiting();
+
+            m.release_before_build();
+            let result = handle.join().unwrap();
+            m.wait_settled();
+
+            if !db.is_poisoned() {
+                continue;
+            }
+            induced = true;
+
+            assert!(
+                result.is_err(),
+                "a stalled writer must wake with an error when poisoned"
+            );
+            assert!(
+                db.put(b"later", b"x").is_err(),
+                "mutation must be refused after poisoning"
+            );
+            let _ = db.get(b"seed0").unwrap(); // reads remain available
+
+            drop(db);
+            let reopened = Kiban::open_with_options(td.path(), opts).unwrap();
+            assert!(!reopened.is_poisoned());
+            break;
+        }
+        assert!(induced, "poisoning during a stalled write never induced");
+    }
+
+    /// Test 8: no missed wakeups under sustained concurrent pressure.
+    /// Several writers repeatedly cross the stall ceiling while the
+    /// worker races to relieve it; a lost-wakeup bug would hang this
+    /// test forever rather than fail an assertion — that is the proof.
+    #[test]
+    fn no_missed_wakeups_under_repeated_pressure_and_release() {
+        for attempt in 0..5 {
+            let td = TempDir::new(&format!("bp-no-missed-wakeup-{attempt}"));
+            let db = SharedKiban::open_with_options(td.path(), stall_options()).unwrap();
+
+            let handles: Vec<_> = (0..4u32)
+                .map(|t| {
+                    let db = db.clone();
+                    std::thread::spawn(move || {
+                        for i in 0..25u32 {
+                            db.put(format!("t{t}-k{i:03}"), format!("v{t}-{i}"))
+                                .unwrap();
+                            if i % 4 == 0 {
+                                db.sync().unwrap();
+                                db.flush().unwrap();
+                            }
+                        }
+                    })
+                })
+                .collect();
+            for h in handles {
+                h.join().unwrap();
+            }
+
+            db.maintenance_for_test().wait_settled();
+            assert!(db.maintenance_error().is_none());
+
+            for t in 0..4u32 {
+                for i in 0..25u32 {
+                    let key = format!("t{t}-k{i:03}");
+                    assert_eq!(
+                        db.get(key.as_bytes()).unwrap(),
+                        Some(format!("v{t}-{i}").into_bytes())
+                    );
+                }
+            }
+        }
+    }
+
+    /// Test 9: direct `Kiban` ignores `l0_write_stall_trigger` entirely
+    /// and stays fully synchronous — a low stall trigger configured
+    /// alongside it never blocks anything, because direct `Kiban` never
+    /// checks it at all.
+    #[test]
+    fn direct_kiban_ignores_the_stall_trigger_and_stays_synchronous() {
+        let td = TempDir::new("bp-direct-kiban");
+        let mut db = Kiban::open_with_options(td.path(), stall_options()).unwrap();
+        for round in 0..20u32 {
+            db.put(format!("k{round}"), format!("v{round}")).unwrap();
+            db.sync().unwrap();
+            db.flush().unwrap();
+        }
+        for round in 0..20u32 {
+            assert_eq!(
+                db.get(format!("k{round}").as_bytes()).unwrap(),
+                Some(format!("v{round}").into_bytes())
+            );
+        }
+    }
+}
+
+/// 11.6: bounded SST file descriptors. `SstTable` does not permanently
+/// own a file handle — every read leases one from a shared,
+/// hard-capacity `TableFileCache`. Low-level cache mechanics (hard
+/// capacity, LRU, in-use-cannot-be-evicted, no missed wakeup) are unit
+/// tested directly against `TableFileCache` in `file_cache.rs`; these
+/// are the integration-level properties that need a real `Kiban`.
+#[cfg(test)]
+mod file_cache_tests {
+    use super::*;
+    use crate::testutil::TempDir;
+
+    fn tiny_with(max_open_table_files: usize) -> KibanOptions {
+        KibanOptions {
+            max_open_table_files,
+            l0_compaction_trigger: 1000, // isolate: no compaction unless a test wants it
+            l0_write_stall_trigger: 2000,
+            ..compaction_tests::tiny_options()
+        }
+    }
+
+    /// Test 1: keeping many `SstTable`s alive (via the live `Version`)
+    /// does not pin a file-cache slot per table — only active use does.
+    #[test]
+    fn live_tables_do_not_each_pin_a_file_cache_slot() {
+        let td = TempDir::new("fc-sst-no-pin");
+        let mut db = Kiban::open_with_options(td.path(), tiny_with(2)).unwrap();
+
+        for i in 0..10u32 {
+            db.put(format!("k{i}"), format!("v{i}")).unwrap();
+            db.sync().unwrap();
+            db.flush().unwrap();
+        }
+        assert_eq!(db.version.tables.len(), 10);
+        // every one of the 10 SstTables is alive right now, pinned by
+        // db.version — yet the file cache holds at most 2 descriptors
+        assert!(db.file_cache.resident() <= 2);
+
+        for i in 0..10u32 {
+            assert_eq!(
+                db.get(format!("k{i}").as_bytes()).unwrap(),
+                Some(format!("v{i}").into_bytes())
+            );
+        }
+        assert!(db.file_cache.max_resident_seen() <= 2);
+    }
+
+    /// Test 6: a block-cache hit must not touch the file cache at all.
+    /// Capacity 1, so if the second read of table A needed to reopen
+    /// it, it would have to evict B — instead B's descriptor must stay
+    /// untouched throughout.
+    #[test]
+    fn block_cache_hit_requires_no_file_lease() {
+        let td = TempDir::new("fc-block-hit");
+        let mut db = Kiban::open_with_options(td.path(), tiny_with(1)).unwrap();
+
+        db.put(b"a", b"1").unwrap();
+        db.sync().unwrap();
+        db.flush().unwrap(); // table A
+        assert_eq!(db.get(b"a").unwrap(), Some(b"1".to_vec())); // populates the block cache for A
+
+        db.put(b"b", b"2").unwrap();
+        db.sync().unwrap();
+        db.flush().unwrap(); // table B
+        assert_eq!(db.get(b"b").unwrap(), Some(b"2".to_vec())); // capacity 1: evicts A's descriptor
+        let b_number = db.version.tables.last().unwrap().number;
+        assert!(db.file_cache.is_resident(b_number));
+        assert_eq!(db.file_cache.resident(), 1);
+
+        // reading A again must hit the block cache — no file lease
+        // needed, so B's descriptor (the cache's only slot) must be
+        // completely untouched by it
+        assert_eq!(db.get(b"a").unwrap(), Some(b"1".to_vec()));
+        assert!(
+            db.file_cache.is_resident(b_number),
+            "a block-cache hit must not touch the file cache"
+        );
+        assert_eq!(db.file_cache.resident(), 1);
+    }
+
+    /// Test 7: a database with far more SSTables than the descriptor
+    /// capacity must still open, and every table must still be
+    /// readable — this catches accidental permanent handles held
+    /// during `SstTable::open` / `Kiban::open_with_options`.
+    #[test]
+    fn opening_many_tables_with_a_tiny_fd_cache_succeeds() {
+        let td = TempDir::new("fc-open-many");
+        {
+            let mut db = Kiban::open_with_options(td.path(), tiny_with(64)).unwrap();
+            for i in 0..40u32 {
+                db.put(format!("k{i:03}"), format!("v{i}")).unwrap();
+                db.sync().unwrap();
+                db.flush().unwrap();
+            }
+        }
+
+        let db = Kiban::open_with_options(td.path(), tiny_with(2)).unwrap();
+        assert_eq!(db.version.tables.len(), 40);
+        assert!(
+            db.file_cache.resident() <= 2,
+            "open() must not hold every table's descriptor at once"
+        );
+
+        for i in 0..40u32 {
+            assert_eq!(
+                db.get(format!("k{i:03}").as_bytes()).unwrap(),
+                Some(format!("v{i}").into_bytes())
+            );
+        }
+        let scanned: usize = db.iter().map(|r| r.unwrap()).fold(0, |n, _| n + 1);
+        assert_eq!(scanned, 40);
+        assert!(db.file_cache.max_resident_seen() <= 2);
+    }
+
+    /// Test 8: a snapshot pinning many tables' metadata must not force
+    /// that many descriptors open at once.
+    #[test]
+    fn snapshot_pins_many_tables_without_pinning_many_descriptors() {
+        let td = TempDir::new("fc-snapshot-no-pin");
+        let mut db = Kiban::open_with_options(td.path(), tiny_with(3)).unwrap();
+        for i in 0..30u32 {
+            db.put(format!("k{i:03}"), format!("v{i}")).unwrap();
+            db.sync().unwrap();
+            db.flush().unwrap();
+        }
+
+        let snap = db.snapshot(); // pins all 30 tables' Arc<TableEntry>
+        assert!(db.file_cache.resident() <= 3);
+
+        for i in 0..30u32 {
+            assert_eq!(
+                db.get_at(&snap, format!("k{i:03}").as_bytes()).unwrap(),
+                Some(format!("v{i}").into_bytes())
+            );
+        }
+        let scanned = db.scan_at(&snap).unwrap();
+        assert_eq!(scanned.len(), 30);
+        assert!(
+            db.file_cache.max_resident_seen() <= 3,
+            "a snapshot must pin metadata, not one descriptor per table"
+        );
+    }
+
+    /// Test 9: background compaction over many input files must never
+    /// need more simultaneously open descriptors than configured.
+    #[test]
+    fn background_compaction_respects_the_fd_bound() {
+        let td = TempDir::new("fc-compaction-bound");
+        let opts = KibanOptions {
+            max_open_table_files: 3,
+            l0_compaction_trigger: 2,
+            l0_write_stall_trigger: 30,
+            ..compaction_tests::tiny_options()
+        };
+        let db = SharedKiban::open_with_options(td.path(), opts).unwrap();
+
+        for round in 0..20u32 {
+            for i in 0..15u32 {
+                db.put(format!("k{i:03}"), format!("r{round}-{i}")).unwrap();
+            }
+            db.sync().unwrap();
+            db.flush().unwrap();
+        }
+        db.maintenance_for_test().wait_settled();
+        assert!(
+            db.maintenance_error().is_none(),
+            "{:?}",
+            db.maintenance_error()
+        );
+
+        for i in 0..15u32 {
+            let key = format!("k{i:03}");
+            assert_eq!(
+                db.get(key.as_bytes()).unwrap(),
+                Some(format!("r19-{i}").into_bytes())
+            );
+        }
+        assert!(db.lock().unwrap().file_cache.max_resident_seen() <= 3);
+    }
+
+    /// Test 10: once a table becomes genuinely obsolete (compacted
+    /// away, nothing references it), its file-cache entry must be
+    /// invalidated before the file is unlinked — never left dangling.
+    #[test]
+    fn reclaiming_an_obsolete_table_invalidates_its_cached_handle() {
+        let td = TempDir::new("fc-reclaim-invalidate");
+        let mut db = Kiban::open_with_options(
+            td.path(),
+            KibanOptions {
+                max_open_table_files: 8,
+                l0_compaction_trigger: 2,
+                l0_write_stall_trigger: 30,
+                ..compaction_tests::tiny_options()
+            },
+        )
+        .unwrap();
+
+        db.put(b"a", b"1").unwrap();
+        db.sync().unwrap();
+        db.flush().unwrap();
+        let first_number = db.version.tables[0].number;
+        assert_eq!(db.get(b"a").unwrap(), Some(b"1".to_vec())); // populate the file cache
+        assert!(db.file_cache.is_resident(first_number));
+
+        db.put(b"b", b"2").unwrap();
+        db.sync().unwrap();
+        db.flush().unwrap(); // L0 reaches trigger=2: compacts, retiring the first table
+
+        assert!(
+            !db.file_cache.is_resident(first_number),
+            "a reclaimed table's cached descriptor must be gone"
+        );
+        assert!(
+            !td.path().join(format!("{first_number}.sst")).exists(),
+            "a reclaimed table's file must be unlinked"
+        );
+
+        assert_eq!(db.get(b"a").unwrap(), Some(b"1".to_vec()));
+        assert_eq!(db.get(b"b").unwrap(), Some(b"2".to_vec()));
+    }
+
+    /// Test 11: foreground reads and background compaction BUILD
+    /// racing for a 2-descriptor cache must never deadlock — the
+    /// adversarial test for the locking design. First phase uses the
+    /// 11.4 worker checkpoints for a deterministic freeze; the second
+    /// phase races real concurrent activity against the released
+    /// worker.
+    #[test]
+    fn foreground_and_background_pressure_on_a_tiny_fd_cache_does_not_deadlock() {
+        let td = TempDir::new("fc-adversarial");
+        let opts = KibanOptions {
+            max_open_table_files: 2,
+            l0_compaction_trigger: 2,
+            l0_write_stall_trigger: 40,
+            ..compaction_tests::tiny_options()
+        };
+        let db = SharedKiban::open_with_options(td.path(), opts).unwrap();
+        let m = db.maintenance_for_test();
+        m.arm_before_build();
+
+        // sync bypass (11.8): seeding past `l0_compaction_trigger` while
+        // `arm_before_build` holds the worker frozen would otherwise
+        // queue a later round's real `flush` behind that same freeze.
+        for round in 0..6u32 {
+            for i in 0..10u32 {
+                db.put(format!("k{i:03}"), format!("r{round}-{i}")).unwrap();
+            }
+            db.sync().unwrap();
+            db.flush_sync_for_test().unwrap();
+        }
+        m.wait_before_build_reached();
+
+        // foreground readers hammer the tiny file cache while the
+        // worker sits frozen, holding no lease at all
+        let reader_handles: Vec<_> = (0..4u32)
+            .map(|_| {
+                let db = db.clone();
+                std::thread::spawn(move || {
+                    for _ in 0..20 {
+                        for i in 0..10u32 {
+                            let _ = db.get(format!("k{i:03}").as_bytes()).unwrap();
+                        }
+                        let snap = db.snapshot().unwrap();
+                        let _ = snap.scan().unwrap();
+                    }
+                })
+            })
+            .collect();
+        for h in reader_handles {
+            h.join().unwrap();
+        }
+
+        // release the worker so BUILD now competes with further
+        // foreground writes/reads for the same tiny cache
+        m.release_before_build();
+        let more_handles: Vec<_> = (0..4u32)
+            .map(|t| {
+                let db = db.clone();
+                std::thread::spawn(move || {
+                    for round in 0..10u32 {
+                        db.put(format!("t{t}-k{round:03}"), format!("v{round}"))
+                            .unwrap();
+                        db.sync().unwrap();
+                        let _ = db.get(b"k000").unwrap();
+                    }
+                })
+            })
+            .collect();
+        for h in more_handles {
+            h.join().unwrap();
+        }
+
+        db.maintenance_for_test().wait_settled();
+        assert!(
+            db.maintenance_error().is_none(),
+            "{:?}",
+            db.maintenance_error()
+        );
+
+        for i in 0..10u32 {
+            let key = format!("k{i:03}");
+            assert_eq!(
+                db.get(key.as_bytes()).unwrap(),
+                Some(format!("r5-{i}").into_bytes())
+            );
+        }
+        assert!(db.lock().unwrap().file_cache.max_resident_seen() <= 2);
+    }
+}
+
+/// 11.7: `SharedKiban::stats()` — a cheap, observational snapshot
+/// answering "what is Kiban doing?" without disk I/O or side effects.
+/// Low-level counter mechanics (exact hit/miss/eviction/wait counts)
+/// are unit tested directly against `BlockCache` and `TableFileCache`
+/// in `cache.rs` / `file_cache.rs`; these are the integration-level
+/// properties that need a real engine.
+#[cfg(test)]
+mod stats_tests {
+    use super::*;
+    use crate::testutil::TempDir;
+
+    fn stall_options() -> KibanOptions {
+        KibanOptions {
+            l0_compaction_trigger: 2,
+            l0_write_stall_trigger: 4,
+            ..super::compaction_tests::tiny_options()
+        }
+    }
+
+    /// Uses the sync bypass (11.8) for the same reason
+    /// `backpressure_tests::seed_l0_tables` does: seeding past
+    /// `l0_compaction_trigger` while `arm_before_build` holds the
+    /// worker frozen would otherwise queue a later round's real `flush`
+    /// behind that same freeze.
+    fn seed_l0_tables(db: &SharedKiban, rounds: u32) {
+        for round in 0..rounds {
+            db.put(format!("seed{round}"), format!("v{round}")).unwrap();
+            db.sync().unwrap();
+            db.flush_sync_for_test().unwrap();
+        }
+    }
+
+    /// Test 1: a fresh database reports sensible zeros — no implementation
+    /// trivia asserted, just the facts a caller would actually check.
+    #[test]
+    fn empty_engine_reports_sensible_zeros() {
+        let td = TempDir::new("stats-empty");
+        let db = SharedKiban::open(td.path()).unwrap();
+        let stats = db.stats().unwrap();
+
+        assert_eq!(stats.memtable_entries, 0);
+        assert_eq!(stats.active_snapshots, 0);
+        assert_eq!(stats.obsolete_files_pending, 0);
+        assert!(stats.levels.is_empty());
+        assert_eq!(stats.block_cache.resident_entries, 0);
+        assert_eq!(stats.block_cache.hits, 0);
+        assert_eq!(stats.block_cache.misses, 0);
+        assert!(stats.table_files.resident <= stats.table_files.capacity);
+        assert_eq!(stats.maintenance.compactions_completed, 0);
+        assert_eq!(stats.maintenance.compactions_failed, 0);
+        assert_eq!(stats.maintenance.waiting_writers, 0);
+        assert_eq!(stats.maintenance.write_stalls, 0);
+    }
+
+    /// Test 2: per-level table count and byte total exactly match the
+    /// engine's own published `Version` — the stats path must read
+    /// `Version`, never walk the filesystem independently.
+    #[test]
+    fn level_stats_match_the_published_version() {
+        let td = TempDir::new("stats-levels");
+        let db = SharedKiban::open_with_options(td.path(), super::compaction_tests::tiny_options())
+            .unwrap();
+
+        for round in 0..12u32 {
+            for i in 0..5u32 {
+                db.put(format!("k{i:03}"), format!("r{round}-{i}")).unwrap();
+            }
+            db.sync().unwrap();
+            db.flush().unwrap();
+        }
+        db.maintenance_for_test().wait_settled();
+        assert!(db.maintenance_error().is_none());
+
+        let stats = db.stats().unwrap();
+        let mut expected: std::collections::BTreeMap<u32, (usize, u64)> = Default::default();
+        for t in &db.lock().unwrap().version.tables {
+            let e = expected.entry(t.level).or_insert((0, 0));
+            e.0 += 1;
+            e.1 += t.size;
+        }
+
+        assert!(!stats.levels.is_empty());
+        assert_eq!(stats.levels.len(), expected.len());
+        for ls in &stats.levels {
+            let (tables, bytes) = expected[&ls.level];
+            assert_eq!(ls.tables, tables, "level {} table count", ls.level);
+            assert_eq!(ls.bytes, bytes, "level {} byte total", ls.level);
+        }
+    }
+
+    /// Test 6: exactly one write stall per genuinely blocked mutation
+    /// call, not one per wake/recheck cycle — and `waiting_writers`
+    /// tracks the live count while it's actually parked.
+    #[test]
+    fn write_stall_counter_counts_blocked_calls_not_wakeups() {
+        let td = TempDir::new("stats-write-stall");
+        let db = SharedKiban::open_with_options(td.path(), stall_options()).unwrap();
+        let m = db.maintenance_for_test();
+        m.arm_before_build();
+
+        seed_l0_tables(&db, 4); // == l0_write_stall_trigger
+        m.wait_before_build_reached();
+        assert_eq!(db.stats().unwrap().maintenance.write_stalls, 0);
+
+        let writer_db = db.clone();
+        let handle = std::thread::spawn(move || writer_db.put(b"blocked", b"v"));
+        m.wait_until_writer_waiting();
+        assert_eq!(db.stats().unwrap().maintenance.waiting_writers, 1);
+
+        m.release_before_build();
+        handle.join().unwrap().unwrap();
+
+        let stats = db.stats().unwrap();
+        assert_eq!(stats.maintenance.waiting_writers, 0);
+        assert_eq!(stats.maintenance.write_stalls, 1);
+    }
+
+    /// Test 7: a real completed compaction moves `compactions_completed`
+    /// and both byte totals, and the output bytes match the level the
+    /// output actually landed in.
+    #[test]
+    fn compaction_stats_reflect_a_real_completed_job() {
+        let td = TempDir::new("stats-compaction");
+        let opts = KibanOptions {
+            l0_compaction_trigger: 2,
+            l0_write_stall_trigger: 30,
+            ..super::compaction_tests::tiny_options()
+        };
+        let db = SharedKiban::open_with_options(td.path(), opts).unwrap();
+        let m = db.maintenance_for_test();
+        m.arm_before_build();
+
+        seed_l0_tables(&db, 2); // == l0_compaction_trigger
+        m.wait_before_build_reached();
+
+        let before = db.stats().unwrap();
+        assert!(before.maintenance.compaction_running);
+        assert_eq!(before.maintenance.compactions_completed, 0);
+
+        m.release_before_build();
+        m.wait_settled();
+        assert!(db.maintenance_error().is_none());
+
+        let after = db.stats().unwrap();
+        assert!(!after.maintenance.compaction_running);
+        assert_eq!(after.maintenance.compactions_completed, 1);
+        assert!(after.maintenance.compaction_input_bytes > 0);
+        assert!(after.maintenance.compaction_output_bytes > 0);
+
+        let l1_bytes: u64 = after
+            .levels
+            .iter()
+            .filter(|l| l.level == 1)
+            .map(|l| l.bytes)
+            .sum();
+        assert_eq!(after.maintenance.compaction_output_bytes, l1_bytes);
+    }
+
+    /// Test 8: a failed background job counts as failed, never as
+    /// completed — the existing `maintenance_error()` API stays the
+    /// only source of the actual error text.
+    #[test]
+    fn failed_compaction_counts_as_failed_not_completed() {
+        let td = TempDir::new("stats-compaction-fail");
+        let opts = KibanOptions {
+            l0_compaction_trigger: 2,
+            l0_write_stall_trigger: 30,
+            ..super::compaction_tests::tiny_options()
+        };
+        let db = SharedKiban::open_with_options(td.path(), opts).unwrap();
+        let m = db.maintenance_for_test();
+        m.arm_before_build();
+        m.inject_on_worker(|| sys::install_fault(0)); // BUILD's first checked op
+
+        seed_l0_tables(&db, 2);
+        m.wait_before_build_reached();
+        m.release_before_build();
+        m.wait_settled();
+
+        assert!(db.maintenance_error().is_some());
+        let stats = db.stats().unwrap();
+        assert_eq!(stats.maintenance.compactions_failed, 1);
+        assert_eq!(stats.maintenance.compactions_completed, 0);
+    }
+
+    /// Test 9: a snapshot pinning a table that compaction retires keeps
+    /// it in `obsolete_files_pending` until both the snapshot is gone
+    /// and a later compaction's reclaim pass re-checks it — turning
+    /// 11.3/11.6's lifetime rules into something visible.
+    #[test]
+    fn snapshot_and_obsolete_counts_reflect_pinned_and_pending_files() {
+        let td = TempDir::new("stats-snapshot-obsolete");
+        let opts = KibanOptions {
+            l0_compaction_trigger: 2,
+            l0_write_stall_trigger: 30,
+            ..super::compaction_tests::tiny_options()
+        };
+        let db = SharedKiban::open_with_options(td.path(), opts).unwrap();
+
+        db.put(b"a", b"1").unwrap();
+        db.sync().unwrap();
+        db.flush().unwrap();
+        db.maintenance_for_test().wait_settled();
+
+        let snap = db.snapshot().unwrap(); // pins the live table's Arc<TableEntry>
+        assert_eq!(db.stats().unwrap().active_snapshots, 1);
+
+        // one more flush reaches l0_compaction_trigger and compacts,
+        // retiring the table `snap` still references
+        db.put(b"b", b"2").unwrap();
+        db.sync().unwrap();
+        db.flush().unwrap();
+        db.maintenance_for_test().wait_settled();
+        assert!(db.maintenance_error().is_none());
+
+        let mid = db.stats().unwrap();
+        assert_eq!(mid.active_snapshots, 1);
+        assert!(
+            mid.obsolete_files_pending > 0,
+            "the snapshot must keep the retired input table pending reclamation"
+        );
+
+        drop(snap);
+        assert_eq!(db.stats().unwrap().active_snapshots, 0);
+
+        // dropping a snapshot alone does not reclaim anything — only
+        // the next compaction's reclaim_obsolete pass re-checks the
+        // refcount, so two more rounds are needed to cross
+        // l0_compaction_trigger again and trigger one
+        for (k, v) in [(b"c" as &[u8], b"3" as &[u8]), (b"d", b"4")] {
+            db.put(k, v).unwrap();
+            db.sync().unwrap();
+            db.flush().unwrap();
+        }
+        db.maintenance_for_test().wait_settled();
+        assert!(db.maintenance_error().is_none());
+
+        let after = db.stats().unwrap();
+        assert_eq!(
+            after.obsolete_files_pending, 0,
+            "reclamation must clear the pending file once the snapshot is gone"
+        );
+    }
+
+    /// Test 10: reading stats must not itself be activity — repeated
+    /// calls must not move any counter.
+    #[test]
+    fn stats_reads_do_not_move_any_counter() {
+        let td = TempDir::new("stats-no-side-effects");
+        let opts = KibanOptions {
+            l0_compaction_trigger: 2,
+            l0_write_stall_trigger: 30,
+            ..super::compaction_tests::tiny_options()
+        };
+        let db = SharedKiban::open_with_options(td.path(), opts).unwrap();
+
+        for i in 0..3u32 {
+            db.put(format!("k{i}"), format!("v{i}")).unwrap();
+            db.sync().unwrap();
+            db.flush().unwrap();
+        }
+        db.maintenance_for_test().wait_settled();
+        for i in 0..3u32 {
+            let _ = db.get(format!("k{i}").as_bytes()).unwrap();
+        }
+
+        let before = db.stats().unwrap();
+        for _ in 0..20 {
+            let _ = db.stats().unwrap();
+        }
+        let after = db.stats().unwrap();
+
+        assert_eq!(before.block_cache.hits, after.block_cache.hits);
+        assert_eq!(before.block_cache.misses, after.block_cache.misses);
+        assert_eq!(before.block_cache.evictions, after.block_cache.evictions);
+        assert_eq!(before.table_files.hits, after.table_files.hits);
+        assert_eq!(before.table_files.misses, after.table_files.misses);
+        assert_eq!(
+            before.maintenance.compactions_completed,
+            after.maintenance.compactions_completed
+        );
+        assert_eq!(
+            before.maintenance.write_stalls,
+            after.maintenance.write_stalls
+        );
+    }
+
+    /// Test 11: concurrent readers, writers, and background compaction
+    /// racing against repeated `stats()` calls from another thread must
+    /// never deadlock or panic; cumulative counters never move
+    /// backwards; the FD hard bound holds throughout; only nonempty
+    /// levels are ever reported.
+    #[test]
+    fn concurrent_stats_reads_never_deadlock_or_go_backwards() {
+        let td = TempDir::new("stats-concurrent");
+        let opts = KibanOptions {
+            l0_compaction_trigger: 2,
+            l0_write_stall_trigger: 30,
+            max_open_table_files: 4,
+            ..super::compaction_tests::tiny_options()
+        };
+        let db = SharedKiban::open_with_options(td.path(), opts).unwrap();
+
+        let stats_db = db.clone();
+        let stats_handle = std::thread::spawn(move || {
+            let mut last_completed = 0u64;
+            let mut last_stalls = 0u64;
+            for _ in 0..200 {
+                let s = stats_db.stats().unwrap();
+                assert!(s.table_files.resident <= s.table_files.capacity);
+                assert!(s.maintenance.compactions_completed >= last_completed);
+                assert!(s.maintenance.write_stalls >= last_stalls);
+                last_completed = s.maintenance.compactions_completed;
+                last_stalls = s.maintenance.write_stalls;
+                for l in &s.levels {
+                    assert!(l.tables > 0, "an empty level must not be reported");
+                }
+            }
+        });
+
+        let writer_handles: Vec<_> = (0..3u32)
+            .map(|t| {
+                let db = db.clone();
+                std::thread::spawn(move || {
+                    for i in 0..30u32 {
+                        db.put(format!("t{t}-k{i:03}"), format!("v{i}")).unwrap();
+                        if i % 5 == 0 {
+                            db.sync().unwrap();
+                            db.flush().unwrap();
+                        }
+                    }
+                })
+            })
+            .collect();
+        for h in writer_handles {
+            h.join().unwrap();
+        }
+        stats_handle.join().unwrap();
+
+        db.maintenance_for_test().wait_settled();
+        assert!(db.maintenance_error().is_none());
+    }
+}
+
+/// 11.8: immutable memtable + background flush. The active memtable
+/// freezes (WAL handoff, durable, MANIFEST-committed) instead of
+/// blocking writers for the SST build; the frozen memtable flushes on
+/// the shared maintenance worker, ahead of compaction. Low-level format
+/// mechanics (the multi-WAL MANIFEST, recovery replay/consolidation)
+/// get direct `Kiban`-level tests; the concurrency/lifetime properties
+/// need `SharedKiban` and the worker's own `before_flush_build`
+/// checkpoint — a separate freeze from compaction's `before_build`, so
+/// a test freezing one never transitively blocks the other on the one
+/// shared worker (see `TestHooks::before_flush_build`'s doc comment).
+#[cfg(test)]
+mod flush_pipeline_tests {
+    use super::*;
+    use crate::testutil::TempDir;
+    use std::collections::BTreeMap;
+
+    /// A tiny, easily-crossed write-buffer threshold, isolated from
+    /// compaction so only freeze/flush behavior is under test.
+    fn tiny_buffer_options() -> KibanOptions {
+        KibanOptions {
+            write_buffer_bytes: 300,
+            l0_compaction_trigger: 1000,
+            l0_write_stall_trigger: 2000,
+            ..super::compaction_tests::tiny_options()
+        }
+    }
+
+    /// Enough ~76-byte entries (40-byte value + short key + the 32-byte
+    /// fixed overhead) to cross `write_buffer_bytes: 300` exactly once
+    /// from a near-zero starting memtable — deliberately not more:
+    /// called on this thread with nothing yet releasing a frozen
+    /// worker, so the *remainder* after the freeze it triggers must
+    /// itself stay safely under threshold too, or this call would
+    /// block on the immutable slot before ever returning. 5 entries
+    /// (freeze on the 4th; one entry, ~76 bytes, left over) leaves a
+    /// wide margin under a second 300-byte crossing.
+    fn fill_past_threshold(db: &SharedKiban, prefix: &str) {
+        for i in 0..5u32 {
+            db.put(format!("{prefix}{i:03}"), vec![b'x'; 40]).unwrap();
+        }
+    }
+
+    /// Test 1: crossing the write-buffer threshold freezes the active
+    /// memtable and hands writers a fresh memtable + WAL immediately —
+    /// before the flush BUILD that publishes the frozen one even starts.
+    #[test]
+    fn automatic_freeze_hands_writers_a_fresh_memtable_and_wal_immediately() {
+        let td = TempDir::new("flush-auto-freeze");
+        let db = SharedKiban::open_with_options(td.path(), tiny_buffer_options()).unwrap();
+        let m = db.maintenance_for_test();
+        m.arm_before_flush_build();
+
+        let wal_before = db.lock().unwrap().wal_number;
+        // put one entry at a time, checking after each: the moment
+        // freeze happens, the active memtable must immediately be a
+        // fresh, empty one — checked right then, since later puts in
+        // this same loop would otherwise land in it and hide the fact.
+        let mut froze_after: Option<u32> = None;
+        for i in 0..8u32 {
+            db.put(format!("a{i:03}"), vec![b'x'; 40]).unwrap();
+            if db.lock().unwrap().immutable.is_some() {
+                froze_after = Some(i);
+                break;
+            }
+        }
+        let froze_after = froze_after.expect("must have frozen within 8 puts");
+        {
+            let guard = db.lock().unwrap();
+            assert_ne!(guard.wal_number, wal_before, "a fresh WAL must be active");
+            assert!(
+                guard.memtable.is_empty(),
+                "the new active memtable starts empty right after freeze"
+            );
+        }
+        m.wait_before_flush_build_reached();
+
+        // writers continue immediately, without waiting for the BUILD
+        db.put(b"during-flush-build", b"v").unwrap();
+        assert_eq!(db.get(b"during-flush-build").unwrap(), Some(b"v".to_vec()));
+        // the remaining seed puts land in the fresh active memtable
+        for i in (froze_after + 1)..8u32 {
+            db.put(format!("a{i:03}"), vec![b'x'; 40]).unwrap();
+        }
+
+        m.release_before_flush_build();
+        m.wait_settled();
+        assert!(db.maintenance_error().is_none());
+        for i in 0..8u32 {
+            assert!(
+                db.get(format!("a{i:03}").as_bytes()).unwrap().is_some(),
+                "the frozen generation's data must have flushed"
+            );
+        }
+    }
+
+    /// Test 2: puts, gets, and scans against the current state all keep
+    /// working while a flush BUILD is paused — the engine mutex was
+    /// never held for SST construction.
+    #[test]
+    fn foreground_writes_and_reads_continue_during_flush_build() {
+        let td = TempDir::new("flush-foreground-continues");
+        let db = SharedKiban::open_with_options(td.path(), tiny_buffer_options()).unwrap();
+        let m = db.maintenance_for_test();
+        m.arm_before_flush_build();
+
+        db.put(b"old-key", b"old-value").unwrap();
+        fill_past_threshold(&db, "pad");
+        m.wait_before_flush_build_reached();
+
+        db.put(b"new-key", b"new-value").unwrap();
+        assert_eq!(db.get(b"old-key").unwrap(), Some(b"old-value".to_vec()));
+        assert_eq!(db.get(b"new-key").unwrap(), Some(b"new-value".to_vec()));
+        let snap = db.snapshot().unwrap();
+        let scanned = snap.scan().unwrap();
+        assert!(scanned.iter().any(|(k, _)| k == b"old-key"));
+        assert!(scanned.iter().any(|(k, _)| k == b"new-key"));
+
+        m.release_before_flush_build();
+        m.wait_settled();
+        assert!(db.maintenance_error().is_none());
+    }
+
+    /// Test 3: the immutable memtable participates in reads exactly
+    /// like the active one — including a delete shadowing an older
+    /// SST's value for as long as the flush is pending.
+    #[test]
+    fn immutable_memtable_shadows_older_sst_values_including_deletes() {
+        let td = TempDir::new("flush-immutable-shadow");
+        let db = SharedKiban::open_with_options(td.path(), tiny_buffer_options()).unwrap();
+        let m = db.maintenance_for_test();
+
+        db.put(b"k", b"old").unwrap();
+        db.sync().unwrap();
+        db.flush().unwrap(); // an SST with k = "old"
+
+        m.arm_before_flush_build();
+        db.delete(b"k").unwrap();
+        let flush_db = db.clone();
+        let handle = std::thread::spawn(move || flush_db.flush()); // freezes the delete-only memtable
+        m.wait_before_flush_build_reached();
+
+        assert!(db.lock().unwrap().immutable.is_some());
+        assert_eq!(
+            db.get(b"k").unwrap(),
+            None,
+            "the frozen delete must not fall through to the older SST value"
+        );
+
+        m.release_before_flush_build();
+        handle.join().unwrap().unwrap();
+        assert_eq!(db.get(b"k").unwrap(), None);
+
+        db.put(b"k", b"newest").unwrap();
+        assert_eq!(db.get(b"k").unwrap(), Some(b"newest".to_vec()));
+    }
+
+    /// Test 4: a snapshot returns the exact same state whether captured
+    /// before a freeze, while the flush BUILD is paused, after the
+    /// flush commits, or after a later compaction runs.
+    #[test]
+    fn snapshot_returns_the_same_state_through_every_freeze_flush_phase() {
+        let td = TempDir::new("flush-snapshot-phases");
+        let opts = super::compaction_tests::tiny_options();
+        let db = SharedKiban::open_with_options(td.path(), opts).unwrap();
+        let m = db.maintenance_for_test();
+
+        db.put(b"k", b"v1").unwrap();
+        let snap_before = db.snapshot().unwrap();
+        assert_eq!(snap_before.get(b"k").unwrap(), Some(b"v1".to_vec()));
+
+        m.arm_before_flush_build();
+        let flush_db = db.clone();
+        let handle = std::thread::spawn(move || flush_db.flush());
+        m.wait_before_flush_build_reached();
+
+        let snap_during = db.snapshot().unwrap(); // captured from the immutable Arc
+        assert_eq!(snap_before.get(b"k").unwrap(), Some(b"v1".to_vec()));
+        assert_eq!(snap_during.get(b"k").unwrap(), Some(b"v1".to_vec()));
+
+        m.release_before_flush_build();
+        handle.join().unwrap().unwrap();
+
+        let snap_after = db.snapshot().unwrap();
+        for s in [&snap_before, &snap_during, &snap_after] {
+            assert_eq!(s.get(b"k").unwrap(), Some(b"v1".to_vec()));
+        }
+
+        // a real compaction afterward (l0_compaction_trigger: 2) must
+        // not disturb any of them
+        for round in 0..6u32 {
+            db.put(format!("pad{round}"), b"x").unwrap();
+            db.sync().unwrap();
+            db.flush().unwrap();
+        }
+        db.maintenance_for_test().wait_settled();
+        assert!(db.maintenance_error().is_none());
+
+        for s in [&snap_before, &snap_during, &snap_after] {
+            assert_eq!(s.get(b"k").unwrap(), Some(b"v1".to_vec()));
+            let scanned = s.scan().unwrap();
+            assert!(scanned.iter().any(|(k, v)| k == b"k" && v == b"v1"));
+        }
+    }
+
+    /// Test 12: once the immutable slot is occupied, a writer that also
+    /// pushes the (new) active memtable past threshold must block —
+    /// never allocate a second immutable memtable (impossible anyway:
+    /// `Kiban::immutable` is an `Option`, not a queue) and never spin.
+    #[test]
+    fn immutable_slot_backpressure_blocks_until_the_pending_flush_commits() {
+        let td = TempDir::new("flush-immutable-backpressure");
+        let db = SharedKiban::open_with_options(td.path(), tiny_buffer_options()).unwrap();
+        let m = db.maintenance_for_test();
+        m.arm_before_flush_build();
+
+        fill_past_threshold(&db, "a"); // freezes generation 1; worker parks before BUILD
+        m.wait_before_flush_build_reached();
+        assert!(db.lock().unwrap().immutable.is_some());
+
+        let writer_db = db.clone();
+        let handle = std::thread::spawn(move || {
+            for i in 0..8u32 {
+                writer_db.put(format!("b{i:03}"), vec![b'x'; 40]).unwrap();
+            }
+        });
+        db.maintenance_for_test().wait_until_writer_waiting();
+        assert_eq!(db.maintenance_for_test().waiting_writers(), 1);
+        assert!(
+            !handle.is_finished(),
+            "writer must wait for the immutable slot, not proceed"
+        );
+        assert!(db.lock().unwrap().immutable.is_some());
+
+        m.release_before_flush_build();
+        handle.join().unwrap();
+
+        for i in 0..8u32 {
+            assert_eq!(
+                db.get(format!("b{i:03}").as_bytes()).unwrap(),
+                Some(vec![b'x'; 40])
+            );
+        }
+    }
+
+    /// Test 13: `sync()` completes for already-accepted active-WAL
+    /// writes even while a writer is stalled on the immutable slot —
+    /// durability of accepted writes must never depend on the pending
+    /// flush freeing that slot.
+    #[test]
+    fn sync_completes_while_a_writer_is_stalled_on_the_immutable_slot() {
+        let td = TempDir::new("flush-sync-during-immutable-stall");
+        let db = SharedKiban::open_with_options(td.path(), tiny_buffer_options()).unwrap();
+        let m = db.maintenance_for_test();
+
+        db.put(b"early", b"durable-me").unwrap();
+
+        m.arm_before_flush_build();
+        fill_past_threshold(&db, "a");
+        m.wait_before_flush_build_reached();
+
+        let writer_db = db.clone();
+        let handle = std::thread::spawn(move || {
+            for i in 0..8u32 {
+                writer_db.put(format!("b{i:03}"), vec![b'x'; 40]).unwrap();
+            }
+        });
+        db.maintenance_for_test().wait_until_writer_waiting();
+
+        db.sync().unwrap();
+
+        m.release_before_flush_build();
+        handle.join().unwrap();
+
+        drop(db);
+        let reopened = Kiban::open_with_options(td.path(), tiny_buffer_options()).unwrap();
+        assert_eq!(
+            reopened.get(b"early").unwrap(),
+            Some(b"durable-me".to_vec())
+        );
+    }
+
+    /// Test 14: an explicit `flush()` waits for its OWN generation's
+    /// commit — never returns early, never waits for a later, unrelated
+    /// compaction to also finish.
+    #[test]
+    fn explicit_flush_waits_only_for_its_own_generation() {
+        let td = TempDir::new("flush-waits-for-generation");
+        let db = SharedKiban::open_with_options(td.path(), super::compaction_tests::tiny_options())
+            .unwrap();
+        let m = db.maintenance_for_test();
+        m.arm_before_flush_build();
+
+        db.put(b"k", b"v").unwrap();
+        let flush_db = db.clone();
+        let handle = std::thread::spawn(move || flush_db.flush());
+        m.wait_before_flush_build_reached();
+        assert!(
+            !handle.is_finished(),
+            "flush must not return before its own commit"
+        );
+
+        m.release_before_flush_build();
+        handle.join().unwrap().unwrap();
+        assert_eq!(db.get(b"k").unwrap(), Some(b"v".to_vec()));
+
+        db.maintenance_for_test().wait_settled();
+        assert!(db.maintenance_error().is_none());
+    }
+
+    /// Test 17: the frozen memtable's WAL stays on disk right up until
+    /// the flush that supersedes it with an SST actually commits — never
+    /// deleted before.
+    #[test]
+    fn old_wal_is_deleted_only_after_the_flush_commits() {
+        let td = TempDir::new("flush-old-wal-lifetime");
+        let db = SharedKiban::open_with_options(td.path(), tiny_buffer_options()).unwrap();
+        let m = db.maintenance_for_test();
+        m.arm_before_flush_build();
+
+        fill_past_threshold(&db, "a");
+        m.wait_before_flush_build_reached();
+
+        let old_wal_number = db.lock().unwrap().immutable.as_ref().unwrap().wal_number;
+        let old_wal_path = td.path().join(file_name(old_wal_number, WAL_EXTENSION));
+        assert!(
+            old_wal_path.exists(),
+            "the frozen memtable's WAL must remain on disk before commit"
+        );
+
+        m.release_before_flush_build();
+        m.wait_settled();
+        assert!(db.maintenance_error().is_none());
+
+        assert!(
+            !old_wal_path.exists(),
+            "the retired WAL must be removed only after a successful commit"
+        );
+    }
+
+    /// Test 10: an ambiguous MANIFEST rename during the freeze handoff
+    /// (old+new WAL both live) must poison the engine exactly like every
+    /// other commit point — no separate interpretation for "this one is
+    /// just a WAL handoff".
+    #[test]
+    fn manifest_ambiguity_during_freeze_handoff_poisons_engine() {
+        let td = TempDir::new("flush-ambiguity-freeze");
+        let opts = tiny_buffer_options();
+        let mut induced = false;
+        for n in 0..40usize {
+            drop(Kiban::open_with_options(td.path(), opts.clone()).unwrap());
+            let mut d = Kiban::open_with_options(td.path(), opts.clone()).unwrap();
+            if d.is_poisoned() {
+                continue;
+            }
+            let _ = d.put(b"k", b"v");
+            sys::install_faults(&[n]);
+            let freeze_result = d.freeze();
+            let poisoned = matches!(
+                &freeze_result,
+                Err(DbError::Poisoned(PoisonCause::CommitAmbiguity(_)))
+            );
+            sys::clear_fault();
+            if poisoned {
+                induced = true;
+                let e = d.put(b"later", b"x").unwrap_err();
+                assert!(e.to_string().contains("poisoned"), "{e}");
+                let _ = d.get(b"k").unwrap(); // reads stay available
+                drop(d);
+                let reopened = Kiban::open_with_options(td.path(), opts.clone()).unwrap();
+                assert!(!reopened.is_poisoned());
+                break;
+            }
+        }
+        assert!(induced, "freeze-handoff ambiguity never induced");
+    }
+
+    /// Test 11: an ambiguous MANIFEST rename while a flush COMMIT
+    /// replaces the frozen memtable's WAL with its SST must poison the
+    /// same way. The fault is installed only around `commit_flush`
+    /// itself, so the sweep targets that step specifically rather than
+    /// the whole freeze+build+commit sequence.
+    #[test]
+    fn manifest_ambiguity_during_flush_commit_poisons_engine() {
+        let td = TempDir::new("flush-ambiguity-commit");
+        let opts = tiny_buffer_options();
+        let mut induced = false;
+        for n in 0..40usize {
+            drop(Kiban::open_with_options(td.path(), opts.clone()).unwrap());
+            let mut d = Kiban::open_with_options(td.path(), opts.clone()).unwrap();
+            if d.is_poisoned() {
+                continue;
+            }
+            let _ = d.put(b"k", b"v");
+            if d.freeze().is_err() {
+                continue;
+            }
+            let Some(plan) = d.plan_flush() else { continue };
+            let output = match plan.build() {
+                Ok(o) => o,
+                Err(_) => continue,
+            };
+            sys::install_faults(&[n]);
+            let commit_result = d.commit_flush(plan, output);
+            let poisoned = matches!(
+                &commit_result,
+                Err(DbError::Poisoned(PoisonCause::CommitAmbiguity(_)))
+            );
+            sys::clear_fault();
+            if poisoned {
+                induced = true;
+                assert!(d.put(b"later", b"x").is_err());
+                let _ = d.get(b"k").unwrap();
+                drop(d);
+                let reopened = Kiban::open_with_options(td.path(), opts.clone()).unwrap();
+                assert!(!reopened.is_poisoned());
+                break;
+            }
+        }
+        assert!(induced, "flush-commit ambiguity never induced");
+    }
+
+    /// Test 15: a crash leaving two live WAL generations (a pending
+    /// flush that never committed) must replay both, in order, into one
+    /// consolidated active memtable/WAL on the next open — and sequence
+    /// numbers must not be reused afterward.
+    #[test]
+    fn multiple_live_wal_recovery_replays_both_generations_in_order() {
+        // Direct `Kiban`, calling `freeze()` itself: simpler and fully
+        // deterministic (no worker/checkpoint dance needed just to get
+        // two live WAL generations on disk with the flush never even
+        // started), and it avoids abandoning a `SharedKiban` while its
+        // worker sits parked in a test checkpoint — that combination
+        // has its own dedicated backpressure tests; here the point is
+        // purely the on-disk multi-WAL state and its recovery.
+        let td = TempDir::new("flush-multi-wal-recovery");
+        let mut db =
+            Kiban::open_with_options(td.path(), super::compaction_tests::tiny_options()).unwrap();
+
+        for i in 0..3u32 {
+            db.put(format!("gen1-{i:03}"), format!("v{i}")).unwrap();
+        }
+        db.freeze().unwrap(); // two live WALs now; the flush itself never runs
+
+        for i in 0..3u32 {
+            db.put(format!("gen2-{i:03}"), format!("w{i}")).unwrap();
+        }
+        db.sync().unwrap();
+
+        let live_wals = Manifest::load(td.path()).unwrap().unwrap().wal_numbers;
+        assert_eq!(live_wals.len(), 2, "both generations must be MANIFEST-live");
+
+        drop(db); // abandon: the pending flush never committed
+
+        let mut reopened = Kiban::open(td.path()).unwrap();
+        for i in 0..3u32 {
+            assert_eq!(
+                reopened.get(format!("gen1-{i:03}").as_bytes()).unwrap(),
+                Some(format!("v{i}").into_bytes())
+            );
+            assert_eq!(
+                reopened.get(format!("gen2-{i:03}").as_bytes()).unwrap(),
+                Some(format!("w{i}").into_bytes())
+            );
+        }
+        assert_eq!(
+            Manifest::load(td.path())
+                .unwrap()
+                .unwrap()
+                .wal_numbers
+                .len(),
+            1,
+            "recovery must consolidate back to exactly one live wal"
+        );
+
+        // a fresh write's sequence number must exceed everything
+        // recovered from either generation, not collide with it
+        reopened.put(b"post-recovery", b"ok").unwrap();
+        reopened.sync().unwrap();
+        assert_eq!(
+            reopened.get(b"post-recovery").unwrap(),
+            Some(b"ok".to_vec())
+        );
+    }
+
+    /// Test 16: the orphan sweep understands a two-WAL live set —
+    /// stragglers outside it are removed, both live generations survive.
+    #[test]
+    fn orphan_sweep_keeps_both_live_wal_generations_and_removes_garbage() {
+        let td = TempDir::new("flush-orphan-sweep-multi-wal");
+
+        let mut throwaway = Memtable::new();
+        atomic::create_durably(&td.path().join(file_name(7, WAL_EXTENSION))).unwrap();
+        {
+            let (mut wal, _) =
+                Wal::open(td.path().join(file_name(7, WAL_EXTENSION)), &mut throwaway).unwrap();
+            wal.put(1, b"k1", b"v1").unwrap();
+            wal.sync().unwrap();
+        }
+        atomic::create_durably(&td.path().join(file_name(8, WAL_EXTENSION))).unwrap();
+        {
+            let (mut wal, _) =
+                Wal::open(td.path().join(file_name(8, WAL_EXTENSION)), &mut throwaway).unwrap();
+            wal.put(2, b"k2", b"v2").unwrap();
+            wal.sync().unwrap();
+        }
+        // garbage: a superseded old generation and a stray future file
+        atomic::create_durably(&td.path().join(file_name(6, WAL_EXTENSION))).unwrap();
+        atomic::create_durably(&td.path().join(file_name(9, WAL_EXTENSION))).unwrap();
+
+        Manifest {
+            next_file_number: 10,
+            wal_numbers: vec![7, 8],
+            last_sequence: 0,
+            tables: vec![],
+        }
+        .install(td.path())
+        .unwrap();
+
+        let mut db = Kiban::open(td.path()).unwrap();
+        assert!(
+            !td.path().join(file_name(6, WAL_EXTENSION)).exists(),
+            "an orphan below the live set must be swept"
+        );
+        assert!(
+            !td.path().join(file_name(9, WAL_EXTENSION)).exists(),
+            "an orphan above the live set must be swept"
+        );
+        assert_eq!(db.get(b"k1").unwrap(), Some(b"v1".to_vec()));
+        assert_eq!(db.get(b"k2").unwrap(), Some(b"v2".to_vec()));
+        db.put(b"k3", b"v3").unwrap();
+        assert_eq!(db.get(b"k3").unwrap(), Some(b"v3".to_vec()));
+    }
+
+    /// Deterministic scenario exercising the freeze/flush pipeline
+    /// directly on `Kiban` (via `freeze`/`plan_flush`/`FlushPlan::build`/
+    /// `commit_flush`, called just like the maintenance worker calls
+    /// them) — two generations, each put+sync+freeze+flush. Mirrors
+    /// `crash_sweep_tests::run_scenario_with_faults`'s shape and reuses
+    /// its `Tracker`/`assert_band`, scoped separately so the existing
+    /// sweep (which exercises `Kiban::flush`, never `freeze` — direct
+    /// `Kiban` never auto-freezes) stays untouched.
+    fn run_flush_scenario_with_faults(
+        dir: &Path,
+        n: &[usize],
+    ) -> (
+        Result<(), DbError>,
+        super::crash_sweep_tests::Tracker,
+        usize,
+    ) {
+        sys::install_faults(n);
+        let mut tracker = super::crash_sweep_tests::Tracker::default();
+        let result = (|| -> Result<(), DbError> {
+            let opts = KibanOptions {
+                l0_compaction_trigger: 1000,
+                l0_write_stall_trigger: 2000,
+                ..super::compaction_tests::tiny_options()
+            };
+            let mut db = Kiban::open_with_options(dir, opts)?;
+
+            macro_rules! step {
+                ($op:expr) => {
+                    if $op.is_err() {
+                        return Ok(());
+                    }
+                };
+            }
+
+            for round in 0..2u32 {
+                for i in 0..5u32 {
+                    let key = format!("k{i:03}");
+                    let val = format!("gen{round}-{i}");
+                    step!(db.put(&key, &val));
+                    tracker.apply(key.as_bytes(), Some(val.as_bytes()));
+                }
+                step!(db.sync());
+                tracker.on_sync_ok();
+
+                if db.freeze().is_err() {
+                    tracker.ambiguous = true;
+                    return Ok(());
+                }
+                if let Some(plan) = db.plan_flush() {
+                    let output = match plan.build() {
+                        Ok(o) => o,
+                        Err(_) => return Ok(()),
+                    };
+                    if db.commit_flush(plan, output).is_err() {
+                        tracker.ambiguous = true;
+                        return Ok(());
+                    }
+                    tracker.on_flush_ok();
+                }
+            }
+            Ok(())
+        })();
+        let ops = sys::op_count();
+        sys::clear_fault();
+        (result, tracker, ops)
+    }
+
+    /// Tests 5, 7, 8, 9 (and every other single crash point in the
+    /// pipeline) as one exhaustive sweep: every single-syscall failure,
+    /// then every pair, must recover within the durability band —
+    /// stronger coverage than naming each point individually, and it
+    /// catches anything an individually-named test would have missed.
+    #[test]
+    fn every_single_and_pairwise_fault_in_the_flush_pipeline_recovers_within_the_band() {
+        let clean_dir = TempDir::new("flush-sweep-clean");
+        let (clean_result, _tracker, total) = run_flush_scenario_with_faults(clean_dir.path(), &[]);
+        assert!(clean_result.is_ok());
+        assert!(total > 5);
+
+        for a in 0..total {
+            let dir = TempDir::new("flush-sweep-single");
+            let (_result, tracker, _ops) = run_flush_scenario_with_faults(dir.path(), &[a]);
+            let db = match Kiban::open(dir.path()) {
+                Ok(db) => db,
+                Err(e) => panic!("a={a}: reopen failed: {e}"),
+            };
+            let recovered: BTreeMap<Vec<u8>, Vec<u8>> = db.iter().map(|r| r.unwrap()).collect();
+            super::crash_sweep_tests::assert_band("flush-sweep-single", &[a], &recovered, &tracker);
+        }
+
+        let mut ran = 0usize;
+        for a in 0..total {
+            for b in 0..total {
+                if a == b {
+                    continue;
+                }
+                let dir = TempDir::new("flush-sweep-pair");
+                let (_result, tracker, _ops) = run_flush_scenario_with_faults(dir.path(), &[a, b]);
+                let db = match Kiban::open(dir.path()) {
+                    Ok(db) => db,
+                    Err(e) => panic!("a={a},b={b}: reopen failed: {e}"),
+                };
+                let recovered: BTreeMap<Vec<u8>, Vec<u8>> = db.iter().map(|r| r.unwrap()).collect();
+                super::crash_sweep_tests::assert_band(
+                    "flush-sweep-pair",
+                    &[a, b],
+                    &recovered,
+                    &tracker,
+                );
+                ran += 1;
+            }
+        }
+        assert!(ran > 20, "pair sweep barely exercised anything: {ran}");
+    }
+
+    /// Test 18: the strongest durability claim, extended to this
+    /// pipeline — with a simulated volatile device, a crash discards
+    /// exactly the unsynced bytes, so recovered state must EQUAL the
+    /// last synced state, not merely fall within a band. Every single-
+    /// and two-fault crash point is checked, mirroring
+    /// `power_loss_tests::power_loss_recovers_exactly_the_last_synced_state`
+    /// exactly but over the freeze/flush scenario.
+    #[test]
+    fn power_loss_recovers_exactly_the_last_synced_state_across_the_flush_pipeline() {
+        let clean_dir = TempDir::new("flush-pl-clean");
+        let (clean_result, _tracker, total) = run_flush_scenario_with_faults(clean_dir.path(), &[]);
+        assert!(clean_result.is_ok());
+        assert!(total > 5);
+
+        let mut checked = 0usize;
+        for a in 0..total {
+            for b in 0..total {
+                if a == b {
+                    continue;
+                }
+                let dir = TempDir::new("flush-pl-sweep");
+                sys::enable_device_sim();
+                let (_result, tracker, _ops) = run_flush_scenario_with_faults(dir.path(), &[a, b]);
+                sys::clear_fault();
+
+                sys::power_loss();
+
+                let db = match Kiban::open(dir.path()) {
+                    Ok(db) => db,
+                    Err(e) => {
+                        sys::disable_device_sim();
+                        panic!("faults {a},{b}: reopen after power loss failed: {e:?}");
+                    }
+                };
+                let recovered: BTreeMap<Vec<u8>, Vec<u8>> = db.iter().map(|r| r.unwrap()).collect();
+                sys::disable_device_sim();
+
+                if tracker.ambiguous {
+                    super::crash_sweep_tests::assert_band(
+                        "flush-pl-sweep",
+                        &[a, b],
+                        &recovered,
+                        &tracker,
+                    );
+                } else {
+                    assert_eq!(
+                        recovered, tracker.synced,
+                        "faults {a},{b}: power loss must recover exactly the last synced state"
+                    );
+                }
+                checked += 1;
+            }
+        }
+        assert!(checked > 20, "barely exercised anything: {checked}");
     }
 }

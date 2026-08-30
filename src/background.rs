@@ -28,6 +28,26 @@ impl std::fmt::Display for MaintenanceError {
 
 impl std::error::Error for MaintenanceError {}
 
+/// Raw counters for the background maintenance worker (phase 11.7,
+/// extended 11.8) — facts only, no health verdicts. `compaction_running`
+/// mirrors the worker's own busy flag: true for the whole PLAN/BUILD/
+/// COMMIT cycle it is currently working through — a pending flush job
+/// or a compaction job, since 11.8 has the one worker do both (flush
+/// always first — see `run_pending_maintenance`), not narrowed to just
+/// BUILD or to compaction specifically.
+#[derive(Debug, Clone, Copy)]
+pub struct MaintenanceStats {
+    pub compaction_running: bool,
+    pub compactions_completed: u64,
+    pub compactions_failed: u64,
+    pub compaction_input_bytes: u64,
+    pub compaction_output_bytes: u64,
+    pub waiting_writers: usize,
+    pub write_stalls: u64,
+    pub flushes_completed: u64,
+    pub flushes_failed: u64,
+}
+
 struct Signal {
     /// There may be more compaction to do; the worker should look.
     wake: bool,
@@ -39,6 +59,37 @@ struct Signal {
     /// Sticky: once a job fails, the worker stops attempting more
     /// compaction until the process is reopened (never retry forever).
     error: Option<MaintenanceError>,
+    /// Bumped whenever a stalled writer (11.5 backpressure) needs to
+    /// recheck its condition: a compaction commit succeeds, background
+    /// maintenance fails, or the worker shuts down. A writer captures
+    /// this value while still holding the engine lock that any commit
+    /// would also need, then waits for it to change — never for a bare
+    /// notify — so a commit landing between "L0 is too high" and
+    /// "start waiting" can never be missed.
+    progress_epoch: u64,
+    /// Count of `SharedKiban` callers currently parked in a backpressure
+    /// wait (11.5) — real, condvar-observable state a test can block on
+    /// instead of inferring blocking from elapsed time.
+    waiting_writers: usize,
+    /// Phase 11.7 raw counters, all cumulative and monotonic
+    /// (`saturating_add`, never reset).
+    compactions_completed: u64,
+    /// Bumped only for an actual failed compaction job (a BUILD error,
+    /// a COMMIT error, or a caught worker panic — see `record_error`).
+    /// Deliberately NOT bumped by `Maintenance::error`'s lazy dead-
+    /// thread detection: that discovers an already-dead worker, which
+    /// is a different kind of failure than a job that ran and failed.
+    compactions_failed: u64,
+    compaction_input_bytes: u64,
+    compaction_output_bytes: u64,
+    /// One per `SharedKiban` mutation call that genuinely had to wait
+    /// for L0 room, immutable-slot room, or both, at least once — one
+    /// blocked call, one stall, however many wake/recheck cycles it
+    /// took (mirrors the file-cache `waits` counting rule).
+    write_stalls: u64,
+    /// Phase 11.8 counters, same conventions as the compaction ones.
+    flushes_completed: u64,
+    flushes_failed: u64,
 }
 
 /// Owns the worker thread and the signal used to wake, stop, and query
@@ -68,6 +119,15 @@ impl Maintenance {
                 stop: false,
                 busy: false,
                 error: None,
+                progress_epoch: 0,
+                waiting_writers: 0,
+                compactions_completed: 0,
+                compactions_failed: 0,
+                compaction_input_bytes: 0,
+                compaction_output_bytes: 0,
+                write_stalls: 0,
+                flushes_completed: 0,
+                flushes_failed: 0,
             }),
             condvar: Condvar::new(),
             thread: Mutex::new(None),
@@ -99,6 +159,7 @@ impl Maintenance {
             let mut s = self.state.lock().unwrap();
             s.stop = true;
             s.wake = true;
+            s.progress_epoch += 1;
         }
         self.condvar.notify_all();
         if let Some(h) = self.thread.lock().unwrap().take() {
@@ -123,12 +184,109 @@ impl Maintenance {
             None => false, // already joined via a clean shutdown
         };
         let mut s = self.state.lock().unwrap();
-        if dead && s.error.is_none() && !s.stop {
+        let became_dead = dead && s.error.is_none() && !s.stop;
+        if became_dead {
             s.error = Some(MaintenanceError(
                 "maintenance worker thread exited unexpectedly".to_string(),
             ));
+            s.progress_epoch += 1;
         }
-        s.error.clone()
+        let result = s.error.clone();
+        drop(s);
+        if became_dead {
+            // A stalled writer may be parked on exactly this transition;
+            // nothing else would ever wake it (11.5).
+            self.condvar.notify_all();
+        }
+        result
+    }
+
+    /// Current progress epoch (11.5 backpressure). Must be read while
+    /// still holding the engine lock, immediately after observing L0
+    /// too high — see `SharedKiban::wait_for_write_room` for why that
+    /// ordering is what makes the wait below race-free.
+    pub(crate) fn progress_epoch(&self) -> u64 {
+        self.state.lock().unwrap().progress_epoch
+    }
+
+    /// Blocks until the progress epoch has moved past `since`, or
+    /// maintenance has failed, or the worker is stopping. Never a bare
+    /// sleep or poll: the check and the wait share one lock, so a
+    /// commit that bumps the epoch between a caller's read of it and
+    /// this call can never be missed.
+    pub(crate) fn wait_for_progress(&self, since: u64) {
+        let mut s = self.state.lock().unwrap();
+        while s.progress_epoch == since && s.error.is_none() && !s.stop {
+            s = self.condvar.wait(s).unwrap();
+        }
+    }
+
+    /// Whether the worker has been told to stop. A writer that somehow
+    /// wakes with nothing else changed (no epoch bump, no error) but
+    /// finds this true must give up rather than loop forever waiting
+    /// for a worker that is going away.
+    pub(crate) fn is_stopped(&self) -> bool {
+        self.state.lock().unwrap().stop
+    }
+
+    /// Marks entry into / exit from a backpressure wait (11.5). Paired
+    /// calls around `wait_for_progress` in
+    /// `SharedKiban::wait_for_write_room`.
+    pub(crate) fn writer_started_waiting(&self) {
+        let mut s = self.state.lock().unwrap();
+        s.waiting_writers += 1;
+        drop(s);
+        self.condvar.notify_all();
+    }
+
+    pub(crate) fn writer_stopped_waiting(&self) {
+        self.state.lock().unwrap().waiting_writers -= 1;
+    }
+
+    /// How many `SharedKiban` callers are, right now, genuinely parked
+    /// waiting for L0 room — not inferred from elapsed time. The same
+    /// fact is also part of `stats()` (11.7), which reads the field
+    /// directly under its own already-held lock rather than calling
+    /// this (a `Mutex` is not reentrant).
+    #[cfg(test)]
+    pub(crate) fn waiting_writers(&self) -> usize {
+        self.state.lock().unwrap().waiting_writers
+    }
+
+    /// Records that one `SharedKiban` mutation call genuinely had to
+    /// wait for L0 room — call exactly once per call that blocks, not
+    /// once per wake/recheck cycle within it (11.7).
+    pub(crate) fn record_write_stall(&self) {
+        let mut s = self.state.lock().unwrap();
+        s.write_stalls = s.write_stalls.saturating_add(1);
+    }
+
+    /// A cheap, lock-once read of every maintenance counter (11.7). No
+    /// I/O, no effect on any counter it reads.
+    pub(crate) fn stats(&self) -> MaintenanceStats {
+        let s = self.state.lock().unwrap();
+        MaintenanceStats {
+            compaction_running: s.busy,
+            compactions_completed: s.compactions_completed,
+            compactions_failed: s.compactions_failed,
+            compaction_input_bytes: s.compaction_input_bytes,
+            compaction_output_bytes: s.compaction_output_bytes,
+            waiting_writers: s.waiting_writers,
+            write_stalls: s.write_stalls,
+            flushes_completed: s.flushes_completed,
+            flushes_failed: s.flushes_failed,
+        }
+    }
+
+    /// Blocks until at least one writer is genuinely parked in a
+    /// backpressure wait — for deterministic tests, instead of
+    /// inferring blocking from elapsed time.
+    #[cfg(test)]
+    pub(crate) fn wait_until_writer_waiting(&self) {
+        let mut s = self.state.lock().unwrap();
+        while s.waiting_writers == 0 {
+            s = self.condvar.wait(s).unwrap();
+        }
     }
 }
 
@@ -147,7 +305,22 @@ fn worker_loop(engine: Arc<Mutex<Kiban>>, m: Arc<Maintenance>) {
         }
 
         if m.state.lock().unwrap().error.is_none() {
-            run_pending_compactions(&engine, &m);
+            // A stalled writer (11.5) may be parked waiting for exactly
+            // the progress this cycle would make. If this panics — a
+            // bug, not an expected runtime condition — that must still
+            // become a recorded, wake-triggering failure rather than a
+            // silently vanished thread nobody notified.
+            let engine = &engine;
+            let m_ref = &m;
+            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                run_pending_maintenance(engine, m_ref);
+            }));
+            if let Err(payload) = outcome {
+                record_error(
+                    &m,
+                    format!("worker thread panicked: {}", panic_message(&payload)),
+                );
+            }
         }
 
         {
@@ -162,13 +335,59 @@ fn worker_loop(engine: Arc<Mutex<Kiban>>, m: Arc<Maintenance>) {
     }
 }
 
-/// Runs every compaction job the engine currently needs, in
-/// `Kiban::maybe_compact`'s own priority order (L0 first, then a level
-/// cascade) — the exact same decision function the synchronous path
-/// uses, just with BUILD moved off the lock.
-fn run_pending_compactions(engine: &Arc<Mutex<Kiban>>, m: &Arc<Maintenance>) {
+fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
+    if let Some(s) = payload.downcast_ref::<&str>() {
+        (*s).to_string()
+    } else if let Some(s) = payload.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "non-string panic payload".to_string()
+    }
+}
+
+/// Runs every job the engine currently needs — flush, then compaction
+/// (11.8: memory pressure outranks maintenance debt) — with BUILD
+/// moved off the lock for both. Compaction's own priority order within
+/// itself (L0 first, then a level cascade) is unchanged, mirroring
+/// `Kiban::maybe_compact`'s decision function exactly.
+///
+/// At most one immutable memtable can ever be pending (this phase's
+/// own rule), so at most one flush job runs per pass through the outer
+/// loop; `continue` after committing one so the loop rechecks — a
+/// fresh freeze can land while this job's BUILD was running unlocked.
+fn run_pending_maintenance(engine: &Arc<Mutex<Kiban>>, m: &Arc<Maintenance>) {
     let mut cascade_level = 1u32;
     loop {
+        let flush_plan = {
+            let Ok(mut guard) = engine.lock() else { return };
+            guard.plan_flush()
+        };
+        if let Some(plan) = flush_plan {
+            #[cfg(test)]
+            m.test.before_flush_build();
+
+            match plan.build() {
+                Ok(output) => {
+                    let committed = {
+                        let Ok(mut guard) = engine.lock() else { return };
+                        guard.commit_flush(plan, output)
+                    };
+                    match committed {
+                        Ok(()) => record_flush_success(m),
+                        Err(e) => {
+                            record_flush_error(m, e.to_string());
+                            return;
+                        }
+                    }
+                }
+                Err(e) => {
+                    record_flush_error(m, e.to_string());
+                    return;
+                }
+            }
+            continue;
+        }
+
         let plan = {
             let Ok(mut guard) = engine.lock() else { return };
             guard.plan_next_compaction(&mut cascade_level)
@@ -180,10 +399,20 @@ fn run_pending_compactions(engine: &Arc<Mutex<Kiban>>, m: &Arc<Maintenance>) {
 
         match plan.build() {
             Ok(outputs) => {
-                let Ok(mut guard) = engine.lock() else { return };
-                if let Err(e) = guard.commit_compaction(plan, outputs) {
-                    record_error(m, e.to_string());
-                    return;
+                let committed = {
+                    let Ok(mut guard) = engine.lock() else { return };
+                    guard.commit_compaction(plan, outputs)
+                };
+                match committed {
+                    // A successful commit is exactly the progress a
+                    // stalled writer (11.5) is waiting to recheck
+                    // against — wake it now, not after the whole
+                    // cascade finishes.
+                    Ok(outcome) => record_compaction_success(m, outcome),
+                    Err(e) => {
+                        record_error(m, e.to_string());
+                        return;
+                    }
                 }
             }
             Err(e) => {
@@ -194,8 +423,46 @@ fn run_pending_compactions(engine: &Arc<Mutex<Kiban>>, m: &Arc<Maintenance>) {
     }
 }
 
+fn record_flush_success(m: &Arc<Maintenance>) {
+    {
+        let mut s = m.state.lock().unwrap();
+        s.flushes_completed = s.flushes_completed.saturating_add(1);
+        s.progress_epoch += 1;
+    }
+    m.condvar.notify_all();
+}
+
+fn record_flush_error(m: &Arc<Maintenance>, msg: String) {
+    {
+        let mut s = m.state.lock().unwrap();
+        s.error = Some(MaintenanceError(msg));
+        s.flushes_failed = s.flushes_failed.saturating_add(1);
+        s.progress_epoch += 1;
+    }
+    m.condvar.notify_all();
+}
+
+fn record_compaction_success(m: &Arc<Maintenance>, outcome: crate::db::CompactionOutcome) {
+    {
+        let mut s = m.state.lock().unwrap();
+        s.compactions_completed = s.compactions_completed.saturating_add(1);
+        s.compaction_input_bytes = s.compaction_input_bytes.saturating_add(outcome.input_bytes);
+        s.compaction_output_bytes = s
+            .compaction_output_bytes
+            .saturating_add(outcome.output_bytes);
+        s.progress_epoch += 1;
+    }
+    m.condvar.notify_all();
+}
+
 fn record_error(m: &Arc<Maintenance>, msg: String) {
-    m.state.lock().unwrap().error = Some(MaintenanceError(msg));
+    {
+        let mut s = m.state.lock().unwrap();
+        s.error = Some(MaintenanceError(msg));
+        s.compactions_failed = s.compactions_failed.saturating_add(1);
+        s.progress_epoch += 1;
+    }
+    m.condvar.notify_all();
 }
 
 // ---------------------------------------------------------- test hooks
@@ -259,7 +526,16 @@ impl Checkpoint {
 #[cfg(test)]
 #[derive(Default)]
 struct TestHooks {
+    /// Compaction's build point (11.4).
     before_build: Checkpoint,
+    /// A pending flush's build point (11.8) — deliberately a separate
+    /// checkpoint from compaction's: since 11.8, `SharedKiban::flush()`
+    /// and auto-freeze both route their SST construction through this
+    /// same worker, and a test arming *compaction's* checkpoint (e.g.
+    /// to freeze the worker mid-cascade while seeding L0 tables via
+    /// ordinary `flush()` calls) must not also freeze every flush
+    /// those seed calls themselves depend on to ever return.
+    before_flush_build: Checkpoint,
     pending: Mutex<Option<Box<dyn FnOnce() + Send>>>,
 }
 
@@ -276,12 +552,20 @@ impl TestHooks {
             f();
         }
     }
+
+    /// Same discipline as `before_build`, for a pending flush's BUILD.
+    fn before_flush_build(&self) {
+        self.before_flush_build.hit();
+        if let Some(f) = self.pending.lock().unwrap().take() {
+            f();
+        }
+    }
 }
 
 #[cfg(test)]
 impl Maintenance {
     /// Freezes the worker the next time it reaches the point after PLAN
-    /// and before BUILD starts.
+    /// and before a COMPACTION's BUILD starts.
     pub(crate) fn arm_before_build(&self) {
         self.test.before_build.arm();
     }
@@ -295,6 +579,23 @@ impl Maintenance {
     /// Lets a frozen worker continue into BUILD.
     pub(crate) fn release_before_build(&self) {
         self.test.before_build.release();
+    }
+
+    /// Freezes the worker the next time it reaches the point after PLAN
+    /// and before a pending FLUSH's BUILD starts (11.8).
+    pub(crate) fn arm_before_flush_build(&self) {
+        self.test.before_flush_build.arm();
+    }
+
+    /// Blocks until the worker has reached that point and is frozen
+    /// there.
+    pub(crate) fn wait_before_flush_build_reached(&self) {
+        self.test.before_flush_build.wait_reached();
+    }
+
+    /// Lets a frozen worker continue into a flush's BUILD.
+    pub(crate) fn release_before_flush_build(&self) {
+        self.test.before_flush_build.release();
     }
 
     /// Runs `f` on the worker thread itself, once, immediately before

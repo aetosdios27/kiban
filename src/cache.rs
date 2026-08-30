@@ -35,12 +35,28 @@ struct Inner {
     map: HashMap<(u64, u64), Entry>,
     order: std::collections::VecDeque<(u64, u64)>,
     bytes: usize,
+    hits: u64,
+    misses: u64,
+    evictions: u64,
 }
 
 #[derive(Debug)]
 pub struct BlockCache {
     inner: Mutex<Inner>,
     capacity: usize,
+}
+
+/// Raw counters for a [`BlockCache`] (phase 11.7) — facts only, no
+/// derived rates or verdicts. A caller wanting a hit rate computes
+/// `hits / (hits + misses)` itself.
+#[derive(Debug, Clone, Copy)]
+pub struct BlockCacheStats {
+    pub capacity_bytes: usize,
+    pub resident_bytes: usize,
+    pub resident_entries: usize,
+    pub hits: u64,
+    pub misses: u64,
+    pub evictions: u64,
 }
 
 impl BlockCache {
@@ -50,6 +66,9 @@ impl BlockCache {
                 map: HashMap::new(),
                 order: std::collections::VecDeque::new(),
                 bytes: 0,
+                hits: 0,
+                misses: 0,
+                evictions: 0,
             }),
             capacity: capacity_bytes,
         }
@@ -67,17 +86,37 @@ impl BlockCache {
         self.inner.lock().unwrap().map.len()
     }
 
+    /// A cheap, lock-once read of every counter (phase 11.7). Reading
+    /// stats never touches an entry, so it cannot itself cause a hit,
+    /// miss, or eviction.
+    pub fn stats(&self) -> BlockCacheStats {
+        let inner = self.inner.lock().unwrap();
+        BlockCacheStats {
+            capacity_bytes: self.capacity,
+            resident_bytes: inner.bytes,
+            resident_entries: inner.map.len(),
+            hits: inner.hits,
+            misses: inner.misses,
+            evictions: inner.evictions,
+        }
+    }
+
     /// Promotes on hit.
     pub fn get(&self, key: &(u64, u64)) -> Option<CachedBlock> {
         let mut inner = self.inner.lock().unwrap();
-        let entry = inner.map.get_mut(key)?;
+        let Some(entry) = inner.map.get_mut(key) else {
+            inner.misses = inner.misses.saturating_add(1);
+            return None;
+        };
         let block = entry.block.clone();
         Self::touch(&mut inner.order, *key);
+        inner.hits = inner.hits.saturating_add(1);
         Some(block)
     }
 
     /// Inserts a verified block. Blocks larger than the whole budget are
-    /// not admitted (the caller already holds the data it needs).
+    /// not admitted (the caller already holds the data it needs) — not
+    /// an eviction, since nothing resident was removed to make room.
     pub fn insert(&self, key: (u64, u64), block: CachedBlock) {
         let bytes = block.data.len();
         if bytes > self.capacity {
@@ -94,6 +133,7 @@ impl BlockCache {
             };
             if let Some(removed) = inner.map.remove(&victim) {
                 inner.bytes -= removed.bytes;
+                inner.evictions = inner.evictions.saturating_add(1);
             }
         }
         inner.order.push_back(key);
@@ -191,5 +231,30 @@ mod tests {
         cache.insert((1, 0), block(150));
         assert_eq!(cache.resident_entries(), 1);
         assert_eq!(cache.resident_bytes(), 100); // original retained
+    }
+
+    /// Phase 11.7, Test 3: exact hit/miss/eviction counts, not fuzzy
+    /// assertions. A miss, then a hit on the same key, then a forced
+    /// eviction under a too-small budget.
+    #[test]
+    fn counters_track_hits_misses_and_evictions_exactly() {
+        let cache = BlockCache::new(150);
+        assert!(cache.get(&(1, 0)).is_none()); // miss: nothing resident yet
+        cache.insert((1, 0), block(100));
+        assert!(cache.get(&(1, 0)).is_some()); // hit
+        cache.insert((2, 0), block(100)); // must evict (1,0) to fit
+
+        let s = cache.stats();
+        assert_eq!(s.misses, 1);
+        assert_eq!(s.hits, 1);
+        assert_eq!(s.evictions, 1);
+        assert_eq!(s.capacity_bytes, 150);
+        assert_eq!(s.resident_entries, 1);
+
+        // reading stats itself must not move any counter
+        let s2 = cache.stats();
+        assert_eq!(s2.hits, 1);
+        assert_eq!(s2.misses, 1);
+        assert_eq!(s2.evictions, 1);
     }
 }

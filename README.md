@@ -36,14 +36,20 @@ Implemented:
   contiguous sequence interval. Recovery applies all operations or none.
 - Block cache and lazy table loading: open touches footers and indexes
   only.
+- `SharedKiban::stats()`: a cheap, observation-only snapshot — memtable
+  size, per-level table counts and bytes, snapshot/obsolete-file
+  counts, and raw block-cache/file-cache/compaction/flush counters. No
+  disk I/O, no derived verdicts.
+- Background flush and compaction: the active memtable freezes on a
+  size threshold and hands writers a fresh memtable and WAL
+  immediately; the frozen memtable and compaction both build off the
+  foreground lock, on one shared maintenance worker (flush first).
 
 Not implemented:
 
-- Background flush/compaction threads (compaction runs inline)
 - File-descriptor cache for table files
 - Compression (format reserves a type byte)
 - Range deletes, reverse iterators, transactions
-- Metrics
 
 ## Architecture
 

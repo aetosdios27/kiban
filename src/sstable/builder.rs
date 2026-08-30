@@ -72,8 +72,17 @@ impl TableBuilder {
         // Flush first if the current block has met the size target; then,
         // if we are about to write the first entry of a fresh block, the
         // incoming key IS that block's first key and completes the pending
-        // separator pair.
-        if !self.block.is_empty() && self.block.estimated_size() >= TARGET_BLOCK_SIZE {
+        // separator pair. Never cut mid-key: if this entry is another
+        // version of the same key as the last one added (multi-version
+        // retention — snapshots, or phase 11.8's `iter_all_versions`
+        // flush), splitting here would hand `find_shortest_separator` two
+        // identical keys, which it cannot separate. A block cut only ever
+        // happens between distinct keys — the same invariant compaction's
+        // own file-level splitting already keeps, one level down.
+        if !self.block.is_empty()
+            && self.block.estimated_size() >= TARGET_BLOCK_SIZE
+            && key != self.last_key.as_slice()
+        {
             self.flush_block();
         }
         if let Some(p) = self.pending.take() {

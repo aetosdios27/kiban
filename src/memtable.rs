@@ -5,6 +5,17 @@
 
 use std::collections::BTreeMap;
 
+/// A deliberately rough per-entry cost (phase 11.8): key bytes + value
+/// bytes (0 for a tombstone) + this fixed overhead. Not a claim about
+/// actual heap/RSS usage — cheap, deterministic, and monotonic enough
+/// to threshold flushes on is the whole requirement.
+const ENTRY_OVERHEAD_BYTES: usize = 32;
+
+fn entry_size(key_len: usize, entry: &Entry) -> usize {
+    let value_len = entry.as_value().map(|v| v.len()).unwrap_or(0);
+    key_len + value_len + ENTRY_OVERHEAD_BYTES
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Entry {
     Value { value: Vec<u8>, seq: u64 },
@@ -59,6 +70,10 @@ pub struct Memtable {
     /// seq >= max_active are retained; min_active prunes history.
     min_active: u64,
     max_active: u64,
+    /// Running total of [`entry_size`] over every currently resident
+    /// entry (live + retained history) — phase 11.8's flush-threshold
+    /// signal. Updated incrementally, never recomputed from scratch.
+    logical_bytes: usize,
 }
 
 impl Memtable {
@@ -67,6 +82,7 @@ impl Memtable {
             map: BTreeMap::new(),
             min_active: 0,
             max_active: 0,
+            logical_bytes: 0,
         }
     }
 
@@ -77,11 +93,21 @@ impl Memtable {
             "memtable inserts must be seq-ascending per key"
         );
         // Retain the superseded version iff some active snapshot can
-        // still observe it.
+        // still observe it; otherwise it stops being resident.
         if slot.live.seq() >= self.max_active {
             slot.history.insert(0, slot.live.clone());
+        } else {
+            self.logical_bytes -= entry_size(key.len(), &slot.live);
         }
+        self.logical_bytes += entry_size(key.len(), &new);
         slot.live = new;
+    }
+
+    /// A cheap, deterministic estimate of currently resident bytes
+    /// (live + retained history versions) — see [`entry_size`]. Not
+    /// exact heap accounting; monotonic enough to threshold flushes on.
+    pub fn logical_bytes(&self) -> usize {
+        self.logical_bytes
     }
 
     pub fn put(&mut self, key: impl AsRef<[u8]>, value: impl AsRef<[u8]>, seq: u64) {
@@ -129,9 +155,19 @@ impl Memtable {
     pub fn set_snapshot_bounds(&mut self, min_active: u64, max_active: u64) {
         self.min_active = min_active;
         self.max_active = max_active;
-        for kv in self.map.values_mut() {
-            kv.history.retain(|e| e.seq() >= min_active);
+        let mut removed_bytes = 0usize;
+        for (key, kv) in self.map.iter_mut() {
+            let key_len = key.len();
+            kv.history.retain(|e| {
+                if e.seq() >= min_active {
+                    true
+                } else {
+                    removed_bytes += entry_size(key_len, e);
+                    false
+                }
+            });
         }
+        self.logical_bytes = self.logical_bytes.saturating_sub(removed_bytes);
     }
 
     /// Iterates every retained version of every key: ascending keys, and
@@ -140,9 +176,20 @@ impl Memtable {
     pub fn iter_all_versions(&self) -> impl DoubleEndedIterator<Item = (&[u8], &Entry)> + '_ {
         let mut out: Vec<(&[u8], &Entry)> = Vec::new();
         for (k, kv) in &self.map {
-            out.push((k.as_slice(), &kv.live));
+            // seq 0 is the synthetic placeholder `KeyVersions::default`
+            // starts every key with ("equivalent to no entry" per its
+            // own doc comment) — never a real mutation, so it must
+            // never reach a persistent format. `entry_at` tolerates it
+            // silently (its Tombstone meaning happens to already say
+            // "absent"); a flushed table must not carry a phantom
+            // record for every key ever written.
+            if kv.live.seq() != 0 {
+                out.push((k.as_slice(), &kv.live));
+            }
             for h in &kv.history {
-                out.push((k.as_slice(), h));
+                if h.seq() != 0 {
+                    out.push((k.as_slice(), h));
+                }
             }
         }
         out.into_iter()

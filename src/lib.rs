@@ -13,6 +13,7 @@ pub mod bloom;
 pub mod cache;
 pub mod crc32;
 pub mod db;
+pub mod file_cache;
 pub mod frame;
 pub mod manifest;
 pub mod memtable;

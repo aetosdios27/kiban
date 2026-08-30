@@ -3,6 +3,10 @@
 //! Per `docs/design/block-cache.md` D1: opening reads only footer,
 //! index, and bloom filter; data blocks load on demand through the
 //! shared LRU. Corruption is detected and reported, never repaired.
+//!
+//! Per phase 11.6: an `SstTable` does not permanently own an open file
+//! descriptor. Every read leases one from the shared `TableFileCache`
+//! for just the duration of that read — see `read_block`.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -13,7 +17,7 @@ use super::{Kind, SstError};
 use crate::bloom::BloomFilter;
 use crate::cache::{BlockCache, CachedBlock};
 use crate::crc32;
-use crate::sys;
+use crate::file_cache::TableFileCache;
 
 struct IndexEntry {
     separator: Vec<u8>,
@@ -22,16 +26,18 @@ struct IndexEntry {
 }
 
 pub struct SstTable {
-    // Debug is implemented manually below because sys::File isn't Debug.
+    // Debug is implemented manually below: neither the file cache nor
+    // the block cache derive it, and their contents aren't useful here
+    // anyway.
     number: u64,
-    file: sys::File,
     path: PathBuf,
     file_len: u64,
     index: Vec<IndexEntry>,
     filter: BloomFilter,
     first_key: Vec<u8>,
     last_key: Vec<u8>,
-    cache: Arc<BlockCache>,
+    block_cache: Arc<BlockCache>,
+    file_cache: Arc<TableFileCache>,
 }
 
 impl std::fmt::Debug for SstTable {
@@ -51,20 +57,35 @@ pub struct Found {
 }
 
 impl SstTable {
-    /// Opens a handle: footer + index + filter only. Data blocks load on
-    /// demand through `cache`.
-    pub fn open(number: u64, path: &Path, cache: Arc<BlockCache>) -> Result<SstTable, SstError> {
+    /// Opens a handle: footer + index + filter only, each read through
+    /// a leased file-cache handle rather than a descriptor this table
+    /// keeps for itself. Data blocks load on demand through
+    /// `block_cache`, each lazily leasing `file_cache` on a miss.
+    ///
+    /// Crate-internal: `file_cache`'s type is itself crate-internal
+    /// (11.6), so opening a table is something only `Kiban`'s own
+    /// machinery does, never a direct external construction path.
+    pub(crate) fn open(
+        number: u64,
+        path: &Path,
+        block_cache: Arc<BlockCache>,
+        file_cache: Arc<TableFileCache>,
+    ) -> Result<SstTable, SstError> {
         let bad = |m: String| SstError::Corrupt(m);
-        let file = sys::File::open_read(path)
-            .map_err(|e| SstError::Corrupt(format!("table {number} cannot be opened: {e}")))?;
-        let file_len = file.len().map_err(|e| bad(e.to_string()))?;
-        if file_len < FOOTER_LEN as u64 {
-            return Err(bad("file is smaller than the footer".to_string()));
-        }
+        let open_err =
+            |e: std::io::Error| SstError::Corrupt(format!("table {number} cannot be opened: {e}"));
 
-        let footer = file
-            .read_range_at(path, file_len - FOOTER_LEN as u64, FOOTER_LEN as u64)
-            .map_err(|e| bad(e.to_string()))?;
+        let (footer, file_len) = {
+            let lease = file_cache.acquire(number, path).map_err(open_err)?;
+            let file_len = lease.len().map_err(|e| bad(e.to_string()))?;
+            if file_len < FOOTER_LEN as u64 {
+                return Err(bad("file is smaller than the footer".to_string()));
+            }
+            let footer = lease
+                .read_range_at(path, file_len - FOOTER_LEN as u64, FOOTER_LEN as u64)
+                .map_err(|e| bad(e.to_string()))?;
+            (footer, file_len)
+        };
         let footer = &footer[..];
         if &footer[36..44] != MAGIC {
             return Err(bad("bad magic number; not a kiban sstable".to_string()));
@@ -87,31 +108,35 @@ impl SstTable {
             ));
         }
 
-        let filter_raw = file
-            .read_range_at(path, filter_offset, filter_len)
-            .map_err(|e| bad(e.to_string()))?;
+        let (filter_raw, index_raw) = {
+            let lease = file_cache.acquire(number, path).map_err(open_err)?;
+            let filter_raw = lease
+                .read_range_at(path, filter_offset, filter_len)
+                .map_err(|e| bad(e.to_string()))?;
+            let index_raw = lease
+                .read_range_at(path, index_offset, index_len)
+                .map_err(|e| bad(e.to_string()))?;
+            (filter_raw, index_raw)
+        };
         verify_trailer(&filter_raw, "filter")?;
         let filter = BloomFilter::decode(&filter_raw[..filter_raw.len() - 5])
             .ok_or_else(|| bad("filter block payload is malformed".to_string()))?;
-
-        let index_raw = file
-            .read_range_at(path, index_offset, index_len)
-            .map_err(|e| bad(e.to_string()))?;
         let index = parse_index(&index_raw, data_end)?;
 
         let mut table = SstTable {
             number,
-            file,
             path: path.to_path_buf(),
             file_len,
             index,
             filter,
             first_key: Vec::new(),
             last_key: Vec::new(),
-            cache,
+            block_cache,
+            file_cache,
         };
 
-        // Boundary keys come from the boundary blocks (two cached reads).
+        // Boundary keys come from the boundary blocks (two cached
+        // reads, each its own brief file-cache lease on a miss).
         let first_block = table.read_block(&table.index[0])?;
         let (_, _, first, _) = first_block
             .first_entry()?
@@ -142,23 +167,33 @@ impl SstTable {
         &self.last_key
     }
 
+    /// A block-cache hit needs no file descriptor at all — memory hit
+    /// means memory hit. Only a miss leases `file_cache`, and only for
+    /// the duration of the positioned read itself (11.6).
     fn read_block(&self, entry: &IndexEntry) -> Result<VerifiedBlock, SstError> {
         let key = (self.number, entry.offset);
-        if let Some(cached) = self.cache.get(&key) {
+        if let Some(cached) = self.block_cache.get(&key) {
             return Ok(VerifiedBlock::from_cached(cached));
         }
-        let data = self
-            .file
-            .read_range_at(&self.path, entry.offset, entry.len)
-            .map_err(|e| {
-                SstError::Corrupt(format!("read failed at offset {}: {e}", entry.offset))
-            })?;
+        let data = {
+            let lease = self
+                .file_cache
+                .acquire(self.number, &self.path)
+                .map_err(|e| {
+                    SstError::Corrupt(format!("table {} cannot be opened: {e}", self.number))
+                })?;
+            lease
+                .read_range_at(&self.path, entry.offset, entry.len)
+                .map_err(|e| {
+                    SstError::Corrupt(format!("read failed at offset {}: {e}", entry.offset))
+                })?
+        };
         let meta = VerifiedBlock::verify(&data)?;
         let cached = CachedBlock {
             data: Arc::from(data),
             meta,
         };
-        self.cache.insert(key, cached.clone());
+        self.block_cache.insert(key, cached.clone());
         Ok(VerifiedBlock::from_cached(cached))
     }
 
