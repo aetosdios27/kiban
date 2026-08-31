@@ -3,7 +3,7 @@
 //! Run with `cargo bench`. Set `KIBAN_BENCH_QUICK=1` to reduce the
 //! operation counts and samples for a fast smoke run.
 
-use std::sync::{Arc, Barrier};
+use std::sync::{Arc, Barrier, RwLock};
 use std::time::{Duration, Instant};
 
 use kiban::cache::{BlockCache, BlockMeta, CachedBlock};
@@ -213,6 +213,33 @@ fn parallel_cache_hits(
     (timer.elapsed(), total as u64)
 }
 
+fn parallel_micro<F>(threads: usize, total: usize, op: F) -> (Duration, u64)
+where
+    F: Fn() + Send + Sync + 'static,
+{
+    let op = Arc::new(op);
+    let start = Arc::new(Barrier::new(threads + 1));
+    let handles: Vec<_> = (0..threads)
+        .map(|thread| {
+            let op = op.clone();
+            let start = start.clone();
+            std::thread::spawn(move || {
+                let begin = total * thread / threads;
+                let end = total * (thread + 1) / threads;
+                start.wait();
+                for _ in begin..end {
+                    op();
+                }
+                (end - begin) as u64
+            })
+        })
+        .collect();
+    let timer = Instant::now();
+    start.wait();
+    let work = handles.into_iter().map(|h| h.join().unwrap()).sum();
+    (timer.elapsed(), work)
+}
+
 fn parallel_writes(
     db: &SharedKiban,
     total: usize,
@@ -290,6 +317,45 @@ fn main() {
     let wide_keys = writes * 2;
     let mixed_reads = reads * 4 / 5;
     println!("Kiban benchmarks: {samples} median samples");
+
+    println!("\n== Tiny-read synchronization controls ==");
+    for &threads in THREAD_COUNTS {
+        let label = format!("raw RwLock read / {threads} threads");
+        measure(&label, reads, "ops", samples, || {
+            let lock = Arc::new(RwLock::new(()));
+            parallel_micro(threads, reads, move || drop(lock.read().unwrap()))
+        });
+    }
+    for &threads in THREAD_COUNTS {
+        let label = format!("raw Arc clone / {threads} threads");
+        measure(&label, reads, "ops", samples, || {
+            let value = Arc::new(());
+            parallel_micro(threads, reads, move || drop(Arc::clone(&value)))
+        });
+    }
+    for &threads in THREAD_COUNTS {
+        let label = format!("RwLock + Arc / {threads} threads");
+        measure(&label, reads, "ops", samples, || {
+            let value = Arc::new(RwLock::new(Arc::new(())));
+            parallel_micro(threads, reads, move || {
+                let cloned = Arc::clone(&value.read().unwrap());
+                drop(cloned);
+            })
+        });
+    }
+
+    println!("\n== Empty and active SharedKiban controls ==");
+    for &threads in THREAD_COUNTS {
+        let label = format!("empty Shared miss / {threads} threads");
+        measure(&label, reads, "gets", samples, || {
+            let dir = temp_dir("empty-shared");
+            let db = SharedKiban::open(&dir).unwrap();
+            let result = parallel_gets(&db, keys("empty", 1), reads, threads, true);
+            drop(db);
+            drop_dir(&dir);
+            result
+        });
+    }
 
     println!("\n== Direct BlockCache hit control ==");
     for &readers in THREAD_COUNTS {
