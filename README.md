@@ -1,4 +1,4 @@
-# Kiban
+# Kiban DB
 
 An embedded LSM-tree storage engine in Rust. Single node. Zero
 dependencies. Byte keys, byte values, sorted.
@@ -34,8 +34,8 @@ Implemented:
   active snapshot can observe them.
 - `WriteBatch`: multiple mutations committed as one WAL record with a
   contiguous sequence interval. Recovery applies all operations or none.
-- Block cache and lazy table loading: open touches footers and indexes
-  only.
+- Block cache, lazy table loading, and a bounded shared table-file cache:
+  opening touches footers and indexes only.
 - `SharedKiban::stats()`: a cheap, observation-only snapshot — memtable
   size, per-level table counts and bytes, snapshot/obsolete-file
   counts, and raw block-cache/file-cache/compaction/flush counters. No
@@ -47,7 +47,6 @@ Implemented:
 
 Not implemented:
 
-- File-descriptor cache for table files
 - Compression (format reserves a type byte)
 - Range deletes, reverse iterators, transactions
 
@@ -66,12 +65,15 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Q[get key] --> M{memtable<br/>contains key?}
-    M -- "value" --> R[value]
-    M -- "tombstone" --> R0[not found]
-    M -- "absent" --> B{"bloom filter<br/>admits key?"}
+    Q[get key] --> A{active memtable<br/>contains key?}
+    A -- "value" --> R[value]
+    A -- "tombstone" --> R0[not found]
+    A -- "absent" --> I{immutable memtable<br/>contains key?}
+    I -- "value" --> R
+    I -- "tombstone" --> R0
+    I -- "absent" --> B{"bloom filter<br/>admits key?"}
     B -- "no" --> R0
-    B -- "yes" --> T[table probe:<br/>index binary search,<br/>then block restart points] --> R
+    B -- "yes" --> T[SSTable probe:<br/>index binary search,<br/>then block restart points] --> R
 ```
 
 Reads consult sources newest-first. A tombstone terminates the search:
@@ -108,8 +110,8 @@ the last acknowledged state.
   such failures as fatal: the engine enters a poisoned state and
   refuses further mutations until reopen.
 
-Design documents recording each decision, rejected alternatives, and
-reopening conditions live in `docs/design/`.
+Kiban's design and research notes are private; this README is the
+public design overview.
 
 ## Building
 
