@@ -6,7 +6,7 @@
 use std::sync::{Arc, Barrier};
 use std::time::{Duration, Instant};
 
-use kiban::db::{Kiban, KibanOptions, KibanStats, SharedKiban};
+use kiban::db::{Kiban, KibanOptions, KibanStats, SharedKiban, SharedSnapshot};
 
 const THREAD_COUNTS: &[usize] = &[1, 2, 4, 8];
 
@@ -96,6 +96,54 @@ fn parallel_gets(
                     } else {
                         let value = got.expect("seeded key must exist");
                         observed += value.len() as u64;
+                    }
+                }
+                observed
+            })
+        })
+        .collect();
+    let timer = Instant::now();
+    start.wait();
+    let observed = handles
+        .into_iter()
+        .map(|handle| handle.join().unwrap())
+        .sum::<u64>();
+    let elapsed = timer.elapsed();
+    let expected = if misses {
+        total as u64
+    } else {
+        (total * 40) as u64
+    };
+    assert_eq!(observed, expected);
+    (elapsed, total as u64)
+}
+
+fn parallel_snapshot_gets(
+    snapshot: Arc<SharedSnapshot>,
+    keys: Arc<Vec<Vec<u8>>>,
+    total: usize,
+    readers: usize,
+    misses: bool,
+) -> (Duration, u64) {
+    let start = Arc::new(Barrier::new(readers + 1));
+    let handles: Vec<_> = (0..readers)
+        .map(|thread| {
+            let snapshot = snapshot.clone();
+            let keys = keys.clone();
+            let start = start.clone();
+            std::thread::spawn(move || {
+                let begin = total * thread / readers;
+                let end = total * (thread + 1) / readers;
+                start.wait();
+                let mut observed = 0u64;
+                for i in begin..end {
+                    let index = (i.wrapping_mul(8191)) % keys.len();
+                    let got = snapshot.get(&keys[index]).unwrap();
+                    if misses {
+                        assert!(got.is_none());
+                        observed += 1;
+                    } else {
+                        observed += got.expect("seeded key must exist").len() as u64;
                     }
                 }
                 observed
@@ -503,23 +551,43 @@ fn main() {
         (elapsed, observed)
     });
 
-    println!("\n== Shared snapshot point reads ==");
-    measure("SharedSnapshot SST gets", reads, "gets", samples, || {
-        let dir = temp_dir("snapshot-reads");
-        let db = seed_shared(&dir, KibanOptions::default(), writes, "snap");
-        let read_keys = keys("snap", writes);
-        let snapshot = db.snapshot().unwrap();
-        let timer = Instant::now();
-        let mut bytes = 0u64;
-        for i in 0..reads {
-            let index = (i.wrapping_mul(8191)) % read_keys.len();
-            bytes += snapshot.get(&read_keys[index]).unwrap().unwrap().len() as u64;
-        }
-        let elapsed = timer.elapsed();
-        assert_eq!(bytes, (reads * 40) as u64);
-        drop(snapshot);
-        drop(db);
-        drop_dir(&dir);
-        (elapsed, reads as u64)
-    });
+    println!("\n== SharedSnapshot read-scaling control ==");
+    for &readers in THREAD_COUNTS {
+        let label = format!("snapshot hot / {readers} readers");
+        measure(&label, reads, "gets", samples, || {
+            let dir = temp_dir("snapshot-hot");
+            let db = seed_shared(&dir, KibanOptions::default(), writes, "snap-hot");
+            let snapshot = Arc::new(db.snapshot().unwrap());
+            let result = parallel_snapshot_gets(
+                snapshot.clone(),
+                keys("snap-hot", writes),
+                reads,
+                readers,
+                false,
+            );
+            drop(snapshot);
+            drop(db);
+            drop_dir(&dir);
+            result
+        });
+    }
+    for &readers in &[1, 4, 8] {
+        let label = format!("snapshot Bloom miss / {readers} readers");
+        measure(&label, reads, "gets", samples, || {
+            let dir = temp_dir("snapshot-bloom");
+            let db = seed_shared(&dir, KibanOptions::default(), writes, "snap-present");
+            let snapshot = Arc::new(db.snapshot().unwrap());
+            let result = parallel_snapshot_gets(
+                snapshot.clone(),
+                keys("snap-missing", writes),
+                reads,
+                readers,
+                true,
+            );
+            drop(snapshot);
+            drop(db);
+            drop_dir(&dir);
+            result
+        });
+    }
 }
