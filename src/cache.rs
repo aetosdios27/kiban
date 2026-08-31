@@ -1,12 +1,13 @@
-//! Byte-budgeted LRU cache of verified sstable blocks.
+//! Byte-budgeted cache of verified sstable blocks.
 //!
-//! Per `docs/design/block-cache.md` D2: keyed by (file number, block
-//! offset), storing raw block bytes plus their parsed layout, CRC
-//! verified once on insertion. Hits clone an `Arc`; eviction is strict
-//! LRU under the cache mutex.
+//! Keys are `(file number, block offset)`. Hits use a shared lock, clone
+//! immutable `Arc`-backed blocks, and set a relaxed CLOCK reference bit.
+//! Insertion and second-chance eviction own the write lock; capacity is a
+//! hard global byte bound.
 
-use std::collections::HashMap;
-use std::sync::Mutex;
+use std::collections::{HashMap, VecDeque};
+use std::sync::RwLock;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 /// Parsed layout of a verified data block, relative to its raw bytes.
 #[derive(Debug, Clone, Copy)]
@@ -24,26 +25,32 @@ pub struct CachedBlock {
 
 pub type ArcBlock = std::sync::Arc<[u8]>;
 
+type CacheKey = (u64, u64);
+
 #[derive(Debug)]
 struct Entry {
     block: CachedBlock,
-    bytes: usize,
+    /// Eviction-policy metadata only. Relaxed is sufficient: map
+    /// membership and block ownership remain protected by `inner`.
+    referenced: AtomicBool,
 }
 
 #[derive(Debug)]
 struct Inner {
-    map: HashMap<(u64, u64), Entry>,
-    order: std::collections::VecDeque<(u64, u64)>,
+    map: HashMap<CacheKey, Entry>,
+    clock: VecDeque<CacheKey>,
     bytes: usize,
-    hits: u64,
-    misses: u64,
-    evictions: u64,
 }
 
 #[derive(Debug)]
 pub struct BlockCache {
-    inner: Mutex<Inner>,
+    inner: RwLock<Inner>,
     capacity: usize,
+    /// Observational counters; they do not publish correctness state, so
+    /// relaxed atomics avoid turning successful hits into write-lock work.
+    hits: AtomicU64,
+    misses: AtomicU64,
+    evictions: AtomicU64,
 }
 
 /// Raw counters for a [`BlockCache`] (phase 11.7) — facts only, no
@@ -62,15 +69,15 @@ pub struct BlockCacheStats {
 impl BlockCache {
     pub fn new(capacity_bytes: usize) -> BlockCache {
         BlockCache {
-            inner: Mutex::new(Inner {
+            inner: RwLock::new(Inner {
                 map: HashMap::new(),
-                order: std::collections::VecDeque::new(),
+                clock: VecDeque::new(),
                 bytes: 0,
-                hits: 0,
-                misses: 0,
-                evictions: 0,
             }),
             capacity: capacity_bytes,
+            hits: AtomicU64::new(0),
+            misses: AtomicU64::new(0),
+            evictions: AtomicU64::new(0),
         }
     }
 
@@ -79,84 +86,120 @@ impl BlockCache {
     }
 
     pub fn resident_bytes(&self) -> usize {
-        self.inner.lock().unwrap().bytes
+        self.inner.read().expect("block cache lock poisoned").bytes
     }
 
     pub fn resident_entries(&self) -> usize {
-        self.inner.lock().unwrap().map.len()
+        self.inner
+            .read()
+            .expect("block cache lock poisoned")
+            .map
+            .len()
     }
 
-    /// A cheap, lock-once read of every counter (phase 11.7). Reading
-    /// stats never touches an entry, so it cannot itself cause a hit,
-    /// miss, or eviction.
+    /// Side-effect-free cache observation. The read lock only protects
+    /// membership and resident byte accounting; counters are relaxed
+    /// observations and do not change cache policy.
     pub fn stats(&self) -> BlockCacheStats {
-        let inner = self.inner.lock().unwrap();
+        let inner = self.inner.read().expect("block cache lock poisoned");
         BlockCacheStats {
             capacity_bytes: self.capacity,
             resident_bytes: inner.bytes,
             resident_entries: inner.map.len(),
-            hits: inner.hits,
-            misses: inner.misses,
-            evictions: inner.evictions,
+            hits: self.hits.load(Ordering::Relaxed),
+            misses: self.misses.load(Ordering::Relaxed),
+            evictions: self.evictions.load(Ordering::Relaxed),
         }
     }
 
-    /// Promotes on hit.
-    pub fn get(&self, key: &(u64, u64)) -> Option<CachedBlock> {
-        let mut inner = self.inner.lock().unwrap();
-        let Some(entry) = inner.map.get_mut(key) else {
-            inner.misses = inner.misses.saturating_add(1);
+    /// A cache hit takes only a shared lock. The relaxed reference-bit
+    /// store affects future CLOCK eviction only; it never publishes block
+    /// contents or map membership.
+    pub fn get(&self, key: &CacheKey) -> Option<CachedBlock> {
+        let inner = self.inner.read().expect("block cache lock poisoned");
+        let Some(entry) = inner.map.get(key) else {
+            self.misses.fetch_add(1, Ordering::Relaxed);
             return None;
         };
         let block = entry.block.clone();
-        Self::touch(&mut inner.order, *key);
-        inner.hits = inner.hits.saturating_add(1);
+        entry.referenced.store(true, Ordering::Relaxed);
+        self.hits.fetch_add(1, Ordering::Relaxed);
         Some(block)
     }
 
-    /// Inserts a verified block. Blocks larger than the whole budget are
-    /// not admitted (the caller already holds the data it needs) — not
-    /// an eviction, since nothing resident was removed to make room.
-    pub fn insert(&self, key: (u64, u64), block: CachedBlock) {
+    /// Inserts a verified block. Oversized blocks bypass admission without
+    /// disturbing resident entries. CLOCK work is deliberately insertion
+    /// work, never hit-path work.
+    pub fn insert(&self, key: CacheKey, block: CachedBlock) {
         let bytes = block.data.len();
         if bytes > self.capacity {
             return;
         }
-        let mut inner = self.inner.lock().unwrap();
-        if inner.map.contains_key(&key) {
-            Self::touch(&mut inner.order, key);
+        let mut inner = self.inner.write().expect("block cache lock poisoned");
+        if let Some(entry) = inner.map.get(&key) {
+            entry.referenced.store(true, Ordering::Relaxed);
             return;
         }
         while inner.bytes + bytes > self.capacity {
-            let Some(victim) = inner.order.pop_front() else {
-                break;
-            };
-            if let Some(removed) = inner.map.remove(&victim) {
-                inner.bytes -= removed.bytes;
-                inner.evictions = inner.evictions.saturating_add(1);
+            let victim = inner
+                .clock
+                .pop_front()
+                .expect("clock tracks every resident entry");
+            let referenced = inner
+                .map
+                .get(&victim)
+                .expect("clock key must be resident")
+                .referenced
+                .swap(false, Ordering::Relaxed);
+            if referenced {
+                inner.clock.push_back(victim);
+                continue;
             }
+            let removed = inner
+                .map
+                .remove(&victim)
+                .expect("clock key must be resident");
+            inner.bytes -= removed.block.data.len();
+            self.evictions.fetch_add(1, Ordering::Relaxed);
         }
-        inner.order.push_back(key);
         inner.bytes += bytes;
-        inner.map.insert(key, Entry { block, bytes });
+        inner.clock.push_back(key);
+        inner.map.insert(
+            key,
+            Entry {
+                block,
+                referenced: AtomicBool::new(true),
+            },
+        );
+        debug_assert!(inner.bytes <= self.capacity);
     }
 
-    fn touch(order: &mut std::collections::VecDeque<(u64, u64)>, key: (u64, u64)) {
-        if let Some(pos) = order.iter().position(|k| *k == key) {
-            order.remove(pos);
+    #[cfg(test)]
+    fn clock_entries(&self) -> usize {
+        self.inner
+            .read()
+            .expect("block cache lock poisoned")
+            .clock
+            .len()
+    }
+
+    #[cfg(test)]
+    fn clear_reference_bits(&self) {
+        let inner = self.inner.read().expect("block cache lock poisoned");
+        for entry in inner.map.values() {
+            entry.referenced.store(false, Ordering::Relaxed);
         }
-        order.push_back(key);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Arc;
+    use std::sync::{Arc, Barrier};
 
-    fn block(size: usize) -> CachedBlock {
+    fn block(size: usize, fill: u8) -> CachedBlock {
         CachedBlock {
-            data: vec![0u8; size].into(),
+            data: vec![fill; size].into(),
             meta: BlockMeta {
                 entries_end: size,
                 restart_start: 0,
@@ -166,95 +209,148 @@ mod tests {
     }
 
     #[test]
-    fn hit_promotes_and_clones_arc() {
-        let cache = BlockCache::new(1000);
-        cache.insert((1, 0), block(100));
-        let hit = cache.get(&(1, 0)).expect("hit");
-        let hit2 = cache.get(&(1, 0)).expect("hit");
-        assert_eq!(hit.data.len(), 100);
-        assert!(Arc::ptr_eq(&hit.data, &hit2.data));
-    }
-
-    #[test]
-    fn miss_is_none_and_unknown_keys_do_not_evict() {
-        let cache = BlockCache::new(1000);
-        cache.insert((1, 0), block(100));
+    fn basic_hit_and_miss_track_exactly() {
+        let cache = BlockCache::new(300);
+        cache.insert((1, 0), block(100, 1));
+        let hit = cache.get(&(1, 0)).unwrap();
+        assert_eq!(hit.data.as_ref(), &[1; 100]);
         assert!(cache.get(&(9, 9)).is_none());
-        assert_eq!(cache.resident_entries(), 1);
+        let stats = cache.stats();
+        assert_eq!((stats.hits, stats.misses, stats.evictions), (1, 1, 0));
+        assert_eq!(stats.resident_bytes, 100);
     }
 
     #[test]
-    fn lru_evicts_least_recently_used_first() {
+    fn clock_gives_touched_entry_second_chance() {
         let cache = BlockCache::new(300);
-        cache.insert((1, 0), block(100));
-        cache.insert((2, 0), block(100));
-        cache.insert((3, 0), block(100));
-        // touch (1,0): now LRU order is 2,1,3
-        cache.get(&(1, 0)).expect("present");
-        cache.insert((4, 0), block(100)); // must evict (2,0)
-        assert!(cache.get(&(2, 0)).is_none());
-        assert!(cache.get(&(1, 0)).is_some());
-        assert!(cache.get(&(3, 0)).is_some());
-        assert!(cache.get(&(4, 0)).is_some());
-        assert!(cache.resident_bytes() <= 300);
-    }
-
-    #[test]
-    fn byte_budget_is_respected_under_pressure() {
-        let cache = BlockCache::new(1000);
-        for i in 0..50u64 {
-            cache.insert((i, 0), block(90));
+        for i in 1..=3 {
+            cache.insert((i, 0), block(100, i as u8));
         }
-        assert!(
-            cache.resident_bytes() <= 1000,
-            "resident {} exceeded budget",
-            cache.resident_bytes()
-        );
-        // newest insert always survives
-        assert!(cache.get(&(49, 0)).is_some());
-    }
-
-    #[test]
-    fn oversize_blocks_bypass_the_cache() {
-        let cache = BlockCache::new(500);
-        cache.insert((1, 0), block(400));
-        cache.insert((2, 0), block(4000)); // larger than budget
-        assert!(cache.get(&(2, 0)).is_none());
-        // the resident block survived the bypass attempt
+        cache.clear_reference_bits();
+        cache.get(&(1, 0)).unwrap();
+        cache.insert((4, 0), block(100, 4));
         assert!(cache.get(&(1, 0)).is_some());
+        assert!(cache.get(&(2, 0)).is_none());
+        assert!(cache.get(&(4, 0)).is_some());
     }
 
     #[test]
-    fn reinsert_of_live_key_does_not_duplicate_or_evict() {
+    fn referenced_entry_is_eventually_evictable() {
+        let cache = BlockCache::new(200);
+        cache.insert((1, 0), block(100, 1));
+        cache.insert((2, 0), block(100, 2));
+        cache.get(&(1, 0)).unwrap();
+        cache.insert((3, 0), block(100, 3));
+        cache.insert((4, 0), block(100, 4));
+        assert!(cache.get(&(1, 0)).is_none());
+    }
+
+    #[test]
+    fn capacity_and_oversize_bypass_hold_under_pressure() {
+        let cache = BlockCache::new(257);
+        cache.insert((0, 0), block(100, 0));
+        let before = cache.stats();
+        cache.insert((9, 0), block(300, 9));
+        assert_eq!(cache.stats().evictions, before.evictions);
+        for i in 1..50 {
+            cache.insert((i, 0), block(37 + (i as usize % 11), i as u8));
+            assert!(cache.resident_bytes() <= 257);
+        }
+    }
+
+    #[test]
+    fn duplicate_insert_has_one_clock_slot() {
         let cache = BlockCache::new(300);
-        cache.insert((1, 0), block(100));
-        cache.insert((1, 0), block(150));
+        cache.insert((1, 0), block(100, 1));
+        cache.insert((1, 0), block(150, 2));
         assert_eq!(cache.resident_entries(), 1);
-        assert_eq!(cache.resident_bytes(), 100); // original retained
+        assert_eq!(cache.clock_entries(), 1);
+        assert_eq!(cache.resident_bytes(), 100);
     }
 
-    /// Phase 11.7, Test 3: exact hit/miss/eviction counts, not fuzzy
-    /// assertions. A miss, then a hit on the same key, then a forced
-    /// eviction under a too-small budget.
     #[test]
-    fn counters_track_hits_misses_and_evictions_exactly() {
-        let cache = BlockCache::new(150);
-        assert!(cache.get(&(1, 0)).is_none()); // miss: nothing resident yet
-        cache.insert((1, 0), block(100));
-        assert!(cache.get(&(1, 0)).is_some()); // hit
-        cache.insert((2, 0), block(100)); // must evict (1,0) to fit
+    fn evicted_entry_clone_remains_usable() {
+        let cache = BlockCache::new(100);
+        cache.insert((1, 0), block(100, 7));
+        let live = cache.get(&(1, 0)).unwrap();
+        cache.insert((2, 0), block(100, 8));
+        assert!(cache.get(&(1, 0)).is_none());
+        assert_eq!(live.data.as_ref(), &[7; 100]);
+    }
 
-        let s = cache.stats();
-        assert_eq!(s.misses, 1);
-        assert_eq!(s.hits, 1);
-        assert_eq!(s.evictions, 1);
-        assert_eq!(s.capacity_bytes, 150);
-        assert_eq!(s.resident_entries, 1);
+    #[test]
+    fn concurrent_same_key_hits_are_correct() {
+        let cache = Arc::new(BlockCache::new(100));
+        cache.insert((1, 0), block(100, 3));
+        let threads = 8;
+        let rounds = 5_000;
+        let start = Arc::new(Barrier::new(threads));
+        let handles: Vec<_> = (0..threads)
+            .map(|_| {
+                let cache = cache.clone();
+                let start = start.clone();
+                std::thread::spawn(move || {
+                    start.wait();
+                    for _ in 0..rounds {
+                        assert_eq!(cache.get(&(1, 0)).unwrap().data[0], 3);
+                    }
+                })
+            })
+            .collect();
+        for handle in handles {
+            handle.join().unwrap();
+        }
+        assert_eq!(cache.stats().hits, (threads * rounds) as u64);
+        assert_eq!(cache.resident_bytes(), 100);
+    }
 
-        // reading stats itself must not move any counter
-        let s2 = cache.stats();
-        assert_eq!(s2.hits, 1);
-        assert_eq!(s2.misses, 1);
-        assert_eq!(s2.evictions, 1);
+    #[test]
+    fn concurrent_scattered_hits_and_eviction_stay_consistent() {
+        let cache = Arc::new(BlockCache::new(400));
+        for i in 0..4 {
+            cache.insert((i, 0), block(100, i as u8));
+        }
+        let start = Arc::new(Barrier::new(5));
+        let mut handles = Vec::new();
+        for thread in 0..4 {
+            let cache = cache.clone();
+            let start = start.clone();
+            handles.push(std::thread::spawn(move || {
+                start.wait();
+                for i in 0..2_000 {
+                    let _ = cache.get(&((i + thread) as u64 % 4, 0));
+                }
+            }));
+        }
+        let writer = cache.clone();
+        let writer_start = start.clone();
+        handles.push(std::thread::spawn(move || {
+            writer_start.wait();
+            for i in 4..200 {
+                writer.insert((i, 0), block(100, i as u8));
+                assert!(writer.resident_bytes() <= 400);
+            }
+        }));
+        for handle in handles {
+            handle.join().unwrap();
+        }
+        assert!(cache.resident_bytes() <= 400);
+        assert_eq!(cache.clock_entries(), cache.resident_entries());
+    }
+
+    #[test]
+    fn same_key_insert_race_keeps_one_entry() {
+        let cache = Arc::new(BlockCache::new(300));
+        let handles: Vec<_> = (0..8)
+            .map(|_| {
+                let cache = cache.clone();
+                std::thread::spawn(move || cache.insert((1, 0), block(100, 1)))
+            })
+            .collect();
+        for handle in handles {
+            handle.join().unwrap();
+        }
+        assert_eq!(cache.resident_entries(), 1);
+        assert_eq!(cache.clock_entries(), 1);
     }
 }

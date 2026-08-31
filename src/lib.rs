@@ -1,11 +1,8 @@
 //! Kiban is a single-node, embedded, durable, ordered byte-key to
-//! byte-value storage engine, currently in phase 5: the database layer.
+//! byte-value storage engine.
 //!
-//! Implemented so far: durable file primitives (`atomic`, `crc32`,
-//! `frame`), the memtable (`memtable`), the write-ahead log (`wal`),
-//! sstables (`sstable`), the MANIFEST (`manifest`), and the assembled
-//! engine handle (`db`). See `docs/design/` for the decisions behind
-//! each component.
+//! It includes a write-ahead log, memtables, SSTables, MANIFEST-backed
+//! recovery, background maintenance, snapshots, and shared handles.
 
 pub mod atomic;
 pub mod background;

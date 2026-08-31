@@ -6,6 +6,7 @@
 use std::sync::{Arc, Barrier};
 use std::time::{Duration, Instant};
 
+use kiban::cache::{BlockCache, BlockMeta, CachedBlock};
 use kiban::db::{Kiban, KibanOptions, KibanStats, SharedKiban, SharedSnapshot};
 
 const THREAD_COUNTS: &[usize] = &[1, 2, 4, 8];
@@ -166,6 +167,52 @@ fn parallel_snapshot_gets(
     (elapsed, total as u64)
 }
 
+fn benchmark_block() -> CachedBlock {
+    CachedBlock {
+        data: Arc::<[u8]>::from(vec![0u8; 256]),
+        meta: BlockMeta {
+            entries_end: 256,
+            restart_start: 0,
+            num_restarts: 1,
+        },
+    }
+}
+
+fn parallel_cache_hits(
+    cache: Arc<BlockCache>,
+    keys: Arc<Vec<(u64, u64)>>,
+    total: usize,
+    readers: usize,
+) -> (Duration, u64) {
+    let start = Arc::new(Barrier::new(readers + 1));
+    let handles: Vec<_> = (0..readers)
+        .map(|thread| {
+            let cache = cache.clone();
+            let keys = keys.clone();
+            let start = start.clone();
+            std::thread::spawn(move || {
+                let begin = total * thread / readers;
+                let end = total * (thread + 1) / readers;
+                start.wait();
+                let mut bytes = 0u64;
+                for i in begin..end {
+                    let key = keys[(i.wrapping_mul(8191)) % keys.len()];
+                    bytes += cache.get(&key).expect("warmed cache hit").data.len() as u64;
+                }
+                bytes
+            })
+        })
+        .collect();
+    let timer = Instant::now();
+    start.wait();
+    let bytes = handles
+        .into_iter()
+        .map(|handle| handle.join().unwrap())
+        .sum::<u64>();
+    assert_eq!(bytes, (total * 256) as u64);
+    (timer.elapsed(), total as u64)
+}
+
 fn parallel_writes(
     db: &SharedKiban,
     total: usize,
@@ -243,6 +290,27 @@ fn main() {
     let wide_keys = writes * 2;
     let mixed_reads = reads * 4 / 5;
     println!("Kiban benchmarks: {samples} median samples");
+
+    println!("\n== Direct BlockCache hit control ==");
+    for &readers in THREAD_COUNTS {
+        let label = format!("cache same block / {readers} readers");
+        measure(&label, reads, "hits", samples, || {
+            let cache = Arc::new(BlockCache::new(1024));
+            cache.insert((1, 0), benchmark_block());
+            parallel_cache_hits(cache, Arc::new(vec![(1, 0)]), reads, readers)
+        });
+    }
+    for &readers in THREAD_COUNTS {
+        let label = format!("cache scattered / {readers} readers");
+        measure(&label, reads, "hits", samples, || {
+            let cache = Arc::new(BlockCache::new(1024 * 256));
+            let keys: Vec<_> = (0..1024u64).map(|i| (1, i)).collect();
+            for key in &keys {
+                cache.insert(*key, benchmark_block());
+            }
+            parallel_cache_hits(cache, Arc::new(keys), reads, readers)
+        });
+    }
 
     println!("\n== Buffered write baseline ==");
     measure("put, buffered (Kiban)", writes, "ops", samples, || {
