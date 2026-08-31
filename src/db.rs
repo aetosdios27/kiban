@@ -189,6 +189,43 @@ impl Version {
     }
 }
 
+/// Resolves a point lookup against one immutable published topology at
+/// `sequence`. Both normal captured reads and snapshots use this path so
+/// table ordering, sequence visibility, and tombstone handling stay one
+/// rule.
+fn get_from_version_at(
+    version: &Version,
+    key: &[u8],
+    sequence: u64,
+) -> Result<Option<Vec<u8>>, DbError> {
+    for entry in version.tables.iter().rev().filter(|t| t.level == 0) {
+        match entry.table.get(key, Some(sequence))? {
+            Some(found) => {
+                return Ok(match found.kind {
+                    Kind::Put => Some(found.value),
+                    Kind::Tombstone => None,
+                });
+            }
+            None => continue,
+        }
+    }
+    for entry in version.tables.iter().filter(|t| t.level >= 1) {
+        if key < entry.first_key.as_slice() || key > entry.last_key.as_slice() {
+            continue;
+        }
+        match entry.table.get(key, Some(sequence))? {
+            Some(found) => {
+                return Ok(match found.kind {
+                    Kind::Put => Some(found.value),
+                    Kind::Tombstone => None,
+                });
+            }
+            None => continue,
+        }
+    }
+    Ok(None)
+}
+
 /// Tunables for flush/compaction behavior (compaction.md configuration).
 #[derive(Debug, Clone)]
 pub struct KibanOptions {
@@ -790,39 +827,7 @@ impl Kiban {
                 MemEntry::Tombstone { .. } => None,
             });
         }
-        self.get_from_tables_at(snap, key)
-    }
-
-    fn get_from_tables_at(&self, snap: &Snapshot, key: &[u8]) -> Result<Option<Vec<u8>>, DbError> {
-        // The table resolves the newest version at or below the snapshot
-        // boundary; anything newer than `snap` is invisible to it.
-        let limit = Some(snap.seq);
-        for entry in self.version.tables.iter().rev().filter(|t| t.level == 0) {
-            match entry.table.get(key, limit)? {
-                Some(found) => {
-                    return Ok(match found.kind {
-                        Kind::Put => Some(found.value),
-                        Kind::Tombstone => None,
-                    });
-                }
-                None => continue,
-            }
-        }
-        for entry in self.version.tables.iter().filter(|t| t.level >= 1) {
-            if key < entry.first_key.as_slice() || key > entry.last_key.as_slice() {
-                continue;
-            }
-            match entry.table.get(key, limit)? {
-                Some(found) => {
-                    return Ok(match found.kind {
-                        Kind::Put => Some(found.value),
-                        Kind::Tombstone => None,
-                    });
-                }
-                None => continue,
-            }
-        }
-        Ok(None)
+        get_from_version_at(&snap.version, key, snap.seq)
     }
 
     /// Scans live entries as of snapshot `snap`, reading the pinned
@@ -3014,14 +3019,74 @@ mod crash_sweep_tests {
 
 /// A clonable, thread-safe handle to one engine.
 ///
-/// Concurrency model per `docs/design/concurrency.md`: one mutex, group
-/// commit falls out of the two-step WAL contract (every `sync` flushes
-/// all pending records from all writers in one fdatasync). Compaction
-/// runs on a single background worker (11.4): foreground `put`/`get`/
-/// `sync`/`flush` never wait behind it, only behind each other.
+/// The engine mutex chooses a read's world. A normal point read releases
+/// it before consulting the immutable memtable or any SST state.
 pub struct SharedKiban {
     inner: std::sync::Arc<std::sync::Mutex<Kiban>>,
     maintenance: std::sync::Arc<Maintenance>,
+    #[cfg(test)]
+    read_checkpoint: StdArc<ReadCheckpoint>,
+}
+
+#[cfg(test)]
+struct ReadBarriers {
+    reached: std::sync::Barrier,
+    release: std::sync::Barrier,
+}
+
+/// Deterministic foreground-read control. A paused read owns every
+/// captured source and has already released the engine mutex.
+#[cfg(test)]
+#[derive(Default)]
+struct ReadCheckpoint {
+    barriers: std::sync::Mutex<Option<StdArc<ReadBarriers>>>,
+}
+
+#[cfg(test)]
+impl ReadCheckpoint {
+    fn barriers(&self) -> Option<StdArc<ReadBarriers>> {
+        self.barriers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    fn arm(&self, readers: usize) {
+        assert!(readers > 0);
+        let mut barriers = self
+            .barriers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        assert!(barriers.is_none(), "read checkpoint already armed");
+        *barriers = Some(StdArc::new(ReadBarriers {
+            reached: std::sync::Barrier::new(readers + 1),
+            release: std::sync::Barrier::new(readers + 1),
+        }));
+    }
+
+    fn hit(&self) {
+        let Some(barriers) = self.barriers() else {
+            return;
+        };
+        barriers.reached.wait();
+        barriers.release.wait();
+    }
+
+    fn wait_reached(&self) {
+        self.barriers()
+            .expect("read checkpoint must be armed")
+            .reached
+            .wait();
+    }
+
+    fn release(&self) {
+        let barriers = self.barriers().expect("read checkpoint must be armed");
+        barriers.release.wait();
+        *self
+            .barriers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+    }
 }
 
 impl Clone for SharedKiban {
@@ -3030,6 +3095,8 @@ impl Clone for SharedKiban {
         SharedKiban {
             inner: self.inner.clone(),
             maintenance: self.maintenance.clone(),
+            #[cfg(test)]
+            read_checkpoint: self.read_checkpoint.clone(),
         }
     }
 }
@@ -3048,13 +3115,10 @@ type SnapEntry = (Vec<u8>, Vec<u8>);
 
 /// A consistent point-in-time view captured from a [`SharedKiban`].
 ///
-/// Capture copies the memtable (O(its size)) under one lock hold and
-/// clones `Arc<TableEntry>` for every currently-live table; reads
-/// afterwards never touch the engine lock (concurrency.md D6). Pinning
-/// the table `Arc`s directly (rather than remembering paths to reopen
-/// later) is what keeps a `SharedSnapshot` correct across a compaction
-/// that reclaims one of its tables' files (11.4): the file's directory
-/// entry can disappear, but this snapshot's open handle to it does not.
+/// Capture copies the active memtable (O(its size)) under one lock hold
+/// and pins the immutable published [`Version`]. Reads afterwards never
+/// touch the engine lock. The version's `Arc<TableEntry>` members keep a
+/// table usable even when a later compaction retires it from live state.
 ///
 /// Dropping a `SharedSnapshot` releases its hold on the engine's
 /// `smallest_snapshot` boundary (compaction's tombstone/old-version GC),
@@ -3072,7 +3136,7 @@ pub struct SharedSnapshot {
     /// capture stays exactly what it sees, unaffected by the live
     /// engine later flushing it away.
     immutable: Option<StdArc<Memtable>>,
-    tables: Vec<StdArc<TableEntry>>,
+    version: StdArc<Version>,
 }
 
 impl Drop for SharedSnapshot {
@@ -3094,45 +3158,15 @@ impl SharedSnapshot {
     #[allow(dead_code)]
     pub fn get(&self, key: impl AsRef<[u8]>) -> Result<Option<Vec<u8>>, DbError> {
         let key = key.as_ref();
-        if let Some(e) = self.memtable.entry(key)
-            && e.seq() <= self.seq
+        if let Some(entry) = self.memtable.entry_at(key, self.seq) {
+            return Ok(entry.as_value().map(ToOwned::to_owned));
+        }
+        if let Some(immutable) = &self.immutable
+            && let Some(entry) = immutable.entry_at(key, self.seq)
         {
-            return Ok(e.as_value().map(|v| v.to_vec()));
+            return Ok(entry.as_value().map(ToOwned::to_owned));
         }
-        if let Some(im) = &self.immutable
-            && let Some(e) = im.entry(key)
-            && e.seq() <= self.seq
-        {
-            return Ok(e.as_value().map(|v| v.to_vec()));
-        }
-        for t in self.tables.iter().rev().filter(|t| t.level == 0) {
-            match t.table.get(key, Some(self.seq))? {
-                Some(f) if f.seq <= self.seq => {
-                    return Ok(match f.kind {
-                        Kind::Put => Some(f.value),
-                        Kind::Tombstone => None,
-                    });
-                }
-                Some(_) => continue,
-                None => continue,
-            }
-        }
-        for t in self.tables.iter().filter(|t| t.level >= 1) {
-            if key < t.first_key.as_slice() || key > t.last_key.as_slice() {
-                continue;
-            }
-            match t.table.get(key, Some(self.seq))? {
-                Some(f) if f.seq <= self.seq => {
-                    return Ok(match f.kind {
-                        Kind::Put => Some(f.value),
-                        Kind::Tombstone => None,
-                    });
-                }
-                Some(_) => continue,
-                None => continue,
-            }
-        }
-        Ok(None)
+        get_from_version_at(&self.version, key, self.seq)
     }
 
     /// Scans all live entries visible at this snapshot.
@@ -3144,21 +3178,21 @@ impl SharedSnapshot {
             head: None,
             exhausted: false,
         });
-        if let Some(im) = &self.immutable {
+        if let Some(immutable) = &self.immutable {
             sources.push(SourceHead {
-                feed: SourceFeed::Mem(Box::new(im.iter_from(b""))),
+                feed: SourceFeed::Mem(Box::new(immutable.iter_from(b""))),
                 head: None,
                 exhausted: false,
             });
         }
-        for t in self.tables.iter().rev().filter(|t| t.level == 0) {
+        for t in self.version.tables.iter().rev().filter(|t| t.level == 0) {
             sources.push(SourceHead {
                 feed: SourceFeed::Table(t.table.iter_from(b"")),
                 head: None,
                 exhausted: false,
             });
         }
-        for t in self.tables.iter().filter(|t| t.level >= 1) {
+        for t in self.version.tables.iter().filter(|t| t.level >= 1) {
             sources.push(SourceHead {
                 feed: SourceFeed::Table(t.table.iter_from(b"")),
                 head: None,
@@ -3174,8 +3208,8 @@ impl SharedSnapshot {
         };
         let mut out = Vec::new();
         while let Some(item) = core.next_scanned() {
-            let e = item?;
-            out.push((e.key, e.value));
+            let entry = item?;
+            out.push((entry.key, entry.value));
         }
         Ok(out)
     }
@@ -3254,7 +3288,12 @@ impl SharedKiban {
             dir, options,
         )?));
         let maintenance = Maintenance::spawn(inner.clone());
-        Ok(SharedKiban { inner, maintenance })
+        Ok(SharedKiban {
+            inner,
+            maintenance,
+            #[cfg(test)]
+            read_checkpoint: StdArc::new(ReadCheckpoint::default()),
+        })
     }
 
     /// The most recent background compaction failure, if any (11.4:
@@ -3489,8 +3528,35 @@ impl SharedKiban {
         }
     }
 
+    /// Captures this operation's sequence boundary and immutable read
+    /// sources under the engine mutex, then resolves SST state after
+    /// releasing it. Slow table, cache, and file-cache work therefore
+    /// never holds the engine mutex.
     pub fn get(&self, key: impl AsRef<[u8]>) -> Result<Option<Vec<u8>>, DbError> {
-        self.lock()?.get(key)
+        let key = key.as_ref();
+        let (sequence, immutable, version) = {
+            let guard = self.lock()?;
+            let sequence = guard.last_sequence;
+            if let Some(entry) = guard.memtable.entry_at(key, sequence) {
+                return Ok(entry.as_value().map(ToOwned::to_owned));
+            }
+            (
+                sequence,
+                guard
+                    .immutable
+                    .as_ref()
+                    .map(|immutable| StdArc::clone(&immutable.memtable)),
+                StdArc::clone(&guard.version),
+            )
+        };
+        #[cfg(test)]
+        self.read_checkpoint.hit();
+        if let Some(immutable) = immutable
+            && let Some(entry) = immutable.entry_at(key, sequence)
+        {
+            return Ok(entry.as_value().map(ToOwned::to_owned));
+        }
+        get_from_version_at(&version, key, sequence)
     }
 
     /// Makes every record appended by *any* thread so far durable in one
@@ -3536,7 +3602,7 @@ impl SharedKiban {
             seq,
             memtable: guard.memtable.clone(),
             immutable: guard.immutable.as_ref().map(|im| im.memtable.clone()),
-            tables: guard.version.tables.clone(),
+            version: StdArc::clone(&guard.version),
         })
     }
 
@@ -4926,6 +4992,277 @@ mod background_tests {
         // the clone alone keeps the worker alive; engine still usable
         assert_eq!(clone.get(b"a").unwrap(), Some(b"1".to_vec()));
         drop(clone); // last handle: worker is stopped and joined here
+    }
+}
+
+/// 11.9: ordinary shared reads choose a stable world under the engine
+/// mutex, then consume immutable sources after releasing it.
+#[cfg(test)]
+mod read_view_tests {
+    use super::*;
+    use crate::testutil::TempDir;
+
+    fn options(max_open_table_files: usize) -> KibanOptions {
+        KibanOptions {
+            l0_compaction_trigger: 100,
+            l0_write_stall_trigger: 200,
+            max_open_table_files,
+            ..compaction_tests::tiny_options()
+        }
+    }
+
+    fn seed_table(db: &SharedKiban, key: &[u8], value: &[u8]) {
+        db.put(key, value).unwrap();
+        db.sync().unwrap();
+        db.flush_sync_for_test().unwrap();
+    }
+
+    fn paused_get(
+        db: SharedKiban,
+        key: &'static [u8],
+    ) -> std::thread::JoinHandle<Result<Option<Vec<u8>>, DbError>> {
+        std::thread::spawn(move || db.get(key))
+    }
+
+    /// A reader stopped after capture holds no engine mutex: a foreground
+    /// mutation completes before that reader enters its SST lookup.
+    #[test]
+    fn stalled_sst_get_does_not_block_writer() {
+        let td = TempDir::new("read-view-writer");
+        let db = SharedKiban::open_with_options(td.path(), options(8)).unwrap();
+        seed_table(&db, b"k", b"old");
+
+        db.read_checkpoint.arm(1);
+        let reader = paused_get(db.clone(), b"k");
+        db.read_checkpoint.wait_reached();
+
+        db.put(b"other", b"value").unwrap();
+        db.read_checkpoint.release();
+
+        assert_eq!(
+            reader.join().expect("reader panicked").unwrap(),
+            Some(b"old".to_vec())
+        );
+        assert_eq!(db.get(b"other").unwrap(), Some(b"value".to_vec()));
+    }
+
+    /// Both reads reach the post-capture boundary before either is
+    /// released. Holding the old engine mutex across table work would
+    /// make the second reader unable to reach this point.
+    #[test]
+    fn two_gets_reach_sst_work_without_engine_serialization() {
+        let td = TempDir::new("read-view-two-gets");
+        let db = SharedKiban::open_with_options(td.path(), options(8)).unwrap();
+        seed_table(&db, b"a", b"one");
+        seed_table(&db, b"b", b"two");
+
+        db.read_checkpoint.arm(2);
+        let first = paused_get(db.clone(), b"a");
+        let second = paused_get(db.clone(), b"b");
+        db.read_checkpoint.wait_reached();
+        db.read_checkpoint.release();
+
+        assert_eq!(
+            first.join().expect("first reader panicked").unwrap(),
+            Some(b"one".to_vec())
+        );
+        assert_eq!(
+            second.join().expect("second reader panicked").unwrap(),
+            Some(b"two".to_vec())
+        );
+    }
+
+    /// Waiting for the only table-file-cache slot happens after release
+    /// of the engine mutex, so unrelated WAL/memtable work still enters.
+    #[test]
+    fn fd_waiting_get_does_not_block_engine() {
+        let td = TempDir::new("read-view-fd-wait");
+        let db = SharedKiban::open_with_options(
+            td.path(),
+            KibanOptions {
+                block_cache_bytes: 0,
+                ..options(1)
+            },
+        )
+        .unwrap();
+        seed_table(&db, b"a", b"one");
+        seed_table(&db, b"b", b"two");
+        let (file_cache, first_number) = {
+            let guard = db.lock().expect("engine lock available");
+            (guard.file_cache.clone(), guard.version.tables[0].number)
+        };
+        let held = file_cache
+            .acquire(first_number, &td.path().join(format!("{first_number}.sst")))
+            .expect("lease first table");
+
+        let reader = paused_get(db.clone(), b"b");
+        file_cache.wait_until_someone_waiting();
+
+        db.put(b"other", b"value").unwrap();
+        db.sync().unwrap();
+        drop(held);
+
+        assert_eq!(
+            reader.join().expect("reader panicked").unwrap(),
+            Some(b"two".to_vec())
+        );
+        assert_eq!(db.get(b"other").unwrap(), Some(b"value".to_vec()));
+    }
+
+    #[test]
+    fn captured_get_precedes_concurrent_put() {
+        let td = TempDir::new("read-view-put");
+        let db = SharedKiban::open_with_options(td.path(), options(8)).unwrap();
+        seed_table(&db, b"k", b"old");
+
+        db.read_checkpoint.arm(1);
+        let reader = paused_get(db.clone(), b"k");
+        db.read_checkpoint.wait_reached();
+        db.put(b"k", b"new").unwrap();
+        db.read_checkpoint.release();
+
+        assert_eq!(
+            reader.join().expect("reader panicked").unwrap(),
+            Some(b"old".to_vec())
+        );
+        assert_eq!(db.get(b"k").unwrap(), Some(b"new".to_vec()));
+    }
+
+    #[test]
+    fn captured_get_precedes_concurrent_delete() {
+        let td = TempDir::new("read-view-delete");
+        let db = SharedKiban::open_with_options(td.path(), options(8)).unwrap();
+        seed_table(&db, b"k", b"old");
+
+        db.read_checkpoint.arm(1);
+        let reader = paused_get(db.clone(), b"k");
+        db.read_checkpoint.wait_reached();
+        db.delete(b"k").unwrap();
+        db.read_checkpoint.release();
+
+        assert_eq!(
+            reader.join().expect("reader panicked").unwrap(),
+            Some(b"old".to_vec())
+        );
+        assert_eq!(db.get(b"k").unwrap(), None);
+    }
+
+    /// A captured immutable memtable stays readable after flush COMMIT
+    /// removes it from current live engine state.
+    #[test]
+    fn captured_get_survives_immutable_flush_commit() {
+        let td = TempDir::new("read-view-immutable");
+        let db = SharedKiban::open_with_options(
+            td.path(),
+            KibanOptions {
+                write_buffer_bytes: 1,
+                ..options(8)
+            },
+        )
+        .unwrap();
+        let maintenance = db.maintenance_for_test();
+        maintenance.arm_before_flush_build();
+        db.put(b"k", b"value").unwrap();
+        maintenance.wait_before_flush_build_reached();
+
+        db.read_checkpoint.arm(1);
+        let reader = paused_get(db.clone(), b"k");
+        db.read_checkpoint.wait_reached();
+        maintenance.release_before_flush_build();
+        maintenance.wait_settled();
+        db.read_checkpoint.release();
+
+        assert_eq!(
+            reader.join().expect("reader panicked").unwrap(),
+            Some(b"value".to_vec())
+        );
+        assert_eq!(db.get(b"k").unwrap(), Some(b"value".to_vec()));
+    }
+
+    /// The captured `Arc<Version>` holds retired `Arc<TableEntry>`s alive
+    /// through compaction. Once released, a later reclaim may unlink the
+    /// old physical table.
+    #[test]
+    fn captured_get_pins_version_through_compaction_and_reclamation() {
+        let td = TempDir::new("read-view-compaction");
+        let db = SharedKiban::open_with_options(
+            td.path(),
+            KibanOptions {
+                l0_compaction_trigger: 2,
+                l0_write_stall_trigger: 30,
+                ..options(8)
+            },
+        )
+        .unwrap();
+        seed_table(&db, b"k", b"old");
+        let first_number = {
+            let guard = db.lock().expect("engine lock available");
+            guard.version.tables[0].number
+        };
+
+        db.read_checkpoint.arm(1);
+        let reader = paused_get(db.clone(), b"k");
+        db.read_checkpoint.wait_reached();
+
+        seed_table(&db, b"trigger", b"value");
+        db.maintenance_for_test().wait_settled();
+        assert!(
+            db.stats().unwrap().obsolete_files_pending > 0,
+            "captured version must keep compacted input pending"
+        );
+        assert!(
+            td.path().join(format!("{first_number}.sst")).exists(),
+            "captured table must remain physically reachable"
+        );
+
+        db.read_checkpoint.release();
+        assert_eq!(
+            reader.join().expect("reader panicked").unwrap(),
+            Some(b"old".to_vec())
+        );
+        assert_eq!(db.get(b"k").unwrap(), Some(b"old".to_vec()));
+
+        seed_table(&db, b"next-a", b"value");
+        seed_table(&db, b"next-b", b"value");
+        db.maintenance_for_test().wait_settled();
+        assert!(
+            !td.path().join(format!("{first_number}.sst")).exists(),
+            "later reclamation may remove an unpinned retired table"
+        );
+        assert_eq!(db.get(b"k").unwrap(), Some(b"old".to_vec()));
+    }
+
+    /// A normal shared get preserves block-cache behavior: once warm, it
+    /// reads the cached block without acquiring an SST descriptor.
+    #[test]
+    fn shared_get_block_cache_hit_needs_no_file_lease() {
+        let td = TempDir::new("read-view-block-cache");
+        let db = SharedKiban::open_with_options(td.path(), options(1)).unwrap();
+        seed_table(&db, b"a", b"one");
+        assert_eq!(db.get(b"a").unwrap(), Some(b"one".to_vec()));
+        seed_table(&db, b"b", b"two");
+        assert_eq!(db.get(b"b").unwrap(), Some(b"two".to_vec()));
+
+        let before = db.stats().unwrap();
+        assert_eq!(db.get(b"a").unwrap(), Some(b"one".to_vec()));
+        let after = db.stats().unwrap();
+        assert_eq!(after.table_files.hits, before.table_files.hits);
+        assert_eq!(after.table_files.misses, before.table_files.misses);
+        assert_eq!(after.table_files.evictions, before.table_files.evictions);
+        assert!(after.block_cache.hits > before.block_cache.hits);
+    }
+
+    #[test]
+    fn shared_sst_get_remains_available_when_poisoned() {
+        let td = TempDir::new("read-view-poisoned");
+        let db = SharedKiban::open_with_options(td.path(), options(8)).unwrap();
+        seed_table(&db, b"k", b"value");
+        {
+            let mut guard = db.lock().expect("engine lock available");
+            guard.poison(PoisonCause::WalAppendFailed("test".to_string()));
+        }
+
+        assert_eq!(db.get(b"k").unwrap(), Some(b"value".to_vec()));
     }
 }
 
