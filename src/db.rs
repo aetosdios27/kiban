@@ -3022,7 +3022,7 @@ mod crash_sweep_tests {
 /// The engine mutex chooses a read's world. A normal point read releases
 /// it before consulting the immutable memtable or any SST state.
 pub struct SharedKiban {
-    inner: std::sync::Arc<std::sync::Mutex<Kiban>>,
+    inner: std::sync::Arc<std::sync::RwLock<Kiban>>,
     maintenance: std::sync::Arc<Maintenance>,
     #[cfg(test)]
     read_checkpoint: StdArc<ReadCheckpoint>,
@@ -3127,7 +3127,7 @@ type SnapEntry = (Vec<u8>, Vec<u8>);
 /// remaining lifetime, not just while it's live.
 #[allow(dead_code)]
 pub struct SharedSnapshot {
-    engine: std::sync::Arc<std::sync::Mutex<Kiban>>,
+    engine: std::sync::Arc<std::sync::RwLock<Kiban>>,
     seq: u64,
     memtable: Memtable,
     /// The frozen immutable memtable at capture time, if any (11.8) —
@@ -3141,7 +3141,7 @@ pub struct SharedSnapshot {
 
 impl Drop for SharedSnapshot {
     fn drop(&mut self) {
-        if let Ok(mut guard) = self.engine.lock()
+        if let Ok(mut guard) = self.engine.write()
             && let Some(pos) = guard.active_snapshots.iter().position(|s| *s == self.seq)
         {
             guard.active_snapshots.remove(pos);
@@ -3284,7 +3284,7 @@ impl SharedKiban {
         dir: impl AsRef<Path>,
         options: KibanOptions,
     ) -> Result<SharedKiban, DbError> {
-        let inner = std::sync::Arc::new(std::sync::Mutex::new(Kiban::open_with_options(
+        let inner = std::sync::Arc::new(std::sync::RwLock::new(Kiban::open_with_options(
             dir, options,
         )?));
         let maintenance = Maintenance::spawn(inner.clone());
@@ -3315,29 +3315,35 @@ impl SharedKiban {
         &self.maintenance
     }
 
-    /// Test-only (11.8): publishes the memtable synchronously,
-    /// bypassing the shared maintenance worker entirely — the exact
-    /// shape `SharedKiban::flush` had before 11.8 moved flushing onto
-    /// that worker. Pre-11.8 tests that use a flush purely to get data
-    /// onto disk or trigger a compaction attempt (not to exercise
-    /// freeze/immutable machinery itself) use this: going through the
-    /// real, worker-mediated `flush` would let a compaction the test
-    /// deliberately froze (`arm_before_build`) transitively block an
-    /// unrelated flush queued behind it on that same one worker.
+    /// Test-only synchronous flush; publication mutates topology.
     #[cfg(test)]
     pub(crate) fn flush_sync_for_test(&self) -> Result<(), DbError> {
-        self.lock()?.flush_without_compaction()?;
+        self.write_lock()?.flush_without_compaction()?;
         self.maintenance.wake();
         Ok(())
     }
 
-    fn lock(&self) -> Result<std::sync::MutexGuard<'_, Kiban>, DbError> {
-        self.inner.lock().map_err(|_| {
+    fn read_lock(&self) -> Result<std::sync::RwLockReadGuard<'_, Kiban>, DbError> {
+        self.inner.read().map_err(|_| {
             DbError::Corrupt(
                 "engine lock poisoned: a panic occurred while an operation was in flight"
                     .to_string(),
             )
         })
+    }
+
+    fn write_lock(&self) -> Result<std::sync::RwLockWriteGuard<'_, Kiban>, DbError> {
+        self.inner.write().map_err(|_| {
+            DbError::Corrupt(
+                "engine lock poisoned: a panic occurred while an operation was in flight"
+                    .to_string(),
+            )
+        })
+    }
+
+    #[cfg(test)]
+    fn lock(&self) -> Result<std::sync::RwLockWriteGuard<'_, Kiban>, DbError> {
+        self.write_lock()
     }
 
     /// Blocks (never holding the engine mutex while doing so) until
@@ -3376,7 +3382,7 @@ impl SharedKiban {
                 )));
             }
             let epoch = {
-                let guard = self.lock()?;
+                let guard = self.write_lock()?;
                 guard.check_poisoned()?;
                 let l0_ok = guard.l0_count() < guard.options().l0_write_stall_trigger;
                 let immutable_ok = guard.immutable.is_none()
@@ -3417,7 +3423,7 @@ impl SharedKiban {
                 )));
             }
             let epoch = {
-                let guard = self.lock()?;
+                let guard = self.write_lock()?;
                 guard.check_poisoned()?;
                 if guard.last_completed_flush_generation >= generation {
                     return Ok(());
@@ -3449,7 +3455,7 @@ impl SharedKiban {
             cache,
             file_cache,
         ) = {
-            let guard = self.lock()?;
+            let guard = self.read_lock()?;
             (
                 guard.memtable.len(),
                 guard.memtable.logical_bytes(),
@@ -3487,7 +3493,7 @@ impl SharedKiban {
     pub fn put(&self, key: impl AsRef<[u8]>, value: impl AsRef<[u8]>) -> io::Result<()> {
         self.wait_for_write_room()
             .map_err(|e| io::Error::other(e.to_string()))?;
-        let froze = match self.lock() {
+        let froze = match self.write_lock() {
             Ok(mut guard) => {
                 guard.put(key, value)?;
                 guard
@@ -3505,7 +3511,7 @@ impl SharedKiban {
     pub fn delete(&self, key: impl AsRef<[u8]>) -> io::Result<()> {
         self.wait_for_write_room()
             .map_err(|e| io::Error::other(e.to_string()))?;
-        let froze = match self.lock() {
+        let froze = match self.write_lock() {
             Ok(mut guard) => {
                 guard.delete(key)?;
                 guard
@@ -3522,7 +3528,7 @@ impl SharedKiban {
 
     /// Whether the shared engine is poisoned.
     pub fn is_poisoned(&self) -> bool {
-        match self.lock() {
+        match self.read_lock() {
             Ok(guard) => guard.is_poisoned(),
             Err(_) => true,
         }
@@ -3535,7 +3541,7 @@ impl SharedKiban {
     pub fn get(&self, key: impl AsRef<[u8]>) -> Result<Option<Vec<u8>>, DbError> {
         let key = key.as_ref();
         let (sequence, immutable, version) = {
-            let guard = self.lock()?;
+            let guard = self.read_lock()?;
             let sequence = guard.last_sequence;
             if let Some(entry) = guard.memtable.entry_at(key, sequence) {
                 return Ok(entry.as_value().map(ToOwned::to_owned));
@@ -3565,7 +3571,7 @@ impl SharedKiban {
     /// publish another L0 table, so durability must never depend on
     /// compaction catching up (11.5).
     pub fn sync(&self) -> io::Result<()> {
-        match self.lock() {
+        match self.write_lock() {
             Ok(mut guard) => guard.sync(),
             Err(e) => Err(io::Error::other(e.to_string())),
         }
@@ -3578,7 +3584,7 @@ impl SharedKiban {
     pub fn write(&self, batch: WriteBatch) -> Result<(), DbError> {
         self.wait_for_write_room()?;
         let froze = {
-            let mut guard = self.lock()?;
+            let mut guard = self.write_lock()?;
             guard.write(batch)?;
             guard.maybe_freeze()?
         };
@@ -3593,7 +3599,7 @@ impl SharedKiban {
     /// subject to backpressure — a read must not stall because writers
     /// are stalled.
     pub fn snapshot(&self) -> Result<SharedSnapshot, DbError> {
-        let mut guard = self.lock()?;
+        let mut guard = self.write_lock()?;
         let seq = guard.last_sequence;
         let pos = guard.active_snapshots.partition_point(|s| *s < seq);
         guard.active_snapshots.insert(pos, seq);
@@ -3637,7 +3643,7 @@ impl SharedKiban {
                 )));
             }
             let epoch = {
-                let mut guard = self.lock()?;
+                let mut guard = self.write_lock()?;
                 guard.check_poisoned()?;
                 let l0_ok = guard.l0_count() < guard.options().l0_write_stall_trigger;
                 if l0_ok && guard.immutable.is_none() {

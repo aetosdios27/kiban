@@ -9,7 +9,7 @@
 //! publication stays single-writer.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::thread::JoinHandle;
 
 use crate::db::Kiban;
@@ -111,7 +111,7 @@ pub(crate) struct Maintenance {
 }
 
 impl Maintenance {
-    pub(crate) fn spawn(engine: Arc<Mutex<Kiban>>) -> Arc<Maintenance> {
+    pub(crate) fn spawn(engine: Arc<RwLock<Kiban>>) -> Arc<Maintenance> {
         let m = Arc::new(Maintenance {
             handles: AtomicUsize::new(1),
             state: Mutex::new(Signal {
@@ -290,7 +290,7 @@ impl Maintenance {
     }
 }
 
-fn worker_loop(engine: Arc<Mutex<Kiban>>, m: Arc<Maintenance>) {
+fn worker_loop(engine: Arc<RwLock<Kiban>>, m: Arc<Maintenance>) {
     loop {
         {
             let mut s = m.state.lock().unwrap();
@@ -355,11 +355,13 @@ fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
 /// own rule), so at most one flush job runs per pass through the outer
 /// loop; `continue` after committing one so the loop rechecks — a
 /// fresh freeze can land while this job's BUILD was running unlocked.
-fn run_pending_maintenance(engine: &Arc<Mutex<Kiban>>, m: &Arc<Maintenance>) {
+fn run_pending_maintenance(engine: &Arc<RwLock<Kiban>>, m: &Arc<Maintenance>) {
     let mut cascade_level = 1u32;
     loop {
         let flush_plan = {
-            let Ok(mut guard) = engine.lock() else { return };
+            let Ok(mut guard) = engine.write() else {
+                return;
+            };
             guard.plan_flush()
         };
         if let Some(plan) = flush_plan {
@@ -369,7 +371,9 @@ fn run_pending_maintenance(engine: &Arc<Mutex<Kiban>>, m: &Arc<Maintenance>) {
             match plan.build() {
                 Ok(output) => {
                     let committed = {
-                        let Ok(mut guard) = engine.lock() else { return };
+                        let Ok(mut guard) = engine.write() else {
+                            return;
+                        };
                         guard.commit_flush(plan, output)
                     };
                     match committed {
@@ -389,7 +393,9 @@ fn run_pending_maintenance(engine: &Arc<Mutex<Kiban>>, m: &Arc<Maintenance>) {
         }
 
         let plan = {
-            let Ok(mut guard) = engine.lock() else { return };
+            let Ok(mut guard) = engine.write() else {
+                return;
+            };
             guard.plan_next_compaction(&mut cascade_level)
         };
         let Some(plan) = plan else { return };
@@ -400,7 +406,9 @@ fn run_pending_maintenance(engine: &Arc<Mutex<Kiban>>, m: &Arc<Maintenance>) {
         match plan.build() {
             Ok(outputs) => {
                 let committed = {
-                    let Ok(mut guard) = engine.lock() else { return };
+                    let Ok(mut guard) = engine.write() else {
+                        return;
+                    };
                     guard.commit_compaction(plan, outputs)
                 };
                 match committed {
