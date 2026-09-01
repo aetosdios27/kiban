@@ -215,6 +215,39 @@ mod tests {
     }
 
     #[test]
+    fn held_reader_excludes_writer_mutation() {
+        let lock = Arc::new(ShardedRwLock::new(0usize));
+        let held = Arc::new(Barrier::new(2));
+        let release = Arc::new(Barrier::new(2));
+        let reader = {
+            let lock = lock.clone();
+            let held = held.clone();
+            let release = release.clone();
+            std::thread::spawn(move || {
+                let _guard = lock.read_from_shard(3).unwrap();
+                held.wait();
+                release.wait();
+            })
+        };
+        held.wait();
+        let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+        let writer = {
+            let lock = lock.clone();
+            std::thread::spawn(move || {
+                let mut guard = lock.write().unwrap();
+                entered_tx.send(()).unwrap();
+                *guard = 1;
+            })
+        };
+        assert!(entered_rx.try_recv().is_err());
+        release.wait();
+        entered_rx.recv().unwrap();
+        reader.join().unwrap();
+        writer.join().unwrap();
+        assert_eq!(*lock.read().unwrap(), 1);
+    }
+
+    #[test]
     fn writer_intent_clears_on_success() {
         let lock = ShardedRwLock::new(0usize);
         drop(lock.write().unwrap());
