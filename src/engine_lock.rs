@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use std::cell::UnsafeCell;
 use std::ops::{Deref, DerefMut};
@@ -21,6 +21,7 @@ thread_local! {
 pub(crate) struct ShardedRwLock<T> {
     shards: [RwLock<()>; ENGINE_READ_SHARDS],
     writer_serial: Mutex<()>,
+    writer_pending: AtomicBool,
     value: UnsafeCell<T>,
 }
 
@@ -39,7 +40,16 @@ impl<T> Deref for ReadGuard<'_, T> {
     }
 }
 
+struct WriterIntent<'a>(&'a AtomicBool);
+
+impl Drop for WriterIntent<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
+
 pub(crate) struct WriteGuard<'a, T> {
+    _intent: WriterIntent<'a>,
     _serial: MutexGuard<'a, ()>,
     _shards: [RwLockWriteGuard<'a, ()>; ENGINE_READ_SHARDS],
     value: &'a mut T,
@@ -62,21 +72,34 @@ impl<T> ShardedRwLock<T> {
         Self {
             shards: std::array::from_fn(|_| RwLock::new(())),
             writer_serial: Mutex::new(()),
+            writer_pending: AtomicBool::new(false),
             value: UnsafeCell::new(value),
         }
     }
     pub(crate) fn read(&self) -> Result<ReadGuard<'_, T>, ()> {
         let shard = READER_SHARD.with(|slot| *slot);
-        let guard = self.shards[shard].read().map_err(|_| ())?;
-        // SAFETY: `guard` prevents any writer from holding every shard.
-        let value = unsafe { &*self.value.get() };
-        Ok(ReadGuard {
-            _shard: guard,
-            value,
-        })
+        loop {
+            if self.writer_pending.load(Ordering::Acquire) {
+                std::thread::yield_now();
+                continue;
+            }
+            let guard = self.shards[shard].read().map_err(|_| ())?;
+            if !self.writer_pending.load(Ordering::Acquire) {
+                // SAFETY: `guard` prevents any writer from holding every shard.
+                let value = unsafe { &*self.value.get() };
+                return Ok(ReadGuard {
+                    _shard: guard,
+                    value,
+                });
+            }
+            drop(guard);
+            std::thread::yield_now();
+        }
     }
     pub(crate) fn write(&self) -> Result<WriteGuard<'_, T>, ()> {
         let serial = self.writer_serial.lock().map_err(|_| ())?;
+        self.writer_pending.store(true, Ordering::Release);
+        let intent = WriterIntent(&self.writer_pending);
         let mut guards = Vec::with_capacity(ENGINE_READ_SHARDS);
         for shard in &self.shards {
             guards.push(shard.write().map_err(|_| ())?);
@@ -86,6 +109,7 @@ impl<T> ShardedRwLock<T> {
         // SAFETY: all shard write guards exclude every read and write guard.
         let value = unsafe { &mut *self.value.get() };
         Ok(WriteGuard {
+            _intent: intent,
             _serial: serial,
             _shards: shards,
             value,
