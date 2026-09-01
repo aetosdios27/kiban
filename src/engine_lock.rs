@@ -256,4 +256,73 @@ mod tests {
         drop(lock.write().unwrap());
         assert!(!lock.writer_pending());
     }
+
+    /// Investigates whether writer priority (readers yield while
+    /// `writer_pending` is set) starves readers under sustained write
+    /// pressure. Ignored by default since it's a timing measurement, not a
+    /// pass/fail check: run with `cargo test --release -- --ignored
+    /// --nocapture reader_starvation_under_sustained_writes`.
+    #[test]
+    #[ignore]
+    fn reader_starvation_under_sustained_writes() {
+        use std::time::{Duration, Instant};
+
+        let lock = Arc::new(ShardedRwLock::new(0u64));
+        let stop = Arc::new(AtomicBool::new(false));
+        let run_for = Duration::from_millis(500);
+
+        let writers: Vec<_> = (0..4)
+            .map(|_| {
+                let lock = lock.clone();
+                let stop = stop.clone();
+                std::thread::spawn(move || {
+                    let mut count = 0u64;
+                    while !stop.load(Ordering::Relaxed) {
+                        *lock.write().unwrap() += 1;
+                        count += 1;
+                    }
+                    count
+                })
+            })
+            .collect();
+
+        let readers: Vec<_> = (0..4)
+            .map(|_| {
+                let lock = lock.clone();
+                let stop = stop.clone();
+                std::thread::spawn(move || {
+                    let mut count = 0u64;
+                    let mut max_gap = Duration::ZERO;
+                    let mut last = Instant::now();
+                    while !stop.load(Ordering::Relaxed) {
+                        let _ = *lock.read().unwrap();
+                        let now = Instant::now();
+                        max_gap = max_gap.max(now.duration_since(last));
+                        last = now;
+                        count += 1;
+                    }
+                    (count, max_gap)
+                })
+            })
+            .collect();
+
+        std::thread::sleep(run_for);
+        stop.store(true, Ordering::Relaxed);
+
+        let write_counts: Vec<u64> = writers.into_iter().map(|w| w.join().unwrap()).collect();
+        let read_results: Vec<(u64, Duration)> =
+            readers.into_iter().map(|r| r.join().unwrap()).collect();
+
+        let total_writes: u64 = write_counts.iter().sum();
+        let total_reads: u64 = read_results.iter().map(|(c, _)| c).sum();
+        let worst_gap = read_results.iter().map(|(_, g)| *g).max().unwrap();
+
+        eprintln!(
+            "writes={total_writes} ({:.0}/s), reads={total_reads} ({:.0}/s), worst reader gap={worst_gap:?}",
+            total_writes as f64 / run_for.as_secs_f64(),
+            total_reads as f64 / run_for.as_secs_f64(),
+        );
+
+        assert!(total_reads > 0, "readers made zero progress under write pressure");
+    }
 }
