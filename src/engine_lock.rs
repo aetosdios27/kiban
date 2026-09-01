@@ -79,7 +79,10 @@ impl<T> ShardedRwLock<T> {
         }
     }
     pub(crate) fn read(&self) -> Result<ReadGuard<'_, T>, ()> {
-        let shard = READER_SHARD.with(|slot| *slot);
+        self.read_from_shard(READER_SHARD.with(|slot| *slot))
+    }
+
+    fn read_from_shard(&self, shard: usize) -> Result<ReadGuard<'_, T>, ()> {
         loop {
             if self.writer_pending.load(Ordering::Acquire) {
                 std::thread::yield_now();
@@ -97,16 +100,6 @@ impl<T> ShardedRwLock<T> {
             drop(guard);
             std::thread::yield_now();
         }
-    }
-
-    #[cfg(test)]
-    fn read_on_shard(&self, shard: usize) -> Result<ReadGuard<'_, T>, ()> {
-        let guard = self.shards[shard].read().map_err(|_| ())?;
-        Ok(ReadGuard {
-            _shard: guard,
-            value: self.value.get(),
-            _marker: PhantomData,
-        })
     }
 
     #[cfg(test)]
@@ -186,7 +179,7 @@ mod tests {
                 let start = start.clone();
                 let release = release.clone();
                 std::thread::spawn(move || {
-                    let guard = lock.read_on_shard(a).unwrap();
+                    let guard = lock.read_from_shard(a).unwrap();
                     start.wait();
                     release.wait();
                     *guard
@@ -197,7 +190,7 @@ mod tests {
                 let start = start.clone();
                 let release = release.clone();
                 std::thread::spawn(move || {
-                    let guard = lock.read_on_shard(b).unwrap();
+                    let guard = lock.read_from_shard(b).unwrap();
                     start.wait();
                     release.wait();
                     *guard
