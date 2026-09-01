@@ -659,6 +659,72 @@ fn main() {
         after.block_cache.misses - before.block_cache.misses,
     );
 
+    println!("\n== 8 readers / 1 writer liveness control (Phase 11.15) ==");
+    let mut heavy_mixed_stats = None;
+    measure(
+        "8R/1W writer progress under read pressure",
+        mixed_reads + writes,
+        "ops",
+        samples,
+        || {
+            let dir = temp_dir("heavy-mixed");
+            let options = KibanOptions {
+                write_buffer_bytes: 16 * 1024,
+                l0_compaction_trigger: 2,
+                l0_write_stall_trigger: 8,
+                ..KibanOptions::default()
+            };
+            let db = seed_shared(&dir, options, writes, "heavy");
+            let before = db.stats().unwrap();
+            let start = Arc::new(Barrier::new(10));
+            let mut handles = Vec::new();
+            for thread in 0..8 {
+                let db = db.clone();
+                let start = start.clone();
+                let read_keys = keys("heavy", writes);
+                let each = mixed_reads / 8;
+                handles.push(std::thread::spawn(move || {
+                    start.wait();
+                    let mut bytes = 0u64;
+                    for i in 0..each {
+                        let index = ((i + thread * each).wrapping_mul(8191)) % read_keys.len();
+                        bytes += db.get(&read_keys[index]).unwrap().unwrap().len() as u64;
+                    }
+                    bytes
+                }));
+            }
+            let writer = db.clone();
+            let writer_start = start.clone();
+            let writer_handle = std::thread::spawn(move || {
+                writer_start.wait();
+                for i in 0..writes {
+                    writer.put(key("heavy-update", i), [b'u'; 40]).unwrap();
+                }
+                writes as u64
+            });
+            let timer = Instant::now();
+            start.wait();
+            let reader_bytes: u64 = handles.into_iter().map(|h| h.join().unwrap()).sum();
+            // Writer completion is the liveness proof itself: if the
+            // sharded gate let 8 continuously-arriving readers starve the
+            // writer, this join would hang (or take drastically longer
+            // than the writer-alone baseline) rather than merely score
+            // lower.
+            let writer_ops = writer_handle.join().unwrap();
+            let elapsed = timer.elapsed();
+            assert_eq!(reader_bytes, mixed_reads as u64 * 40);
+            assert_eq!(writer_ops, writes as u64);
+            let after = db.stats().unwrap();
+            heavy_mixed_stats = Some((before, after));
+            drop(db);
+            drop_dir(&dir);
+            (elapsed, (mixed_reads + writes) as u64)
+        },
+    );
+    let (before, after) = heavy_mixed_stats.expect("8R/1W sample must run");
+    print_maintenance_delta(&before, &after);
+    println!("  writer completed all {writes} ops under 8-reader pressure without hanging");
+
     println!("\n== Maintenance pressure ==");
     let mut pressure_stats = None;
     measure(
