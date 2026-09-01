@@ -239,6 +239,9 @@ mod tests {
                 *guard = 1;
             })
         };
+        while !lock.writer_pending() {
+            std::thread::yield_now();
+        }
         assert!(entered_rx.try_recv().is_err());
         release.wait();
         entered_rx.recv().unwrap();
