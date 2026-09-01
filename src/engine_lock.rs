@@ -1,6 +1,7 @@
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use std::cell::UnsafeCell;
+use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
@@ -30,13 +31,15 @@ unsafe impl<T: Send + Sync> Sync for ShardedRwLock<T> {}
 
 pub(crate) struct ReadGuard<'a, T> {
     _shard: RwLockReadGuard<'a, ()>,
-    value: &'a T,
+    value: *const T,
+    _marker: PhantomData<&'a T>,
 }
 
 impl<T> Deref for ReadGuard<'_, T> {
     type Target = T;
     fn deref(&self) -> &T {
-        self.value
+        // SAFETY: `_shard` remains live for this guard's lifetime.
+        unsafe { &*self.value }
     }
 }
 
@@ -52,18 +55,21 @@ pub(crate) struct WriteGuard<'a, T> {
     _intent: WriterIntent<'a>,
     _serial: MutexGuard<'a, ()>,
     _shards: [RwLockWriteGuard<'a, ()>; ENGINE_READ_SHARDS],
-    value: &'a mut T,
+    value: *mut T,
+    _marker: PhantomData<&'a mut T>,
 }
 
 impl<T> Deref for WriteGuard<'_, T> {
     type Target = T;
     fn deref(&self) -> &T {
-        self.value
+        // SAFETY: every shard write guard remains live.
+        unsafe { &*self.value }
     }
 }
 impl<T> DerefMut for WriteGuard<'_, T> {
     fn deref_mut(&mut self) -> &mut T {
-        self.value
+        // SAFETY: every shard write guard remains live and writers serialize.
+        unsafe { &mut *self.value }
     }
 }
 
@@ -86,10 +92,10 @@ impl<T> ShardedRwLock<T> {
             let guard = self.shards[shard].read().map_err(|_| ())?;
             if !self.writer_pending.load(Ordering::Acquire) {
                 // SAFETY: `guard` prevents any writer from holding every shard.
-                let value = unsafe { &*self.value.get() };
                 return Ok(ReadGuard {
                     _shard: guard,
-                    value,
+                    value: self.value.get(),
+                    _marker: PhantomData,
                 });
             }
             drop(guard);
@@ -107,12 +113,12 @@ impl<T> ShardedRwLock<T> {
         let shards: [RwLockWriteGuard<'_, ()>; ENGINE_READ_SHARDS] =
             guards.try_into().map_err(|_| ())?;
         // SAFETY: all shard write guards exclude every read and write guard.
-        let value = unsafe { &mut *self.value.get() };
         Ok(WriteGuard {
             _intent: intent,
             _serial: serial,
             _shards: shards,
-            value,
+            value: self.value.get(),
+            _marker: PhantomData,
         })
     }
 }
