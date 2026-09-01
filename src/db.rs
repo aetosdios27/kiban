@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 use crate::atomic;
 use crate::background::{Maintenance, MaintenanceError};
 use crate::cache::BlockCache;
+use crate::engine_lock::ShardedRwLock;
 use crate::file_cache::TableFileCache;
 use crate::manifest::{MANIFEST_NAME, Manifest, ManifestError, TableRef};
 use crate::memtable::{Entry as MemEntry, Memtable};
@@ -345,9 +346,6 @@ impl WriteBatch {
 struct Immutable {
     memtable: StdArc<Memtable>,
     wal_number: u64,
-    /// Monotonic, assigned at freeze time. Lets `SharedKiban::flush()`
-    /// wait for its OWN freeze's flush to commit — never satisfied by
-    /// an unrelated earlier or later flush completing first.
     generation: u64,
 }
 
@@ -3022,7 +3020,7 @@ mod crash_sweep_tests {
 /// The engine mutex chooses a read's world. A normal point read releases
 /// it before consulting the immutable memtable or any SST state.
 pub struct SharedKiban {
-    inner: std::sync::Arc<std::sync::RwLock<Kiban>>,
+    inner: std::sync::Arc<ShardedRwLock<Kiban>>,
     maintenance: std::sync::Arc<Maintenance>,
     #[cfg(test)]
     read_checkpoint: StdArc<ReadCheckpoint>,
@@ -3127,7 +3125,7 @@ type SnapEntry = (Vec<u8>, Vec<u8>);
 /// remaining lifetime, not just while it's live.
 #[allow(dead_code)]
 pub struct SharedSnapshot {
-    engine: std::sync::Arc<std::sync::RwLock<Kiban>>,
+    engine: std::sync::Arc<ShardedRwLock<Kiban>>,
     seq: u64,
     memtable: Memtable,
     /// The frozen immutable memtable at capture time, if any (11.8) —
@@ -3284,9 +3282,8 @@ impl SharedKiban {
         dir: impl AsRef<Path>,
         options: KibanOptions,
     ) -> Result<SharedKiban, DbError> {
-        let inner = std::sync::Arc::new(std::sync::RwLock::new(Kiban::open_with_options(
-            dir, options,
-        )?));
+        let inner =
+            std::sync::Arc::new(ShardedRwLock::new(Kiban::open_with_options(dir, options)?));
         let maintenance = Maintenance::spawn(inner.clone());
         Ok(SharedKiban {
             inner,
@@ -3323,26 +3320,20 @@ impl SharedKiban {
         Ok(())
     }
 
-    fn read_lock(&self) -> Result<std::sync::RwLockReadGuard<'_, Kiban>, DbError> {
-        self.inner.read().map_err(|_| {
-            DbError::Corrupt(
-                "engine lock poisoned: a panic occurred while an operation was in flight"
-                    .to_string(),
-            )
-        })
+    fn read_lock(&self) -> Result<crate::engine_lock::ReadGuard<'_, Kiban>, DbError> {
+        self.inner
+            .read()
+            .map_err(|_| DbError::Corrupt("engine lock poisoned".to_string()))
     }
 
-    fn write_lock(&self) -> Result<std::sync::RwLockWriteGuard<'_, Kiban>, DbError> {
-        self.inner.write().map_err(|_| {
-            DbError::Corrupt(
-                "engine lock poisoned: a panic occurred while an operation was in flight"
-                    .to_string(),
-            )
-        })
+    fn write_lock(&self) -> Result<crate::engine_lock::WriteGuard<'_, Kiban>, DbError> {
+        self.inner
+            .write()
+            .map_err(|_| DbError::Corrupt("engine lock poisoned".to_string()))
     }
 
     #[cfg(test)]
-    fn lock(&self) -> Result<std::sync::RwLockWriteGuard<'_, Kiban>, DbError> {
+    fn lock(&self) -> Result<crate::engine_lock::WriteGuard<'_, Kiban>, DbError> {
         self.write_lock()
     }
 

@@ -240,6 +240,31 @@ where
     (timer.elapsed(), work)
 }
 
+fn parallel_sharded_reads(shards: usize, threads: usize, total: usize) -> (Duration, u64) {
+    let locks = Arc::new((0..shards).map(|_| RwLock::new(())).collect::<Vec<_>>());
+    let start = Arc::new(Barrier::new(threads + 1));
+    let handles: Vec<_> = (0..threads)
+        .map(|thread| {
+            let locks = locks.clone();
+            let start = start.clone();
+            std::thread::spawn(move || {
+                let begin = total * thread / threads;
+                let end = total * (thread + 1) / threads;
+                let shard = thread % locks.len();
+                start.wait();
+                for _ in begin..end {
+                    drop(locks[shard].read().unwrap());
+                }
+                (end - begin) as u64
+            })
+        })
+        .collect();
+    let timer = Instant::now();
+    start.wait();
+    let work = handles.into_iter().map(|h| h.join().unwrap()).sum();
+    (timer.elapsed(), work)
+}
+
 fn parallel_writes(
     db: &SharedKiban,
     total: usize,
@@ -342,6 +367,16 @@ fn main() {
                 drop(cloned);
             })
         });
+    }
+
+    println!("\n== Benchmark-only sharded gate control ==");
+    for &shards in &[4, 8, 16] {
+        for &threads in THREAD_COUNTS {
+            let label = format!("sharded gate {shards} / {threads} threads");
+            measure(&label, reads, "ops", samples, || {
+                parallel_sharded_reads(shards, threads, reads)
+            });
+        }
     }
 
     println!("\n== Empty and active SharedKiban controls ==");

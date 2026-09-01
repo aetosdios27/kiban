@@ -10,6 +10,7 @@ pub mod bloom;
 pub mod cache;
 pub mod crc32;
 pub mod db;
+pub(crate) mod engine_lock;
 pub mod file_cache;
 pub mod frame;
 pub mod manifest;

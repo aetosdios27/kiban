@@ -9,8 +9,10 @@
 //! publication stays single-writer.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Condvar, Mutex, RwLock};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread::JoinHandle;
+
+use crate::engine_lock::ShardedRwLock;
 
 use crate::db::Kiban;
 
@@ -111,7 +113,7 @@ pub(crate) struct Maintenance {
 }
 
 impl Maintenance {
-    pub(crate) fn spawn(engine: Arc<RwLock<Kiban>>) -> Arc<Maintenance> {
+    pub(crate) fn spawn(engine: Arc<ShardedRwLock<Kiban>>) -> Arc<Maintenance> {
         let m = Arc::new(Maintenance {
             handles: AtomicUsize::new(1),
             state: Mutex::new(Signal {
@@ -290,7 +292,7 @@ impl Maintenance {
     }
 }
 
-fn worker_loop(engine: Arc<RwLock<Kiban>>, m: Arc<Maintenance>) {
+fn worker_loop(engine: Arc<ShardedRwLock<Kiban>>, m: Arc<Maintenance>) {
     loop {
         {
             let mut s = m.state.lock().unwrap();
@@ -355,7 +357,7 @@ fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
 /// own rule), so at most one flush job runs per pass through the outer
 /// loop; `continue` after committing one so the loop rechecks — a
 /// fresh freeze can land while this job's BUILD was running unlocked.
-fn run_pending_maintenance(engine: &Arc<RwLock<Kiban>>, m: &Arc<Maintenance>) {
+fn run_pending_maintenance(engine: &Arc<ShardedRwLock<Kiban>>, m: &Arc<Maintenance>) {
     let mut cascade_level = 1u32;
     loop {
         let flush_plan = {
