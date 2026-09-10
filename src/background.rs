@@ -48,6 +48,15 @@ pub struct MaintenanceStats {
     pub write_stalls: u64,
     pub flushes_completed: u64,
     pub flushes_failed: u64,
+    /// Total bytes written by completed flush jobs (11.17-round-2,
+    /// section 7): with `compaction_output_bytes`, gives the total
+    /// physical bytes Kiban has written to SST files, the numerator for
+    /// write amplification against logical bytes inserted (the
+    /// denominator is the caller's own bookkeeping — Kiban doesn't
+    /// track "logical bytes ever inserted" itself, since deletes and
+    /// overwrites make that a workload-dependent question the caller is
+    /// already in a better position to answer).
+    pub flush_output_bytes: u64,
 }
 
 struct Signal {
@@ -92,6 +101,7 @@ struct Signal {
     /// Phase 11.8 counters, same conventions as the compaction ones.
     flushes_completed: u64,
     flushes_failed: u64,
+    flush_output_bytes: u64,
 }
 
 /// Owns the worker thread and the signal used to wake, stop, and query
@@ -130,6 +140,7 @@ impl Maintenance {
                 write_stalls: 0,
                 flushes_completed: 0,
                 flushes_failed: 0,
+                flush_output_bytes: 0,
             }),
             condvar: Condvar::new(),
             thread: Mutex::new(None),
@@ -277,6 +288,7 @@ impl Maintenance {
             write_stalls: s.write_stalls,
             flushes_completed: s.flushes_completed,
             flushes_failed: s.flushes_failed,
+            flush_output_bytes: s.flush_output_bytes,
         }
     }
 
@@ -432,6 +444,7 @@ fn run_pending_maintenance(engine: &Arc<ShardedRwLock<Kiban>>, m: &Arc<Maintenan
 
             match plan.build() {
                 Ok(output) => {
+                    let output_bytes = output.size;
                     let (committed, pressure) = {
                         let Ok(mut guard) = engine.write() else {
                             return;
@@ -440,7 +453,7 @@ fn run_pending_maintenance(engine: &Arc<ShardedRwLock<Kiban>>, m: &Arc<Maintenan
                         (committed, MaintenancePressure::capture(&guard))
                     };
                     match committed {
-                        Ok(()) => record_flush_success(m),
+                        Ok(()) => record_flush_success(m, output_bytes),
                         Err(e) => {
                             record_flush_error(m, e.to_string());
                             return;
@@ -497,10 +510,11 @@ fn run_pending_maintenance(engine: &Arc<ShardedRwLock<Kiban>>, m: &Arc<Maintenan
     }
 }
 
-fn record_flush_success(m: &Arc<Maintenance>) {
+fn record_flush_success(m: &Arc<Maintenance>, output_bytes: u64) {
     {
         let mut s = m.state.lock().unwrap();
         s.flushes_completed = s.flushes_completed.saturating_add(1);
+        s.flush_output_bytes = s.flush_output_bytes.saturating_add(output_bytes);
         s.progress_epoch += 1;
     }
     m.condvar.notify_all();

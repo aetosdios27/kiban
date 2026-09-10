@@ -198,8 +198,11 @@ fn get_from_version_at(
     version: &Version,
     key: &[u8],
     sequence: u64,
+    read_amp: &ReadAmpCounters,
 ) -> Result<Option<Vec<u8>>, DbError> {
+    use std::sync::atomic::Ordering::Relaxed;
     for entry in version.tables.iter().rev().filter(|t| t.level == 0) {
+        read_amp.l0_tables_probed.fetch_add(1, Relaxed);
         match entry.table.get(key, Some(sequence))? {
             Some(found) => {
                 return Ok(match found.kind {
@@ -214,6 +217,7 @@ fn get_from_version_at(
         if key < entry.first_key.as_slice() || key > entry.last_key.as_slice() {
             continue;
         }
+        read_amp.leveled_tables_probed.fetch_add(1, Relaxed);
         match entry.table.get(key, Some(sequence))? {
             Some(found) => {
                 return Ok(match found.kind {
@@ -224,6 +228,7 @@ fn get_from_version_at(
             None => continue,
         }
     }
+    read_amp.resolved_not_found.fetch_add(1, Relaxed);
     Ok(None)
 }
 
@@ -422,6 +427,66 @@ pub struct Kiban {
     /// `Kiban` usage builds and maintains it but never reads it back
     /// (single-owner access has no need for a gate-free path).
     read_view: StdArc<ShardedRwLock<StdArc<ReadView>>>,
+    /// 11.17-round-2, section 6: cheap, always-on, cumulative counters
+    /// of where a point lookup's work actually goes — memtable/
+    /// immutable hit, or how many L0/leveled tables a miss on those
+    /// had to probe before resolving (found or genuinely absent). A
+    /// few relaxed atomic increments per `get`, no lock, no per-call
+    /// allocation. See `ReadAmpStats` for the exposed snapshot shape.
+    read_amp: StdArc<ReadAmpCounters>,
+}
+
+/// Raw counters behind `KibanStats::read_amp`. Relaxed throughout:
+/// these are observational (how many table probes did lookups need),
+/// never a correctness signal, so the same reasoning as `BlockCache`'s
+/// hit/miss counters applies — see there.
+#[derive(Debug, Default)]
+pub(crate) struct ReadAmpCounters {
+    gets_total: std::sync::atomic::AtomicU64,
+    resolved_in_memtable: std::sync::atomic::AtomicU64,
+    resolved_in_immutable: std::sync::atomic::AtomicU64,
+    /// Every `SstTable::get` call against an L0 table, whether it hits
+    /// or not — L0 tables can overlap, so a lookup may need to probe
+    /// several before finding (or ruling out) a key, newest first.
+    l0_tables_probed: std::sync::atomic::AtomicU64,
+    /// Every `SstTable::get` call against a level >= 1 table. Levels
+    /// are range-disjoint, so this is normally 0 or 1 per get that
+    /// reaches this far — a value consistently above 1 would mean the
+    /// disjointness invariant is somehow violated, which is itself a
+    /// useful thing for this counter to be able to reveal.
+    leveled_tables_probed: std::sync::atomic::AtomicU64,
+    resolved_not_found: std::sync::atomic::AtomicU64,
+}
+
+/// A point-in-time snapshot of `ReadAmpCounters` (phase 11.17-round-2)
+/// — facts only, no derived verdict. `avg_tables_probed_on_sst_path`
+/// is the one ratio worth computing yourself:
+/// `(l0_tables_probed + leveled_tables_probed) / (gets_total -
+/// resolved_in_memtable - resolved_in_immutable)`, i.e. how many
+/// physical table probes an average memtable-miss paid, the direct
+/// read-amplification signal for the SST path specifically.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ReadAmpStats {
+    pub gets_total: u64,
+    pub resolved_in_memtable: u64,
+    pub resolved_in_immutable: u64,
+    pub l0_tables_probed: u64,
+    pub leveled_tables_probed: u64,
+    pub resolved_not_found: u64,
+}
+
+impl ReadAmpCounters {
+    fn snapshot(&self) -> ReadAmpStats {
+        use std::sync::atomic::Ordering::Relaxed;
+        ReadAmpStats {
+            gets_total: self.gets_total.load(Relaxed),
+            resolved_in_memtable: self.resolved_in_memtable.load(Relaxed),
+            resolved_in_immutable: self.resolved_in_immutable.load(Relaxed),
+            l0_tables_probed: self.l0_tables_probed.load(Relaxed),
+            leveled_tables_probed: self.leveled_tables_probed.load(Relaxed),
+            resolved_not_found: self.resolved_not_found.load(Relaxed),
+        }
+    }
 }
 
 /// See `Kiban::read_view`. Everything a gate-free `SharedKiban::get`
@@ -648,6 +713,7 @@ impl Kiban {
             obsolete: Vec::new(),
             poisoned: None,
             read_view,
+            read_amp: StdArc::new(ReadAmpCounters::default()),
         })
     }
 
@@ -932,11 +998,14 @@ impl Kiban {
         snap: &Snapshot,
         key: impl AsRef<[u8]>,
     ) -> Result<Option<Vec<u8>>, DbError> {
+        use std::sync::atomic::Ordering::Relaxed;
         let key = key.as_ref();
+        self.read_amp.gets_total.fetch_add(1, Relaxed);
         // The memtable retains superseded versions while a snapshot needs
         // them, so the newest version at-or-below snap may live here even
         // when newer invisible versions exist.
         if let Some(entry) = self.memtable.entry_at(key, snap.seq) {
+            self.read_amp.resolved_in_memtable.fetch_add(1, Relaxed);
             return Ok(match entry {
                 MemEntry::Value { value, .. } => Some(value.clone()),
                 MemEntry::Tombstone { .. } => None,
@@ -948,12 +1017,13 @@ impl Kiban {
         if let Some(im) = &self.immutable
             && let Some(entry) = im.memtable.entry_at(key, snap.seq)
         {
+            self.read_amp.resolved_in_immutable.fetch_add(1, Relaxed);
             return Ok(match entry {
                 MemEntry::Value { value, .. } => Some(value.clone()),
                 MemEntry::Tombstone { .. } => None,
             });
         }
-        get_from_version_at(&snap.version, key, snap.seq)
+        get_from_version_at(&snap.version, key, snap.seq, &self.read_amp)
     }
 
     /// Scans live entries as of snapshot `snap`, reading the pinned
@@ -3216,6 +3286,10 @@ pub struct SharedKiban {
     /// without going through the engine-wide write gate that guards
     /// `inner`. See `ReadView`.
     read_view: StdArc<ShardedRwLock<StdArc<ReadView>>>,
+    /// Same reasoning as `read_view`: a direct clone of `Kiban::
+    /// read_amp`'s handle so `get` can record its own resolution point
+    /// without going through `inner`.
+    read_amp: StdArc<ReadAmpCounters>,
     maintenance: std::sync::Arc<Maintenance>,
     #[cfg(test)]
     read_checkpoint: StdArc<ReadCheckpoint>,
@@ -3288,6 +3362,7 @@ impl Clone for SharedKiban {
         SharedKiban {
             inner: self.inner.clone(),
             read_view: self.read_view.clone(),
+            read_amp: self.read_amp.clone(),
             maintenance: self.maintenance.clone(),
             #[cfg(test)]
             read_checkpoint: self.read_checkpoint.clone(),
@@ -3331,6 +3406,7 @@ pub struct SharedSnapshot {
     /// engine later flushing it away.
     immutable: Option<StdArc<Memtable>>,
     version: StdArc<Version>,
+    read_amp: StdArc<ReadAmpCounters>,
 }
 
 impl Drop for SharedSnapshot {
@@ -3351,16 +3427,20 @@ impl SharedSnapshot {
     /// Reads `key` as of this snapshot.
     #[allow(dead_code)]
     pub fn get(&self, key: impl AsRef<[u8]>) -> Result<Option<Vec<u8>>, DbError> {
+        use std::sync::atomic::Ordering::Relaxed;
         let key = key.as_ref();
+        self.read_amp.gets_total.fetch_add(1, Relaxed);
         if let Some(entry) = self.memtable.entry_at(key, self.seq) {
+            self.read_amp.resolved_in_memtable.fetch_add(1, Relaxed);
             return Ok(entry.as_value().map(ToOwned::to_owned));
         }
         if let Some(immutable) = &self.immutable
             && let Some(entry) = immutable.entry_at(key, self.seq)
         {
+            self.read_amp.resolved_in_immutable.fetch_add(1, Relaxed);
             return Ok(entry.as_value().map(ToOwned::to_owned));
         }
-        get_from_version_at(&self.version, key, self.seq)
+        get_from_version_at(&self.version, key, self.seq, &self.read_amp)
     }
 
     /// Scans all live entries visible at this snapshot.
@@ -3450,6 +3530,7 @@ pub struct KibanStats {
     pub block_cache: crate::cache::BlockCacheStats,
     pub table_files: crate::file_cache::TableFileCacheStats,
     pub maintenance: crate::background::MaintenanceStats,
+    pub read_amp: ReadAmpStats,
 }
 
 fn levels_from_version(version: &Version) -> Vec<LevelStats> {
@@ -3484,11 +3565,13 @@ impl SharedKiban {
         // `ShardedRwLock<Arc<ReadView>>`, reached from here on without
         // ever going through `inner` (see `ReadView`).
         let read_view = kiban.read_view.clone();
+        let read_amp = kiban.read_amp.clone();
         let inner = std::sync::Arc::new(ShardedRwLock::new(kiban));
         let maintenance = Maintenance::spawn(inner.clone());
         Ok(SharedKiban {
             inner,
             read_view,
+            read_amp,
             maintenance,
             #[cfg(test)]
             read_checkpoint: StdArc::new(ReadCheckpoint::default()),
@@ -3696,6 +3779,7 @@ impl SharedKiban {
             block_cache: cache.stats(),
             table_files: file_cache.stats(),
             maintenance: self.maintenance.stats(),
+            read_amp: self.read_amp.snapshot(),
         })
     }
 
@@ -3738,7 +3822,9 @@ impl SharedKiban {
     /// necessarily written at or before the moment this exact `view`
     /// was published (see `ReadView`, `Kiban::publish_read_view`).
     pub fn get(&self, key: impl AsRef<[u8]>) -> Result<Option<Vec<u8>>, DbError> {
+        use std::sync::atomic::Ordering::Relaxed;
         let key = key.as_ref();
+        self.read_amp.gets_total.fetch_add(1, Relaxed);
         let view = self
             .read_view
             .read()
@@ -3750,6 +3836,7 @@ impl SharedKiban {
                 .read()
                 .map_err(|_| DbError::Corrupt("shared memtable lock poisoned".to_string()))?;
             if let Some(entry) = mem.entry(key) {
+                self.read_amp.resolved_in_memtable.fetch_add(1, Relaxed);
                 return Ok(entry.as_value().map(ToOwned::to_owned));
             }
         }
@@ -3758,9 +3845,10 @@ impl SharedKiban {
         if let Some(immutable) = &view.immutable
             && let Some(entry) = immutable.entry(key)
         {
+            self.read_amp.resolved_in_immutable.fetch_add(1, Relaxed);
             return Ok(entry.as_value().map(ToOwned::to_owned));
         }
-        get_from_version_at(&view.version, key, view.last_sequence)
+        get_from_version_at(&view.version, key, view.last_sequence, &self.read_amp)
     }
 
     /// Makes every record appended by *any* thread so far durable in one
@@ -3798,6 +3886,7 @@ impl SharedKiban {
             memtable: guard.memtable.clone(),
             immutable: guard.immutable.as_ref().map(|im| im.memtable.clone()),
             version: StdArc::clone(&guard.version),
+            read_amp: guard.read_amp.clone(),
         })
     }
 
@@ -3999,6 +4088,35 @@ mod shared_tests {
             "get took {elapsed:?} while the write gate was held for {hold_for:?} — \
              it must not have waited on that gate at all"
         );
+    }
+
+    /// 11.17-round-2, section 6: the read-amplification counters must
+    /// actually reflect where each get resolved, not just exist.
+    #[test]
+    fn read_amp_counters_reflect_resolution_points() {
+        let td = TempDir::new("read-amp-counters");
+        let db = SharedKiban::open(td.path()).unwrap();
+
+        db.put(b"in-memtable", b"v").unwrap();
+        let before = db.stats().unwrap().read_amp;
+        assert_eq!(db.get(b"in-memtable").unwrap(), Some(b"v".to_vec()));
+        let after = db.stats().unwrap().read_amp;
+        assert_eq!(after.gets_total - before.gets_total, 1);
+        assert_eq!(after.resolved_in_memtable - before.resolved_in_memtable, 1);
+        assert_eq!(after.l0_tables_probed - before.l0_tables_probed, 0);
+
+        db.sync().unwrap();
+        db.flush().unwrap();
+        let before = db.stats().unwrap().read_amp;
+        assert_eq!(db.get(b"in-memtable").unwrap(), Some(b"v".to_vec()));
+        let after = db.stats().unwrap().read_amp;
+        assert_eq!(after.resolved_in_memtable - before.resolved_in_memtable, 0);
+        assert_eq!(after.l0_tables_probed - before.l0_tables_probed, 1);
+
+        let before = db.stats().unwrap().read_amp;
+        assert_eq!(db.get(b"absent-key").unwrap(), None);
+        let after = db.stats().unwrap().read_amp;
+        assert_eq!(after.resolved_not_found - before.resolved_not_found, 1);
     }
 }
 
