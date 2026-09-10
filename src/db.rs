@@ -3422,24 +3422,54 @@ mod crash_sweep_tests {
     /// Scenario: interleaved puts/deletes with syncs and two flushes under
     /// aggressive compaction options.
     pub(crate) fn run_scenario_with_faults(dir: &Path, n: &[usize]) -> RunOutcome {
+        run_scenario_with_faults_and_options(dir, n, sweep_options())
+    }
+
+    pub(crate) fn sweep_options() -> KibanOptions {
+        KibanOptions {
+            l0_compaction_trigger: 2,
+            l0_write_stall_trigger: 20,
+            base_level_bytes: 300,
+            level_multiplier: 4,
+            target_file_size: 250,
+            block_cache_bytes: 1 << 20,
+            max_open_table_files: 64,
+            write_buffer_bytes: 1 << 20,
+            mmap_max_level: None,
+            compaction_scheduler: CompactionScheduler::FixedPriority,
+            compaction_batch_size: 1,
+            maintenance_pacing_enabled: true,
+        }
+    }
+
+    /// Same as `sweep_options`, under the scored scheduler + batching
+    /// (11.17-round-2) instead of the original fixed-priority rule —
+    /// used only by the sweep test that specifically targets these new
+    /// candidate-selection/batching code paths, so a fault mid-PLAN or
+    /// mid-COMMIT for a scored or batched compaction gets the exact
+    /// same crash-recovery scrutiny the original scheduler already had.
+    pub(crate) fn scored_sweep_options() -> KibanOptions {
+        KibanOptions {
+            compaction_scheduler: CompactionScheduler::Scored,
+            compaction_batch_size: 3,
+            ..sweep_options()
+        }
+    }
+
+    /// Same scenario as `run_scenario_with_faults`, with the options
+    /// exposed — 11.17-round-2: lets the fault sweep re-run under the
+    /// scored scheduler + batching (`scored_sweep_options`) without
+    /// touching this function's own callers, all of which keep getting
+    /// the exact original `FixedPriority` behavior via the wrapper
+    /// above.
+    pub(crate) fn run_scenario_with_faults_and_options(
+        dir: &Path,
+        n: &[usize],
+        options: KibanOptions,
+    ) -> RunOutcome {
         sys::install_faults(n);
         let mut tracker = Tracker::default();
         let result = (|| -> Result<(), DbError> {
-            let mut options = KibanOptions {
-                l0_compaction_trigger: 2,
-                l0_write_stall_trigger: 20,
-                base_level_bytes: 300,
-                level_multiplier: 4,
-                target_file_size: 250,
-                block_cache_bytes: 1 << 20,
-                max_open_table_files: 64,
-                write_buffer_bytes: 1 << 20,
-                mmap_max_level: None,
-                compaction_scheduler: CompactionScheduler::FixedPriority,
-                compaction_batch_size: 1,
-                maintenance_pacing_enabled: true,
-            };
-            let _ = &mut options;
             let mut db = Kiban::open_with_options(dir, options)?;
             macro_rules! step {
                 ($op:expr) => {
@@ -3548,6 +3578,60 @@ mod crash_sweep_tests {
             assert_band("pipeline", &[n], &recovered, &outcome.tracker);
 
             // scans and gets agree after recovery too
+            for (k, v) in &recovered {
+                assert_eq!(
+                    db.get(k.as_slice()).unwrap().as_deref(),
+                    Some(v.as_slice()),
+                    "n={n}: get disagrees with scan"
+                );
+            }
+        }
+        assert!(any_failed, "no injected failure ever triggered");
+    }
+
+    /// 11.17-round-2, section 9: the exact same sweep as
+    /// `every_single_syscall_failure_in_the_pipeline_recovers_
+    /// correctly`, under the scored scheduler + batching instead of the
+    /// original fixed-priority rule — the new candidate-selection and
+    /// multi-table-batch code paths this round adds must survive a
+    /// syscall failure at every single point in the pipeline exactly as
+    /// rigorously as the original scheduler already does. Not a
+    /// duplicate of the other sweep: batching means PLAN can now reserve
+    /// output numbers for and COMMIT can retire more than one input
+    /// table per job, a real difference in what a fault mid-pipeline
+    /// could catch half-done.
+    #[test]
+    fn every_single_syscall_failure_recovers_correctly_under_scored_scheduler() {
+        let clean_dir = TempDir::new("sweep-scored-clean");
+        let clean =
+            run_scenario_with_faults_and_options(clean_dir.path(), &[], scored_sweep_options());
+        assert!(clean.result.is_ok(), "clean scenario must succeed");
+        let total_ops = clean.ops;
+        assert!(
+            total_ops > 20,
+            "scenario too small to exercise anything: {total_ops}"
+        );
+        drop(clean);
+
+        let mut any_failed = false;
+        for n in 0..total_ops {
+            let dir = TempDir::new("sweep-scored");
+            let outcome =
+                run_scenario_with_faults_and_options(dir.path(), &[n], scored_sweep_options());
+            any_failed |= outcome.failed;
+
+            let db = match Kiban::open_with_options(dir.path(), scored_sweep_options()) {
+                Ok(db) => db,
+                Err(e) => panic!("n={n}: reopen failed: {e}"),
+            };
+
+            let recovered: Model = db
+                .iter()
+                .map(|r| r.unwrap())
+                .map(|(k, v)| (k, v.to_vec()))
+                .collect();
+            assert_band("scored-pipeline", &[n], &recovered, &outcome.tracker);
+
             for (k, v) in &recovered {
                 assert_eq!(
                     db.get(k.as_slice()).unwrap().as_deref(),
