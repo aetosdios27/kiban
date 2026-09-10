@@ -13,6 +13,7 @@ pub mod db;
 pub(crate) mod engine_lock;
 pub mod file_cache;
 pub mod frame;
+pub mod governor;
 pub mod manifest;
 pub mod memtable;
 pub mod sstable;

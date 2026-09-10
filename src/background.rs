@@ -367,6 +367,11 @@ struct MaintenancePressure {
     l0_count: usize,
     l0_write_stall_trigger: usize,
     pacing_enabled: bool,
+    /// 11.17-round-3, section 8: the governor's mode at capture time.
+    /// `Balanced` for every non-Governor scheduler (see
+    /// `Kiban::governor_mode`), in which case this changes nothing
+    /// about `pace()`'s existing behavior.
+    governor_mode: crate::governor::GovernorMode,
 }
 
 impl MaintenancePressure {
@@ -375,6 +380,7 @@ impl MaintenancePressure {
             l0_count: guard.l0_count(),
             l0_write_stall_trigger: guard.options().l0_write_stall_trigger,
             pacing_enabled: guard.options().maintenance_pacing_enabled,
+            governor_mode: guard.governor_mode(),
         }
     }
 
@@ -412,14 +418,33 @@ impl MaintenancePressure {
     /// to offset the extra stalls); 100us pushes GET p99 lower still
     /// (~32us) but starts visibly costing PUT p99. 20us was chosen as
     /// the balance.
+    ///
+    /// 11.17-round-3, section 8: the governor's mode (when in use)
+    /// additionally scales this delay instead of adding a second,
+    /// separate pacing mechanism — the "minimum mechanism that
+    /// measurably stabilizes latency" the round asked for, not a new
+    /// QoS framework. `WRITE_EMERGENCY` sets the delay to zero (the
+    /// worker bursts flat out, matching "remove/reduce maintenance
+    /// pacing as necessary" — survival outranks foreground comfort);
+    /// `READ_PROTECT` doubles it (foreground reads are already under
+    /// sustained pressure — spend a little more background cadence
+    /// protecting them); `BALANCED` (and every non-Governor scheduler,
+    /// which reports `Balanced` unconditionally) is the unchanged
+    /// original delay.
     fn pace(&self) {
         const HEADROOM_DIVISOR: usize = 2;
         const PACE_DELAY: std::time::Duration = std::time::Duration::from_micros(20);
-        if self.pacing_enabled
-            && self.l0_count.saturating_mul(HEADROOM_DIVISOR) < self.l0_write_stall_trigger
+        if !self.pacing_enabled
+            || self.l0_count.saturating_mul(HEADROOM_DIVISOR) >= self.l0_write_stall_trigger
         {
-            std::thread::sleep(PACE_DELAY);
+            return;
         }
+        let delay = match self.governor_mode {
+            crate::governor::GovernorMode::WriteEmergency => return,
+            crate::governor::GovernorMode::ReadProtect => PACE_DELAY * 2,
+            crate::governor::GovernorMode::Balanced => PACE_DELAY,
+        };
+        std::thread::sleep(delay);
     }
 }
 

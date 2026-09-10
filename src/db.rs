@@ -15,6 +15,7 @@ use crate::background::{Maintenance, MaintenanceError};
 use crate::cache::BlockCache;
 use crate::engine_lock::ShardedRwLock;
 use crate::file_cache::TableFileCache;
+use crate::governor;
 use crate::manifest::{MANIFEST_NAME, Manifest, ManifestError, TableRef};
 use crate::memtable::{Entry as MemEntry, Memtable};
 use crate::sstable::{Kind, SstError, SstTable, TableBuilder};
@@ -340,6 +341,13 @@ pub enum CompactionScheduler {
     #[default]
     FixedPriority,
     Scored,
+    /// 11.17-round-3: adaptive policy that switches among three
+    /// objectives (`crate::governor::GovernorMode`) based on smoothed
+    /// engine pressure, instead of committing to one static tradeoff
+    /// for the whole process. See `crate::governor` and the round-3
+    /// final report for the measured Pareto-frontier comparison against
+    /// `FixedPriority` and `Scored` + batching.
+    Governor,
 }
 
 impl Default for KibanOptions {
@@ -501,6 +509,11 @@ pub struct Kiban {
     /// few relaxed atomic increments per `get`, no lock, no per-call
     /// allocation. See `ReadAmpStats` for the exposed snapshot shape.
     read_amp: StdArc<ReadAmpCounters>,
+    /// 11.17-round-3: adaptive governor state (mode FSM, EWMA signals,
+    /// reporting counters). Always present, cheap, and inert unless
+    /// `options.compaction_scheduler == Governor` — same pattern as
+    /// every other opt-in surface in this engine (mmap, pacing).
+    governor: governor::GovernorState,
 }
 
 /// Raw counters behind `KibanStats::read_amp`. Relaxed throughout:
@@ -781,6 +794,7 @@ impl Kiban {
             poisoned: None,
             read_view,
             read_amp: StdArc::new(ReadAmpCounters::default()),
+            governor: governor::GovernorState::new(),
         })
     }
 
@@ -1141,6 +1155,15 @@ impl Kiban {
     /// The engine's active configuration.
     pub fn options(&self) -> &KibanOptions {
         &self.options
+    }
+
+    /// 11.17-round-3: the governor's current mode, read by
+    /// `background::MaintenancePressure` to make maintenance pacing
+    /// itself pressure-aware (section 8) — meaningless when
+    /// `compaction_scheduler != Governor`, where it just stays
+    /// `Balanced` forever and pacing behaves exactly as before.
+    pub(crate) fn governor_mode(&self) -> governor::GovernorMode {
+        self.governor.mode()
     }
 
     /// Whether the engine is in a poisoned (fatal) state.
@@ -2395,6 +2418,21 @@ pub(crate) struct CompactionPlan {
     file_cache: StdArc<TableFileCache>,
     target_file_size: u64,
     mmap_max_level: Option<u32>,
+    /// 11.17-round-3, section 7: when true, this plan moves exactly one
+    /// existing table down a level by metadata alone (`build()` reopens
+    /// the same file's footer/index — no merge, no bytes rewritten).
+    /// See `Kiban::plan_trivial_move` for the safety argument
+    /// (level>=1 tables only; requires zero overlap with the
+    /// destination level) and `commit_compaction` for why this flag
+    /// changes obsolete-file handling.
+    trivial_move: bool,
+    /// 11.17-round-3, section 3: the governor's own upper-bound
+    /// estimate of physical rewrite bytes for this job, carried through
+    /// so `commit_compaction` can compare it against the real
+    /// `CompactionOutcome` and feed `GovernorState::record_outcome`.
+    /// `None` for `FixedPriority`/`Scored` plans, which make no such
+    /// prediction.
+    predicted_output_bytes: Option<u64>,
 }
 
 impl CompactionPlan {
@@ -2408,6 +2446,36 @@ impl CompactionPlan {
     /// through leaves at most orphan sst files, cleaned by the next
     /// reopen's sweep — never anything the MANIFEST references).
     pub(crate) fn build(&self) -> Result<Vec<TableEntry>, DbError> {
+        if self.trivial_move {
+            // No merge, no new bytes: reopen the SAME file (its number
+            // is unchanged) so the returned `TableEntry` carries the new
+            // `output_level` — a footer/index touch, the same cost any
+            // table open already pays (README "lazy table loading"),
+            // never a rewrite.
+            let entry = self
+                .inputs
+                .first()
+                .ok_or_else(|| DbError::Corrupt("trivial move plan has no input".to_string()))?;
+            let path = self.dir.join(file_name(entry.number, SST_EXTENSION));
+            let use_mmap = self
+                .mmap_max_level
+                .is_some_and(|max| self.output_level <= max);
+            let table = SstTable::open(
+                entry.number,
+                &path,
+                self.cache.clone(),
+                self.file_cache.clone(),
+                use_mmap,
+            )?;
+            return Ok(vec![TableEntry {
+                level: self.output_level,
+                number: entry.number,
+                size: table.size_on_disk(),
+                first_key: table.smallest_key().to_vec(),
+                last_key: table.largest_key().to_vec(),
+                table,
+            }]);
+        }
         let mut sources: Vec<SourceHead<'_>> = Vec::with_capacity(self.inputs.len());
         for entry in &self.inputs {
             // 11.17-C: compaction reads through its own bulk/sequential,
@@ -2629,7 +2697,129 @@ impl Kiban {
         match self.options.compaction_scheduler {
             CompactionScheduler::FixedPriority => self.plan_next_compaction_fixed(cascade_level),
             CompactionScheduler::Scored => self.plan_next_compaction_scored(),
+            CompactionScheduler::Governor => self.plan_next_compaction_governor(),
         }
+    }
+
+    /// PLAN for `CompactionScheduler::Governor` (11.17-round-3). Builds
+    /// a plain-data view of the current topology, feeds pressure into
+    /// `GovernorState` to (possibly) transition mode, enumerates
+    /// candidates, and dispatches the winner to whichever real PLAN
+    /// path produces a `CompactionPlan` — `plan_compaction_at_level_
+    /// with_batch` for L0/level batches, `plan_trivial_move` for a
+    /// metadata-only level bump. See `crate::governor` for the pure
+    /// FSM/scoring logic this only adapts real engine state into.
+    fn plan_next_compaction_governor(&mut self) -> Option<CompactionPlan> {
+        let tables: Vec<governor::TableInfo> = self
+            .version
+            .tables
+            .iter()
+            .map(|t| governor::TableInfo {
+                number: t.number,
+                level: t.level,
+                size: t.size,
+                first_key: t.first_key.clone(),
+                last_key: t.last_key.clone(),
+            })
+            .collect();
+
+        let max_level = tables.iter().map(|t| t.level).max().unwrap_or(0);
+        let mut over_budget_levels: Vec<(u32, u64)> = Vec::new();
+        let mut max_level_debt_ratio = 0.0f64;
+        for level in 1..=max_level.max(1) {
+            let Some(budget) = self.level_budget(level) else {
+                continue;
+            };
+            let bytes = self.level_bytes(level);
+            if bytes > budget && budget > 0 {
+                over_budget_levels.push((level, budget));
+                max_level_debt_ratio = max_level_debt_ratio.max(bytes as f64 / budget as f64);
+            }
+        }
+
+        let mode = self.governor.observe_engine(
+            self.l0_count(),
+            self.options.l0_write_stall_trigger,
+            max_level_debt_ratio,
+            self.read_amp.snapshot(),
+        );
+
+        let candidates = governor::generate_candidates(
+            &tables,
+            self.options.l0_compaction_trigger,
+            &over_budget_levels,
+            self.next_file_number,
+        );
+        if candidates.is_empty() {
+            return None;
+        }
+        let estimated: Vec<(governor::Candidate, governor::CandidateEstimate)> = candidates
+            .into_iter()
+            .map(|c| {
+                let est = governor::estimate_candidate(&tables, &c, self.next_file_number);
+                (c, est)
+            })
+            .collect();
+        let (best, best_est) =
+            governor::pick_best(mode, &estimated, self.options.l0_write_stall_trigger)?;
+        self.governor.record_candidate_chosen(best.kind);
+
+        let mut plan = match best.kind {
+            governor::CandidateKind::L0 => self.plan_compaction_at_level(0),
+            governor::CandidateKind::LevelBatch { level, batch_len } => {
+                self.plan_compaction_at_level_with_batch(level, batch_len)
+            }
+            governor::CandidateKind::TrivialMove { level } => {
+                self.plan_trivial_move(best.input_numbers[0], level)
+            }
+        }?;
+        debug_assert_eq!(
+            plan.output_level, best.output_level,
+            "governor candidate and the real PLAN it dispatched to disagree on output_level"
+        );
+        plan.predicted_output_bytes = Some(best_est.estimated_rewrite_bytes);
+        Some(plan)
+    }
+
+    /// PLAN for a metadata-only level bump (11.17-round-3, section 7):
+    /// moves one existing table from `level` to `level + 1` with no
+    /// rewrite. Safe only because: level >= 1 tables are range-disjoint
+    /// within their own level, so a single table's departure keeps
+    /// `level` disjoint trivially; the caller (governor candidate
+    /// generation) already verified this exact table has zero overlap
+    /// with every `level + 1` table, so inserting it there preserves
+    /// that level's disjointness too; and no data is read, merged, or
+    /// dropped, so none of the tombstone/snapshot drop-rule reasoning
+    /// that gates a real compaction (`gc_allowed`, `smallest_snapshot`)
+    /// applies — there is nothing here that could violate it. L0 is
+    /// deliberately never a source level: L0 tables can overlap each
+    /// other, so moving a single one out from under the others would
+    /// change which value wins for any key more than one L0 table
+    /// covers — see the module docs on why this is skipped rather than
+    /// forced.
+    fn plan_trivial_move(&mut self, number: u64, level: u32) -> Option<CompactionPlan> {
+        debug_assert!(level >= 1, "trivial move source must never be L0");
+        let entry = self
+            .version
+            .tables
+            .iter()
+            .find(|t| t.number == number && t.level == level)?
+            .clone();
+        Some(CompactionPlan {
+            inputs: vec![entry],
+            input_numbers: std::iter::once(number).collect(),
+            output_level: level + 1,
+            smallest_snapshot: self.oldest_active_snapshot().unwrap_or(self.last_sequence),
+            gc_allowed: false,
+            output_numbers: Vec::new(),
+            dir: self.dir.clone(),
+            cache: self.cache.clone(),
+            file_cache: self.file_cache.clone(),
+            target_file_size: self.options.target_file_size,
+            mmap_max_level: self.options.mmap_max_level,
+            trivial_move: true,
+            predicted_output_bytes: None,
+        })
     }
 
     /// The original rule, unchanged: drain L0 first, then cascade
@@ -2779,6 +2969,20 @@ impl Kiban {
     /// when the level turns out to have nothing to compact (callers
     /// already check this; kept as a safe fallback here too).
     fn plan_compaction_at_level(&mut self, level: u32) -> Option<CompactionPlan> {
+        self.plan_compaction_at_level_with_batch(level, self.options.compaction_batch_size.max(1))
+    }
+
+    /// Same as `plan_compaction_at_level`, with the level-batch length
+    /// (level >= 1 only, L0 always takes every L0 table regardless)
+    /// passed explicitly instead of read from
+    /// `options.compaction_batch_size` — lets the governor (11.17-
+    /// round-3) choose a different batch length per decision instead of
+    /// one fixed global value.
+    fn plan_compaction_at_level_with_batch(
+        &mut self,
+        level: u32,
+        batch_size: usize,
+    ) -> Option<CompactionPlan> {
         let mut input_indices: Vec<usize> = Vec::new();
         let range_lo: Vec<u8>;
         let range_hi: Vec<u8>;
@@ -2833,8 +3037,7 @@ impl Kiban {
                 .min_by_key(|(_, (_, t))| t.number)
                 .map(|(pos, _)| pos)
                 .expect("by_key nonempty");
-            let batch_size = self.options.compaction_batch_size.max(1);
-            let end = (seed_pos + batch_size).min(by_key.len());
+            let end = (seed_pos + batch_size.max(1)).min(by_key.len());
             let batch = &by_key[seed_pos..end];
             for (i, _) in batch {
                 input_indices.push(*i);
@@ -2912,6 +3115,8 @@ impl Kiban {
             file_cache: self.file_cache.clone(),
             target_file_size: self.options.target_file_size,
             mmap_max_level: self.options.mmap_max_level,
+            trivial_move: false,
+            predicted_output_bytes: None,
         })
     }
 
@@ -2931,6 +3136,8 @@ impl Kiban {
         // already in hand — never a reread of file bytes.
         let input_bytes: u64 = plan.inputs.iter().map(|t| t.size).sum();
         let output_bytes: u64 = outputs.iter().map(|o| o.size).sum();
+        let trivial_move = plan.trivial_move;
+        let predicted_output_bytes = plan.predicted_output_bytes;
 
         // The one worker means no other compaction can have touched
         // these inputs meanwhile; this just makes that assumption
@@ -2999,8 +3206,20 @@ impl Kiban {
         // no longer holds one (replaced above), so whether anything
         // else (a snapshot, most likely) still does is exactly what
         // `reclaim_obsolete`'s refcount check answers.
+        //
+        // A trivial move is the one exception: its single input and
+        // single output share the SAME file number (see
+        // `Kiban::plan_trivial_move` / `CompactionPlan::build`) — the
+        // "output" TableEntry just inserted above already keeps that
+        // file alive under the new level. Pushing the old TableEntry to
+        // `self.obsolete` here would eventually `reclaim_obsolete` ->
+        // unlink the file the new entry still points at. Just let the
+        // old `Arc<TableEntry>` drop normally instead (an ordinary
+        // handle/mapping close, never an unlink).
         for entry in plan.inputs {
-            self.obsolete.push(entry);
+            if !trivial_move {
+                self.obsolete.push(entry);
+            }
         }
         // Publish BEFORE reclaiming: `self.read_view` itself still
         // points at the PREVIOUS `ReadView` (built from the
@@ -3013,6 +3232,12 @@ impl Kiban {
         // the real last reference — Kiban's own — finally drops).
         self.publish_read_view();
         self.reclaim_obsolete();
+        if let Some(predicted) = predicted_output_bytes {
+            self.governor.record_outcome(predicted, output_bytes);
+        }
+        if trivial_move {
+            self.governor.record_trivial_move(input_bytes);
+        }
         Ok(CompactionOutcome {
             input_bytes,
             output_bytes,
@@ -3211,6 +3436,178 @@ mod compaction_tests {
             .map(|(k, v)| (k, v.to_vec()))
             .collect();
         assert_eq!(rescanned, scanned);
+    }
+
+    /// 11.17-round-3: the same reference-equality workload again, under
+    /// the governor — exercises the FSM, candidate generation, adaptive
+    /// batching, and (opportunistically, whenever an empty deeper level
+    /// makes one legal) trivial moves against a real, evolving,
+    /// multi-generation topology, not just the synthetic tables in
+    /// `governor::tests`.
+    #[test]
+    fn governor_scheduler_keeps_reads_and_scans_correct_over_many_generations() {
+        let td = TempDir::new("compact-governor-longrun");
+        let options = KibanOptions {
+            compaction_scheduler: CompactionScheduler::Governor,
+            ..tiny_options()
+        };
+        let mut db = Kiban::open_with_options(td.path(), options.clone()).unwrap();
+        let mut reference: BTreeMap<Vec<u8>, Vec<u8>> = BTreeMap::new();
+
+        let mut state: u64 = 0x2222_1111_aaaa_bbbb;
+        let mut next = move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+
+        for round in 0..60u64 {
+            for _ in 0..12 {
+                let i = next() % 80;
+                let key = format!("k{i:03}");
+                if next() % 5 == 0 {
+                    db.delete(key.as_bytes()).unwrap();
+                    reference.remove(key.as_bytes());
+                } else {
+                    let val = format!("r{round}-i{i}");
+                    db.put(key.as_bytes(), val.as_bytes()).unwrap();
+                    reference.insert(key.into_bytes(), val.into_bytes());
+                }
+            }
+            db.sync().unwrap();
+            db.flush().unwrap();
+        }
+
+        let scanned: Vec<(Vec<u8>, Vec<u8>)> = db
+            .iter()
+            .map(|r| r.unwrap())
+            .map(|(k, v)| (k, v.to_vec()))
+            .collect();
+        assert_eq!(scanned, reference.clone().into_iter().collect::<Vec<_>>());
+        for (k, v) in &reference {
+            assert_eq!(db.get(k.as_slice()).unwrap().as_deref(), Some(v.as_slice()));
+        }
+        assert!(db.version.tables.iter().any(|t| t.level >= 2));
+
+        drop(db);
+        let db = Kiban::open_with_options(td.path(), options).unwrap();
+        let rescanned: Vec<(Vec<u8>, Vec<u8>)> = db
+            .iter()
+            .map(|r| r.unwrap())
+            .map(|(k, v)| (k, v.to_vec()))
+            .collect();
+        assert_eq!(rescanned, scanned);
+    }
+
+    /// 11.17-round-3, section 7: direct proof that a trivial move is a
+    /// metadata-only relabel, not a rewrite — the file's on-disk bytes
+    /// are byte-identical before and after — and that the result
+    /// survives a reopen. Built deterministically rather than hoping a
+    /// random workload produces one: get a table down to L1 with L2
+    /// still completely empty (zero overlap is then vacuous, so the
+    /// move is always legal), then lower `base_level_bytes` to just
+    /// under that table's own size — L1 becomes over budget, L2's
+    /// budget (`base * level_multiplier`) stays comfortably above the
+    /// table's size, so exactly one hop happens, not a cascade.
+    #[test]
+    fn trivial_move_relocates_a_table_without_rewriting_it_and_survives_reopen() {
+        let td = TempDir::new("compact-trivial-move");
+        let mut options = KibanOptions {
+            target_file_size: 4096,
+            base_level_bytes: 1 << 20, // generous: nothing over budget during setup
+            compaction_scheduler: CompactionScheduler::FixedPriority,
+            ..tiny_options()
+        };
+        let mut db = Kiban::open_with_options(td.path(), options.clone()).unwrap();
+
+        for i in 0..4u32 {
+            db.put(format!("k{i:02}"), format!("v{i}")).unwrap();
+            db.sync().unwrap();
+            db.flush().unwrap();
+        }
+        assert!(
+            !db.version.tables.iter().any(|t| t.level == 2),
+            "setup: L2 must still be empty"
+        );
+        // The setup loop's independent flushes can land either one
+        // merged L1 table or several disjoint ones (only overlapping
+        // L1 tables get pulled into an L0->L1 merge) — either is a
+        // valid setup for this test, so capture whatever landed there
+        // rather than assuming exactly one.
+        let l1_before: Vec<(u64, u64)> = db
+            .version
+            .tables
+            .iter()
+            .filter(|t| t.level == 1)
+            .map(|t| (t.number, t.size))
+            .collect();
+        assert!(
+            !l1_before.is_empty(),
+            "setup: expected at least one L1 table"
+        );
+        let bytes_before: Vec<(u64, Vec<u8>)> = l1_before
+            .iter()
+            .map(|&(number, _)| {
+                (
+                    number,
+                    fs::read(td.path().join(file_name(number, SST_EXTENSION))).unwrap(),
+                )
+            })
+            .collect();
+        let smallest_l1_size = l1_before.iter().map(|&(_, size)| size).min().unwrap();
+
+        // Every L1 table is now (deliberately) over budget, L2 stays
+        // comfortably under even the smallest one: the only legal next
+        // move for each is free.
+        options.base_level_bytes = smallest_l1_size.saturating_sub(1).max(1);
+        options.compaction_scheduler = CompactionScheduler::Governor;
+        db.options = options.clone();
+        db.maybe_compact().unwrap();
+
+        assert!(
+            !db.version.tables.iter().any(|t| t.level == 1),
+            "L1 should now be empty — every table there had zero overlap with an empty L2"
+        );
+        let mut total_bytes_avoided = 0u64;
+        for (number, before) in &bytes_before {
+            let moved = db
+                .version
+                .tables
+                .iter()
+                .find(|t| t.number == *number)
+                .expect("the same file number must survive a trivial move");
+            assert_eq!(
+                moved.level, 2,
+                "table {number} should have moved from L1 to L2"
+            );
+            let after = fs::read(td.path().join(file_name(*number, SST_EXTENSION))).unwrap();
+            assert_eq!(
+                before, &after,
+                "trivial move must not rewrite table {number}"
+            );
+            total_bytes_avoided += moved.size;
+        }
+
+        let stats = db.governor.snapshot();
+        assert_eq!(stats.trivial_moves_performed, l1_before.len() as u64);
+        assert_eq!(stats.trivial_move_bytes_avoided, total_bytes_avoided);
+
+        for i in 0..4u32 {
+            assert_eq!(
+                db.get(format!("k{i:02}").as_bytes()).unwrap(),
+                Some(format!("v{i}").into_bytes())
+            );
+        }
+        drop(db);
+        let db = Kiban::open_with_options(td.path(), options).unwrap();
+        for i in 0..4u32 {
+            assert_eq!(
+                db.get(format!("k{i:02}").as_bytes()).unwrap(),
+                Some(format!("v{i}").into_bytes())
+            );
+        }
+        assert!(db.version.tables.iter().any(|t| t.level == 2));
     }
 
     #[test]
@@ -3456,6 +3853,17 @@ mod crash_sweep_tests {
         }
     }
 
+    /// Same as `sweep_options`, under the governor (11.17-round-3) —
+    /// exercises the candidate-generation/trivial-move/predicted-cost
+    /// bookkeeping code paths under the exact same fault-injection
+    /// scrutiny as the other two schedulers.
+    pub(crate) fn governor_sweep_options() -> KibanOptions {
+        KibanOptions {
+            compaction_scheduler: CompactionScheduler::Governor,
+            ..sweep_options()
+        }
+    }
+
     /// Same scenario as `run_scenario_with_faults`, with the options
     /// exposed — 11.17-round-2: lets the fault sweep re-run under the
     /// scored scheduler + batching (`scored_sweep_options`) without
@@ -3631,6 +4039,54 @@ mod crash_sweep_tests {
                 .map(|(k, v)| (k, v.to_vec()))
                 .collect();
             assert_band("scored-pipeline", &[n], &recovered, &outcome.tracker);
+
+            for (k, v) in &recovered {
+                assert_eq!(
+                    db.get(k.as_slice()).unwrap().as_deref(),
+                    Some(v.as_slice()),
+                    "n={n}: get disagrees with scan"
+                );
+            }
+        }
+        assert!(any_failed, "no injected failure ever triggered");
+    }
+
+    /// 11.17-round-3, section 13: the same sweep again, under the
+    /// governor. Trivial moves in particular change what a mid-pipeline
+    /// crash could catch half-done — reserving zero output numbers,
+    /// retiring nothing to `obsolete` — so this is not redundant with
+    /// the other two scheduler sweeps.
+    #[test]
+    fn every_single_syscall_failure_recovers_correctly_under_governor() {
+        let clean_dir = TempDir::new("sweep-governor-clean");
+        let clean =
+            run_scenario_with_faults_and_options(clean_dir.path(), &[], governor_sweep_options());
+        assert!(clean.result.is_ok(), "clean scenario must succeed");
+        let total_ops = clean.ops;
+        assert!(
+            total_ops > 20,
+            "scenario too small to exercise anything: {total_ops}"
+        );
+        drop(clean);
+
+        let mut any_failed = false;
+        for n in 0..total_ops {
+            let dir = TempDir::new("sweep-governor");
+            let outcome =
+                run_scenario_with_faults_and_options(dir.path(), &[n], governor_sweep_options());
+            any_failed |= outcome.failed;
+
+            let db = match Kiban::open_with_options(dir.path(), governor_sweep_options()) {
+                Ok(db) => db,
+                Err(e) => panic!("n={n}: reopen failed: {e}"),
+            };
+
+            let recovered: Model = db
+                .iter()
+                .map(|r| r.unwrap())
+                .map(|(k, v)| (k, v.to_vec()))
+                .collect();
+            assert_band("governor-pipeline", &[n], &recovered, &outcome.tracker);
 
             for (k, v) in &recovered {
                 assert_eq!(
@@ -3921,6 +4377,12 @@ pub struct KibanStats {
     pub table_files: crate::file_cache::TableFileCacheStats,
     pub maintenance: crate::background::MaintenanceStats,
     pub read_amp: ReadAmpStats,
+    /// 11.17-round-3: facts about the adaptive governor (mode, mode
+    /// switches, adaptive batch sizes, trivial moves, predicted-vs-
+    /// actual rewrite accuracy). Populated the same way regardless of
+    /// scheduler — inert (all zero, mode `Balanced`) unless
+    /// `compaction_scheduler == Governor`.
+    pub governor: governor::GovernorStats,
 }
 
 fn levels_from_version(version: &Version) -> Vec<LevelStats> {
@@ -4140,6 +4602,7 @@ impl SharedKiban {
             levels,
             cache,
             file_cache,
+            governor,
         ) = {
             let guard = self.read_lock()?;
             (
@@ -4156,6 +4619,7 @@ impl SharedKiban {
                 levels_from_version(&guard.version),
                 guard.cache.clone(),
                 guard.file_cache.clone(),
+                guard.governor.snapshot(),
             )
         };
         Ok(KibanStats {
@@ -4170,6 +4634,7 @@ impl SharedKiban {
             table_files: file_cache.stats(),
             maintenance: self.maintenance.stats(),
             read_amp: self.read_amp.snapshot(),
+            governor,
         })
     }
 
