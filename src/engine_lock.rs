@@ -5,7 +5,11 @@ use std::ops::{Deref, DerefMut};
 // Loom models the gate's real protocol (below, `loom_tests`) by swapping
 // these primitives for loom-modeled equivalents; the non-loom build is
 // byte-identical std code.
+// AtomicUsize is only reached through `mod tests`/`mod loom_tests` here
+// (`use super::*`), never by non-test lib code under this branch — the
+// loom build's own shard counter is dropped (see below).
 #[cfg(feature = "loom")]
+#[allow(unused_imports)]
 use loom::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 #[cfg(feature = "loom")]
 use loom::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -31,7 +35,7 @@ thread_local! {
     #[cfg(not(feature = "loom"))]
     static READER_SHARD: usize = NEXT_SHARD.fetch_add(1, Ordering::Relaxed) % ENGINE_READ_SHARDS;
     #[cfg(feature = "loom")]
-    static READER_SHARD: usize = 0;
+    static READER_SHARD: usize = const { 0 };
 }
 
 /// One engine value guarded by eight independent reader gates.
@@ -790,7 +794,7 @@ mod tests {
         release.wait();
         writer.join().unwrap();
         for _ in 0..4 {
-            let _ = entered_rx.recv().unwrap();
+            entered_rx.recv().unwrap();
         }
         for reader in readers {
             reader.join().unwrap();
@@ -1235,7 +1239,15 @@ mod loom_tests {
                 let (gate, readers_in, writers_in) =
                     (gate.clone(), readers_in.clone(), writers_in.clone());
                 move || {
-                    if gate.write().is_some() {
+                    // Bind the guard (not `.is_some()` on the temporary):
+                    // an unbound `if gate.write().is_some() { .. }` drops
+                    // the `Option<GateWrite>` at the end of the condition,
+                    // before the body runs, releasing every shard lock
+                    // ahead of the counter check below and making the
+                    // assertion race for real. Binding keeps the guard
+                    // alive for the whole body, matching the real
+                    // exclusion this test exists to prove.
+                    if let Some(_guard) = gate.write() {
                         writers_in.fetch_add(1, Ordering::Relaxed);
                         assert!(
                             readers_in.load(Ordering::Relaxed) == 0,
@@ -1263,7 +1275,10 @@ mod loom_tests {
             for _ in 0..2 {
                 let (gate, writers_in) = (gate.clone(), writers_in.clone());
                 joins.push(thread::spawn(move || {
-                    if gate.write().is_some() {
+                    // Same bound-guard requirement as above: an unbound
+                    // `.is_some()` releases the guard before this body
+                    // runs, defeating the very exclusion under test.
+                    if let Some(_guard) = gate.write() {
                         let n = writers_in.fetch_add(1, Ordering::Relaxed) + 1;
                         assert!(n == 1, "two writers held the gate together");
                         writers_in.fetch_sub(1, Ordering::Relaxed);
@@ -1289,10 +1304,10 @@ mod loom_tests {
             let reader = {
                 let (gate, writer_done) = (gate.clone(), writer_done.clone());
                 thread::spawn(move || {
-                    if let Some(guard) = gate.read(0) {
-                        if writer_done.load(Ordering::Acquire) {
-                            assert_eq!(*guard, 1, "reader observed completion but not the write");
-                        }
+                    if let Some(guard) = gate.read(0)
+                        && writer_done.load(Ordering::Acquire)
+                    {
+                        assert_eq!(*guard, 1, "reader observed completion but not the write");
                     }
                 })
             };

@@ -48,6 +48,11 @@
 //!   `last_sequence` captured at publication. `SharedSnapshot`
 //!   semantics are untouched by this module.
 
+// Scaffold only (see the module doc above): nothing in the crate wires
+// this up to a real GET path yet, so a plain `--features readview` lib
+// build has no caller for any of it — expected, not a bug.
+#![allow(dead_code)]
+
 use std::mem::ManuallyDrop;
 use std::sync::Arc as StdArc;
 use std::sync::Mutex;
