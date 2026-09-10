@@ -367,11 +367,18 @@ struct MaintenancePressure {
     l0_count: usize,
     l0_write_stall_trigger: usize,
     pacing_enabled: bool,
-    /// 11.17-round-3, section 8: the governor's mode at capture time.
+    /// 11.17-round-3, section 8: the governor's mode at capture time —
+    /// still used to pick `pacing_delay`'s ceiling (see below).
     /// `Balanced` for every non-Governor scheduler (see
     /// `Kiban::governor_mode`), in which case this changes nothing
     /// about `pace()`'s existing behavior.
     governor_mode: crate::governor::GovernorMode,
+    /// 11.17-round-3.1: the governor's continuous pressure signal at
+    /// capture time (`Kiban::governor_pressure`) — 0.0 forever for
+    /// every non-Governor scheduler, which (combined with `Balanced`
+    /// above) reproduces the original flat `PACE_DELAY` exactly via
+    /// `pacing_delay(Balanced, 0.0)`.
+    governor_pressure: f64,
 }
 
 impl MaintenancePressure {
@@ -381,6 +388,7 @@ impl MaintenancePressure {
             l0_write_stall_trigger: guard.options().l0_write_stall_trigger,
             pacing_enabled: guard.options().maintenance_pacing_enabled,
             governor_mode: guard.governor_mode(),
+            governor_pressure: guard.governor_pressure(),
         }
     }
 
@@ -419,44 +427,37 @@ impl MaintenancePressure {
     /// (~32us) but starts visibly costing PUT p99. 20us was chosen as
     /// the balance.
     ///
-    /// 11.17-round-3, section 8: the governor's mode (when in use)
-    /// additionally scales this delay instead of adding a second,
-    /// separate pacing mechanism — the "minimum mechanism that
-    /// measurably stabilizes latency" the round asked for, not a new
-    /// QoS framework. `READ_PROTECT` doubles the delay (foreground
-    /// reads are already under sustained pressure — spend a little
-    /// more background cadence protecting them); `BALANCED` (and every
-    /// non-Governor scheduler, which reports `Balanced` unconditionally)
-    /// is the unchanged original delay.
+    /// 11.17-round-3.1: pacing aggressiveness is now driven by the
+    /// governor's *continuous* pressure signal (`pacing_delay`), not a
+    /// flat per-mode multiplier. The mode still selects which delay
+    /// *ceiling* applies (`READ_PROTECT` gets a higher one — foreground
+    /// reads are already under sustained load, spend a little more
+    /// background cadence protecting them — see `pacing_delay`), but
+    /// the actual delay within that ceiling now varies smoothly with
+    /// pressure instead of jumping between three fixed values the
+    /// instant a hysteresis-gated mode transition lands. This is what
+    /// fixed a real, measured problem: `WRITE_EMERGENCY`'s old flat
+    /// delay stayed at its most-aggressive value through the mode's
+    /// exit hysteresis-lag tail (L0 already recovered, mode not yet
+    /// caught up), and a phase-changing benchmark caught a burst of
+    /// under-paced COMMITs landing right as a workload shifted to read-
+    /// heavy, spiking PUT p999 to several milliseconds. Pressure reacts
+    /// every call, not every mode transition, so that tail now decays
+    /// smoothly instead of stepping.
     ///
-    /// `WRITE_EMERGENCY` quarters it rather than zeroing it outright.
-    /// The early return above already skips pacing entirely whenever L0
-    /// has no real headroom (within `HEADROOM_DIVISOR` of the stall
-    /// trigger) — which is always true while genuinely at peak
-    /// emergency pressure, since entering `WRITE_EMERGENCY` requires L0
-    /// past 75% of that same trigger. A flat `return` here only ever
-    /// additionally fired during the mode's hysteresis-lag tail, after
-    /// L0 had already drained back into headroom but the FSM's
-    /// multi-window exit streak hadn't completed yet — exactly the
-    /// window a phase-changing benchmark caught: a burst of fully
-    /// unpaced COMMITs landing right as a workload shifted to read-
-    /// heavy, spiking PUT p999 to ~4.7ms. A quartered delay keeps
-    /// almost all of the burst benefit for genuine emergencies (already
-    /// covered by the guard above) while capping how long that lag
-    /// window can run completely unpaced.
+    /// The early return below is unchanged from before pressure
+    /// existed: pacing is skipped entirely whenever L0 has no real
+    /// headroom (within `HEADROOM_DIVISOR` of the stall trigger) —
+    /// draining a genuine backlog is never slowed down, for every
+    /// scheduler, Governor or not.
     fn pace(&self) {
         const HEADROOM_DIVISOR: usize = 2;
-        const PACE_DELAY: std::time::Duration = std::time::Duration::from_micros(20);
         if !self.pacing_enabled
             || self.l0_count.saturating_mul(HEADROOM_DIVISOR) >= self.l0_write_stall_trigger
         {
             return;
         }
-        let delay = match self.governor_mode {
-            crate::governor::GovernorMode::WriteEmergency => PACE_DELAY / 4,
-            crate::governor::GovernorMode::ReadProtect => PACE_DELAY * 2,
-            crate::governor::GovernorMode::Balanced => PACE_DELAY,
-        };
+        let delay = crate::governor::pacing_delay(self.governor_mode, self.governor_pressure);
         std::thread::sleep(delay);
     }
 }

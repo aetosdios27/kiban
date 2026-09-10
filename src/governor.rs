@@ -17,6 +17,56 @@
 //! engine lock. `crate::db` adapts real engine state into these plain
 //! types and back into a `CompactionPlan`; see
 //! `Kiban::plan_next_compaction_governor`.
+//!
+//! 11.17-round-3.1: maintenance *pacing* (how aggressively the
+//! background worker paces itself between jobs) is deliberately
+//! decoupled from the mode FSM above. Modes still decide *what* to
+//! compact and gate correctness-relevant behavior; a separate
+//! continuous `pressure` value (`GovernorState::pressure`, `[0.0,
+//! 1.0]`) decides *how hard* to pace, via `pacing_delay`. This exists
+//! because the mode FSM's own hysteresis (needed so BALANCED/
+//! READ_PROTECT don't flap) means a mode can stay "stale" for a few
+//! PLAN cycles after the pressure that justified it has actually
+//! subsided — harmless for candidate selection, but a real problem for
+//! pacing: a phase-changing benchmark caught `WRITE_EMERGENCY`'s flat,
+//! mode-keyed pacing multiplier producing a multi-millisecond PUT p999
+//! spike exactly in that stale window. `pressure` reacts every PLAN
+//! call, not every mode transition, so pacing decays as smoothly as
+//! the underlying signals do instead of jumping the instant (delayed)
+//! mode flips.
+
+pub(crate) use pressure::pacing_delay;
+
+mod pressure {
+    use std::time::Duration;
+
+    /// Continuous map from blended pressure to a maintenance pacing
+    /// delay. `READ_PROTECT`'s ceiling is higher (more cautious at low
+    /// pressure — foreground reads are already under sustained load);
+    /// every mode shares the same floor, because a real emergency must
+    /// be reachable regardless of which mode the (separately, more
+    /// slowly) hysteresis-gated FSM currently reports. All three
+    /// duration constants are unchanged from the discrete, mode-keyed
+    /// version this replaces (20us BALANCED, 40us READ_PROTECT, 5us
+    /// WRITE_EMERGENCY post-fix) — reused as the endpoints of a
+    /// continuous curve instead of three fixed, independently-selected
+    /// values.
+    pub(crate) fn pacing_delay(mode: super::GovernorMode, pressure: f64) -> Duration {
+        const MAX_DELAY: Duration = Duration::from_micros(20);
+        const READ_PROTECT_MAX_DELAY: Duration = Duration::from_micros(40);
+        const MIN_DELAY: Duration = Duration::from_micros(5);
+        let ceiling = if mode == super::GovernorMode::ReadProtect {
+            READ_PROTECT_MAX_DELAY
+        } else {
+            MAX_DELAY
+        };
+        let p = pressure.clamp(0.0, 1.0);
+        let ceiling_nanos = ceiling.as_nanos() as f64;
+        let floor_nanos = MIN_DELAY.as_nanos() as f64;
+        let nanos = ceiling_nanos - p * (ceiling_nanos - floor_nanos);
+        Duration::from_nanos(nanos.max(floor_nanos) as u64)
+    }
+}
 
 use crate::db::ReadAmpStats;
 
@@ -57,6 +107,13 @@ pub(crate) struct PressureSample {
     /// it stands in for a live GET p99 signal without adding any new
     /// per-get instrumentation.
     pub tables_probed_per_get: f64,
+    /// Number of levels >= 1 currently over their byte budget — how
+    /// *wide* the compaction backlog is, a different question from
+    /// `max_level_debt_ratio`'s "how deep is the worst one." Feeds only
+    /// the smoothed pressure signal, not the instant emergency floor
+    /// (breadth alone was never part of the FSM's own emergency
+    /// criteria, so it shouldn't gate the pacing floor either).
+    pub backlog_levels: usize,
 }
 
 // ---- FSM tuning constants -------------------------------------------
@@ -95,6 +152,19 @@ const READ_PROTECT_ENTER_WINDOWS: u32 = 3;
 const READ_PROTECT_EXIT_TABLES_PROBED: f64 = 1.15;
 const READ_PROTECT_EXIT_WINDOWS: u32 = 4;
 
+/// Weight of the read-amplification contribution in the blended
+/// pressure signal that feeds `GovernorState::pressure` (structural
+/// signals — L0 and level debt — get the rest). Read amplification is
+/// corroborating evidence of a bad backlog, not the primary driver: a
+/// weight well under half keeps it from dominating the signal that
+/// controls pacing.
+const PRESSURE_READAMP_WEIGHT: f64 = 0.3;
+/// Number of simultaneously over-budget levels treated as "fully"
+/// contributing backlog-breadth pressure. Three over-budget levels at
+/// once is already an unusual, clearly-bad topology for this engine's
+/// leveled layout; more doesn't need to push the signal harder.
+const PRESSURE_BACKLOG_NORMALIZATION: f64 = 3.0;
+
 /// Prefix lengths considered per level batch candidate: 1, 2, 3, 4 —
 /// exactly the task's own `[A] [A,B] [A,B,C] [A,B,C,D]` example. A
 /// fixed small cap, not a search: linear in this constant, never
@@ -108,6 +178,16 @@ const MAX_ADAPTIVE_BATCH: usize = 4;
 pub(crate) struct GovernorState {
     mode: GovernorMode,
     tables_probed_ewma: f64,
+    /// EWMA of the blended structural + read-amp pressure signal
+    /// (11.17-round-3.1) — decays gradually across successive
+    /// `observe` calls rather than stepping when the (separately
+    /// hysteresis-gated) mode changes. See `pressure`.
+    pressure_ewma: f64,
+    /// `pressure_ewma` combined with the current call's *unsmoothed*
+    /// emergency floor — what `pressure()` actually returns. Stored
+    /// (rather than recomputed) because `observe`'s return value is the
+    /// mode, not this.
+    last_pressure: f64,
     enter_read_protect_streak: u32,
     exit_read_protect_streak: u32,
     exit_emergency_streak: u32,
@@ -131,6 +211,8 @@ impl GovernorState {
         GovernorState {
             mode: GovernorMode::Balanced,
             tables_probed_ewma: 0.0,
+            pressure_ewma: 0.0,
+            last_pressure: 0.0,
             enter_read_protect_streak: 0,
             exit_read_protect_streak: 0,
             exit_emergency_streak: 0,
@@ -149,6 +231,15 @@ impl GovernorState {
 
     pub(crate) fn mode(&self) -> GovernorMode {
         self.mode
+    }
+
+    /// Continuous maintenance-aggressiveness signal in `[0.0, 1.0]`,
+    /// updated on every `observe`/`observe_engine` call — see the
+    /// module-level 11.17-round-3.1 docs and `pacing_delay`. Independent
+    /// of `mode`'s own hysteresis: this is what actually decays
+    /// smoothly.
+    pub(crate) fn pressure(&self) -> f64 {
+        self.last_pressure
     }
 
     /// The pure FSM step: given one pressure sample, updates the EWMA
@@ -170,6 +261,33 @@ impl GovernorState {
             || sample.max_level_debt_ratio >= WRITE_EMERGENCY_ENTER_DEBT_RATIO;
         let recovered = l0_fraction <= WRITE_EMERGENCY_EXIT_L0_FRACTION
             && sample.max_level_debt_ratio <= WRITE_EMERGENCY_EXIT_DEBT_RATIO;
+
+        // 11.17-round-3.1: continuous pressure, computed every call
+        // regardless of mode transitions. `l0_component`/`debt_component`
+        // are normalized so 1.0 lands exactly where the FSM's own
+        // WRITE_EMERGENCY entry criteria do — the point past which
+        // maximum maintenance is unconditionally correct regardless of
+        // mode. `emergency_floor` uses those two, UNSMOOTHED, so a
+        // genuine spike forces near-maximum pacing aggressiveness on
+        // this exact call (requirement: no waiting on a smoothing
+        // window when real danger is imminent). `pressure_ewma` blends
+        // in backlog breadth and read amplification and decays
+        // gradually across calls, which is what lets pacing taper off
+        // smoothly after a busy stretch instead of stepping the moment
+        // the (separately hysteresis-gated) mode itself flips back.
+        let l0_component = (l0_fraction / WRITE_EMERGENCY_ENTER_L0_FRACTION).min(1.0);
+        let debt_component =
+            (sample.max_level_debt_ratio / WRITE_EMERGENCY_ENTER_DEBT_RATIO).min(1.0);
+        let backlog_component =
+            (sample.backlog_levels as f64 / PRESSURE_BACKLOG_NORMALIZATION).min(1.0);
+        let readamp_component =
+            (self.tables_probed_ewma / READ_PROTECT_ENTER_TABLES_PROBED).min(1.0);
+        let structural = l0_component.max(debt_component).max(backlog_component);
+        let instant = structural * (1.0 - PRESSURE_READAMP_WEIGHT)
+            + readamp_component * PRESSURE_READAMP_WEIGHT;
+        self.pressure_ewma = EWMA_ALPHA * instant + (1.0 - EWMA_ALPHA) * self.pressure_ewma;
+        let emergency_floor = l0_component.max(debt_component);
+        self.last_pressure = self.pressure_ewma.max(emergency_floor).clamp(0.0, 1.0);
 
         let new_mode = match self.mode {
             GovernorMode::WriteEmergency => {
@@ -239,6 +357,7 @@ impl GovernorState {
         l0_count: usize,
         l0_write_stall_trigger: usize,
         max_level_debt_ratio: f64,
+        backlog_levels: usize,
         read_amp_now: ReadAmpStats,
     ) -> GovernorMode {
         let probed_now = read_amp_now.l0_tables_probed + read_amp_now.leveled_tables_probed;
@@ -264,6 +383,7 @@ impl GovernorState {
             l0_write_stall_trigger,
             max_level_debt_ratio,
             tables_probed_per_get,
+            backlog_levels,
         })
     }
 
@@ -303,6 +423,7 @@ impl GovernorState {
         };
         GovernorStats {
             mode: self.mode,
+            pressure: self.last_pressure,
             mode_switches: self.mode_switches,
             time_balanced_ms: time_in_mode[GovernorMode::Balanced.idx()].as_millis() as u64,
             time_read_protect_ms: time_in_mode[GovernorMode::ReadProtect.idx()].as_millis() as u64,
@@ -321,6 +442,12 @@ impl GovernorState {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct GovernorStats {
     pub mode: GovernorMode,
+    /// Continuous pacing-aggressiveness signal at snapshot time (11.17-
+    /// round-3.1) — see `GovernorState::pressure`. Sampled alongside
+    /// `mode` so a caller (a benchmark, say) can plot whether actuation
+    /// actually decays smoothly across a workload transition instead of
+    /// stepping with the mode.
+    pub pressure: f64,
     pub mode_switches: u64,
     pub time_balanced_ms: u64,
     pub time_read_protect_ms: u64,
@@ -672,6 +799,7 @@ mod tests {
             l0_write_stall_trigger: stall_trigger,
             max_level_debt_ratio: debt_ratio,
             tables_probed_per_get: tables_probed,
+            backlog_levels: 0,
         }
     }
 
@@ -927,6 +1055,143 @@ mod tests {
         assert!(
             matches!(best.0.kind, CandidateKind::L0),
             "READ_PROTECT should favor L0 relief"
+        );
+    }
+
+    // ---- continuous pressure / pacing tests (11.17-round-3.1) ----
+
+    #[test]
+    fn pacing_delay_ranges_from_ceiling_to_floor_monotonically() {
+        let at_zero = pacing_delay(GovernorMode::Balanced, 0.0);
+        let at_half = pacing_delay(GovernorMode::Balanced, 0.5);
+        let at_one = pacing_delay(GovernorMode::Balanced, 1.0);
+        assert_eq!(
+            at_zero,
+            std::time::Duration::from_micros(20),
+            "pressure 0 must match the old flat BALANCED delay exactly"
+        );
+        assert_eq!(
+            at_one,
+            std::time::Duration::from_micros(5),
+            "pressure 1 must reach the emergency floor"
+        );
+        assert!(
+            at_half < at_zero && at_half > at_one,
+            "delay must decrease monotonically with pressure, not step"
+        );
+    }
+
+    #[test]
+    fn read_protect_paces_more_than_balanced_at_the_same_low_pressure() {
+        let balanced = pacing_delay(GovernorMode::Balanced, 0.1);
+        let read_protect = pacing_delay(GovernorMode::ReadProtect, 0.1);
+        assert!(
+            read_protect > balanced,
+            "READ_PROTECT should reduce foreground interference more than BALANCED at the same pressure"
+        );
+    }
+
+    #[test]
+    fn every_mode_reaches_the_same_emergency_floor_at_full_pressure() {
+        // Whatever mode the (separately hysteresis-gated) FSM currently
+        // reports, a real emergency must still be fully reachable —
+        // pacing cannot be pinned to a cautious ceiling just because the
+        // mode hasn't caught up yet.
+        for mode in [
+            GovernorMode::Balanced,
+            GovernorMode::ReadProtect,
+            GovernorMode::WriteEmergency,
+        ] {
+            assert_eq!(pacing_delay(mode, 1.0), std::time::Duration::from_micros(5));
+        }
+    }
+
+    #[test]
+    fn emergency_floor_overrides_smoothed_pressure_instantly() {
+        let mut g = GovernorState::new();
+        // Several calm samples: pressure_ewma should settle near 0.
+        for _ in 0..10 {
+            g.observe(sample(0, 100, 0.0, 0.0));
+        }
+        assert!(
+            g.pressure() < 0.1,
+            "pressure should be near zero after sustained calm, got {}",
+            g.pressure()
+        );
+        // One sample right at the FSM's own emergency threshold: the
+        // unsmoothed floor must force pressure to (near) 1.0 on THIS
+        // call — no waiting for an EWMA to catch up.
+        g.observe(sample(75, 100, 0.0, 0.0));
+        assert!(
+            g.pressure() > 0.95,
+            "a single sample at the emergency threshold must force pressure to the floor immediately, got {}",
+            g.pressure()
+        );
+    }
+
+    #[test]
+    fn pressure_decays_smoothly_not_instantly_after_a_spike_clears() {
+        let mut g = GovernorState::new();
+        // Drive pressure high via sustained real pressure (not just the
+        // instantaneous floor, which itself doesn't persist) so there is
+        // a real EWMA to decay.
+        for _ in 0..10 {
+            g.observe(sample(75, 100, 0.0, 0.0));
+        }
+        let peak = g.pressure();
+        assert!(
+            peak > 0.9,
+            "expected sustained pressure near 1.0, got {peak}"
+        );
+
+        // Pressure now clears completely (L0 back to zero, no debt).
+        let mut previous = peak;
+        let mut saw_gradual_step = false;
+        for _ in 0..15 {
+            g.observe(sample(0, 100, 0.0, 0.0));
+            let now = g.pressure();
+            assert!(
+                now <= previous + 1e-9,
+                "pressure must not increase while the underlying signal stays clear"
+            );
+            if previous - now > 1e-9 && now > 0.05 {
+                saw_gradual_step = true;
+            }
+            previous = now;
+        }
+        assert!(
+            saw_gradual_step,
+            "expected at least one intermediate, still-elevated sample during decay — pressure dropped in one step instead of decaying"
+        );
+        assert!(
+            previous < 0.05,
+            "pressure should eventually settle back near zero, ended at {previous}"
+        );
+    }
+
+    #[test]
+    fn backlog_breadth_and_read_amp_contribute_to_pressure_without_a_debt_ratio() {
+        // No L0 pressure, no level debt — but several levels over
+        // budget and elevated read amplification should still produce
+        // some nonzero pressure (backlog breadth + read-amp
+        // corroborating evidence), just not at the emergency floor.
+        let mut g = GovernorState::new();
+        for _ in 0..5 {
+            g.observe(PressureSample {
+                l0_count: 0,
+                l0_write_stall_trigger: 100,
+                max_level_debt_ratio: 0.0,
+                tables_probed_per_get: 2.0,
+                backlog_levels: 3,
+            });
+        }
+        assert!(
+            g.pressure() > 0.0,
+            "backlog/read-amp signals should contribute nonzero pressure"
+        );
+        assert!(
+            g.pressure() < 0.95,
+            "this scenario is not a real emergency and must not hit the floor"
         );
     }
 }

@@ -1192,6 +1192,13 @@ impl Kiban {
         self.governor.mode()
     }
 
+    /// 11.17-round-3.1: the governor's continuous pacing-aggressiveness
+    /// signal, read by `background::MaintenancePressure` alongside
+    /// `governor_mode` — see `governor::GovernorState::pressure`.
+    pub(crate) fn governor_pressure(&self) -> f64 {
+        self.governor.pressure()
+    }
+
     /// Whether the engine is in a poisoned (fatal) state.
     pub fn is_poisoned(&self) -> bool {
         self.poisoned.is_some()
@@ -2767,6 +2774,7 @@ impl Kiban {
             self.l0_count(),
             self.options.l0_write_stall_trigger,
             max_level_debt_ratio,
+            over_budget_levels.len(),
             self.read_amp.snapshot(),
         );
 
