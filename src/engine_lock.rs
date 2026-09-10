@@ -1,15 +1,37 @@
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-
 use std::cell::UnsafeCell;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
-use std::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
+// Loom models the gate's real protocol (below, `loom_tests`) by swapping
+// these primitives for loom-modeled equivalents; the non-loom build is
+// byte-identical std code.
+#[cfg(feature = "loom")]
+use loom::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+#[cfg(feature = "loom")]
+use loom::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
+#[cfg(feature = "loom")]
+use loom::thread::yield_now;
+#[cfg(not(feature = "loom"))]
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+#[cfg(not(feature = "loom"))]
+use std::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
+#[cfg(not(feature = "loom"))]
+use std::thread::yield_now;
+
+// Shard pick is per-thread round-robin over the process; under loom the
+// global ticket counter is dropped (loom atomics are not const-constructible)
+// and every model thread lands on shard 0, which only tightens the explored
+// contention — shard choice is load balancing, never a safety property.
 pub(crate) const ENGINE_READ_SHARDS: usize = 8;
+
+#[cfg(not(feature = "loom"))]
 static NEXT_SHARD: AtomicUsize = AtomicUsize::new(0);
 
 thread_local! {
+    #[cfg(not(feature = "loom"))]
     static READER_SHARD: usize = NEXT_SHARD.fetch_add(1, Ordering::Relaxed) % ENGINE_READ_SHARDS;
+    #[cfg(feature = "loom")]
+    static READER_SHARD: usize = 0;
 }
 
 /// One engine value guarded by eight independent reader gates.
@@ -118,7 +140,7 @@ impl<T> ShardedRwLock<T> {
     fn read_from_shard(&self, shard: usize) -> Result<ReadGuard<'_, T>, ()> {
         loop {
             if self.writer_pending.load(Ordering::Acquire) {
-                std::thread::yield_now();
+                yield_now();
                 continue;
             }
             let guard = self.shards[shard].read().map_err(|_| ())?;
@@ -131,7 +153,7 @@ impl<T> ShardedRwLock<T> {
                 });
             }
             drop(guard);
-            std::thread::yield_now();
+            yield_now();
         }
     }
 
@@ -882,7 +904,11 @@ mod tests {
                 !lock.writer_pending(),
                 "writer_pending stuck after writer {i} released"
             );
-            assert_eq!(*lock.read().unwrap(), i, "reader admitted right after writer {i}");
+            assert_eq!(
+                *lock.read().unwrap(),
+                i,
+                "reader admitted right after writer {i}"
+            );
         }
 
         let held = Arc::new(Barrier::new(9));
@@ -935,8 +961,8 @@ mod tests {
                         if writers_in.load(Ordering::Relaxed) != 0 {
                             violations.fetch_add(1, Ordering::Relaxed);
                         }
-                        drop(guard);
                         readers_in.fetch_sub(1, Ordering::Relaxed);
+                        drop(guard);
                     }
                 })
             })
@@ -1047,5 +1073,248 @@ mod tests {
             total_reads > 0,
             "readers made zero progress under write pressure"
         );
+    }
+}
+
+/// Exhaustive interleaving checks over the gate's synchronization core.
+///
+/// The unbounded reader yield-spin is not expressible as a bounded loom
+/// search (loom itself rejects spin loops: "exceeded maximum number of
+/// branches"), so the models below run a self-contained copy of the
+/// protocol core — identical state, acquisition order, admission
+/// linearization, and guard drop order — with the spin replaced by bounded
+/// give-up semantics, which is equivalent for every safety property
+/// (spinning only retries what a give-up would retry later).
+///
+/// Deliberately not modeled here: poisoning (loom locks never poison),
+/// unwinding (loom does not model panics), and liveness (writer progress
+/// under pressure). All three stay covered by the std unit tests above,
+/// which exercise the production bytes directly.
+#[cfg(all(test, feature = "loom"))]
+mod loom_tests {
+    use super::*;
+    use loom::sync::Arc;
+    use loom::thread;
+
+    /// Model of the `ShardedRwLock` protocol core: same fields, same reader
+    /// double-check admission, same writer serial → intent → ascending
+    /// shard acquisition, same guard drop order (intent → serial → shards).
+    /// MUST be kept in sync with `ShardedRwLock` above; it exists so loom
+    /// can exhaustively explore the protocol without the unbounded spin.
+    struct Gate {
+        shards: [RwLock<()>; ENGINE_READ_SHARDS],
+        writer_serial: Mutex<()>,
+        writer_pending: AtomicBool,
+        value: UnsafeCell<u64>,
+    }
+
+    // SAFETY: mirror of the `ShardedRwLock` impls — shard read guards gate
+    // shared access, the writer's serial + full shard set gate exclusive
+    // access, and the model moves its owned state as one unit.
+    unsafe impl Send for Gate {}
+    unsafe impl Sync for Gate {}
+
+    struct GateRead<'a> {
+        _shard: RwLockReadGuard<'a, ()>,
+        value: *const u64,
+    }
+    impl Deref for GateRead<'_> {
+        type Target = u64;
+        fn deref(&self) -> &u64 {
+            // SAFETY: same argument as `ReadGuard::deref` — this guard owns a
+            // shard read lock and no `GateWrite` can exist without every shard.
+            unsafe { &*self.value }
+        }
+    }
+
+    struct GateIntent<'a>(&'a AtomicBool);
+    impl Drop for GateIntent<'_> {
+        fn drop(&mut self) {
+            self.0.store(false, Ordering::Release);
+        }
+    }
+
+    struct GateWrite<'a> {
+        _intent: GateIntent<'a>,
+        _serial: MutexGuard<'a, ()>,
+        _shards: [RwLockWriteGuard<'a, ()>; ENGINE_READ_SHARDS],
+        value: *mut u64,
+    }
+    impl Deref for GateWrite<'_> {
+        type Target = u64;
+        fn deref(&self) -> &u64 {
+            // SAFETY: same argument as `WriteGuard::deref` — serial plus every
+            // shard write lock are still live while `self` is borrowed.
+            unsafe { &*self.value }
+        }
+    }
+    impl DerefMut for GateWrite<'_> {
+        fn deref_mut(&mut self) -> &mut u64 {
+            // SAFETY: same argument as `WriteGuard::deref_mut` — serial plus
+            // every shard write lock are still live while `self` is borrowed.
+            unsafe { &mut *self.value }
+        }
+    }
+
+    impl Gate {
+        fn new() -> Self {
+            Self {
+                shards: std::array::from_fn(|_| RwLock::new(())),
+                writer_serial: Mutex::new(()),
+                writer_pending: AtomicBool::new(false),
+                value: UnsafeCell::new(0),
+            }
+        }
+
+        /// Reader admission: linearized at the second `writer_pending`
+        /// check, exactly as in `read_from_shard`. A give-up (`None`) is
+        /// what one spin iteration with an unmet shard lock would do.
+        fn read(&self, shard: usize) -> Option<GateRead<'_>> {
+            if self.writer_pending.load(Ordering::Acquire) {
+                return None;
+            }
+            let guard = self.shards[shard].read().map_err(|_| ()).ok()?;
+            if !self.writer_pending.load(Ordering::Acquire) {
+                return Some(GateRead {
+                    _shard: guard,
+                    value: self.value.get(),
+                });
+            }
+            None
+        }
+
+        fn write(&self) -> Option<GateWrite<'_>> {
+            let serial = self.writer_serial.lock().map_err(|_| ()).ok()?;
+            self.writer_pending.store(true, Ordering::Release);
+            let intent = GateIntent(&self.writer_pending);
+            let mut guards = Vec::with_capacity(ENGINE_READ_SHARDS);
+            for shard in &self.shards {
+                guards.push(shard.write().map_err(|_| ()).ok()?);
+            }
+            let shards: [RwLockWriteGuard<'_, ()>; ENGINE_READ_SHARDS] = guards.try_into().ok()?;
+            Some(GateWrite {
+                _intent: intent,
+                _serial: serial,
+                _shards: shards,
+                value: self.value.get(),
+            })
+        }
+
+        fn pending(&self) -> bool {
+            self.writer_pending.load(Ordering::Acquire)
+        }
+    }
+
+    /// Invariant harness: each critical-section entry increments its side's
+    /// counter BEFORE checking the other side's, so if reader and writer (or
+    /// two writers) could ever coexist, at least one check would observe the
+    /// overlap and the assert fires — and loom explores every interleaving.
+    #[test]
+    fn loom_single_writer_excludes_concurrent_readers() {
+        loom::model(|| {
+            let gate = Arc::new(Gate::new());
+            let readers_in = Arc::new(AtomicUsize::new(0));
+            let writers_in = Arc::new(AtomicUsize::new(0));
+            let mut joins = Vec::new();
+            for shard in 0..2usize {
+                let (gate, readers_in, writers_in) =
+                    (gate.clone(), readers_in.clone(), writers_in.clone());
+                joins.push(thread::spawn(move || {
+                    if let Some(guard) = gate.read(shard) {
+                        readers_in.fetch_add(1, Ordering::Relaxed);
+                        assert!(
+                            writers_in.load(Ordering::Relaxed) == 0,
+                            "reader and writer held the gate together"
+                        );
+                        readers_in.fetch_sub(1, Ordering::Relaxed);
+                        drop(guard);
+                    }
+                }));
+            }
+            joins.push(thread::spawn({
+                let (gate, readers_in, writers_in) =
+                    (gate.clone(), readers_in.clone(), writers_in.clone());
+                move || {
+                    if gate.write().is_some() {
+                        writers_in.fetch_add(1, Ordering::Relaxed);
+                        assert!(
+                            readers_in.load(Ordering::Relaxed) == 0,
+                            "reader and writer held the gate together"
+                        );
+                        writers_in.fetch_sub(1, Ordering::Relaxed);
+                    }
+                }
+            }));
+            for join in joins {
+                join.join().unwrap();
+            }
+            assert!(!gate.pending(), "writer intent lost or stuck");
+        });
+    }
+
+    /// Two writers serialized by `writer_serial`: never both inside, intent
+    /// never lost, and both eventually enter (join proves it).
+    #[test]
+    fn loom_two_writers_never_share_the_gate() {
+        loom::model(|| {
+            let gate = Arc::new(Gate::new());
+            let writers_in = Arc::new(AtomicUsize::new(0));
+            let mut joins = Vec::new();
+            for _ in 0..2 {
+                let (gate, writers_in) = (gate.clone(), writers_in.clone());
+                joins.push(thread::spawn(move || {
+                    if gate.write().is_some() {
+                        let n = writers_in.fetch_add(1, Ordering::Relaxed) + 1;
+                        assert!(n == 1, "two writers held the gate together");
+                        writers_in.fetch_sub(1, Ordering::Relaxed);
+                    }
+                }));
+            }
+            for join in joins {
+                join.join().unwrap();
+            }
+            assert!(!gate.pending(), "writer intent lost or stuck");
+        });
+    }
+
+    /// Value handoff: a reader that observes the writer's completion must
+    /// observe the written value (the intent flag's Release store pairs
+    /// with the reader's Acquire load), and after all threads drain, the
+    /// final read guard sees the write through the shard-lock handoff.
+    #[test]
+    fn loom_write_handoff_is_ordered_and_visible() {
+        loom::model(|| {
+            let gate = Arc::new(Gate::new());
+            let writer_done = Arc::new(AtomicBool::new(false));
+            let reader = {
+                let (gate, writer_done) = (gate.clone(), writer_done.clone());
+                thread::spawn(move || {
+                    if let Some(guard) = gate.read(0) {
+                        if writer_done.load(Ordering::Acquire) {
+                            assert_eq!(*guard, 1, "reader observed completion but not the write");
+                        }
+                    }
+                })
+            };
+            let writer = {
+                let (gate, writer_done) = (gate.clone(), writer_done.clone());
+                thread::spawn(move || {
+                    if let Some(mut guard) = gate.write() {
+                        *guard = 1;
+                        writer_done.store(true, Ordering::Release);
+                    }
+                })
+            };
+            reader.join().unwrap();
+            writer.join().unwrap();
+            assert!(writer_done.load(Ordering::Acquire));
+            assert!(!gate.pending(), "writer intent lost or stuck");
+            assert_eq!(
+                *gate
+                    .read(1)
+                    .unwrap_or_else(|| panic!("gate refused the final read")),
+                1
+            );
+        });
     }
 }

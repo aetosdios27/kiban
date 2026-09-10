@@ -3,7 +3,15 @@ name = "kiban"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+# Test-only: enables the exhaustive loom interleaving models for the
+# engine gate (`src/engine_lock.rs::loom_tests`). Never enabled in
+# production builds; run with
+# `cargo test --features loom -- --test-threads=1 loom_`.
+loom = ["dep:loom"]
+
 [dependencies]
+loom = { version = "0.7", optional = true }
 
 [[bench]]
 name = "basic"
