@@ -520,7 +520,7 @@ fn main() {
             compaction_scheduler: CompactionScheduler::Scored,
             compaction_batch_size: 4,
             maintenance_pacing_enabled: true,
-            ..base
+            ..base.clone()
         },
         total_writes,
         total_reads,
@@ -529,12 +529,27 @@ fn main() {
     );
     print_result(&d);
 
+    let e = run_steady_state(
+        "E: governor (11.17-round-3)",
+        KibanOptions {
+            compaction_scheduler: CompactionScheduler::Governor,
+            compaction_batch_size: 1,
+            maintenance_pacing_enabled: true,
+            ..base
+        },
+        total_writes,
+        total_reads,
+        writers,
+        readers,
+    );
+    print_result(&e);
+
     println!("\n== Summary ==");
     println!(
         "{:<45} {:>12} {:>12} {:>10} {:>10}",
         "config", "GET p99(us)", "PUT p99(us)", "WA", "stalls"
     );
-    for r in [&a, &b, &c, &d] {
+    for r in [&a, &b, &c, &d, &e] {
         println!(
             "{:<45} {:>12.2} {:>12.2} {:>10.2} {:>10}",
             r.label,
@@ -573,7 +588,7 @@ fn main() {
             compaction_scheduler: CompactionScheduler::Scored,
             compaction_batch_size: 4,
             maintenance_pacing_enabled: true,
-            ..base
+            ..base.clone()
         },
         total_writes,
         total_reads,
@@ -582,12 +597,27 @@ fn main() {
         WorkloadShape::Sequential,
     );
     print_result(&d_seq);
+    let e_seq = run_steady_state_shaped(
+        "E-seq: governor (11.17-round-3)",
+        KibanOptions {
+            compaction_scheduler: CompactionScheduler::Governor,
+            compaction_batch_size: 1,
+            maintenance_pacing_enabled: true,
+            ..base
+        },
+        total_writes,
+        total_reads,
+        writers,
+        readers,
+        WorkloadShape::Sequential,
+    );
+    print_result(&e_seq);
     println!("\n== Sequential-workload summary ==");
     println!(
         "{:<45} {:>12} {:>12} {:>10} {:>10}",
         "config", "GET p99(us)", "PUT p99(us)", "WA", "stalls"
     );
-    for r in [&a_seq, &d_seq] {
+    for r in [&a_seq, &d_seq, &e_seq] {
         println!(
             "{:<45} {:>12.2} {:>12.2} {:>10.2} {:>10}",
             r.label,

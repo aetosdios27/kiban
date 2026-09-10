@@ -423,14 +423,27 @@ impl MaintenancePressure {
     /// additionally scales this delay instead of adding a second,
     /// separate pacing mechanism — the "minimum mechanism that
     /// measurably stabilizes latency" the round asked for, not a new
-    /// QoS framework. `WRITE_EMERGENCY` sets the delay to zero (the
-    /// worker bursts flat out, matching "remove/reduce maintenance
-    /// pacing as necessary" — survival outranks foreground comfort);
-    /// `READ_PROTECT` doubles it (foreground reads are already under
-    /// sustained pressure — spend a little more background cadence
-    /// protecting them); `BALANCED` (and every non-Governor scheduler,
-    /// which reports `Balanced` unconditionally) is the unchanged
-    /// original delay.
+    /// QoS framework. `READ_PROTECT` doubles the delay (foreground
+    /// reads are already under sustained pressure — spend a little
+    /// more background cadence protecting them); `BALANCED` (and every
+    /// non-Governor scheduler, which reports `Balanced` unconditionally)
+    /// is the unchanged original delay.
+    ///
+    /// `WRITE_EMERGENCY` quarters it rather than zeroing it outright.
+    /// The early return above already skips pacing entirely whenever L0
+    /// has no real headroom (within `HEADROOM_DIVISOR` of the stall
+    /// trigger) — which is always true while genuinely at peak
+    /// emergency pressure, since entering `WRITE_EMERGENCY` requires L0
+    /// past 75% of that same trigger. A flat `return` here only ever
+    /// additionally fired during the mode's hysteresis-lag tail, after
+    /// L0 had already drained back into headroom but the FSM's
+    /// multi-window exit streak hadn't completed yet — exactly the
+    /// window a phase-changing benchmark caught: a burst of fully
+    /// unpaced COMMITs landing right as a workload shifted to read-
+    /// heavy, spiking PUT p999 to ~4.7ms. A quartered delay keeps
+    /// almost all of the burst benefit for genuine emergencies (already
+    /// covered by the guard above) while capping how long that lag
+    /// window can run completely unpaced.
     fn pace(&self) {
         const HEADROOM_DIVISOR: usize = 2;
         const PACE_DELAY: std::time::Duration = std::time::Duration::from_micros(20);
@@ -440,7 +453,7 @@ impl MaintenancePressure {
             return;
         }
         let delay = match self.governor_mode {
-            crate::governor::GovernorMode::WriteEmergency => return,
+            crate::governor::GovernorMode::WriteEmergency => PACE_DELAY / 4,
             crate::governor::GovernorMode::ReadProtect => PACE_DELAY * 2,
             crate::governor::GovernorMode::Balanced => PACE_DELAY,
         };
