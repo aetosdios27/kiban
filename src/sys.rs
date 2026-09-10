@@ -182,7 +182,6 @@ pub struct File {
 
 impl File {
     pub fn create_new(path: &Path) -> io::Result<File> {
-        eprintln!("CREATE_NEW {:?}", path);
         check()?;
         let existed = with_sim(|files| files.contains_key(path));
         if let Some(true) = existed {
@@ -414,7 +413,6 @@ impl Seek for File {
 /// Whole-file read routed through the simulated device when active.
 pub fn read(path: &Path) -> io::Result<Vec<u8>> {
     let known = with_sim(|files| files.contains_key(path));
-    eprintln!("READ {path:?} known={known:?}");
     if known == Some(true) {
         let handle = File::open_read(path)?;
         let len = handle.len()?;
@@ -446,7 +444,6 @@ fn known_real(_p: &Path) -> bool {
 }
 
 pub fn remove_file(path: &Path) -> io::Result<()> {
-    eprintln!("REMOVE {:?}", path);
     check()?;
     with_sim(|files| {
         files.remove(path);
