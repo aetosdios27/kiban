@@ -366,6 +366,7 @@ fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
 struct MaintenancePressure {
     l0_count: usize,
     l0_write_stall_trigger: usize,
+    pacing_enabled: bool,
 }
 
 impl MaintenancePressure {
@@ -373,6 +374,7 @@ impl MaintenancePressure {
         MaintenancePressure {
             l0_count: guard.l0_count(),
             l0_write_stall_trigger: guard.options().l0_write_stall_trigger,
+            pacing_enabled: guard.options().maintenance_pacing_enabled,
         }
     }
 
@@ -413,7 +415,9 @@ impl MaintenancePressure {
     fn pace(&self) {
         const HEADROOM_DIVISOR: usize = 2;
         const PACE_DELAY: std::time::Duration = std::time::Duration::from_micros(20);
-        if self.l0_count.saturating_mul(HEADROOM_DIVISOR) < self.l0_write_stall_trigger {
+        if self.pacing_enabled
+            && self.l0_count.saturating_mul(HEADROOM_DIVISOR) < self.l0_write_stall_trigger
+        {
             std::thread::sleep(PACE_DELAY);
         }
     }

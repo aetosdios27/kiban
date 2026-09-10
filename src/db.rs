@@ -281,6 +281,45 @@ pub struct KibanOptions {
     /// a later `unlink` (compaction retiring the file) cannot invalidate
     /// an existing mapping on POSIX. See `SstTable`'s `MappedFile`.
     pub mmap_max_level: Option<u32>,
+    /// 11.17-round-2, section 1: which of the two compaction candidate
+    /// pickers `plan_next_compaction` uses. `FixedPriority` (default)
+    /// is the original, unchanged rule — drain L0 whenever it's at
+    /// `l0_compaction_trigger`, unconditionally ahead of anything else;
+    /// otherwise cascade levels 1, 2, 3... in order, compacting the
+    /// first one found over its byte budget. `Scored` instead computes
+    /// a cheap urgency score for every eligible candidate (L0 and each
+    /// over-budget level) and always runs the highest-scoring one —
+    /// see `CompactionCandidate::score`. The two agree in the common
+    /// case (L0 usually does dominate); they diverge under real
+    /// contention, e.g. a deep level far over budget while L0 is only
+    /// barely past its trigger, which `FixedPriority` still drains
+    /// first unconditionally and `Scored` may not.
+    pub compaction_scheduler: CompactionScheduler,
+    /// 11.17-round-2, section 2: for a level-N (N>=1) compaction, how
+    /// many of that level's oldest tables to fold into ONE job instead
+    /// of the original one-seed-table-per-job rule (default 1 = that
+    /// original behavior, unchanged). A level's own tables are always
+    /// range-disjoint, so picking the N oldest is well-defined and
+    /// never creates a bigger overlap footprint per input table than
+    /// picking one at a time repeatedly would — it just amortizes the
+    /// fixed per-job cost (PLAN+COMMIT lock acquisitions, MANIFEST
+    /// writes, output-file open/close) over more useful work. Not
+    /// applied to L0 (already batches everything live in one job).
+    pub compaction_batch_size: usize,
+    /// 11.17-round-2: toggles `background::MaintenancePressure::pace`
+    /// (on by default, matching the behavior shipped last round) so
+    /// this round's A/B/C/D comparison can isolate the scheduler
+    /// change from the pacing change instead of always measuring both
+    /// together.
+    pub maintenance_pacing_enabled: bool,
+}
+
+/// See `KibanOptions::compaction_scheduler`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CompactionScheduler {
+    #[default]
+    FixedPriority,
+    Scored,
 }
 
 impl Default for KibanOptions {
@@ -296,6 +335,9 @@ impl Default for KibanOptions {
             max_open_table_files: 128,
             write_buffer_bytes: 4 * MIB as usize,
             mmap_max_level: None,
+            compaction_scheduler: CompactionScheduler::FixedPriority,
+            compaction_batch_size: 1,
+            maintenance_pacing_enabled: true,
         }
     }
 }
@@ -318,6 +360,11 @@ impl KibanOptions {
         if self.write_buffer_bytes == 0 {
             return Err(DbError::Corrupt(
                 "invalid options: write_buffer_bytes must be greater than zero".to_string(),
+            ));
+        }
+        if self.compaction_batch_size == 0 {
+            return Err(DbError::Corrupt(
+                "invalid options: compaction_batch_size must be at least 1".to_string(),
             ));
         }
         Ok(())
@@ -2546,13 +2593,12 @@ impl Kiban {
         Ok(())
     }
 
-    /// PLAN, in `maybe_compact`'s fixed priority order: drain L0 first,
-    /// then cascade levels 1, 2, 3... stopping at the first level found
-    /// within its budget. `cascade_level` carries the cascade position
-    /// across calls, exactly mirroring the original single-threaded
-    /// loop's `level` variable — L0 is rechecked every call (compaction
-    /// there always takes priority), the level cascade only ever
-    /// advances past a level once it has actually been compacted.
+    /// PLAN dispatcher (11.17-round-2, section 1): picks between the
+    /// two candidate-selection policies per
+    /// `KibanOptions::compaction_scheduler`. `cascade_level` is only
+    /// meaningful to `FixedPriority` — `Scored` ignores it, since it
+    /// re-scores every eligible candidate on every call instead of
+    /// remembering cascade position.
     pub(crate) fn plan_next_compaction(
         &mut self,
         cascade_level: &mut u32,
@@ -2560,6 +2606,20 @@ impl Kiban {
         if self.poisoned.is_some() {
             return None;
         }
+        match self.options.compaction_scheduler {
+            CompactionScheduler::FixedPriority => self.plan_next_compaction_fixed(cascade_level),
+            CompactionScheduler::Scored => self.plan_next_compaction_scored(),
+        }
+    }
+
+    /// The original rule, unchanged: drain L0 first, then cascade
+    /// levels 1, 2, 3... stopping at the first level found within its
+    /// budget. `cascade_level` carries the cascade position across
+    /// calls, exactly mirroring the original single-threaded loop's
+    /// `level` variable — L0 is rechecked every call (compaction there
+    /// always takes priority), the level cascade only ever advances
+    /// past a level once it has actually been compacted.
+    fn plan_next_compaction_fixed(&mut self, cascade_level: &mut u32) -> Option<CompactionPlan> {
         if self.l0_count() >= self.options.l0_compaction_trigger {
             return self.plan_compaction_at_level(0);
         }
@@ -2579,6 +2639,118 @@ impl Kiban {
             }
             _ => None,
         }
+    }
+
+    /// Scores every eligible candidate (L0, once it has reached its
+    /// trigger; each level >= 1 currently over its byte budget) and
+    /// runs whichever scores highest, rather than always draining L0
+    /// unconditionally first. See `score_l0_candidate`/
+    /// `score_level_candidate` for what "score" weighs; this function's
+    /// only job is "gather candidates, pick the max".
+    fn plan_next_compaction_scored(&mut self) -> Option<CompactionPlan> {
+        let mut best_level: Option<u32> = None;
+        let mut best_score = f64::NEG_INFINITY;
+
+        if let Some(score) = self.score_l0_candidate()
+            && score > best_score
+        {
+            best_score = score;
+            best_level = Some(0);
+        }
+        let max_level = self
+            .version
+            .tables
+            .iter()
+            .map(|t| t.level)
+            .max()
+            .unwrap_or(0);
+        for level in 1..=max_level {
+            if let Some(score) = self.score_level_candidate(level)
+                && score > best_score
+            {
+                best_score = score;
+                best_level = Some(level);
+            }
+        }
+        self.plan_compaction_at_level(best_level?)
+    }
+
+    /// `None` when L0 hasn't reached its trigger at all (matches
+    /// `FixedPriority`'s hard gate — this scheduler still never starts
+    /// an L0 compaction "early"). Once eligible, the score has two
+    /// terms: `urgency` (how far past the trigger L0 already is — grows
+    /// without bound if compaction keeps falling behind) and
+    /// `stall_risk` (proximity to the hard write-stall ceiling,
+    /// weighted heavily — see `SCORE_STALL_WEIGHT`: avoiding a write
+    /// stall is treated as more important than draining an
+    /// already-over-budget deep level), minus a mild penalty for how
+    /// many L1 tables this compaction would need to touch (more
+    /// overlap, more rewrite cost for the same amount of L0 progress).
+    fn score_l0_candidate(&self) -> Option<f64> {
+        const SCORE_URGENCY_WEIGHT: f64 = 1.0;
+        const SCORE_STALL_WEIGHT: f64 = 4.0;
+        const SCORE_OVERLAP_WEIGHT: f64 = 0.15;
+        let trigger = self.options.l0_compaction_trigger.max(1) as f64;
+        let stall = self.options.l0_write_stall_trigger.max(1) as f64;
+        let l0 = self.l0_count();
+        if l0 < self.options.l0_compaction_trigger {
+            return None;
+        }
+        let urgency = l0 as f64 / trigger;
+        let stall_risk = l0 as f64 / stall;
+        let overlap = self.version.tables.iter().filter(|t| t.level == 1).count() as f64;
+        Some(
+            urgency * SCORE_URGENCY_WEIGHT + stall_risk * SCORE_STALL_WEIGHT
+                - overlap * SCORE_OVERLAP_WEIGHT,
+        )
+    }
+
+    /// `None` when this level has no tables or isn't over its byte
+    /// budget (same hard gate `FixedPriority` uses). `urgency` is how
+    /// far over budget the level is; `overlap` is how many L+1 tables
+    /// the batch `plan_compaction_at_level` would actually pick (the
+    /// oldest table's key-contiguous run — see there) touches, same
+    /// rewrite-cost reasoning as L0's; `age` is a small bonus favoring
+    /// levels whose oldest untouched data has been waiting longest
+    /// (file-number distance from the next number to be allocated, log-
+    /// scaled so it nudges rather than dominates), so a level that's
+    /// only slightly over budget but has been neglected for a long time
+    /// isn't perpetually starved by levels that cross their (much
+    /// bigger, at deeper levels) budgets more dramatically.
+    fn score_level_candidate(&self, level: u32) -> Option<f64> {
+        const SCORE_URGENCY_WEIGHT: f64 = 1.0;
+        const SCORE_OVERLAP_WEIGHT: f64 = 0.15;
+        const SCORE_AGE_WEIGHT: f64 = 0.05;
+        let budget = self.level_budget(level)?;
+        if budget == 0 {
+            return None;
+        }
+        let bytes = self.level_bytes(level);
+        if bytes <= budget {
+            return None;
+        }
+        let urgency = bytes as f64 / budget as f64;
+        let oldest = self
+            .version
+            .tables
+            .iter()
+            .filter(|t| t.level == level)
+            .min_by_key(|t| t.number)?;
+        let age = self.next_file_number.saturating_sub(oldest.number) as f64;
+        let overlap = self
+            .version
+            .tables
+            .iter()
+            .filter(|t| {
+                t.level == level + 1
+                    && t.first_key <= oldest.last_key
+                    && t.last_key >= oldest.first_key
+            })
+            .count() as f64;
+        Some(
+            urgency * SCORE_URGENCY_WEIGHT - overlap * SCORE_OVERLAP_WEIGHT
+                + age.ln_1p() * SCORE_AGE_WEIGHT,
+        )
     }
 
     /// PLAN for one level (compaction.md D3-D4): choose inputs, choose
@@ -2610,16 +2782,53 @@ impl Kiban {
                 .max()
                 .expect("level 0 nonempty");
         } else {
-            let seed = self
+            // 11.17-round-2, section 2 (batching): pick a KEY-CONTIGUOUS
+            // run of up to `compaction_batch_size` tables at this level,
+            // starting at the oldest (lowest file number). Contiguous in
+            // KEY order, not just "N oldest by number", matters: a
+            // level's own tables are range-disjoint but stored in
+            // creation order, not key order (compaction.md D2), so
+            // picking non-adjacent old tables would widen the union
+            // range with a gap in between — sweeping unrelated data
+            // from the overlapping output level into this job's rewrite
+            // for no reason. A contiguous run has no such gap: the
+            // union range is exactly the run's own span, so it costs no
+            // more L+1 overlap than compacting its tables one at a time
+            // would, while draining `compaction_batch_size` inputs per
+            // PLAN/BUILD/COMMIT cycle instead of one.
+            let mut by_key: Vec<(usize, &StdArc<TableEntry>)> = self
                 .version
                 .tables
                 .iter()
                 .enumerate()
                 .filter(|(_, t)| t.level == level)
-                .min_by_key(|(_, t)| t.number)?;
-            input_indices.push(seed.0);
-            range_lo = seed.1.first_key.clone();
-            range_hi = seed.1.last_key.clone();
+                .collect();
+            if by_key.is_empty() {
+                return None;
+            }
+            by_key.sort_by(|a, b| a.1.first_key.cmp(&b.1.first_key));
+            let seed_pos = by_key
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, (_, t))| t.number)
+                .map(|(pos, _)| pos)
+                .expect("by_key nonempty");
+            let batch_size = self.options.compaction_batch_size.max(1);
+            let end = (seed_pos + batch_size).min(by_key.len());
+            let batch = &by_key[seed_pos..end];
+            for (i, _) in batch {
+                input_indices.push(*i);
+            }
+            range_lo = batch
+                .iter()
+                .map(|(_, t)| t.first_key.clone())
+                .min()
+                .expect("batch nonempty");
+            range_hi = batch
+                .iter()
+                .map(|(_, t)| t.last_key.clone())
+                .max()
+                .expect("batch nonempty");
         }
         let output_level = level + 1;
         for (i, t) in self.version.tables.iter().enumerate() {
@@ -2850,6 +3059,9 @@ mod compaction_tests {
             // flush use their own tight `write_buffer_bytes`.
             write_buffer_bytes: 1 << 20,
             mmap_max_level: None,
+            compaction_scheduler: CompactionScheduler::FixedPriority,
+            compaction_batch_size: 1,
+            maintenance_pacing_enabled: true,
         }
     }
 
@@ -2905,6 +3117,74 @@ mod compaction_tests {
         // invariant survives reopen (open re-validates disjointness)
         drop(db);
         let db = Kiban::open_with_options(td.path(), tiny_options()).unwrap();
+        let rescanned: Vec<(Vec<u8>, Vec<u8>)> = db
+            .iter()
+            .map(|r| r.unwrap())
+            .map(|(k, v)| (k, v.to_vec()))
+            .collect();
+        assert_eq!(rescanned, scanned);
+    }
+
+    /// 11.17-round-2: the exact same workload/reference-equality shape
+    /// as `compactions_keep_reads_and_scans_correct_over_many_
+    /// generations`, but under the scored scheduler with batching
+    /// enabled — the two new, previously-untested code paths this
+    /// round adds. Correctness (never performance) is the property
+    /// under test: a different candidate-selection policy must still
+    /// produce exactly the right data, scan order, and level
+    /// disjointness (re-validated on reopen).
+    #[test]
+    fn scored_scheduler_with_batching_keeps_reads_and_scans_correct() {
+        let td = TempDir::new("compact-scored-longrun");
+        let options = KibanOptions {
+            compaction_scheduler: CompactionScheduler::Scored,
+            compaction_batch_size: 3,
+            ..tiny_options()
+        };
+        let mut db = Kiban::open_with_options(td.path(), options.clone()).unwrap();
+        let mut reference: BTreeMap<Vec<u8>, Vec<u8>> = BTreeMap::new();
+
+        let mut state: u64 = 0x0fed_cba9_8765_4321;
+        let mut next = move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+
+        for round in 0..60u64 {
+            for _ in 0..12 {
+                let i = next() % 80;
+                let key = format!("k{i:03}");
+                if next() % 5 == 0 {
+                    db.delete(key.as_bytes()).unwrap();
+                    reference.remove(key.as_bytes());
+                } else {
+                    let val = format!("r{round}-i{i}");
+                    db.put(key.as_bytes(), val.as_bytes()).unwrap();
+                    reference.insert(key.into_bytes(), val.into_bytes());
+                }
+            }
+            db.sync().unwrap();
+            db.flush().unwrap();
+        }
+
+        let scanned: Vec<(Vec<u8>, Vec<u8>)> = db
+            .iter()
+            .map(|r| r.unwrap())
+            .map(|(k, v)| (k, v.to_vec()))
+            .collect();
+        assert_eq!(scanned, reference.clone().into_iter().collect::<Vec<_>>());
+        for (k, v) in &reference {
+            assert_eq!(db.get(k.as_slice()).unwrap().as_deref(), Some(v.as_slice()));
+        }
+        assert!(db.version.tables.iter().any(|t| t.level >= 2));
+
+        // Reopen re-validates level disjointness (compaction.md D2) —
+        // a real check that batching's key-contiguous-run selection
+        // never produced overlapping same-level output.
+        drop(db);
+        let db = Kiban::open_with_options(td.path(), options).unwrap();
         let rescanned: Vec<(Vec<u8>, Vec<u8>)> = db
             .iter()
             .map(|r| r.unwrap())
@@ -3135,6 +3415,9 @@ mod crash_sweep_tests {
                 max_open_table_files: 64,
                 write_buffer_bytes: 1 << 20,
                 mmap_max_level: None,
+                compaction_scheduler: CompactionScheduler::FixedPriority,
+                compaction_batch_size: 1,
+                maintenance_pacing_enabled: true,
             };
             let _ = &mut options;
             let mut db = Kiban::open_with_options(dir, options)?;
@@ -3228,6 +3511,9 @@ mod crash_sweep_tests {
                     max_open_table_files: 64,
                     write_buffer_bytes: 1 << 20,
                     mmap_max_level: None,
+                    compaction_scheduler: CompactionScheduler::FixedPriority,
+                    compaction_batch_size: 1,
+                    maintenance_pacing_enabled: true,
                 },
             ) {
                 Ok(db) => db,
@@ -4139,6 +4425,9 @@ mod cache_scaling_tests {
             // never auto-freezes (11.8 auto-freeze is SharedKiban-only).
             write_buffer_bytes: 1 << 20,
             mmap_max_level: None,
+            compaction_scheduler: CompactionScheduler::FixedPriority,
+            compaction_batch_size: 1,
+            maintenance_pacing_enabled: true,
         }
     }
 
