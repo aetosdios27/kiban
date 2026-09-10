@@ -741,6 +741,29 @@ fn main() {
         println!("  scaling: {:.2}x", throughput / wide_one);
     }
 
+    println!("\n== Shared point reads: wide working set, mmap_max_level enabled ==");
+    let mut wide_mmap_one = 0.0;
+    for &readers in THREAD_COUNTS {
+        let label = format!("wide+mmap / {readers} readers");
+        let throughput = measure(&label, reads, "gets", samples, || {
+            let dir = temp_dir("wide-reads-mmap");
+            let options = KibanOptions {
+                block_cache_bytes: 4 * 1024,
+                mmap_max_level: Some(u32::MAX),
+                ..KibanOptions::default()
+            };
+            let db = seed_shared(&dir, options, wide_keys, "wide");
+            let result = parallel_gets(&db, keys("wide", wide_keys), reads, readers, false);
+            drop(db);
+            drop_dir(&dir);
+            result
+        });
+        if readers == 1 {
+            wide_mmap_one = throughput;
+        }
+        println!("  scaling: {:.2}x", throughput / wide_mmap_one);
+    }
+
     println!("\n== Shared Bloom-rejected misses ==");
     for &readers in &[1, 4, 8] {
         let label = format!("bloom miss / {readers} readers");

@@ -25,6 +25,95 @@ struct IndexEntry {
     len: u64,
 }
 
+unsafe extern "C" {
+    fn mmap(
+        addr: *mut std::ffi::c_void,
+        len: usize,
+        prot: i32,
+        flags: i32,
+        fd: i32,
+        offset: i64,
+    ) -> *mut std::ffi::c_void;
+    fn munmap(addr: *mut std::ffi::c_void, len: usize) -> i32;
+}
+const PROT_READ: i32 = 0x1;
+const MAP_SHARED: i32 = 0x1;
+const MAP_FAILED: i64 = -1;
+
+/// 11.17-B/mmap-hybrid: a whole-file, read-only `mmap(2)` mapping,
+/// opt-in per table via `KibanOptions::mmap_max_level` (disabled by
+/// default — see there for the warm-path-win/cold-tail-risk tradeoff
+/// this exists to capture only for tables actually worth the risk).
+///
+/// Sound specifically because of two Kiban-specific guarantees, not
+/// general-purpose mmap safety: (1) an SST file is fully written once
+/// via `atomic::commit_file` and never modified or truncated after —
+/// so a mapping sized to the validated `file_len` at open time can
+/// never see a SIGBUS from the file shrinking underneath it; (2) a
+/// later compaction that retires this file only `unlink`s it — POSIX
+/// guarantees a mapping's pages stay valid after unlink, identically
+/// to how a held file descriptor would, so no lifetime coordination
+/// with `reclaim_obsolete` is needed at all.
+struct MappedFile {
+    addr: *mut std::ffi::c_void,
+    len: usize,
+}
+
+// SAFETY: PROT_READ-only, never mutated after construction (see the
+// struct doc for why the underlying bytes themselves never change
+// either), so sharing `&MappedFile`/sending it across threads is sound
+// the same way sharing any other read-only, immutable byte buffer is.
+unsafe impl Send for MappedFile {}
+unsafe impl Sync for MappedFile {}
+
+impl MappedFile {
+    /// A short-lived `fd`, open only long enough to create the
+    /// mapping: POSIX guarantees the mapping outlives the descriptor
+    /// that created it, so this does not hold a `TableFileCache` slot
+    /// (or any descriptor at all) for the table's lifetime.
+    fn open(path: &Path, len: u64) -> std::io::Result<MappedFile> {
+        let len = len as usize;
+        if len == 0 {
+            return Err(std::io::Error::other("cannot mmap a zero-length file"));
+        }
+        let file = std::fs::File::open(path)?;
+        use std::os::unix::io::AsRawFd;
+        let addr = unsafe {
+            mmap(
+                std::ptr::null_mut(),
+                len,
+                PROT_READ,
+                MAP_SHARED,
+                file.as_raw_fd(),
+                0,
+            )
+        };
+        drop(file);
+        if addr as i64 == MAP_FAILED {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok(MappedFile { addr, len })
+    }
+
+    fn as_slice(&self) -> &[u8] {
+        // SAFETY: `addr`/`len` came from a successful `mmap` of exactly
+        // `len` bytes, PROT_READ, held for `self`'s entire lifetime;
+        // see the struct doc for why those bytes never change.
+        unsafe { std::slice::from_raw_parts(self.addr as *const u8, self.len) }
+    }
+}
+
+impl Drop for MappedFile {
+    fn drop(&mut self) {
+        // SAFETY: `addr`/`len` are exactly what the successful `mmap`
+        // in `open` returned/was called with; not unmapped anywhere
+        // else (this is the only place that calls `munmap`).
+        unsafe {
+            munmap(self.addr, self.len);
+        }
+    }
+}
+
 pub struct SstTable {
     // Debug is implemented manually below: neither the file cache nor
     // the block cache derive it, and their contents aren't useful here
@@ -38,6 +127,12 @@ pub struct SstTable {
     last_key: Vec<u8>,
     block_cache: Arc<BlockCache>,
     file_cache: Arc<TableFileCache>,
+    /// `Some` only when this table was opened with `use_mmap: true`
+    /// AND the `mmap(2)` call itself succeeded — a failure there
+    /// (e.g. address-space exhaustion) degrades silently to the
+    /// existing `file_cache`-leased pread path, never fails the whole
+    /// table open, since this is a pure performance opt-in.
+    mmap: Option<MappedFile>,
 }
 
 impl std::fmt::Debug for SstTable {
@@ -70,6 +165,7 @@ impl SstTable {
         path: &Path,
         block_cache: Arc<BlockCache>,
         file_cache: Arc<TableFileCache>,
+        use_mmap: bool,
     ) -> Result<SstTable, SstError> {
         let bad = |m: String| SstError::Corrupt(m);
         let open_err =
@@ -123,6 +219,12 @@ impl SstTable {
             .ok_or_else(|| bad("filter block payload is malformed".to_string()))?;
         let index = parse_index(&index_raw, data_end)?;
 
+        // Best-effort: a failed mmap degrades silently to the pread
+        // path (see `SstTable::mmap`'s doc), never fails the open.
+        let mmap = use_mmap
+            .then(|| MappedFile::open(path, file_len).ok())
+            .flatten();
+
         let mut table = SstTable {
             number,
             path: path.to_path_buf(),
@@ -133,6 +235,7 @@ impl SstTable {
             last_key: Vec::new(),
             block_cache,
             file_cache,
+            mmap,
         };
 
         // Boundary keys come from the boundary blocks (two cached
@@ -167,23 +270,40 @@ impl SstTable {
         &self.last_key
     }
 
-    /// A block-cache hit needs no file descriptor at all — memory hit
-    /// means memory hit. Only a miss leases `file_cache`, and only for
-    /// the duration of the positioned read itself (11.6).
+    /// A block-cache hit needs no file descriptor (or mmap access) at
+    /// all — memory hit means memory hit. Only a miss reads through,
+    /// via `self.mmap` when this table was opened with it (11.17-mmap-
+    /// hybrid: no syscall at all for OS-page-cache-resident bytes, at
+    /// the cost of the file's whole address-space mapping living for
+    /// the table's lifetime) or `file_cache` otherwise (11.6: a lease
+    /// held only for the duration of the positioned read itself).
     ///
     /// Concurrent misses on the SAME block (11.17-F: multiple readers
     /// racing the same not-yet-cached key) are coalesced through
-    /// `BlockCache::get_or_load`: only the first caller actually leases
-    /// a file descriptor and reads; the rest wait for its result.
+    /// `BlockCache::get_or_load`: only the first caller actually reads
+    /// (leases a descriptor, or slices the mapping); the rest wait for
+    /// its result.
     fn read_block(&self, entry: &IndexEntry) -> Result<VerifiedBlock, SstError> {
         let key = (self.number, entry.offset);
         let number = self.number;
         let path = &self.path;
         let file_cache = &self.file_cache;
+        let mmap = self.mmap.as_ref();
         let cached = self
             .block_cache
             .get_or_load(key, || -> Result<CachedBlock, SstError> {
-                let data = {
+                let data = if let Some(m) = mmap {
+                    let start = entry.offset as usize;
+                    let end = start + entry.len as usize;
+                    let slice = m.as_slice();
+                    if end > slice.len() {
+                        return Err(SstError::Corrupt(format!(
+                            "mmap read past end of file at offset {}",
+                            entry.offset
+                        )));
+                    }
+                    slice[start..end].to_vec()
+                } else {
                     let lease = file_cache.acquire(number, path).map_err(|e| {
                         SstError::Corrupt(format!("table {number} cannot be opened: {e}"))
                     })?;
@@ -509,6 +629,27 @@ mod compaction_iter_tests {
         block_cache: Arc<BlockCache>,
         file_cache: Arc<TableFileCache>,
     ) -> SstTable {
+        build_table_with_mmap(
+            dir,
+            number,
+            entries,
+            value_len,
+            block_cache,
+            file_cache,
+            false,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn build_table_with_mmap(
+        dir: &std::path::Path,
+        number: u64,
+        entries: usize,
+        value_len: usize,
+        block_cache: Arc<BlockCache>,
+        file_cache: Arc<TableFileCache>,
+        use_mmap: bool,
+    ) -> SstTable {
         let mut builder = TableBuilder::new();
         for i in 0..entries {
             let key = format!("k{i:06}").into_bytes();
@@ -520,7 +661,7 @@ mod compaction_iter_tests {
         let bytes = builder.finish().unwrap();
         let path = dir.join(format!("{number}.sst"));
         crate::atomic::commit_file(&path, &bytes).unwrap();
-        SstTable::open(number, &path, block_cache, file_cache).unwrap()
+        SstTable::open(number, &path, block_cache, file_cache, use_mmap).unwrap()
     }
 
     /// The core correctness property: compaction_iter must yield
@@ -640,5 +781,123 @@ mod compaction_iter_tests {
             "compaction must complete without the shared file-cache lease"
         );
         drop(lease);
+    }
+}
+
+#[cfg(test)]
+mod mmap_tests {
+    use super::compaction_iter_tests::build_table_with_mmap;
+    use super::*;
+    use crate::testutil::TempDir;
+
+    /// The core correctness property: an mmap-backed table must yield
+    /// byte-for-byte the same entries, in the same order, as the same
+    /// table opened the normal (file-cache-leased pread) way.
+    #[test]
+    fn mmap_reads_match_pread_reads() {
+        let td = TempDir::new("mmap-match");
+        let pread_table = build_table_with_mmap(
+            td.path(),
+            1,
+            400,
+            96,
+            Arc::new(BlockCache::new(1024 * 1024)),
+            Arc::new(TableFileCache::new(8)),
+            false,
+        );
+        let mmap_table = build_table_with_mmap(
+            td.path(),
+            1,
+            400,
+            96,
+            Arc::new(BlockCache::new(1024 * 1024)),
+            Arc::new(TableFileCache::new(8)),
+            true,
+        );
+
+        let pread_entries: Vec<_> = pread_table.iter_from(b"").map(|r| r.unwrap()).collect();
+        let mmap_entries: Vec<_> = mmap_table.iter_from(b"").map(|r| r.unwrap()).collect();
+        assert!(!pread_entries.is_empty());
+        assert_eq!(pread_entries, mmap_entries);
+
+        // Point lookups too, not just full iteration.
+        for i in [0usize, 137, 399] {
+            let key = format!("k{i:06}");
+            assert_eq!(
+                pread_table
+                    .get(key.as_bytes(), None)
+                    .unwrap()
+                    .map(|f| f.value),
+                mmap_table
+                    .get(key.as_bytes(), None)
+                    .unwrap()
+                    .map(|f| f.value),
+            );
+        }
+    }
+
+    /// POSIX guarantee this whole design leans on: unlinking the file
+    /// backing a live mapping must not invalidate it. Simulates what a
+    /// later compaction's `reclaim_obsolete` does to a retired table
+    /// while this table handle (and its mapping) is still alive and in
+    /// use.
+    #[test]
+    fn mmap_survives_the_backing_file_being_unlinked() {
+        let td = TempDir::new("mmap-unlink");
+        let table = build_table_with_mmap(
+            td.path(),
+            1,
+            200,
+            64,
+            Arc::new(BlockCache::new(1024 * 1024)),
+            Arc::new(TableFileCache::new(8)),
+            true,
+        );
+        let before: Vec<_> = table.iter_from(b"").map(|r| r.unwrap()).collect();
+        assert!(!before.is_empty());
+
+        std::fs::remove_file(td.path().join("1.sst")).unwrap();
+
+        // The path itself is gone; the mapping must not care.
+        assert!(!td.path().join("1.sst").exists());
+        let after: Vec<_> = table.iter_from(b"").map(|r| r.unwrap()).collect();
+        assert_eq!(before, after);
+        for i in [0usize, 55, 199] {
+            let key = format!("k{i:06}");
+            assert!(table.get(key.as_bytes(), None).unwrap().is_some());
+        }
+    }
+
+    /// Many threads reading through the SAME mapping concurrently:
+    /// proves `MappedFile`'s `Send + Sync` is actually sound in
+    /// practice, not just type-checked.
+    #[test]
+    fn mmap_reads_are_safe_under_concurrent_threads() {
+        let td = TempDir::new("mmap-concurrent");
+        let table = Arc::new(build_table_with_mmap(
+            td.path(),
+            1,
+            500,
+            64,
+            Arc::new(BlockCache::new(1024 * 1024)),
+            Arc::new(TableFileCache::new(8)),
+            true,
+        ));
+        let handles: Vec<_> = (0..8)
+            .map(|t| {
+                let table = table.clone();
+                std::thread::spawn(move || {
+                    for round in 0..200 {
+                        let i = (t * 137 + round * 31) % 500;
+                        let key = format!("k{i:06}");
+                        let found = table.get(key.as_bytes(), None).unwrap();
+                        assert!(found.is_some(), "key {key} must be found");
+                    }
+                })
+            })
+            .collect();
+        for h in handles {
+            h.join().unwrap();
+        }
     }
 }

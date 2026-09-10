@@ -258,6 +258,24 @@ pub struct KibanOptions {
     /// `Kiban` ignores this entirely, exactly like
     /// `l0_write_stall_trigger` (11.5).
     pub write_buffer_bytes: usize,
+    /// 11.17-mmap-hybrid, experimental and off by default (`None`):
+    /// tables at or below this level are opened with a whole-file
+    /// `mmap(2)` mapping instead of the default `TableFileCache`-leased
+    /// positional-read path. Measured tradeoff (standalone shootout,
+    /// not yet re-verified against a full Kiban workload): a real
+    /// 3-10x throughput win for reads that hit the OS page cache but
+    /// missed Kiban's own block cache, against a real, much worse tail
+    /// (single-digit milliseconds, not microseconds) for concurrent
+    /// genuinely-cold reads of larger blocks under a page-fault
+    /// stampede. Low-numbered levels (L0, maybe L1) are the closest
+    /// available proxy this phase has for "hot" — they're what
+    /// compaction and recent flushes touch most — not a real
+    /// access-frequency measurement. Sound only because of two
+    /// Kiban-specific guarantees, not general mmap safety: SST files
+    /// are fully written once and never modified/truncated after, and
+    /// a later `unlink` (compaction retiring the file) cannot invalidate
+    /// an existing mapping on POSIX. See `SstTable`'s `MappedFile`.
+    pub mmap_max_level: Option<u32>,
 }
 
 impl Default for KibanOptions {
@@ -272,6 +290,7 @@ impl Default for KibanOptions {
             block_cache_bytes: 32 * MIB as usize,
             max_open_table_files: 128,
             write_buffer_bytes: 4 * MIB as usize,
+            mmap_max_level: None,
         }
     }
 }
@@ -551,7 +570,14 @@ impl Kiban {
         let mut tables = Vec::with_capacity(manifest.tables.len());
         for tref in &manifest.tables {
             let path = dir.join(file_name(tref.number, SST_EXTENSION));
-            let table = SstTable::open(tref.number, &path, cache.clone(), file_cache.clone())?;
+            let use_mmap = options.mmap_max_level.is_some_and(|max| tref.level <= max);
+            let table = SstTable::open(
+                tref.number,
+                &path,
+                cache.clone(),
+                file_cache.clone(),
+                use_mmap,
+            )?;
             let size = table.size_on_disk();
             let first_key = table.smallest_key().to_vec();
             let last_key = table.largest_key().to_vec();
@@ -1079,11 +1105,14 @@ impl Kiban {
         // returned success.
         self.next_file_number = new_next_file_number;
         self.wal_number = new_wal_number;
+        // Flush output is always L0.
+        let use_mmap = self.options.mmap_max_level.is_some();
         let table = SstTable::open(
             sst_number,
             &self.dir.join(file_name(sst_number, SST_EXTENSION)),
             self.cache.clone(),
             self.file_cache.clone(),
+            use_mmap,
         )?;
         let entry = StdArc::new(TableEntry {
             level: 0,
@@ -1242,6 +1271,7 @@ impl Kiban {
             dir: self.dir.clone(),
             cache: self.cache.clone(),
             file_cache: self.file_cache.clone(),
+            mmap_max_level: self.options.mmap_max_level,
         })
     }
 
@@ -2227,6 +2257,7 @@ pub(crate) struct CompactionPlan {
     cache: StdArc<BlockCache>,
     file_cache: StdArc<TableFileCache>,
     target_file_size: u64,
+    mmap_max_level: Option<u32>,
 }
 
 impl CompactionPlan {
@@ -2342,7 +2373,16 @@ impl CompactionPlan {
         let bytes = builder.finish()?;
         let path = self.dir.join(file_name(number, SST_EXTENSION));
         atomic::commit_file(&path, &bytes)?;
-        let table = SstTable::open(number, &path, self.cache.clone(), self.file_cache.clone())?;
+        let use_mmap = self
+            .mmap_max_level
+            .is_some_and(|max| self.output_level <= max);
+        let table = SstTable::open(
+            number,
+            &path,
+            self.cache.clone(),
+            self.file_cache.clone(),
+            use_mmap,
+        )?;
         outputs.push(TableEntry {
             level: self.output_level,
             number,
@@ -2370,6 +2410,7 @@ pub(crate) struct FlushPlan {
     dir: PathBuf,
     cache: StdArc<BlockCache>,
     file_cache: StdArc<TableFileCache>,
+    mmap_max_level: Option<u32>,
 }
 
 impl FlushPlan {
@@ -2389,11 +2430,14 @@ impl FlushPlan {
         let bytes = builder.finish()?;
         let path = self.dir.join(file_name(self.output_number, SST_EXTENSION));
         atomic::commit_file(&path, &bytes)?;
+        // Flush output is always L0.
+        let use_mmap = self.mmap_max_level.is_some();
         let table = SstTable::open(
             self.output_number,
             &path,
             self.cache.clone(),
             self.file_cache.clone(),
+            use_mmap,
         )?;
         Ok(TableEntry {
             level: 0,
@@ -2568,6 +2612,7 @@ impl Kiban {
             cache: self.cache.clone(),
             file_cache: self.file_cache.clone(),
             target_file_size: self.options.target_file_size,
+            mmap_max_level: self.options.mmap_max_level,
         })
     }
 
@@ -2734,6 +2779,7 @@ mod compaction_tests {
             // by accident. Tests that specifically exercise freeze/
             // flush use their own tight `write_buffer_bytes`.
             write_buffer_bytes: 1 << 20,
+            mmap_max_level: None,
         }
     }
 
@@ -3018,6 +3064,7 @@ mod crash_sweep_tests {
                 block_cache_bytes: 1 << 20,
                 max_open_table_files: 64,
                 write_buffer_bytes: 1 << 20,
+                mmap_max_level: None,
             };
             let _ = &mut options;
             let mut db = Kiban::open_with_options(dir, options)?;
@@ -3110,6 +3157,7 @@ mod crash_sweep_tests {
                     block_cache_bytes: 1 << 20,
                     max_open_table_files: 64,
                     write_buffer_bytes: 1 << 20,
+                    mmap_max_level: None,
                 },
             ) {
                 Ok(db) => db,
@@ -3972,6 +4020,7 @@ mod cache_scaling_tests {
             // Irrelevant here: this module uses direct `Kiban`, which
             // never auto-freezes (11.8 auto-freeze is SharedKiban-only).
             write_buffer_bytes: 1 << 20,
+            mmap_max_level: None,
         }
     }
 
