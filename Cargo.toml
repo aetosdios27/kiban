@@ -16,3 +16,7 @@ loom = { version = "0.7", optional = true }
 [[bench]]
 name = "basic"
 harness = false
+
+[[bench]]
+name = "steady_state"
+harness = false

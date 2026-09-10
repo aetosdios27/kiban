@@ -288,12 +288,32 @@ pub struct KibanOptions {
     /// otherwise cascade levels 1, 2, 3... in order, compacting the
     /// first one found over its byte budget. `Scored` instead computes
     /// a cheap urgency score for every eligible candidate (L0 and each
-    /// over-budget level) and always runs the highest-scoring one —
-    /// see `CompactionCandidate::score`. The two agree in the common
-    /// case (L0 usually does dominate); they diverge under real
-    /// contention, e.g. a deep level far over budget while L0 is only
-    /// barely past its trigger, which `FixedPriority` still drains
-    /// first unconditionally and `Scored` may not.
+    /// over-budget level) and always runs the highest-scoring one — see
+    /// `score_l0_candidate`/`score_level_candidate`.
+    ///
+    /// Measured (steady-state torture bench, `benches/steady_state.rs`,
+    /// 300K writes, two workload shapes, `Scored` combined with
+    /// `compaction_batch_size: 4`): write amplification 2.3-4.3x lower
+    /// (24-62x down to 10-14x) and 2-6x higher sustained throughput —
+    /// `FixedPriority` unconditionally draining L0 every time it hits a
+    /// small trigger means small, frequent L0->L1 merges keep re-
+    /// touching the same overlapping L1 range for comparatively little
+    /// new data each time; `Scored` lets L0 accumulate more before
+    /// compacting when a deeper level's urgency wins instead, so each
+    /// eventual merge amortizes over more new data. That is a genuine,
+    /// substantial win, not why this isn't the default: on one of the
+    /// two workload shapes tested, `Scored`'s higher and more variable
+    /// L0 file count (it's less eager to drain L0 than `FixedPriority`)
+    /// cost GET p99 about 45% (a fatter tail from more L0 tables to
+    /// probe on the worst gets, not a change in the average) even
+    /// though PUT p99 improved there too. `FixedPriority` keeps L0
+    /// small and predictable by construction, which is the safer
+    /// default for foreground read tail latency specifically — the
+    /// stated priority of this whole round ("bounded foreground tail
+    /// latency... not maximum throughput"). Opt into `Scored` (with
+    /// `compaction_batch_size` > 1) for a write/compaction-throughput-
+    /// and write-amplification-sensitive deployment that can tolerate a
+    /// wider L0 and its GET tail.
     pub compaction_scheduler: CompactionScheduler,
     /// 11.17-round-2, section 2: for a level-N (N>=1) compaction, how
     /// many of that level's oldest tables to fold into ONE job instead
