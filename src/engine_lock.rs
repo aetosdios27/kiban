@@ -701,6 +701,282 @@ mod tests {
         assert_eq!(*lock.read().unwrap(), 99);
     }
 
+    /// TEST 10: a HELD WRITE guard excludes fresh readers as well as fresh
+    /// writers. The writer's guard is provably alive (it sits on a Barrier
+    /// this thread must also pass), every contender announces its attempt
+    /// before acquiring, and only after the writer's release do any of them
+    /// enter.
+    #[test]
+    fn held_writer_excludes_readers_and_writers() {
+        let lock = Arc::new(ShardedRwLock::new(0usize));
+        let attempting = Arc::new(AtomicUsize::new(0));
+        let held = Arc::new(Barrier::new(2));
+        let release = Arc::new(Barrier::new(2));
+        let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+
+        let writer = {
+            let lock = lock.clone();
+            let held = held.clone();
+            let release = release.clone();
+            std::thread::spawn(move || {
+                let mut guard = lock.write().unwrap();
+                *guard = 5;
+                held.wait();
+                release.wait();
+            })
+        };
+        held.wait();
+
+        // Two readers and two writers, each signalling "attempting" before
+        // its acquisition call so the exclusion window is a proof, not a
+        // race on thread startup.
+        let readers: Vec<_> = (0..2)
+            .map(|_| {
+                let lock = lock.clone();
+                let attempting = attempting.clone();
+                let entered_tx = entered_tx.clone();
+                std::thread::spawn(move || {
+                    attempting.fetch_add(1, Ordering::SeqCst);
+                    let guard = lock.read().unwrap();
+                    entered_tx.send(()).unwrap();
+                    drop(guard);
+                })
+            })
+            .collect();
+        let writers: Vec<_> = (0..2)
+            .map(|_| {
+                let lock = lock.clone();
+                let attempting = attempting.clone();
+                let entered_tx = entered_tx.clone();
+                std::thread::spawn(move || {
+                    attempting.fetch_add(1, Ordering::SeqCst);
+                    let mut guard = lock.write().unwrap();
+                    entered_tx.send(()).unwrap();
+                    *guard += 1;
+                })
+            })
+            .collect();
+
+        while attempting.load(Ordering::SeqCst) < 4 {
+            std::thread::yield_now();
+        }
+        assert!(
+            entered_rx.try_recv().is_err(),
+            "a contender entered the gate while the writer's guard was provably held"
+        );
+
+        release.wait();
+        writer.join().unwrap();
+        for _ in 0..4 {
+            let _ = entered_rx.recv().unwrap();
+        }
+        for reader in readers {
+            reader.join().unwrap();
+        }
+        for writer in writers {
+            writer.join().unwrap();
+        }
+        assert_eq!(
+            *lock.read().unwrap(),
+            7,
+            "5 was not preserved; expected the two queued writers' increments on top"
+        );
+    }
+
+    /// TEST 11: three readers on distinct shards hold the gate at the same
+    /// instant (Barrier-proven: all three guards are alive simultaneously)
+    /// and all read the same value.
+    #[test]
+    fn three_readers_hold_gate_simultaneously() {
+        let lock = Arc::new(ShardedRwLock::new(3usize));
+        let held = Arc::new(Barrier::new(4));
+        let release = Arc::new(Barrier::new(4));
+        let readers: Vec<_> = [1usize, 4, 6]
+            .map(|shard| {
+                let lock = lock.clone();
+                let held = held.clone();
+                let release = release.clone();
+                std::thread::spawn(move || {
+                    let guard = lock.read_from_shard(shard).unwrap();
+                    assert_eq!(*guard, 3);
+                    held.wait();
+                    release.wait();
+                })
+            })
+            .into_iter()
+            .collect();
+        held.wait();
+        release.wait();
+        for reader in readers {
+            reader.join().unwrap();
+        }
+        assert!(lock.write().is_ok());
+    }
+
+    /// TEST 12: three writers queue while two reader threads stream reads.
+    /// At most one writer may hold the gate at a time; every queued writer
+    /// eventually enters (join proves it); after the queue drains the gate
+    /// is fully released and admits readers.
+    #[test]
+    fn three_queued_writers_progress_under_reader_stream() {
+        let lock = Arc::new(ShardedRwLock::new(0usize));
+        let writers_in = Arc::new(AtomicUsize::new(0));
+        let max_writers = Arc::new(AtomicUsize::new(0));
+
+        let start = Arc::new(Barrier::new(5));
+        let reader_streams: Vec<_> = (0..2)
+            .map(|_| {
+                let lock = lock.clone();
+                let start = start.clone();
+                std::thread::spawn(move || {
+                    start.wait();
+                    for _ in 0..250 {
+                        let _ = *lock.read().unwrap();
+                    }
+                })
+            })
+            .collect();
+        let writers: Vec<_> = (0..3)
+            .map(|_| {
+                let lock = lock.clone();
+                let writers_in = writers_in.clone();
+                let max_writers = max_writers.clone();
+                let start = start.clone();
+                std::thread::spawn(move || {
+                    start.wait();
+                    let mut guard = lock.write().unwrap();
+                    let n = writers_in.fetch_add(1, Ordering::SeqCst) + 1;
+                    max_writers.fetch_max(n, Ordering::SeqCst);
+                    *guard += 1;
+                    writers_in.fetch_sub(1, Ordering::SeqCst);
+                })
+            })
+            .collect();
+
+        for reader in reader_streams {
+            reader.join().unwrap();
+        }
+        for writer in writers {
+            writer.join().unwrap();
+        }
+
+        assert_eq!(max_writers.load(Ordering::SeqCst), 1);
+        assert!(
+            !lock.writer_pending(),
+            "writer_pending stayed set after the writer queue drained"
+        );
+        assert_eq!(*lock.read().unwrap(), 3);
+    }
+
+    /// TEST 13: after each of a stream of writers finishes, fresh readers are
+    /// immediately admissible and `writer_pending` is never observed stuck
+    /// between writers.
+    #[test]
+    fn readers_admit_after_every_writer_flag_never_stuck() {
+        let lock = Arc::new(ShardedRwLock::new(0usize));
+        for i in 0..8 {
+            let mut guard = lock.write().unwrap();
+            *guard = i;
+            drop(guard);
+            assert!(
+                !lock.writer_pending(),
+                "writer_pending stuck after writer {i} released"
+            );
+            assert_eq!(*lock.read().unwrap(), i, "reader admitted right after writer {i}");
+        }
+
+        let held = Arc::new(Barrier::new(9));
+        let release = Arc::new(Barrier::new(9));
+        let readers: Vec<_> = (0..8)
+            .map(|shard| {
+                let lock = lock.clone();
+                let held = held.clone();
+                let release = release.clone();
+                std::thread::spawn(move || {
+                    let guard = lock.read_from_shard(shard % ENGINE_READ_SHARDS).unwrap();
+                    assert_eq!(*guard, 7);
+                    held.wait();
+                    release.wait();
+                })
+            })
+            .collect();
+        held.wait();
+        release.wait();
+        for reader in readers {
+            reader.join().unwrap();
+        }
+        assert!(!lock.writer_pending());
+        assert_eq!(*lock.read().unwrap(), 7);
+    }
+
+    /// TEST 14 (ignored, heavier): mixed stress with live exclusion
+    /// invariants. Readers count admissions and assert no writer was inside
+    /// the gate with them; writers assert no reader and no second writer was
+    /// inside with them. Run with
+    /// `cargo test --release -- --ignored --nocapture mixed_stress`.
+    #[test]
+    #[ignore]
+    fn mixed_stress_exclusion_invariants_hold() {
+        let lock = Arc::new(ShardedRwLock::new(0u64));
+        let readers_in = Arc::new(AtomicUsize::new(0));
+        let writers_in = Arc::new(AtomicUsize::new(0));
+        let violations = Arc::new(AtomicUsize::new(0));
+
+        let readers: Vec<_> = (0..4)
+            .map(|_| {
+                let lock = lock.clone();
+                let readers_in = readers_in.clone();
+                let writers_in = writers_in.clone();
+                let violations = violations.clone();
+                std::thread::spawn(move || {
+                    for _ in 0..10_000 {
+                        let guard = lock.read().unwrap();
+                        readers_in.fetch_add(1, Ordering::Relaxed);
+                        if writers_in.load(Ordering::Relaxed) != 0 {
+                            violations.fetch_add(1, Ordering::Relaxed);
+                        }
+                        drop(guard);
+                        readers_in.fetch_sub(1, Ordering::Relaxed);
+                    }
+                })
+            })
+            .collect();
+        let writers: Vec<_> = (0..4)
+            .map(|_| {
+                let lock = lock.clone();
+                let readers_in = readers_in.clone();
+                let writers_in = writers_in.clone();
+                let violations = violations.clone();
+                std::thread::spawn(move || {
+                    for _ in 0..500 {
+                        let mut guard = lock.write().unwrap();
+                        let n = writers_in.fetch_add(1, Ordering::Relaxed) + 1;
+                        if readers_in.load(Ordering::Relaxed) != 0 || n != 1 {
+                            violations.fetch_add(1, Ordering::Relaxed);
+                        }
+                        *guard += 1;
+                        writers_in.fetch_sub(1, Ordering::Relaxed);
+                    }
+                })
+            })
+            .collect();
+
+        for reader in readers {
+            reader.join().unwrap();
+        }
+        for writer in writers {
+            writer.join().unwrap();
+        }
+
+        assert_eq!(
+            violations.load(Ordering::Relaxed),
+            0,
+            "exclusion violated: reader(s) and writer(s) held the gate together"
+        );
+        assert!(!lock.writer_pending());
+        assert_eq!(*lock.read().unwrap(), 2_000);
+    }
+
     /// Investigates whether writer priority (readers yield while
     /// `writer_pending` is set) starves readers under sustained write
     /// pressure. Ignored by default since it's a timing measurement, not a
