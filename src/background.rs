@@ -347,6 +347,66 @@ fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
     }
 }
 
+/// L0 pressure captured in the same lock hold as a flush/compaction
+/// commit (11.17-D), used only to decide whether the worker should
+/// pace itself before its next job — never anything policy-relevant
+/// (L0 admission, backpressure) depends on it.
+struct MaintenancePressure {
+    l0_count: usize,
+    l0_write_stall_trigger: usize,
+}
+
+impl MaintenancePressure {
+    fn capture(guard: &Kiban) -> Self {
+        MaintenancePressure {
+            l0_count: guard.l0_count(),
+            l0_write_stall_trigger: guard.options().l0_write_stall_trigger,
+        }
+    }
+
+    /// Sole point of this type: `run_pending_maintenance`'s inner loop
+    /// otherwise runs PLAN -> BUILD -> COMMIT back to back with no
+    /// pacing at all, each commit briefly excluding every foreground
+    /// reader (engine_lock's writer-excludes-all-shards protocol).
+    /// Under a sustained flood of small, fast jobs (many writes against
+    /// small buffers producing many small flushes/compactions in
+    /// quick succession) that can mean thousands of back-to-back full
+    /// engine-gate acquisitions with no gap for a foreground reader to
+    /// actually get scheduled in between — even though each individual
+    /// acquisition is brief, measured foreground GET p99 under exactly
+    /// this shape of pressure was ~100x baseline (11.17-D stress
+    /// results).
+    ///
+    /// Pacing is a plain `sleep`, not a lock-holding wait, and fires
+    /// only when L0 has real headroom below its hard write-stall
+    /// ceiling — i.e. maintenance is not racing to prevent a stall.
+    /// Once L0 is within `HEADROOM_DIVISOR` of that ceiling, pacing
+    /// stops immediately and the worker goes back to running flat out
+    /// (self-stabilizing in practice: the 11.17-D stress workload
+    /// settles at a roughly constant L0 count well under the ceiling
+    /// rather than growing unbounded, across every delay tested). This
+    /// never slows draining a genuine backlog, and the fixed delay is
+    /// small enough to be immaterial next to real BUILD time (disk
+    /// I/O, table construction) for anything but a degenerate
+    /// tiny-file workload — precisely the pathological churn case this
+    /// exists to pace.
+    ///
+    /// `PACE_DELAY` was swept (0/10/30/100us) against the 11.17-D
+    /// stress workload: 10-30us already captures most of the
+    /// foreground win (GET p99 ~120us -> ~50us) while keeping PUT p99
+    /// flat-to-better than unpaced (write-lock contention drops enough
+    /// to offset the extra stalls); 100us pushes GET p99 lower still
+    /// (~32us) but starts visibly costing PUT p99. 20us was chosen as
+    /// the balance.
+    fn pace(&self) {
+        const HEADROOM_DIVISOR: usize = 2;
+        const PACE_DELAY: std::time::Duration = std::time::Duration::from_micros(20);
+        if self.l0_count.saturating_mul(HEADROOM_DIVISOR) < self.l0_write_stall_trigger {
+            std::thread::sleep(PACE_DELAY);
+        }
+    }
+}
+
 /// Runs every job the engine currently needs — flush, then compaction
 /// (11.8: memory pressure outranks maintenance debt) — with BUILD
 /// moved off the lock for both. Compaction's own priority order within
@@ -372,11 +432,12 @@ fn run_pending_maintenance(engine: &Arc<ShardedRwLock<Kiban>>, m: &Arc<Maintenan
 
             match plan.build() {
                 Ok(output) => {
-                    let committed = {
+                    let (committed, pressure) = {
                         let Ok(mut guard) = engine.write() else {
                             return;
                         };
-                        guard.commit_flush(plan, output)
+                        let committed = guard.commit_flush(plan, output);
+                        (committed, MaintenancePressure::capture(&guard))
                     };
                     match committed {
                         Ok(()) => record_flush_success(m),
@@ -385,6 +446,7 @@ fn run_pending_maintenance(engine: &Arc<ShardedRwLock<Kiban>>, m: &Arc<Maintenan
                             return;
                         }
                     }
+                    pressure.pace();
                 }
                 Err(e) => {
                     record_flush_error(m, e.to_string());
@@ -407,11 +469,12 @@ fn run_pending_maintenance(engine: &Arc<ShardedRwLock<Kiban>>, m: &Arc<Maintenan
 
         match plan.build() {
             Ok(outputs) => {
-                let committed = {
+                let (committed, pressure) = {
                     let Ok(mut guard) = engine.write() else {
                         return;
                     };
-                    guard.commit_compaction(plan, outputs)
+                    let committed = guard.commit_compaction(plan, outputs);
+                    (committed, MaintenancePressure::capture(&guard))
                 };
                 match committed {
                     // A successful commit is exactly the progress a
@@ -424,6 +487,7 @@ fn run_pending_maintenance(engine: &Arc<ShardedRwLock<Kiban>>, m: &Arc<Maintenan
                         return;
                     }
                 }
+                pressure.pace();
             }
             Err(e) => {
                 record_error(m, e.to_string());

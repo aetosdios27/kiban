@@ -626,9 +626,7 @@ impl Kiban {
         Ok(())
     }
 
-    /// Returns Err(Poisoned) when the engine may no longer acknowledge
-    /// mutations; Ok(()) otherwise (engine-poisoning.md D1).
-    fn l0_count(&self) -> usize {
+    pub(crate) fn l0_count(&self) -> usize {
         self.version.l0_count()
     }
 
