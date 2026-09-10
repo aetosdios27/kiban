@@ -8,8 +8,98 @@ use std::time::{Duration, Instant};
 
 use kiban::cache::{BlockCache, BlockMeta, CachedBlock};
 use kiban::db::{Kiban, KibanOptions, KibanStats, SharedKiban, SharedSnapshot};
+use kiban::memtable::Memtable;
 
-const THREAD_COUNTS: &[usize] = &[1, 2, 4, 8];
+const THREAD_COUNTS: &[usize] = &[1, 2, 4, 8, 16, 32];
+
+/// p50/p95/p99 over a flat pool of per-op latency samples (nanoseconds).
+fn percentiles(mut samples: Vec<u64>) -> (u64, u64, u64) {
+    samples.sort_unstable();
+    let at = |q: f64| samples[((samples.len() - 1) as f64 * q) as usize];
+    (at(0.50), at(0.95), at(0.99))
+}
+
+/// Bet A mechanism-level control (11.17 read-gate removal shootout):
+/// `readers` threads hammer `Memtable::get` through only a per-memtable
+/// `RwLock` (no outer engine-wide gate at all — this is the target
+/// architecture's "concurrently readable mutable memtable" in isolation),
+/// while `writers` threads concurrently `put` fresh sequence numbers into
+/// the SAME memtable. Reports reader-side throughput and latency
+/// percentiles; the writer keeps running for the full measured window so
+/// the numbers reflect genuine concurrent read/write pressure, not a
+/// read-only best case.
+fn memtable_rwlock_mixed(
+    readers: usize,
+    writers: usize,
+    reader_ops_total: usize,
+    key_space: usize,
+) -> (f64, u64, u64, u64) {
+    let all_keys = keys("k", key_space);
+    let mut seed = Memtable::new();
+    for (i, k) in all_keys.iter().enumerate() {
+        seed.put(k.clone(), [b'v'; 40], (i + 1) as u64);
+    }
+    let mem = Arc::new(RwLock::new(seed));
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let start = Arc::new(Barrier::new(readers + writers + 1));
+
+    let writer_handles: Vec<_> = (0..writers)
+        .map(|w| {
+            let mem = mem.clone();
+            let stop = stop.clone();
+            let start = start.clone();
+            let all_keys = all_keys.clone();
+            std::thread::spawn(move || {
+                start.wait();
+                let mut seq = (key_space as u64 + 1) + w as u64 * 10_000_000;
+                let mut i: usize = 0;
+                while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                    let k = &all_keys[i % key_space];
+                    mem.write().unwrap().put(k.clone(), [b'w'; 40], seq);
+                    seq += 1;
+                    i += 1;
+                }
+            })
+        })
+        .collect();
+
+    let per_reader = reader_ops_total / readers;
+    let reader_handles: Vec<_> = (0..readers)
+        .map(|r| {
+            let mem = mem.clone();
+            let start = start.clone();
+            let all_keys = all_keys.clone();
+            std::thread::spawn(move || {
+                start.wait();
+                let mut samples = Vec::with_capacity(per_reader);
+                for i in 0..per_reader {
+                    let index = (r * per_reader + i).wrapping_mul(8191) % key_space;
+                    let k = &all_keys[index];
+                    let t0 = Instant::now();
+                    let got = mem.read().unwrap().get(k);
+                    samples.push(t0.elapsed().as_nanos() as u64);
+                    assert!(got.is_some());
+                }
+                samples
+            })
+        })
+        .collect();
+
+    let timer = Instant::now();
+    start.wait();
+    let mut all_samples = Vec::with_capacity(reader_ops_total);
+    for h in reader_handles {
+        all_samples.extend(h.join().unwrap());
+    }
+    let elapsed = timer.elapsed();
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    for h in writer_handles {
+        h.join().unwrap();
+    }
+    let throughput = all_samples.len() as f64 / elapsed.as_secs_f64();
+    let (p50, p95, p99) = percentiles(all_samples);
+    (throughput, p50, p95, p99)
+}
 
 /// Runs an equivalent prepared workload once as warmup, then takes the
 /// middle of independent timed samples. Each closure owns any setup and
@@ -305,6 +395,74 @@ fn parallel_writes(
     (timer.elapsed(), writes)
 }
 
+/// Same shape as `memtable_rwlock_mixed`, but through the real, current
+/// `SharedKiban` (engine-wide `ShardedRwLock` gate) — every read is a
+/// pure memtable hit (freshly seeded, never flushed), so this isolates
+/// the gate's own contribution under concurrent writers as it exists in
+/// production today, directly comparable to the gate-free control above.
+fn shared_kiban_mixed(
+    db: &SharedKiban,
+    keys: Arc<Vec<Vec<u8>>>,
+    readers: usize,
+    writers: usize,
+    reader_ops_total: usize,
+) -> (f64, u64, u64, u64) {
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let start = Arc::new(Barrier::new(readers + writers + 1));
+
+    let writer_handles: Vec<_> = (0..writers)
+        .map(|w| {
+            let db = db.clone();
+            let stop = stop.clone();
+            let start = start.clone();
+            std::thread::spawn(move || {
+                start.wait();
+                let mut i: usize = 0;
+                while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                    db.put(key(&format!("mw{w}"), i), [b'w'; 40]).unwrap();
+                    i += 1;
+                }
+            })
+        })
+        .collect();
+
+    let per_reader = reader_ops_total / readers;
+    let reader_handles: Vec<_> = (0..readers)
+        .map(|r| {
+            let db = db.clone();
+            let keys = keys.clone();
+            let start = start.clone();
+            std::thread::spawn(move || {
+                start.wait();
+                let mut samples = Vec::with_capacity(per_reader);
+                for i in 0..per_reader {
+                    let index = (r * per_reader + i).wrapping_mul(8191) % keys.len();
+                    let t0 = Instant::now();
+                    let got = db.get(&keys[index]).unwrap();
+                    samples.push(t0.elapsed().as_nanos() as u64);
+                    assert!(got.is_some());
+                }
+                samples
+            })
+        })
+        .collect();
+
+    let timer = Instant::now();
+    start.wait();
+    let mut all_samples = Vec::with_capacity(reader_ops_total);
+    for h in reader_handles {
+        all_samples.extend(h.join().unwrap());
+    }
+    let elapsed = timer.elapsed();
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    for h in writer_handles {
+        h.join().unwrap();
+    }
+    let throughput = all_samples.len() as f64 / elapsed.as_secs_f64();
+    let (p50, p95, p99) = percentiles(all_samples);
+    (throughput, p50, p95, p99)
+}
+
 fn print_file_delta(before: &KibanStats, after: &KibanStats) {
     let b = before.table_files;
     let a = after.table_files;
@@ -377,6 +535,80 @@ fn main() {
                 parallel_sharded_reads(shards, threads, reads)
             });
         }
+    }
+
+    println!("\n== Bet A: memtable-only, gate-free RwLock<Memtable> (11.17 mechanism control) ==");
+    println!("  (Memtable::get through its own RwLock, no engine-wide gate at all)");
+    let key_space = 20_000;
+    for &(rname, _r_num, w_num) in &[
+        ("100R/0W", 1.0, 0.0),
+        ("99R/1W", 0.99, 0.01),
+        ("95R/5W", 0.95, 0.05),
+        ("90R/10W", 0.90, 0.10),
+    ] {
+        for &threads in THREAD_COUNTS {
+            let writers = ((threads as f64 * w_num).round() as usize).clamp(
+                if w_num > 0.0 { 1 } else { 0 },
+                threads.saturating_sub(1).max(1),
+            );
+            let readers = (threads - writers).max(1);
+            let (throughput, p50, p95, p99) =
+                memtable_rwlock_mixed(readers, writers, reads, key_space);
+            println!(
+                "  {rname:<8} {threads:>2} threads ({readers}R/{writers}W)  {throughput:>12.0} gets/s   p50={:>6.2}us p95={:>7.2}us p99={:>8.2}us",
+                p50 as f64 / 1000.0,
+                p95 as f64 / 1000.0,
+                p99 as f64 / 1000.0,
+            );
+        }
+    }
+
+    println!(
+        "\n== Bet A: same workload through the real gated SharedKiban (memtable hits only) =="
+    );
+    {
+        let dir = temp_dir("gate-mixed");
+        let db = SharedKiban::open(&dir).unwrap();
+        for i in 0..key_space {
+            db.put(key("k", i), [b'v'; 40]).unwrap();
+        }
+        let read_keys = keys("k", key_space);
+        for &(rname, _r_num, w_num) in &[
+            ("100R/0W", 1.0, 0.0),
+            ("99R/1W", 0.99, 0.01),
+            ("95R/5W", 0.95, 0.05),
+            ("90R/10W", 0.90, 0.10),
+        ] {
+            for &threads in THREAD_COUNTS {
+                let writers = ((threads as f64 * w_num).round() as usize).clamp(
+                    if w_num > 0.0 { 1 } else { 0 },
+                    threads.saturating_sub(1).max(1),
+                );
+                let readers = (threads - writers).max(1);
+                let before = db.stats().unwrap();
+                let (throughput, p50, p95, p99) =
+                    shared_kiban_mixed(&db, read_keys.clone(), readers, writers, reads);
+                let after = db.stats().unwrap();
+                println!(
+                    "  {rname:<8} {threads:>2} threads ({readers}R/{writers}W)  {throughput:>12.0} gets/s   p50={:>6.2}us p95={:>7.2}us p99={:>8.2}us  [flushes +{} compactions +{} stalls +{} l0={}]",
+                    p50 as f64 / 1000.0,
+                    p95 as f64 / 1000.0,
+                    p99 as f64 / 1000.0,
+                    after.maintenance.flushes_completed - before.maintenance.flushes_completed,
+                    after.maintenance.compactions_completed
+                        - before.maintenance.compactions_completed,
+                    after.maintenance.write_stalls - before.maintenance.write_stalls,
+                    after
+                        .levels
+                        .iter()
+                        .find(|l| l.level == 0)
+                        .map(|l| l.tables)
+                        .unwrap_or(0),
+                );
+            }
+        }
+        drop(db);
+        drop_dir(&dir);
     }
 
     println!("\n== Empty and active SharedKiban controls ==");
@@ -554,6 +786,106 @@ fn main() {
         });
         let (before, after) = final_stats.expect("FD sample must run");
         print_file_delta(&before, &after);
+    }
+
+    println!("\n== Bet F: single-flight cache-miss coalescing ==");
+    {
+        // Same cold key, hammered by every thread at once: without
+        // coalescing this is N physical block reads; with it, ~1.
+        let dir = temp_dir("single-flight-stampede");
+        let options = KibanOptions {
+            block_cache_bytes: 64 * 1024 * 1024,
+            ..KibanOptions::default()
+        };
+        let mut db = Kiban::open_with_options(&dir, options.clone()).unwrap();
+        for i in 0..2_000 {
+            db.put(key("sf", i), [b'v'; 200]).unwrap();
+        }
+        db.sync().unwrap();
+        db.flush().unwrap();
+        drop(db);
+        for &readers in THREAD_COUNTS {
+            let db = SharedKiban::open_with_options(&dir, options.clone()).unwrap();
+            let before = db.stats().unwrap();
+            let target = key("sf", 1_000);
+            let start = Arc::new(Barrier::new(readers + 1));
+            let handles: Vec<_> = (0..readers)
+                .map(|_| {
+                    let db = db.clone();
+                    let target = target.clone();
+                    let start = start.clone();
+                    std::thread::spawn(move || {
+                        start.wait();
+                        db.get(&target).unwrap().unwrap().len()
+                    })
+                })
+                .collect();
+            let timer = Instant::now();
+            start.wait();
+            for h in handles {
+                h.join().unwrap();
+            }
+            let elapsed = timer.elapsed();
+            let after = db.stats().unwrap();
+            println!(
+                "  stampede {readers:>2} threads on 1 cold key  {:>8.2?}   [block-cache misses +{} coalesced +{} | file hits +{} misses +{}]",
+                elapsed,
+                after.block_cache.misses - before.block_cache.misses,
+                after.block_cache.coalesced - before.block_cache.coalesced,
+                after.table_files.hits - before.table_files.hits,
+                after.table_files.misses - before.table_files.misses,
+            );
+            drop(db);
+        }
+        drop_dir(&dir);
+    }
+    {
+        // Control: every thread reads a DIFFERENT cold key — nothing
+        // should collide, so coalesced must stay at 0 and throughput
+        // should track plain concurrent cold reads (no added overhead
+        // from the single-flight bookkeeping in the common case).
+        let dir = temp_dir("single-flight-no-collision");
+        let options = KibanOptions {
+            block_cache_bytes: 64 * 1024 * 1024,
+            ..KibanOptions::default()
+        };
+        let mut db = Kiban::open_with_options(&dir, options.clone()).unwrap();
+        for i in 0..2_000 {
+            db.put(key("nc", i), [b'v'; 200]).unwrap();
+        }
+        db.sync().unwrap();
+        db.flush().unwrap();
+        drop(db);
+        for &readers in THREAD_COUNTS {
+            let db = SharedKiban::open_with_options(&dir, options.clone()).unwrap();
+            let before = db.stats().unwrap();
+            let start = Arc::new(Barrier::new(readers + 1));
+            let handles: Vec<_> = (0..readers)
+                .map(|t| {
+                    let db = db.clone();
+                    let start = start.clone();
+                    std::thread::spawn(move || {
+                        start.wait();
+                        let target = key("nc", (t * 37) % 2_000);
+                        db.get(&target).unwrap().unwrap().len()
+                    })
+                })
+                .collect();
+            let timer = Instant::now();
+            start.wait();
+            for h in handles {
+                h.join().unwrap();
+            }
+            let elapsed = timer.elapsed();
+            let after = db.stats().unwrap();
+            println!(
+                "  no-collision {readers:>2} threads, distinct cold keys  {:>8.2?}   [coalesced +{}]",
+                elapsed,
+                after.block_cache.coalesced - before.block_cache.coalesced,
+            );
+            drop(db);
+        }
+        drop_dir(&dir);
     }
 
     println!("\n== Shared writer scaling: buffered ==");
@@ -759,6 +1091,113 @@ fn main() {
     );
     let (before, after) = pressure_stats.expect("pressure sample must run");
     print_maintenance_delta(&before, &after);
+
+    println!("\n== Bet D: foreground GET p99 under sustained compaction debt (Bet C context) ==");
+    {
+        let dir = temp_dir("compaction-debt-foreground");
+        let options = KibanOptions {
+            write_buffer_bytes: 2 * 1024,
+            l0_compaction_trigger: 4,
+            l0_write_stall_trigger: 60,
+            target_file_size: 2 * 1024,
+            base_level_bytes: 8 * 1024,
+            level_multiplier: 2,
+            block_cache_bytes: 256 * 1024,
+            ..KibanOptions::default()
+        };
+        let seed_count = 4_000;
+        let mut seed = Kiban::open_with_options(&dir, options.clone()).unwrap();
+        for i in 0..seed_count {
+            seed.put(key("hot", i), [b'h'; 80]).unwrap();
+        }
+        seed.sync().unwrap();
+        seed.flush().unwrap();
+        drop(seed);
+
+        let db = SharedKiban::open_with_options(&dir, options).unwrap();
+        let hot_keys = keys("hot", seed_count);
+        let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let l0_samples: Arc<std::sync::Mutex<Vec<usize>>> =
+            Arc::new(std::sync::Mutex::new(Vec::new()));
+
+        // Foreground: continuous GETs against the already-flushed,
+        // never-rewritten "hot" keyspace — a real workload's steady
+        // read traffic, unrelated to the writer's own keys, while
+        // compaction debt from the writer piles up underneath it.
+        let reader = {
+            let db = db.clone();
+            let hot_keys = hot_keys.clone();
+            let stop = stop.clone();
+            std::thread::spawn(move || {
+                let mut samples = Vec::new();
+                let mut i = 0usize;
+                while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                    let k = &hot_keys[i % hot_keys.len()];
+                    let t0 = Instant::now();
+                    let got = db.get(k).unwrap();
+                    samples.push(t0.elapsed().as_nanos() as u64);
+                    assert!(got.is_some());
+                    i += 1;
+                }
+                samples
+            })
+        };
+        // A second thread just samples L0 file count over the run so
+        // we can correlate the GET tail with actual compaction debt,
+        // not just elapsed time.
+        let sampler = {
+            let db = db.clone();
+            let stop = stop.clone();
+            let l0_samples = l0_samples.clone();
+            std::thread::spawn(move || {
+                while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                    if let Ok(stats) = db.stats() {
+                        let l0 = stats
+                            .levels
+                            .iter()
+                            .find(|l| l.level == 0)
+                            .map(|l| l.tables)
+                            .unwrap_or(0);
+                        l0_samples.lock().unwrap().push(l0);
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(2));
+                }
+            })
+        };
+
+        let write_count = writes * 2;
+        let before = db.stats().unwrap();
+        let timer = Instant::now();
+        for i in 0..write_count {
+            db.put(key("debt", i), [b'w'; 80]).unwrap();
+        }
+        let write_elapsed = timer.elapsed();
+        let after = db.stats().unwrap();
+
+        stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        let read_samples = reader.join().unwrap();
+        sampler.join().unwrap();
+
+        let (p50, p95, p99) = percentiles(read_samples.clone());
+        let mut l0_sorted = l0_samples.lock().unwrap().clone();
+        l0_sorted.sort_unstable();
+        let max_l0 = l0_sorted.last().copied().unwrap_or(0);
+        let median_l0 = l0_sorted.get(l0_sorted.len() / 2).copied().unwrap_or(0);
+        let read_throughput = read_samples.len() as f64 / write_elapsed.as_secs_f64();
+        println!(
+            "  {write_count} writes in {write_elapsed:?}; concurrent GET: {} ops, {read_throughput:>10.0} ops/s",
+            read_samples.len()
+        );
+        println!(
+            "  GET p50={:>6.2}us p95={:>8.2}us p99={:>9.2}us   L0 files: median={median_l0} max={max_l0}",
+            p50 as f64 / 1000.0,
+            p95 as f64 / 1000.0,
+            p99 as f64 / 1000.0,
+        );
+        print_maintenance_delta(&before, &after);
+        drop(db);
+        drop_dir(&dir);
+    }
 
     println!("\n== Range scan baseline (direct Kiban) ==");
     let scans = (reads / 1_000).max(20);
