@@ -1167,9 +1167,12 @@ fn main() {
 
         let write_count = writes * 2;
         let before = db.stats().unwrap();
+        let mut write_samples = Vec::with_capacity(write_count);
         let timer = Instant::now();
         for i in 0..write_count {
+            let t0 = Instant::now();
             db.put(key("debt", i), [b'w'; 80]).unwrap();
+            write_samples.push(t0.elapsed().as_nanos() as u64);
         }
         let write_elapsed = timer.elapsed();
         let after = db.stats().unwrap();
@@ -1178,6 +1181,7 @@ fn main() {
         let read_samples = reader.join().unwrap();
         sampler.join().unwrap();
 
+        let (put_p50, put_p95, put_p99) = percentiles(write_samples);
         let (p50, p95, p99) = percentiles(read_samples.clone());
         let mut l0_sorted = l0_samples.lock().unwrap().clone();
         l0_sorted.sort_unstable();
@@ -1193,6 +1197,12 @@ fn main() {
             p50 as f64 / 1000.0,
             p95 as f64 / 1000.0,
             p99 as f64 / 1000.0,
+        );
+        println!(
+            "  PUT p50={:>6.2}us p95={:>8.2}us p99={:>9.2}us",
+            put_p50 as f64 / 1000.0,
+            put_p95 as f64 / 1000.0,
+            put_p99 as f64 / 1000.0,
         );
         print_maintenance_delta(&before, &after);
         drop(db);

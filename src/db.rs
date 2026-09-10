@@ -358,6 +358,17 @@ pub struct Kiban {
     /// created by flush, created by compaction. No accidental islands.
     file_cache: StdArc<TableFileCache>,
     memtable: Memtable,
+    /// 11.17-readview: a shadow of `memtable`'s exact live content,
+    /// behind the SAME sharded-reader-gate primitive the engine-wide
+    /// gate uses (`ShardedRwLock`), scoped down to just this one
+    /// value. Every mutation to `memtable` is mirrored here in the
+    /// same call (see `put`/`delete`/`write`), and the handle itself
+    /// is replaced (not cleared) on `freeze`, matching `memtable`'s
+    /// own reset to a fresh `Memtable::new()`. This is what lets
+    /// `SharedKiban::get` read live puts without the engine-wide write
+    /// gate at all, while still getting the existing shard mechanism's
+    /// proven read-scaling — see `ReadView`.
+    shared_memtable: StdArc<ShardedRwLock<Memtable>>,
     wal: Wal,
     /// The one frozen memtable pending background flush (11.8). `None`
     /// means nothing is frozen right now.
@@ -382,6 +393,37 @@ pub struct Kiban {
     /// Set when a durability-relevant failure makes future
     /// acknowledgement unsafe (engine-poisoning.md D1/D2).
     poisoned: Option<PoisonCause>,
+    /// 11.17-readview: the published, gate-free read path. Updated only
+    /// at structural commits (`freeze`, `commit_flush`,
+    /// `commit_compaction` — see `publish_read_view`), never per-put:
+    /// `shared_memtable` above is mutated in place, so a reader holding
+    /// an already-published view sees new puts through it automatically
+    /// without needing a fresh publish. `SharedKiban::get` reads through
+    /// this and never touches the engine-wide write gate at all; direct
+    /// `Kiban` usage builds and maintains it but never reads it back
+    /// (single-owner access has no need for a gate-free path).
+    read_view: StdArc<ShardedRwLock<StdArc<ReadView>>>,
+}
+
+/// See `Kiban::read_view`. Everything a gate-free `SharedKiban::get`
+/// needs, bundled so one atomic-with-respect-to-shard-locks pointer
+/// swap publishes all of it together.
+pub(crate) struct ReadView {
+    pub(crate) memtable: StdArc<ShardedRwLock<Memtable>>,
+    /// Frozen, so no lock is needed — same `Arc<Memtable>` `Immutable`
+    /// already carries; cloned straight from `Kiban::immutable` at
+    /// publish time.
+    pub(crate) immutable: Option<StdArc<Memtable>>,
+    pub(crate) version: StdArc<Version>,
+    /// The engine's `last_sequence` *as of this publish*, not a live
+    /// value — sufficient because it is only ever used to bound
+    /// `version`'s table entries, and every entry in the specific
+    /// `Arc<Version>` published alongside it was necessarily written at
+    /// or before this same moment (tables are immutable once built).
+    /// The live memtable/immutable are read directly (unbounded), not
+    /// through this field, so its staleness relative to later puts
+    /// never matters.
+    pub(crate) last_sequence: u64,
 }
 
 impl Kiban {
@@ -547,12 +589,22 @@ impl Kiban {
             }
         }
 
+        let shared_memtable = StdArc::new(ShardedRwLock::new(memtable.clone()));
+        let version = StdArc::new(Version { id: 0, tables });
+        let last_sequence = manifest.last_sequence.max(wal_max_seq);
+        let read_view = StdArc::new(ShardedRwLock::new(StdArc::new(ReadView {
+            memtable: shared_memtable.clone(),
+            immutable: None,
+            version: version.clone(),
+            last_sequence,
+        })));
         Ok(Kiban {
             dir,
             options,
             cache,
             file_cache,
             memtable,
+            shared_memtable,
             wal,
             immutable: None,
             // 1-indexed, deliberately: generation 0 must never be a
@@ -564,11 +616,12 @@ impl Kiban {
             last_completed_flush_generation: 0,
             next_file_number,
             wal_number,
-            last_sequence: manifest.last_sequence.max(wal_max_seq),
+            last_sequence,
             active_snapshots: Vec::new(),
-            version: StdArc::new(Version { id: 0, tables }),
+            version,
             obsolete: Vec::new(),
             poisoned: None,
+            read_view,
         })
     }
 
@@ -648,18 +701,61 @@ impl Kiban {
         }
     }
 
+    /// Mirrors one mutation into `shared_memtable` right after applying
+    /// it to `memtable` — same key, same value shape, same seq, so the
+    /// two stay byte-for-byte identical. A poisoned `shared_memtable`
+    /// (only possible if a prior mutation panicked while holding its
+    /// write guard) is treated the same as every other engine-fatal
+    /// condition here: panic, don't silently diverge from `memtable`.
+    fn mirror_put(&self, key: &[u8], value: &[u8], seq: u64) {
+        self.shared_memtable
+            .write()
+            .expect("shared_memtable poisoned by a panic during a prior mutation")
+            .put(key, value, seq);
+    }
+
+    fn mirror_delete(&self, key: &[u8], seq: u64) {
+        self.shared_memtable
+            .write()
+            .expect("shared_memtable poisoned by a panic during a prior mutation")
+            .delete(key, seq);
+    }
+
+    /// Publishes a fresh `ReadView` reflecting the CURRENT
+    /// `shared_memtable`/`immutable`/`version`/`last_sequence` — call
+    /// after any change to one of those four (freeze, flush commit,
+    /// compaction commit). Never needed after a plain put/delete/write:
+    /// those mutate `shared_memtable`'s content in place without
+    /// changing its identity, so a reader holding an older published
+    /// view already sees the new data through the same `Arc`.
+    fn publish_read_view(&self) {
+        let view = StdArc::new(ReadView {
+            memtable: self.shared_memtable.clone(),
+            immutable: self.immutable.as_ref().map(|im| im.memtable.clone()),
+            version: self.version.clone(),
+            last_sequence: self.last_sequence,
+        });
+        *self
+            .read_view
+            .write()
+            .expect("read_view lock poisoned by a panic during a prior publish") = view;
+    }
+
     pub fn put(&mut self, key: impl AsRef<[u8]>, value: impl AsRef<[u8]>) -> io::Result<()> {
         if let Err(e) = self.check_poisoned() {
             return Err(io::Error::other(e.to_string()));
         }
+        let key = key.as_ref();
+        let value = value.as_ref();
         let seq = self.last_sequence + 1;
-        if let Err(e) = self.wal.put(seq, key.as_ref(), value.as_ref()) {
+        if let Err(e) = self.wal.put(seq, key, value) {
             // A torn WAL frame would silently discard later, successfully
             // synced records at recovery: append failure poisons.
             self.poison(PoisonCause::WalAppendFailed(e.to_string()));
             return Err(io::Error::other("wal append failed; engine poisoned"));
         }
         self.memtable.put(key, value, seq);
+        self.mirror_put(key, value, seq);
         self.last_sequence = seq;
         Ok(())
     }
@@ -668,12 +764,14 @@ impl Kiban {
         if let Err(e) = self.check_poisoned() {
             return Err(io::Error::other(e.to_string()));
         }
+        let key = key.as_ref();
         let seq = self.last_sequence + 1;
-        if let Err(e) = self.wal.delete(seq, key.as_ref()) {
+        if let Err(e) = self.wal.delete(seq, key) {
             self.poison(PoisonCause::WalAppendFailed(e.to_string()));
             return Err(io::Error::other("wal append failed; engine poisoned"));
         }
         self.memtable.delete(key, seq);
+        self.mirror_delete(key, seq);
         self.last_sequence = seq;
         Ok(())
     }
@@ -698,8 +796,14 @@ impl Kiban {
         for (i, (kind, key, value)) in batch.ops.iter().enumerate() {
             let seq = first_seq + i as u64;
             match kind {
-                Kind::Put => self.memtable.put(key, value, seq),
-                Kind::Tombstone => self.memtable.delete(key, seq),
+                Kind::Put => {
+                    self.memtable.put(key, value, seq);
+                    self.mirror_put(key, value, seq);
+                }
+                Kind::Tombstone => {
+                    self.memtable.delete(key, seq);
+                    self.mirror_delete(key, seq);
+                }
             }
         }
         self.last_sequence = first_seq + batch.ops.len() as u64 - 1;
@@ -1003,7 +1107,12 @@ impl Kiban {
         let mut fresh_memtable = Memtable::new();
         let (wal, _report) = Wal::open(&new_wal_path, &mut fresh_memtable)?;
         self.wal = wal;
-        self.memtable = fresh_memtable;
+        self.memtable = fresh_memtable.clone();
+        // See `freeze`'s identical reset: the shadow rotates alongside
+        // `memtable`, and this whole topology change (version + reset
+        // memtable) is exactly what `publish_read_view` exists for.
+        self.shared_memtable = StdArc::new(ShardedRwLock::new(fresh_memtable));
+        self.publish_read_view();
 
         // Best-effort deletion; recovery's sweep owns stragglers (D2).
         let _ = fs::remove_file(old_wal_path);
@@ -1093,6 +1202,15 @@ impl Kiban {
         // handoff can happen. Never before — never publish RAM state
         // ahead of what the MANIFEST actually says.
         let old_memtable = std::mem::replace(&mut self.memtable, Memtable::new());
+        // The shadow rotates too: readers holding an already-published
+        // `ReadView` still keep the OLD `Arc<ShardedRwLock<Memtable>>`
+        // alive through their own clone (freeze publishes a fresh
+        // `ReadView` right after this — see the `SharedKiban`/
+        // `background` callers), so dropping our own handle to it here
+        // is safe and not a use-after-free: it just stops being the
+        // handle new callers get. The frozen content itself is
+        // captured independently below via `Immutable::memtable`.
+        self.shared_memtable = StdArc::new(ShardedRwLock::new(Memtable::new()));
         let old_wal_number = self.wal_number;
         self.wal = new_wal;
         self.wal_number = new_wal_number;
@@ -1104,6 +1222,7 @@ impl Kiban {
             wal_number: old_wal_number,
             generation,
         });
+        self.publish_read_view();
         Ok(())
     }
 
@@ -1197,6 +1316,7 @@ impl Kiban {
         // Best-effort deletion; recovery's sweep owns stragglers.
         let _ = sys::remove_file(&self.dir.join(file_name(plan.old_wal_number, WAL_EXTENSION)));
 
+        self.publish_read_view();
         Ok(())
     }
 
@@ -2538,6 +2658,16 @@ impl Kiban {
         for entry in plan.inputs {
             self.obsolete.push(entry);
         }
+        // Publish BEFORE reclaiming: `self.read_view` itself still
+        // points at the PREVIOUS `ReadView` (built from the
+        // pre-compaction `self.version`) until this call, so it is
+        // itself one of the references `reclaim_obsolete`'s refcount
+        // check would see — publishing first drops that pin, exactly
+        // like any other stale reader's, before the check runs.
+        // Reclaiming first would strand these files as permanent
+        // garbage (never deleted, since nothing re-checks them after
+        // the real last reference — Kiban's own — finally drops).
+        self.publish_read_view();
         self.reclaim_obsolete();
         Ok(CompactionOutcome {
             input_bytes,
@@ -3032,6 +3162,12 @@ mod crash_sweep_tests {
 /// it before consulting the immutable memtable or any SST state.
 pub struct SharedKiban {
     inner: std::sync::Arc<ShardedRwLock<Kiban>>,
+    /// 11.17-readview: a direct clone of `Kiban::read_view`'s own
+    /// handle, taken once at open. `get` reads through THIS, never
+    /// through `inner` — same underlying `ShardedRwLock`, just reached
+    /// without going through the engine-wide write gate that guards
+    /// `inner`. See `ReadView`.
+    read_view: StdArc<ShardedRwLock<StdArc<ReadView>>>,
     maintenance: std::sync::Arc<Maintenance>,
     #[cfg(test)]
     read_checkpoint: StdArc<ReadCheckpoint>,
@@ -3103,6 +3239,7 @@ impl Clone for SharedKiban {
         self.maintenance.add_handle();
         SharedKiban {
             inner: self.inner.clone(),
+            read_view: self.read_view.clone(),
             maintenance: self.maintenance.clone(),
             #[cfg(test)]
             read_checkpoint: self.read_checkpoint.clone(),
@@ -3293,11 +3430,17 @@ impl SharedKiban {
         dir: impl AsRef<Path>,
         options: KibanOptions,
     ) -> Result<SharedKiban, DbError> {
-        let inner =
-            std::sync::Arc::new(ShardedRwLock::new(Kiban::open_with_options(dir, options)?));
+        let kiban = Kiban::open_with_options(dir, options)?;
+        // Cloned out before `kiban` moves into the engine-wide gate:
+        // this is `SharedKiban`'s OWN direct handle to the same
+        // `ShardedRwLock<Arc<ReadView>>`, reached from here on without
+        // ever going through `inner` (see `ReadView`).
+        let read_view = kiban.read_view.clone();
+        let inner = std::sync::Arc::new(ShardedRwLock::new(kiban));
         let maintenance = Maintenance::spawn(inner.clone());
         Ok(SharedKiban {
             inner,
+            read_view,
             maintenance,
             #[cfg(test)]
             read_checkpoint: StdArc::new(ReadCheckpoint::default()),
@@ -3530,35 +3673,46 @@ impl SharedKiban {
         }
     }
 
-    /// Captures this operation's sequence boundary and immutable read
-    /// sources under the engine mutex, then resolves SST state after
-    /// releasing it. Slow table, cache, and file-cache work therefore
-    /// never holds the engine mutex.
+    /// 11.17-readview: gate-free. Never calls `read_lock`/`write_lock`
+    /// — reads through `self.read_view` only, the SAME sharded-lock
+    /// primitive the (now-bypassed) engine-wide gate uses, scoped down
+    /// to a small published bundle instead of the whole engine. A
+    /// concurrent put/delete/write/flush/compaction never blocks this
+    /// call at all, at any point.
+    ///
+    /// Sequencing: `view.memtable`/`view.immutable` are read live and
+    /// unbounded (`entry`, not `entry_at`) — they're either the actual
+    /// mutating structure (memtable, sharded-locked) or frozen forever
+    /// (immutable) — so "newest entry present" is always correct
+    /// regardless of how stale `view` itself is. `view.last_sequence`
+    /// only bounds `view.version`'s table entries, and is valid for
+    /// that alone: every entry in that specific `Arc<Version>` was
+    /// necessarily written at or before the moment this exact `view`
+    /// was published (see `ReadView`, `Kiban::publish_read_view`).
     pub fn get(&self, key: impl AsRef<[u8]>) -> Result<Option<Vec<u8>>, DbError> {
         let key = key.as_ref();
-        let (sequence, immutable, version) = {
-            let guard = self.read_lock()?;
-            let sequence = guard.last_sequence;
-            if let Some(entry) = guard.memtable.entry_at(key, sequence) {
+        let view = self
+            .read_view
+            .read()
+            .map_err(|_| DbError::Corrupt("read_view lock poisoned".to_string()))?
+            .clone();
+        {
+            let mem = view
+                .memtable
+                .read()
+                .map_err(|_| DbError::Corrupt("shared memtable lock poisoned".to_string()))?;
+            if let Some(entry) = mem.entry(key) {
                 return Ok(entry.as_value().map(ToOwned::to_owned));
             }
-            (
-                sequence,
-                guard
-                    .immutable
-                    .as_ref()
-                    .map(|immutable| StdArc::clone(&immutable.memtable)),
-                StdArc::clone(&guard.version),
-            )
-        };
+        }
         #[cfg(test)]
         self.read_checkpoint.hit();
-        if let Some(immutable) = immutable
-            && let Some(entry) = immutable.entry_at(key, sequence)
+        if let Some(immutable) = &view.immutable
+            && let Some(entry) = immutable.entry(key)
         {
             return Ok(entry.as_value().map(ToOwned::to_owned));
         }
-        get_from_version_at(&version, key, sequence)
+        get_from_version_at(&view.version, key, view.last_sequence)
     }
 
     /// Makes every record appended by *any* thread so far durable in one
@@ -3757,6 +3911,46 @@ mod shared_tests {
             r.join().unwrap();
         }
         assert_eq!(db.get(b"anchor").unwrap(), Some(b"stable".to_vec()));
+    }
+
+    /// 11.17-readview: the headline property. A `get` must never wait
+    /// on the engine-wide write gate at all — proven here by holding
+    /// that gate exclusively (`db.lock()`, the same `write_lock` every
+    /// put/delete/write/flush/compaction commit uses) for a long,
+    /// deliberately observable duration from one thread, while a
+    /// concurrent `get` on another thread is timed. Before 11.17 this
+    /// get would have blocked for the entire hold (it took the same
+    /// gate); now it must complete near-instantly regardless.
+    #[test]
+    fn get_never_blocks_on_a_held_write_gate() {
+        let td = TempDir::new("read-view-never-blocks");
+        let db = SharedKiban::open(td.path()).unwrap();
+        db.put(b"k", b"v").unwrap();
+
+        let hold_for = std::time::Duration::from_millis(300);
+        let held = StdArc::new(std::sync::Barrier::new(2));
+        let holder = {
+            let db = db.clone();
+            let held = held.clone();
+            std::thread::spawn(move || {
+                let _guard = db.lock().expect("engine lock available");
+                held.wait();
+                std::thread::sleep(hold_for);
+            })
+        };
+        held.wait();
+
+        let t0 = std::time::Instant::now();
+        let value = db.get(b"k").unwrap();
+        let elapsed = t0.elapsed();
+
+        holder.join().unwrap();
+        assert_eq!(value, Some(b"v".to_vec()));
+        assert!(
+            elapsed < hold_for / 2,
+            "get took {elapsed:?} while the write gate was held for {hold_for:?} — \
+             it must not have waited on that gate at all"
+        );
     }
 }
 
