@@ -9,6 +9,9 @@ edition = "2024"
 # production builds; run with
 # `cargo test --features loom -- --test-threads=1 loom_`.
 loom = ["dep:loom"]
+# Experiment-only: the phase 11.17 read-concurrency shootout (a bench +
+# its gated prototype module). Never enabled in production builds.
+readview = []
 
 [dependencies]
 loom = { version = "0.7", optional = true }

@@ -15,6 +15,8 @@ pub mod file_cache;
 pub mod frame;
 pub mod manifest;
 pub mod memtable;
+#[cfg(feature = "readview")]
+pub mod readview;
 pub mod sstable;
 pub mod sys;
 #[cfg(test)]
