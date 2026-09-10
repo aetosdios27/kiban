@@ -170,30 +170,39 @@ impl SstTable {
     /// A block-cache hit needs no file descriptor at all — memory hit
     /// means memory hit. Only a miss leases `file_cache`, and only for
     /// the duration of the positioned read itself (11.6).
+    ///
+    /// Concurrent misses on the SAME block (11.17-F: multiple readers
+    /// racing the same not-yet-cached key) are coalesced through
+    /// `BlockCache::get_or_load`: only the first caller actually leases
+    /// a file descriptor and reads; the rest wait for its result.
     fn read_block(&self, entry: &IndexEntry) -> Result<VerifiedBlock, SstError> {
         let key = (self.number, entry.offset);
-        if let Some(cached) = self.block_cache.get(&key) {
-            return Ok(VerifiedBlock::from_cached(cached));
-        }
-        let data = {
-            let lease = self
-                .file_cache
-                .acquire(self.number, &self.path)
-                .map_err(|e| {
-                    SstError::Corrupt(format!("table {} cannot be opened: {e}", self.number))
-                })?;
-            lease
-                .read_range_at(&self.path, entry.offset, entry.len)
-                .map_err(|e| {
-                    SstError::Corrupt(format!("read failed at offset {}: {e}", entry.offset))
-                })?
-        };
-        let meta = VerifiedBlock::verify(&data)?;
-        let cached = CachedBlock {
-            data: Arc::from(data),
-            meta,
-        };
-        self.block_cache.insert(key, cached.clone());
+        let number = self.number;
+        let path = &self.path;
+        let file_cache = &self.file_cache;
+        let cached = self
+            .block_cache
+            .get_or_load(key, || -> Result<CachedBlock, SstError> {
+                let data = {
+                    let lease = file_cache.acquire(number, path).map_err(|e| {
+                        SstError::Corrupt(format!("table {number} cannot be opened: {e}"))
+                    })?;
+                    lease
+                        .read_range_at(path, entry.offset, entry.len)
+                        .map_err(|e| {
+                            SstError::Corrupt(format!(
+                                "read failed at offset {}: {e}",
+                                entry.offset
+                            ))
+                        })?
+                };
+                let meta = VerifiedBlock::verify(&data)?;
+                Ok(CachedBlock {
+                    data: Arc::from(data),
+                    meta,
+                })
+            })
+            .map_err(SstError::Corrupt)?;
         Ok(VerifiedBlock::from_cached(cached))
     }
 

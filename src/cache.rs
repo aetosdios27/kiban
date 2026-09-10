@@ -6,8 +6,8 @@
 //! hard global byte bound.
 
 use std::collections::{HashMap, VecDeque};
-use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Condvar, Mutex, PoisonError, RwLock};
 
 /// Parsed layout of a verified data block, relative to its raw bytes.
 #[derive(Debug, Clone, Copy)]
@@ -42,6 +42,34 @@ struct Inner {
     bytes: usize,
 }
 
+/// State of one physical load in flight for a key, shared by every
+/// caller that arrives while it is running.
+#[derive(Debug)]
+enum Outcome {
+    /// The leader is still running `load`.
+    Pending,
+    /// The leader finished (successfully or not) and published a result.
+    Done(Result<CachedBlock, String>),
+    /// The leader's `load` panicked before publishing anything — never
+    /// set by the leader's own code, only by `RemoveOnDrop::drop` when
+    /// it finds the slot still `Pending` during an unwind. A waiter
+    /// that observes this must retry as a fresh leader, not wait
+    /// forever: nothing will ever move this slot out of `Abandoned`.
+    Abandoned,
+}
+
+/// One physical load in flight for a key. `outcome` starts `Pending`;
+/// the leader (the caller that created this slot) resolves it and
+/// notifies exactly once, whether it succeeds, returns an error, or
+/// panics (via `RemoveOnDrop` in `get_or_load`, which fires on unwind
+/// too) — so a waiter's wait loop always has a real state to act on
+/// and can never block forever.
+#[derive(Debug)]
+struct InFlight {
+    outcome: Mutex<Outcome>,
+    condvar: Condvar,
+}
+
 #[derive(Debug)]
 pub struct BlockCache {
     inner: RwLock<Inner>,
@@ -51,11 +79,21 @@ pub struct BlockCache {
     hits: AtomicU64,
     misses: AtomicU64,
     evictions: AtomicU64,
+    /// Single-flight state for `get_or_load` (11.17-F): one entry per
+    /// key with a physical load currently running. Misses that don't
+    /// collide with a concurrent load for the same key never touch
+    /// this map's lock at all beyond the one check-and-maybe-insert.
+    in_flight: Mutex<HashMap<CacheKey, Arc<InFlight>>>,
+    /// Count of `get_or_load` calls that found a load for their key
+    /// already in flight and reused its result instead of issuing a
+    /// second physical read — the duplicate I/O `get_or_load` exists to
+    /// avoid.
+    coalesced: AtomicU64,
 }
 
-/// Raw counters for a [`BlockCache`] (phase 11.7) — facts only, no
-/// derived rates or verdicts. A caller wanting a hit rate computes
-/// `hits / (hits + misses)` itself.
+/// Raw counters for a [`BlockCache`] (phase 11.7, extended 11.17-F) —
+/// facts only, no derived rates or verdicts. A caller wanting a hit
+/// rate computes `hits / (hits + misses)` itself.
 #[derive(Debug, Clone, Copy)]
 pub struct BlockCacheStats {
     pub capacity_bytes: usize,
@@ -64,6 +102,9 @@ pub struct BlockCacheStats {
     pub hits: u64,
     pub misses: u64,
     pub evictions: u64,
+    /// Concurrent misses on the same key that waited for another
+    /// caller's already-running load instead of duplicating it.
+    pub coalesced: u64,
 }
 
 impl BlockCache {
@@ -78,6 +119,8 @@ impl BlockCache {
             hits: AtomicU64::new(0),
             misses: AtomicU64::new(0),
             evictions: AtomicU64::new(0),
+            in_flight: Mutex::new(HashMap::new()),
+            coalesced: AtomicU64::new(0),
         }
     }
 
@@ -109,6 +152,7 @@ impl BlockCache {
             hits: self.hits.load(Ordering::Relaxed),
             misses: self.misses.load(Ordering::Relaxed),
             evictions: self.evictions.load(Ordering::Relaxed),
+            coalesced: self.coalesced.load(Ordering::Relaxed),
         }
     }
 
@@ -172,6 +216,132 @@ impl BlockCache {
             },
         );
         debug_assert!(inner.bytes <= self.capacity);
+    }
+
+    /// Loads `key` via `load` on a miss, coalescing concurrent misses
+    /// for the SAME key into one physical load (11.17-F): the first
+    /// caller to miss becomes the leader and runs `load`; any other
+    /// caller that misses on the same key while the leader is still
+    /// working waits for the leader's result — cached or not — instead
+    /// of repeating a possibly disk-bound read. A hit (the common case)
+    /// never touches the single-flight machinery at all.
+    ///
+    /// `load`'s error is stringified for waiters (`E` need not be
+    /// `Clone`): this mirrors how callers already format table-read
+    /// errors into their own error type, so nothing is lost in
+    /// practice. If the leader panics, `RemoveOnDrop` below still runs
+    /// during unwind and marks the slot `Abandoned` before notifying —
+    /// waiters wake, see they'll never get a result from this slot, and
+    /// retry as a fresh leader rather than waiting on a condvar nothing
+    /// will ever signal again.
+    pub fn get_or_load<E, F>(&self, key: CacheKey, load: F) -> Result<CachedBlock, String>
+    where
+        F: FnOnce() -> Result<CachedBlock, E>,
+        E: std::fmt::Display,
+    {
+        loop {
+            if let Some(hit) = self.get(&key) {
+                return Ok(hit);
+            }
+
+            enum Role {
+                Leader(Arc<InFlight>),
+                Waiter(Arc<InFlight>),
+            }
+            let role = {
+                let mut in_flight = self
+                    .in_flight
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner);
+                if let Some(slot) = in_flight.get(&key) {
+                    Role::Waiter(slot.clone())
+                } else {
+                    let slot = Arc::new(InFlight {
+                        outcome: Mutex::new(Outcome::Pending),
+                        condvar: Condvar::new(),
+                    });
+                    in_flight.insert(key, slot.clone());
+                    Role::Leader(slot)
+                }
+            };
+
+            match role {
+                Role::Waiter(slot) => {
+                    self.coalesced.fetch_add(1, Ordering::Relaxed);
+                    let mut outcome = slot.outcome.lock().unwrap_or_else(PoisonError::into_inner);
+                    loop {
+                        match &*outcome {
+                            Outcome::Pending => {
+                                outcome = slot
+                                    .condvar
+                                    .wait(outcome)
+                                    .unwrap_or_else(PoisonError::into_inner);
+                            }
+                            Outcome::Done(result) => return result.clone(),
+                            Outcome::Abandoned => break,
+                        }
+                    }
+                    // The leader panicked before publishing: its
+                    // RemoveOnDrop guard already dropped the map entry.
+                    // Retry from the top — either the cache now has it
+                    // (another retrying waiter already won leadership
+                    // and finished) or we become the new leader.
+                    continue;
+                }
+                Role::Leader(slot) => {
+                    struct RemoveOnDrop<'a> {
+                        cache: &'a BlockCache,
+                        key: CacheKey,
+                        slot: &'a InFlight,
+                    }
+                    impl Drop for RemoveOnDrop<'_> {
+                        fn drop(&mut self) {
+                            self.cache
+                                .in_flight
+                                .lock()
+                                .unwrap_or_else(PoisonError::into_inner)
+                                .remove(&self.key);
+                            // On the normal path `outcome` is already
+                            // `Done` by the time this guard drops. On a
+                            // panic it is still `Pending` — mark it
+                            // `Abandoned` so waiters know to stop
+                            // waiting on this slot instead of blocking
+                            // on a notify that will never come again.
+                            let mut outcome = self
+                                .slot
+                                .outcome
+                                .lock()
+                                .unwrap_or_else(PoisonError::into_inner);
+                            if matches!(*outcome, Outcome::Pending) {
+                                *outcome = Outcome::Abandoned;
+                            }
+                            drop(outcome);
+                            self.slot.condvar.notify_all();
+                        }
+                    }
+                    let _remove = RemoveOnDrop {
+                        cache: self,
+                        key,
+                        slot: &slot,
+                    };
+                    let result = load().map_err(|e| e.to_string());
+                    if let Ok(block) = &result {
+                        self.insert(key, block.clone());
+                    }
+                    *slot.outcome.lock().unwrap_or_else(PoisonError::into_inner) =
+                        Outcome::Done(result.clone());
+                    return result;
+                }
+            }
+        }
+    }
+
+    #[cfg(test)]
+    fn in_flight_len(&self) -> usize {
+        self.in_flight
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .len()
     }
 
     #[cfg(test)]
@@ -352,5 +522,136 @@ mod tests {
         }
         assert_eq!(cache.resident_entries(), 1);
         assert_eq!(cache.clock_entries(), 1);
+    }
+
+    /// 11.17-F: N concurrent misses on the SAME key must trigger exactly
+    /// one physical load — every caller still gets the right block.
+    #[test]
+    fn concurrent_misses_on_same_key_coalesce_to_one_load() {
+        let cache = Arc::new(BlockCache::new(1024));
+        let load_calls = Arc::new(AtomicU64::new(0));
+        let readers_ready = Arc::new(Barrier::new(9));
+        let release = Arc::new(Barrier::new(9));
+        // Every thread races into `get_or_load` for the same key; the
+        // barriers just maximize the odds they actually overlap instead
+        // of proving anything themselves — the assertion below is what
+        // actually proves single-flight, not timing.
+        let handles: Vec<_> = (0..8)
+            .map(|_| {
+                let cache = cache.clone();
+                let load_calls = load_calls.clone();
+                let readers_ready = readers_ready.clone();
+                let release = release.clone();
+                std::thread::spawn(move || {
+                    readers_ready.wait();
+                    release.wait();
+                    cache
+                        .get_or_load((1, 0), || {
+                            load_calls.fetch_add(1, Ordering::SeqCst);
+                            std::thread::sleep(std::time::Duration::from_millis(20));
+                            Ok::<CachedBlock, String>(block(64, 7))
+                        })
+                        .unwrap()
+                })
+            })
+            .collect();
+        readers_ready.wait();
+        release.wait();
+        for h in handles {
+            assert_eq!(h.join().unwrap().data.as_ref(), &[7u8; 64]);
+        }
+        assert_eq!(
+            load_calls.load(Ordering::SeqCst),
+            1,
+            "8 concurrent misses on the same key issued more than one physical load"
+        );
+        assert!(cache.stats().coalesced >= 1);
+        assert_eq!(
+            cache.in_flight_len(),
+            0,
+            "in-flight slot must be cleaned up"
+        );
+    }
+
+    /// Non-colliding misses (distinct keys) must not serialize on each
+    /// other or on the single-flight map beyond its own brief lock.
+    #[test]
+    fn non_colliding_misses_do_not_coalesce_or_block_each_other() {
+        let cache = Arc::new(BlockCache::new(4096));
+        let load_calls = Arc::new(AtomicU64::new(0));
+        let handles: Vec<_> = (0..8u64)
+            .map(|i| {
+                let cache = cache.clone();
+                let load_calls = load_calls.clone();
+                std::thread::spawn(move || {
+                    cache
+                        .get_or_load((1, i), || {
+                            load_calls.fetch_add(1, Ordering::SeqCst);
+                            Ok::<CachedBlock, String>(block(64, i as u8))
+                        })
+                        .unwrap()
+                })
+            })
+            .collect();
+        for (i, h) in handles.into_iter().enumerate() {
+            assert_eq!(h.join().unwrap().data.as_ref(), &[i as u8; 64]);
+        }
+        assert_eq!(load_calls.load(Ordering::SeqCst), 8);
+        assert_eq!(cache.stats().coalesced, 0);
+        assert_eq!(cache.in_flight_len(), 0);
+    }
+
+    /// A leader whose `load` panics must not strand its waiters forever:
+    /// they wake, see no published result, and retry as fresh leaders
+    /// until one of them actually succeeds.
+    #[test]
+    fn panicking_leader_does_not_strand_waiters() {
+        let cache = Arc::new(BlockCache::new(1024));
+        let attempt = Arc::new(AtomicU64::new(0));
+        let ready = Arc::new(Barrier::new(5));
+        let release = Arc::new(Barrier::new(5));
+        let handles: Vec<_> = (0..4)
+            .map(|_| {
+                let cache = cache.clone();
+                let attempt = attempt.clone();
+                let ready = ready.clone();
+                let release = release.clone();
+                std::thread::spawn(move || {
+                    ready.wait();
+                    release.wait();
+                    cache.get_or_load((1, 0), || {
+                        // The first attempt across all racing threads
+                        // panics (simulating a leader that dies mid-load);
+                        // every later attempt (a retrying waiter or a
+                        // fresh miss) succeeds.
+                        if attempt.fetch_add(1, Ordering::SeqCst) == 0 {
+                            panic!("simulated leader failure");
+                        }
+                        Ok::<CachedBlock, String>(block(64, 9))
+                    })
+                })
+            })
+            .collect();
+        ready.wait();
+        release.wait();
+        let mut ok = 0;
+        let mut panicked = 0;
+        for h in handles {
+            match h.join() {
+                Ok(Ok(b)) => {
+                    assert_eq!(b.data.as_ref(), &[9u8; 64]);
+                    ok += 1;
+                }
+                Err(_) => panicked += 1,
+                Ok(Err(e)) => panic!("unexpected load error: {e}"),
+            }
+        }
+        assert!(ok >= 1, "no caller ever got a successful result");
+        assert!(panicked >= 1, "the simulated panic never actually fired");
+        assert_eq!(
+            cache.in_flight_len(),
+            0,
+            "in-flight slot must not leak after a panic"
+        );
     }
 }
