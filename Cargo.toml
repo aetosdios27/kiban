@@ -20,3 +20,7 @@ harness = false
 [[bench]]
 name = "steady_state"
 harness = false
+
+[[bench]]
+name = "phase_changing"
+harness = false

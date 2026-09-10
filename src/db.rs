@@ -3133,10 +3133,30 @@ impl Kiban {
         outputs: Vec<TableEntry>,
     ) -> Result<CompactionOutcome, DbError> {
         // Raw facts for the stats surface (11.7), read from metadata
-        // already in hand — never a reread of file bytes.
-        let input_bytes: u64 = plan.inputs.iter().map(|t| t.size).sum();
-        let output_bytes: u64 = outputs.iter().map(|o| o.size).sum();
+        // already in hand — never a reread of file bytes. A trivial
+        // move reports 0/0 here regardless of the moved file's real
+        // size: it reads and writes nothing (build() only reopens an
+        // existing file's footer/index), so counting its pre-existing
+        // size as "compaction output bytes" would both inflate write-
+        // amplification accounting with bytes that were never written
+        // and corrupt the governor's own predicted-vs-actual rewrite-
+        // cost tracking below (whose prediction, correctly, is also 0
+        // for a trivial move) with a manufactured, meaningless error.
+        // `GovernorState::record_trivial_move` — a separate, correct
+        // concept ("real rewrite bytes avoided by choosing this
+        // instead") — still gets the file's actual size.
         let trivial_move = plan.trivial_move;
+        // The real size of the moved file, for `record_trivial_move`'s
+        // "rewrite bytes avoided" bookkeeping — a genuinely different
+        // question from `input_bytes`/`output_bytes` below (which ask
+        // "how many bytes did this job physically read/write").
+        let moved_bytes: u64 = plan.inputs.iter().map(|t| t.size).sum();
+        let input_bytes: u64 = if trivial_move { 0 } else { moved_bytes };
+        let output_bytes: u64 = if trivial_move {
+            0
+        } else {
+            outputs.iter().map(|o| o.size).sum()
+        };
         let predicted_output_bytes = plan.predicted_output_bytes;
 
         // The one worker means no other compaction can have touched
@@ -3232,11 +3252,15 @@ impl Kiban {
         // the real last reference — Kiban's own — finally drops).
         self.publish_read_view();
         self.reclaim_obsolete();
-        if let Some(predicted) = predicted_output_bytes {
+        // Predicted-vs-actual accuracy is only meaningful for a real
+        // merge's rewrite-cost estimate; a trivial move's prediction
+        // (0) is trivially exact by construction, not a data point
+        // worth folding into the accuracy stat.
+        if !trivial_move && let Some(predicted) = predicted_output_bytes {
             self.governor.record_outcome(predicted, output_bytes);
         }
         if trivial_move {
-            self.governor.record_trivial_move(input_bytes);
+            self.governor.record_trivial_move(moved_bytes);
         }
         Ok(CompactionOutcome {
             input_bytes,
@@ -4943,6 +4967,106 @@ mod shared_tests {
             "get took {elapsed:?} while the write gate was held for {hold_for:?} — \
              it must not have waited on that gate at all"
         );
+    }
+
+    /// 11.17-round-3 investigation: `benches/phase_changing.rs` (many
+    /// reader threads hammering an overlapping "hot" keyspace while
+    /// writers continuously flush/compact against tiny buffers) hung
+    /// intermittently — one reader thread out of several would stop
+    /// making progress forever, well before reaching any bounded
+    /// iteration count, with no panic and no CPU usage on that thread.
+    /// This reproduces the same shape (many readers, one shared hot
+    /// range, constant background compaction churn) as a real `cargo
+    /// test`, with a bounded completion check (`recv_timeout`) instead
+    /// of an unbounded `join()` — so a real hang fails this test
+    /// loudly and fast instead of hanging the whole suite.
+    #[test]
+    fn concurrent_reads_complete_under_sustained_compaction_churn() {
+        let td = TempDir::new("read-under-churn");
+        let options = KibanOptions {
+            write_buffer_bytes: 64 * 1024,
+            target_file_size: 64 * 1024,
+            base_level_bytes: 256 * 1024,
+            level_multiplier: 4,
+            l0_compaction_trigger: 4,
+            l0_write_stall_trigger: 16,
+            block_cache_bytes: 2 * 1024 * 1024,
+            ..KibanOptions::default()
+        };
+        let db = SharedKiban::open_with_options(td.path(), options).unwrap();
+
+        let hot_keys = 20_000usize;
+        for i in 0..hot_keys {
+            db.put(format!("hot{i:06}"), [b'h'; 64]).unwrap();
+        }
+        db.sync().unwrap();
+        db.flush().unwrap();
+
+        let stop = StdArc::new(std::sync::atomic::AtomicBool::new(false));
+        let writers: Vec<_> = (0..4)
+            .map(|w| {
+                let db = db.clone();
+                let stop = stop.clone();
+                std::thread::spawn(move || {
+                    let mut i = 0usize;
+                    while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                        let idx = (w * 5000 + i) % hot_keys;
+                        let _ = db.put(format!("hot{idx:06}"), [b'w'; 80]);
+                        i += 1;
+                    }
+                })
+            })
+            .collect();
+
+        let readers = 4usize;
+        let iters_per_reader = 2_000_000usize;
+        let (tx, rx) = std::sync::mpsc::channel();
+        let reader_handles: Vec<_> = (0..readers)
+            .map(|r| {
+                let db = db.clone();
+                let tx = tx.clone();
+                std::thread::spawn(move || {
+                    for i in 0..iters_per_reader {
+                        let idx = (i.wrapping_mul(7) + r * 13) % hot_keys;
+                        let got = db.get(format!("hot{idx:06}").as_bytes());
+                        if matches!(got, Ok(None)) {
+                            let _ = tx.send(Err(format!(
+                                "reader {r}: unexpected miss at iter {i}, idx={idx}"
+                            )));
+                            return;
+                        }
+                    }
+                    let _ = tx.send(Ok(r));
+                })
+            })
+            .collect();
+        drop(tx);
+
+        let deadline = std::time::Duration::from_secs(60);
+        let mut completed = std::collections::HashSet::new();
+        while completed.len() < readers {
+            match rx.recv_timeout(deadline) {
+                Ok(Ok(r)) => {
+                    completed.insert(r);
+                }
+                Ok(Err(msg)) => panic!("{msg}"),
+                Err(_) => panic!(
+                    "reader(s) {:?} never completed {iters_per_reader} gets within {deadline:?} — \
+                     a reader thread is stuck, not just slow (evidence: {} of {readers} readers finished)",
+                    (0..readers)
+                        .filter(|r| !completed.contains(r))
+                        .collect::<Vec<_>>(),
+                    completed.len(),
+                ),
+            }
+        }
+        stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        for h in writers {
+            h.join().unwrap();
+        }
+        for h in reader_handles {
+            h.join().unwrap();
+        }
     }
 
     /// 11.17-round-2, section 6: the read-amplification counters must
