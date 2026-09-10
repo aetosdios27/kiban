@@ -846,14 +846,14 @@ impl Kiban {
         }
         for t in snap.version.tables.iter().rev().filter(|t| t.level == 0) {
             sources.push(SourceHead {
-                feed: SourceFeed::Table(t.table.iter_from(b"")),
+                feed: SourceFeed::Table(Box::new(t.table.iter_from(b""))),
                 head: None,
                 exhausted: false,
             });
         }
         for t in snap.version.tables.iter().filter(|t| t.level >= 1) {
             sources.push(SourceHead {
-                feed: SourceFeed::Table(t.table.iter_from(b"")),
+                feed: SourceFeed::Table(Box::new(t.table.iter_from(b""))),
                 head: None,
                 exhausted: false,
             });
@@ -1307,14 +1307,14 @@ impl Kiban {
         }
         for table in self.version.tables.iter().rev().filter(|t| t.level == 0) {
             sources.push(SourceHead {
-                feed: SourceFeed::Table(table.table.iter_from(start)),
+                feed: SourceFeed::Table(Box::new(table.table.iter_from(start))),
                 head: None,
                 exhausted: false,
             });
         }
         for table in self.version.tables.iter().filter(|t| t.level >= 1) {
             sources.push(SourceHead {
-                feed: SourceFeed::Table(table.table.iter_from(start)),
+                feed: SourceFeed::Table(Box::new(table.table.iter_from(start))),
                 head: None,
                 exhausted: false,
             });
@@ -1712,9 +1712,18 @@ struct HeadEntry {
     seq: u64,
 }
 
+/// A table-entry iterator item: (kind, sequence, key, value).
+type TableItem = Result<(Kind, u64, Vec<u8>, Vec<u8>), SstError>;
+/// Boxed rather than the concrete `sstable::Iter` so compaction's BUILD
+/// phase (11.17-C) can feed a `MergeCore` from its own cache-bypassing,
+/// shared-file-cache-bypassing `CompactionIter` through the exact same
+/// merge path scans and snapshots use, without `MergeCore`/`SourceFeed`
+/// needing to know two table iterator types exist.
+type TableFeed<'a> = Box<dyn Iterator<Item = TableItem> + 'a>;
+
 enum SourceFeed<'a> {
     Mem(Box<dyn DoubleEndedIterator<Item = (&'a [u8], &'a MemEntry)> + 'a>),
-    Table(crate::sstable::Iter<'a>),
+    Table(TableFeed<'a>),
 }
 
 struct SourceHead<'a> {
@@ -2115,8 +2124,12 @@ impl CompactionPlan {
     pub(crate) fn build(&self) -> Result<Vec<TableEntry>, DbError> {
         let mut sources: Vec<SourceHead<'_>> = Vec::with_capacity(self.inputs.len());
         for entry in &self.inputs {
+            // 11.17-C: compaction reads through its own bulk/sequential,
+            // cache-bypassing iterator instead of the foreground
+            // `iter_from` path every other MergeCore caller (scans,
+            // snapshots) uses.
             sources.push(SourceHead {
-                feed: SourceFeed::Table(entry.table.iter_from(b"")),
+                feed: SourceFeed::Table(Box::new(entry.table.compaction_iter()?)),
                 head: None,
                 exhausted: false,
             });
@@ -3185,14 +3198,14 @@ impl SharedSnapshot {
         }
         for t in self.version.tables.iter().rev().filter(|t| t.level == 0) {
             sources.push(SourceHead {
-                feed: SourceFeed::Table(t.table.iter_from(b"")),
+                feed: SourceFeed::Table(Box::new(t.table.iter_from(b""))),
                 head: None,
                 exhausted: false,
             });
         }
         for t in self.version.tables.iter().filter(|t| t.level >= 1) {
             sources.push(SourceHead {
-                feed: SourceFeed::Table(t.table.iter_from(b"")),
+                feed: SourceFeed::Table(Box::new(t.table.iter_from(b""))),
                 head: None,
                 exhausted: false,
             });

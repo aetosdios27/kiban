@@ -244,6 +244,141 @@ impl SstTable {
             lower_bound: None,
         }
     }
+
+    /// A dedicated bulk/sequential reader for compaction's k-way merge
+    /// (11.17-C), never for foreground point lookups or scans: compaction
+    /// always reads a table start-to-finish exactly once and its output
+    /// is unlikely to be re-read soon, so routing it through
+    /// `read_block` would (a) evict hotter foreground blocks from
+    /// `block_cache` for no benefit and (b) lease `file_cache` — a
+    /// shared, bounded descriptor pool foreground GETs also need — once
+    /// per ~block-sized positional read instead of once for the whole
+    /// scan. `compaction_iter` opens its own OWNED file handle up front
+    /// (never touches `file_cache`) and reads ahead in large sequential
+    /// chunks (see `CompactionIter::read_block_bulk`), touching neither
+    /// shared cache at all.
+    pub(crate) fn compaction_iter(&self) -> Result<CompactionIter<'_>, SstError> {
+        self.compaction_iter_with_window(COMPACTION_READ_AHEAD_BYTES)
+    }
+
+    /// Same as `compaction_iter`, with the read-ahead window size
+    /// exposed — production always uses `COMPACTION_READ_AHEAD_BYTES`
+    /// (see `compaction_iter`); tests use a tiny window here to force
+    /// many refills over a small fixture table, exercising the same
+    /// refill logic a multi-megabyte production table would.
+    fn compaction_iter_with_window(
+        &self,
+        window_bytes: u64,
+    ) -> Result<CompactionIter<'_>, SstError> {
+        let file = std::fs::File::open(&self.path).map_err(|e| {
+            SstError::Corrupt(format!(
+                "table {} cannot be opened for compaction: {e}",
+                self.number
+            ))
+        })?;
+        Ok(CompactionIter {
+            table: self,
+            file,
+            next_block: 0,
+            buffer: Vec::new(),
+            buffer_start: 0,
+            current: None,
+            failed: false,
+            window_bytes,
+        })
+    }
+}
+
+/// How far ahead `CompactionIter` reads in one sequential syscall —
+/// covers many blocks per read instead of one syscall per block. Not
+/// tuned against real hardware this phase; chosen to comfortably
+/// exceed `KibanOptions::target_file_size`'s default (4 MiB) so a
+/// typical table needs only one or two refills total.
+const COMPACTION_READ_AHEAD_BYTES: u64 = 4 * 1024 * 1024;
+
+pub(crate) struct CompactionIter<'a> {
+    table: &'a SstTable,
+    file: std::fs::File,
+    next_block: usize,
+    /// Bytes covering `[buffer_start, buffer_start + buffer.len())` of
+    /// the file, refilled forward as blocks are consumed. Never
+    /// touches `block_cache`: every block handed out is its own owned
+    /// copy sliced from here, so the buffer's own lifetime (replaced
+    /// wholesale on each refill) can't outlive what callers hold.
+    buffer: Vec<u8>,
+    buffer_start: u64,
+    current: Option<BlockIter>,
+    failed: bool,
+    /// How far ahead one refill reads — `COMPACTION_READ_AHEAD_BYTES`
+    /// in production, deliberately tiny in some tests to force many
+    /// refills over a small fixture table.
+    window_bytes: u64,
+}
+
+impl CompactionIter<'_> {
+    fn read_block_bulk(&mut self, idx: usize) -> Result<VerifiedBlock, SstError> {
+        let entry = &self.table.index[idx];
+        let (start, len) = (entry.offset, entry.len);
+        let buffer_end = self.buffer_start + self.buffer.len() as u64;
+        if self.buffer.is_empty() || start < self.buffer_start || start + len > buffer_end {
+            // Forward read-ahead window starting at this block: extend
+            // past it to include as many subsequent (whole) blocks as
+            // fit within window_bytes. Always covers at least this one
+            // block, even if it alone exceeds the nominal window.
+            let mut window_end = start + len;
+            for e in &self.table.index[idx..] {
+                let candidate_end = e.offset + e.len;
+                if candidate_end > start + self.window_bytes {
+                    break;
+                }
+                window_end = candidate_end;
+            }
+            let mut buf = vec![0u8; (window_end - start) as usize];
+            use std::os::unix::fs::FileExt;
+            self.file.read_exact_at(&mut buf, start).map_err(|e| {
+                SstError::Corrupt(format!("compaction read failed at offset {start}: {e}"))
+            })?;
+            self.buffer = buf;
+            self.buffer_start = start;
+        }
+        let rel = (start - self.buffer_start) as usize;
+        VerifiedBlock::from_raw(self.buffer[rel..rel + len as usize].to_vec())
+    }
+}
+
+impl Iterator for CompactionIter<'_> {
+    type Item = Result<(Kind, u64, Vec<u8>, Vec<u8>), SstError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.failed {
+            return None;
+        }
+        loop {
+            if let Some(state) = &mut self.current {
+                match state.next() {
+                    Some(Ok(item)) => return Some(Ok(item)),
+                    Some(Err(e)) => {
+                        self.failed = true;
+                        return Some(Err(e));
+                    }
+                    None => self.current = None,
+                }
+            }
+            if self.next_block >= self.table.index.len() {
+                return None;
+            }
+            match self.read_block_bulk(self.next_block) {
+                Ok(block) => {
+                    self.current = Some(BlockIter::from_verified(block));
+                    self.next_block += 1;
+                }
+                Err(e) => {
+                    self.failed = true;
+                    return Some(Err(e));
+                }
+            }
+        }
+    }
 }
 
 fn verify_trailer(raw: &[u8], what: &str) -> Result<(), SstError> {
@@ -353,5 +488,157 @@ impl<'a> Iterator for Iter<'a> {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod compaction_iter_tests {
+    use super::*;
+    use crate::sstable::TableBuilder;
+    use crate::testutil::TempDir;
+
+    /// Builds a real, on-disk SstTable with `entries` (key, value)
+    /// pairs, each key `k{i:06}`. Enough entries at a big-enough value
+    /// size spans multiple `TARGET_BLOCK_SIZE` (4096-byte) blocks, so
+    /// tests exercise real block boundaries, not a single-block table.
+    fn build_table(
+        dir: &std::path::Path,
+        number: u64,
+        entries: usize,
+        value_len: usize,
+        block_cache: Arc<BlockCache>,
+        file_cache: Arc<TableFileCache>,
+    ) -> SstTable {
+        let mut builder = TableBuilder::new();
+        for i in 0..entries {
+            let key = format!("k{i:06}").into_bytes();
+            let value = vec![(i % 256) as u8; value_len];
+            builder
+                .add(Kind::Put, &key, &value, (i + 1) as u64)
+                .unwrap();
+        }
+        let bytes = builder.finish().unwrap();
+        let path = dir.join(format!("{number}.sst"));
+        crate::atomic::commit_file(&path, &bytes).unwrap();
+        SstTable::open(number, &path, block_cache, file_cache).unwrap()
+    }
+
+    /// The core correctness property: compaction_iter must yield
+    /// EXACTLY the same sequence of entries as the foreground
+    /// iter_from(b"") path, for a table spanning many blocks.
+    #[test]
+    fn compaction_iter_matches_foreground_iteration() {
+        let td = TempDir::new("compaction-iter-match");
+        let block_cache = Arc::new(BlockCache::new(1024 * 1024));
+        let file_cache = Arc::new(TableFileCache::new(8));
+        let table = build_table(td.path(), 1, 300, 64, block_cache, file_cache);
+
+        let foreground: Vec<_> = table.iter_from(b"").map(|r| r.unwrap()).collect();
+        assert!(foreground.len() >= 300);
+
+        let compaction: Vec<_> = table
+            .compaction_iter()
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect();
+
+        assert_eq!(
+            foreground, compaction,
+            "compaction_iter must yield the same entries, in the same order, as the foreground path"
+        );
+    }
+
+    /// Same equivalence property, but with a read-ahead window small
+    /// enough to force a refill on almost every single block — proves
+    /// the multi-refill path (not just the "whole table in one
+    /// syscall" common case) parses correctly at block boundaries.
+    #[test]
+    fn compaction_iter_matches_with_tiny_read_ahead_window() {
+        let td = TempDir::new("compaction-iter-tiny-window");
+        let block_cache = Arc::new(BlockCache::new(1024 * 1024));
+        let file_cache = Arc::new(TableFileCache::new(8));
+        let table = build_table(td.path(), 1, 300, 64, block_cache, file_cache);
+
+        let foreground: Vec<_> = table.iter_from(b"").map(|r| r.unwrap()).collect();
+
+        // 1-byte window: every block is smaller than the window, so
+        // every single block forces its own refill (the "at least
+        // this one block" guarantee is what keeps this correct rather
+        // than looping forever).
+        let compaction: Vec<_> = table
+            .compaction_iter_with_window(1)
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect();
+
+        assert_eq!(foreground, compaction);
+    }
+
+    /// The whole point of 11.17-C: a compaction scan must not touch
+    /// the foreground block cache at all, in either direction — not a
+    /// hit, not a miss, not an insertion.
+    #[test]
+    fn compaction_iter_never_touches_block_cache() {
+        let td = TempDir::new("compaction-iter-no-cache");
+        let block_cache = Arc::new(BlockCache::new(1024 * 1024));
+        let file_cache = Arc::new(TableFileCache::new(8));
+        let table = build_table(
+            td.path(),
+            1,
+            300,
+            64,
+            block_cache.clone(),
+            file_cache.clone(),
+        );
+
+        // `SstTable::open` itself already cached the first/last
+        // boundary blocks (block-cache.md D1) — that's unrelated to
+        // compaction_iter, so the property under test is "unchanged by
+        // the scan", not "zero", and it's asserted only after opening.
+        let before = block_cache.stats();
+        assert!(
+            before.resident_entries > 0,
+            "sanity: table open should have cached its boundary blocks"
+        );
+        let count = table.compaction_iter().unwrap().count();
+        assert!(count >= 300);
+        let after = block_cache.stats();
+
+        assert_eq!(before.hits, after.hits);
+        assert_eq!(before.misses, after.misses);
+        assert_eq!(
+            before.resident_entries, after.resident_entries,
+            "compaction_iter must not insert anything into the block cache"
+        );
+    }
+
+    /// A compaction scan must not lease from the shared, bounded
+    /// TableFileCache either — it opens its own handle. Proven here by
+    /// shrinking the file-cache to zero effective capacity for foreign
+    /// leases (capacity 1, already held by a concurrent foreground
+    /// lease) and showing compaction still completes.
+    #[test]
+    fn compaction_iter_does_not_contend_the_shared_file_cache() {
+        let td = TempDir::new("compaction-iter-no-fd-contention");
+        let block_cache = Arc::new(BlockCache::new(1024 * 1024));
+        let file_cache = Arc::new(TableFileCache::new(1));
+        let table = build_table(
+            td.path(),
+            1,
+            50,
+            64,
+            block_cache.clone(),
+            file_cache.clone(),
+        );
+
+        // Hold the file cache's one slot with a foreground-style lease
+        // for the table's own path for the whole compaction scan.
+        let lease = file_cache.acquire(table.number(), &table.path).unwrap();
+        let count = table.compaction_iter().unwrap().count();
+        assert!(
+            count >= 50,
+            "compaction must complete without the shared file-cache lease"
+        );
+        drop(lease);
     }
 }
