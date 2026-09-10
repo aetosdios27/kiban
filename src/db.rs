@@ -3337,18 +3337,27 @@ impl SharedKiban {
         self.write_lock()
     }
 
-    /// Blocks (never holding the engine mutex while doing so) until
-    /// neither of two independent write-pressure reasons hold: L0 at
-    /// its hard ceiling (11.5), or the one immutable-memtable slot
+    /// Runs `mutate` against the engine under one write-lock hold, but
+    /// only once neither of two independent write-pressure reasons hold:
+    /// L0 at its hard ceiling (11.5), or the one immutable-memtable slot
     /// already occupied *and* the active memtable has itself also
     /// crossed the write-buffer threshold (11.8) — i.e. a second freeze
-    /// is wanted but the one slot this phase allows is taken. Called
-    /// before every operation that would grow that debt — `put`,
-    /// `delete`, `write` — never before `get`/`scan`/`sync`/snapshot
-    /// reads, which must keep working while writers stall.
-    /// `SharedKiban::flush()` uses its own, stricter wait (unconditional
-    /// on the immutable slot, since an explicit flush always wants to
-    /// freeze right now — see `wait_for_immutable_slot`).
+    /// is wanted but the one slot this phase allows is taken. Used by
+    /// every operation that would grow that debt — `put`, `delete`,
+    /// `write` — never by `get`/`scan`/`sync`/snapshot reads, which must
+    /// keep working while writers stall. `SharedKiban::flush()` uses its
+    /// own, stricter check (unconditional on the immutable slot, since
+    /// an explicit flush always wants to freeze right now).
+    ///
+    /// One lock hold per attempt, not two: the room check, the mutation,
+    /// and the post-mutation freeze check all happen inside the same
+    /// `write_lock()` guard, so an unstalled call — the overwhelmingly
+    /// common case — pays for exactly one full engine-gate acquisition
+    /// instead of one to check room and a second to actually mutate.
+    /// Each such acquisition briefly excludes every concurrent reader
+    /// (engine_lock's writer-excludes-all-shards protocol), so halving
+    /// their count directly halves how often sustained writers interrupt
+    /// foreground reads.
     ///
     /// The epoch is captured *while still holding the engine lock*,
     /// immediately after observing pressure: any commit that could
@@ -3357,12 +3366,16 @@ impl SharedKiban {
     /// can never land in the gap between "still under pressure" and
     /// "start waiting on this epoch" — closing the classic check-then-
     /// sleep missed-wakeup race.
-    fn wait_for_write_room(&self) -> Result<(), DbError> {
+    fn mutate_with_write_room(
+        &self,
+        mutate: impl FnOnce(&mut Kiban) -> Result<(), DbError>,
+    ) -> Result<(), DbError> {
         // Set once this call has genuinely had to wait at least once,
         // so a call that loops through several wake/recheck cycles
         // before getting room still counts as exactly one write stall
         // (11.7) — one blocked mutation, one stall event.
         let mut stalled = false;
+        let mut mutate = Some(mutate);
         loop {
             if let Some(err) = self.maintenance.error() {
                 return Err(DbError::Maintenance(err));
@@ -3373,12 +3386,19 @@ impl SharedKiban {
                 )));
             }
             let epoch = {
-                let guard = self.write_lock()?;
+                let mut guard = self.write_lock()?;
                 guard.check_poisoned()?;
                 let l0_ok = guard.l0_count() < guard.options().l0_write_stall_trigger;
                 let immutable_ok = guard.immutable.is_none()
                     || guard.memtable.logical_bytes() < guard.options().write_buffer_bytes;
                 if l0_ok && immutable_ok {
+                    let mutate = mutate.take().expect("loop runs the mutation at most once");
+                    mutate(&mut guard)?;
+                    let froze = guard.maybe_freeze()?;
+                    drop(guard);
+                    if froze {
+                        self.maintenance.wake();
+                    }
                     return Ok(());
                 }
                 self.maintenance.progress_epoch()
@@ -3482,39 +3502,13 @@ impl SharedKiban {
     /// `write_buffer_bytes` (11.8) — same lock hold as the write
     /// itself, so the check and the freeze are atomic together.
     pub fn put(&self, key: impl AsRef<[u8]>, value: impl AsRef<[u8]>) -> io::Result<()> {
-        self.wait_for_write_room()
-            .map_err(|e| io::Error::other(e.to_string()))?;
-        let froze = match self.write_lock() {
-            Ok(mut guard) => {
-                guard.put(key, value)?;
-                guard
-                    .maybe_freeze()
-                    .map_err(|e| io::Error::other(e.to_string()))?
-            }
-            Err(e) => return Err(io::Error::other(e.to_string())),
-        };
-        if froze {
-            self.maintenance.wake();
-        }
-        Ok(())
+        self.mutate_with_write_room(|guard| Ok(guard.put(key, value)?))
+            .map_err(|e| io::Error::other(e.to_string()))
     }
 
     pub fn delete(&self, key: impl AsRef<[u8]>) -> io::Result<()> {
-        self.wait_for_write_room()
-            .map_err(|e| io::Error::other(e.to_string()))?;
-        let froze = match self.write_lock() {
-            Ok(mut guard) => {
-                guard.delete(key)?;
-                guard
-                    .maybe_freeze()
-                    .map_err(|e| io::Error::other(e.to_string()))?
-            }
-            Err(e) => return Err(io::Error::other(e.to_string())),
-        };
-        if froze {
-            self.maintenance.wake();
-        }
-        Ok(())
+        self.mutate_with_write_room(|guard| Ok(guard.delete(key)?))
+            .map_err(|e| io::Error::other(e.to_string()))
     }
 
     /// Whether the shared engine is poisoned.
@@ -3573,16 +3567,7 @@ impl SharedKiban {
     /// commit applies. May freeze the active memtable afterward,
     /// exactly like `put`/`delete` (11.8).
     pub fn write(&self, batch: WriteBatch) -> Result<(), DbError> {
-        self.wait_for_write_room()?;
-        let froze = {
-            let mut guard = self.write_lock()?;
-            guard.write(batch)?;
-            guard.maybe_freeze()?
-        };
-        if froze {
-            self.maintenance.wake();
-        }
-        Ok(())
+        self.mutate_with_write_room(|guard| guard.write(batch))
     }
 
     /// Captures a consistent snapshot: O(memtable) copy under one lock
