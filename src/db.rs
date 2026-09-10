@@ -342,11 +342,37 @@ pub enum CompactionScheduler {
     FixedPriority,
     Scored,
     /// 11.17-round-3: adaptive policy that switches among three
-    /// objectives (`crate::governor::GovernorMode`) based on smoothed
-    /// engine pressure, instead of committing to one static tradeoff
-    /// for the whole process. See `crate::governor` and the round-3
-    /// final report for the measured Pareto-frontier comparison against
-    /// `FixedPriority` and `Scored` + batching.
+    /// objectives (`crate::governor::GovernorMode`: `Balanced`,
+    /// `ReadProtect`, `WriteEmergency`) based on smoothed engine
+    /// pressure, instead of committing to one static tradeoff for the
+    /// whole process. Also adds two things neither static scheduler
+    /// has: per-level-batch-length adaptive selection (picks the
+    /// marginally-best-amortizing batch instead of one fixed size), and
+    /// zero-rewrite trivial moves (a level >= 1 table with no overlap
+    /// against level + 1 relabels down for free instead of paying for a
+    /// real merge).
+    ///
+    /// Measured (`benches/steady_state.rs`, 20K-op quick run, both
+    /// workload shapes; `benches/phase_changing.rs`, a six-phase
+    /// changing workload, full 6s/phase run): on the stationary
+    /// workloads, `Governor` matched or beat every static config on
+    /// BOTH GET p99 and write amplification simultaneously — the
+    /// tradeoff `Scored`+batching accepts (wider L0, worse GET tail, in
+    /// exchange for lower write-amp) didn't have to be paid. On the
+    /// changing workload the picture is more mixed: write-amp varied
+    /// run to run (sometimes best of the three, sometimes not) and GET
+    /// tail stayed mid-pack-to-good, but one real, specific weakness
+    /// showed up — `WriteEmergency`'s exit hysteresis (3 consecutive
+    /// recovered samples required) can lag a few PLAN cycles into a
+    /// newly write-light phase, and during that lag window a burst of
+    /// commits landed with reduced-but-nonzero pacing, spiking PUT p999
+    /// to ~1.5ms (down from ~4.7ms before quartering, rather than
+    /// zeroing, the pacing delay in that mode — see
+    /// `background::MaintenancePressure::pace`) versus the static
+    /// schedulers' tens-of-microseconds tail in the same window. Not
+    /// fully closed; not chased further to avoid overfitting hysteresis
+    /// constants to one noisy benchmark. See `crate::governor` and the
+    /// round-3 final report for the full comparison and verdict.
     Governor,
 }
 
