@@ -2488,34 +2488,40 @@ impl CompactionPlan {
     /// reopen's sweep — never anything the MANIFEST references).
     pub(crate) fn build(&self) -> Result<Vec<TableEntry>, DbError> {
         if self.trivial_move {
-            // No merge, no new bytes: reopen the SAME file (its number
-            // is unchanged) so the returned `TableEntry` carries the new
+            // No merge, no new bytes: reopen each SAME file (numbers
+            // unchanged) so each returned `TableEntry` carries the new
             // `output_level` — a footer/index touch, the same cost any
             // table open already pays (README "lazy table loading"),
-            // never a rewrite.
-            let entry = self
-                .inputs
-                .first()
-                .ok_or_else(|| DbError::Corrupt("trivial move plan has no input".to_string()))?;
-            let path = self.dir.join(file_name(entry.number, SST_EXTENSION));
-            let use_mmap = self
-                .mmap_max_level
-                .is_some_and(|max| self.output_level <= max);
-            let table = SstTable::open(
-                entry.number,
-                &path,
-                self.cache.clone(),
-                self.file_cache.clone(),
-                use_mmap,
-            )?;
-            return Ok(vec![TableEntry {
-                level: self.output_level,
-                number: entry.number,
-                size: table.size_on_disk(),
-                first_key: table.smallest_key().to_vec(),
-                last_key: table.largest_key().to_vec(),
-                table,
-            }]);
+            // never a rewrite. Batched across every input (11.17-
+            // round-3.3) so N free moves cost one COMMIT instead of N.
+            if self.inputs.is_empty() {
+                return Err(DbError::Corrupt(
+                    "trivial move plan has no input".to_string(),
+                ));
+            }
+            let mut outputs = Vec::with_capacity(self.inputs.len());
+            for entry in &self.inputs {
+                let path = self.dir.join(file_name(entry.number, SST_EXTENSION));
+                let use_mmap = self
+                    .mmap_max_level
+                    .is_some_and(|max| self.output_level <= max);
+                let table = SstTable::open(
+                    entry.number,
+                    &path,
+                    self.cache.clone(),
+                    self.file_cache.clone(),
+                    use_mmap,
+                )?;
+                outputs.push(TableEntry {
+                    level: self.output_level,
+                    number: entry.number,
+                    size: table.size_on_disk(),
+                    first_key: table.smallest_key().to_vec(),
+                    last_key: table.largest_key().to_vec(),
+                    table,
+                });
+            }
+            return Ok(outputs);
         }
         let mut sources: Vec<SourceHead<'_>> = Vec::with_capacity(self.inputs.len());
         for entry in &self.inputs {
@@ -2863,7 +2869,7 @@ impl Kiban {
                 self.plan_compaction_at_level_with_batch(level, batch_len)
             }
             governor::CandidateKind::TrivialMove { level } => {
-                self.plan_trivial_move(best.input_numbers[0], level)
+                self.plan_trivial_move(&best.input_numbers, level)
             }
         }?;
         debug_assert_eq!(
@@ -2874,33 +2880,42 @@ impl Kiban {
         Some(plan)
     }
 
-    /// PLAN for a metadata-only level bump (11.17-round-3, section 7):
-    /// moves one existing table from `level` to `level + 1` with no
+    /// PLAN for a metadata-only level bump (11.17-round-3, section 7;
+    /// batched across multiple tables since 11.17-round-3.3): moves one
+    /// or more existing tables from `level` to `level + 1` with no
     /// rewrite. Safe only because: level >= 1 tables are range-disjoint
-    /// within their own level, so a single table's departure keeps
-    /// `level` disjoint trivially; the caller (governor candidate
-    /// generation) already verified this exact table has zero overlap
-    /// with every `level + 1` table, so inserting it there preserves
-    /// that level's disjointness too; and no data is read, merged, or
-    /// dropped, so none of the tombstone/snapshot drop-rule reasoning
-    /// that gates a real compaction (`gc_allowed`, `smallest_snapshot`)
-    /// applies — there is nothing here that could violate it. L0 is
-    /// deliberately never a source level: L0 tables can overlap each
-    /// other, so moving a single one out from under the others would
-    /// change which value wins for any key more than one L0 table
-    /// covers — see the module docs on why this is skipped rather than
-    /// forced.
-    fn plan_trivial_move(&mut self, number: u64, level: u32) -> Option<CompactionPlan> {
+    /// within their own level, so any subset's departure keeps `level`
+    /// disjoint trivially; the caller (governor candidate generation)
+    /// already verified EACH of these tables has zero overlap with
+    /// every `level + 1` table (including each other, since they're
+    /// already disjoint within their own level), so inserting all of
+    /// them there preserves that level's disjointness too; and no data
+    /// is read, merged, or dropped, so none of the tombstone/snapshot
+    /// drop-rule reasoning that gates a real compaction (`gc_allowed`,
+    /// `smallest_snapshot`) applies — there is nothing here that could
+    /// violate it. L0 is deliberately never a source level: L0 tables
+    /// can overlap each other, so moving one out from under the others
+    /// would change which value wins for any key more than one L0
+    /// table covers — see the module docs on why this is skipped
+    /// rather than forced.
+    fn plan_trivial_move(&mut self, numbers: &[u64], level: u32) -> Option<CompactionPlan> {
         debug_assert!(level >= 1, "trivial move source must never be L0");
-        let entry = self
-            .version
-            .tables
-            .iter()
-            .find(|t| t.number == number && t.level == level)?
-            .clone();
+        let mut inputs = Vec::with_capacity(numbers.len());
+        for &number in numbers {
+            let entry = self
+                .version
+                .tables
+                .iter()
+                .find(|t| t.number == number && t.level == level)?
+                .clone();
+            inputs.push(entry);
+        }
+        if inputs.is_empty() {
+            return None;
+        }
         Some(CompactionPlan {
-            inputs: vec![entry],
-            input_numbers: std::iter::once(number).collect(),
+            inputs,
+            input_numbers: numbers.iter().copied().collect(),
             output_level: level + 1,
             smallest_snapshot: self.oldest_active_snapshot().unwrap_or(self.last_sequence),
             gc_allowed: false,
@@ -3706,8 +3721,18 @@ mod compaction_tests {
             total_bytes_avoided += moved.size;
         }
 
+        // 11.17-round-3.3: trivial moves batch every eligible table at
+        // a level into ONE job now, so `trivial_moves_performed` counts
+        // JOBS, not tables — it's between 1 and `l1_before.len()`
+        // inclusive, never more (batching only ever reduces job count).
         let stats = db.governor.snapshot();
-        assert_eq!(stats.trivial_moves_performed, l1_before.len() as u64);
+        assert!(
+            stats.trivial_moves_performed >= 1
+                && stats.trivial_moves_performed <= l1_before.len() as u64,
+            "expected 1..={} trivial-move jobs (batched), got {}",
+            l1_before.len(),
+            stats.trivial_moves_performed
+        );
         assert_eq!(stats.trivial_move_bytes_avoided, total_bytes_avoided);
 
         for i in 0..4u32 {

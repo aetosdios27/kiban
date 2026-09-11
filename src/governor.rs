@@ -845,18 +845,31 @@ pub(crate) fn generate_candidates(
             });
         }
 
-        // Trivial-move candidate: the largest table at this level with
-        // zero overlap against level+1, ties broken by lowest number
-        // for determinism. `min_by_key`/`max_by_key` scans, cheap
-        // (bounded by this level's table count).
-        let best_free = by_key
+        // Trivial-move candidate: EVERY table at this level with zero
+        // overlap against level+1 (up to MAX_ADAPTIVE_BATCH), not just
+        // the largest one — batched into ONE job. 11.17-round-3.3
+        // evidence (three independent full six-phase runs) found that
+        // moving only one table per job, when a level often has several
+        // simultaneously free-to-move tables, meant several separate
+        // PLAN/BUILD/COMMIT cycles — several foreground-excluding
+        // COMMITs in rapid succession — to do work that costs nothing
+        // extra to combine into one. Each trivial move is independently
+        // free (no I/O beyond a footer/index reopen), so there is no
+        // batching-length tradeoff to explore the way real merges have
+        // (more overlap, more rewrite cost) — take as many as exist, up
+        // to the same cap real batches use, largest first for
+        // determinism.
+        let mut free: Vec<&TableInfo> = by_key
             .iter()
+            .copied()
             .filter(|t| overlapping(tables, level + 1, &t.first_key, &t.last_key).is_empty())
-            .max_by_key(|t| (t.size, std::cmp::Reverse(t.number)));
-        if let Some(t) = best_free {
+            .collect();
+        free.sort_by(|a, b| b.size.cmp(&a.size).then(a.number.cmp(&b.number)));
+        free.truncate(MAX_ADAPTIVE_BATCH);
+        if !free.is_empty() {
             out.push(Candidate {
                 kind: CandidateKind::TrivialMove { level },
-                input_numbers: vec![t.number],
+                input_numbers: free.iter().map(|t| t.number).collect(),
                 output_level: level + 1,
             });
         }
