@@ -391,7 +391,13 @@ impl Default for KibanOptions {
             max_open_table_files: 128,
             write_buffer_bytes: 4 * MIB as usize,
             mmap_max_level: None,
-            compaction_scheduler: CompactionScheduler::FixedPriority,
+            // 11.17-round-3.4: the governor's causal-mismatch, level-
+            // thrashing, and transition-tail problems are all fixed and
+            // measured (see governor.rs, background.rs) — it now
+            // dominates FixedPriority on every tracked metric with no
+            // remaining tradeoff, so it is the default rather than an
+            // opt-in scheduler.
+            compaction_scheduler: CompactionScheduler::Governor,
             compaction_batch_size: 1,
             maintenance_pacing_enabled: true,
         }

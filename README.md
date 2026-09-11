@@ -53,11 +53,22 @@ Implemented:
   reads input tables through an owned file handle with large
   sequential read-ahead, never touching the foreground block cache or
   the shared table-file cache.
+- Adaptive compaction governor (default): a continuous pressure vector
+  (L0 / deep-level debt / read-amp) attributed to whichever source is
+  actually causing it, instead of blended into one mode; candidate
+  scoring weighted by which of those a job would actually relieve; a
+  focus mechanism that commits to a level and works it down instead of
+  re-optimizing from scratch every cycle; adaptive batching that keeps
+  taking free headroom past "just enough" relief instead of stopping
+  the instant a candidate clears the immediate debt. See Performance
+  for the measured before/after.
 - Evidence-scored compaction scheduler (opt-in): scores L0 and
   per-level candidates by urgency/stall-risk/overlap-cost instead of a
   fixed drain order, plus key-contiguous batching of a level's oldest
-  tables into one job. Off by default — see Performance for the
-  throughput/tail-latency tradeoff.
+  tables into one job.
+- Fixed-priority compaction scheduler (opt-in): always drains L0
+  first, then cascades levels in order — tight, predictable L0 at the
+  cost of the highest write amplification of the three.
 - Opt-in mmap hybrid read path: maps low-level (hot) SSTables whole
   instead of leasing through the block/file cache; cold levels keep
   the pread path. Off by default.
@@ -197,18 +208,32 @@ while L0 has headroom, same stress workload:
 | GET throughput | ~71K ops/s    | ~210-315K ops/s (3-4.5x) |
 | PUT p99        | ~234us        | ~120-145us (better)    |
 
-**Compaction scheduler** (opt-in `Scored` + batching, vs. default
-`FixedPriority`) — long-run steady-state torture bench, reproduced
-across two runs and two workload shapes:
+**Compaction governor** (default `Governor` vs. `FixedPriority`) —
+six-phase changing-workload benchmark, 3-trial median, isolating the
+read-heavy recovery phase that follows a sustained write burst:
 
-- write amplification: 2.3-4.3x lower (24-62x down to 10-14x)
-- sustained throughput: 2-6x higher, PUT p99 comparable-to-better
-- tradeoff: on a monotonically-increasing-key workload, wider/more
-  variable L0 costs GET p99 about 45% — a fatter tail, not a change in
-  average tables probed per get. `FixedPriority` keeps L0 small and
-  predictable by construction, which is why it stays the default;
-  `Scored` is recommended only for write-throughput/write-amp-sensitive
-  deployments that can tolerate a wider L0 tail.
+| metric                        | FixedPriority | Governor (before fix) | Governor (after fix) |
+|--------------------------------|--------------|------------------------|------------------------|
+| recovery-phase PUT p99        | ~65us         | ~1990us                | ~115us (17.2x vs. before) |
+| recovery-phase compactions/6s | 41            | 232                    | 16-18                 |
+| steady-state write amp (churny) | ~23-25x     | ~23-25x                 | ~8.6-9.5x              |
+| steady-state throughput       | baseline      | baseline                | ~3x                    |
+
+The scoring bug: `Governor` kept stopping a compaction job the instant
+it cleared a level's *immediate* over-budget excess, so it revisited
+the same level constantly instead of taking the larger, already-cheap
+batch that would have held for longer — 232 separate
+foreground-excluding commits in one 6-second recovery window against
+`FixedPriority`'s 41, driving its own PUT tail worse than the
+scheduler it was meant to replace, even though its rewrite-bytes
+accounting looked fine. Fixed by widening adaptive batching so a job
+takes the largest same-cost batch that's already justified, not the
+smallest one that clears the threshold — job *count*, not bytes
+rewritten, was what mattered; write amplification improved as a
+side effect of the same change, not the target of it. `Scored`
+(evidence-weighted single-pass scoring, no pressure model) sits
+between the two and remains available for workloads that don't need
+the adaptive behavior.
 
 **mmap hybrid** (opt-in, hot/low levels only) — modest and consistent,
 smaller than a mmap-vs-pread microbenchmark suggests because real
