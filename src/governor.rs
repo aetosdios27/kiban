@@ -179,13 +179,29 @@ impl From<CandidateKind> for ChosenKind {
 pub struct SchedulingDecision {
     pub pressure: PressureVector,
     pub dominant: PressureSource,
-    pub l0_survival_override: bool,
+    /// 11.17-round-3.3: which of `pick_best_cause_aware`'s three tiers
+    /// produced `chosen` — the direct, observable proof of whether the
+    /// focus mechanism is actually preventing level-thrashing.
+    /// `FocusContinued` appearing several times in a row for the same
+    /// level (visible via `chosen`) is what "the fix is working" looks
+    /// like in this trace.
+    pub tier: SelectionTier,
     pub candidates_considered: usize,
     pub chosen: Option<ChosenKind>,
     pub predicted_rewrite_bytes: u64,
     pub l0_relief: f64,
     pub debt_relief: f64,
     pub read_relief: f64,
+}
+
+/// See `SchedulingDecision::tier`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SelectionTier {
+    #[default]
+    None,
+    L0,
+    FocusContinued,
+    FocusReselected,
 }
 
 /// One PLAN-time observation of engine pressure. Cheap to build from
@@ -300,6 +316,11 @@ pub(crate) struct GovernorState {
     /// oldest dropped first. Exists purely for observability — nothing
     /// in the engine reads this back to make a decision.
     decisions: std::collections::VecDeque<SchedulingDecision>,
+    /// 11.17-round-3.3: which deep level candidate selection is
+    /// currently committed to, and for how many consecutive jobs — see
+    /// `pick_best_cause_aware`. Unlike `decisions`, this genuinely IS
+    /// read back to make the next decision.
+    focus: FocusState,
     enter_read_protect_streak: u32,
     exit_read_protect_streak: u32,
     exit_emergency_streak: u32,
@@ -328,6 +349,7 @@ impl GovernorState {
             debt_ewma: 0.0,
             pressure_vector: PressureVector::default(),
             decisions: std::collections::VecDeque::new(),
+            focus: FocusState::default(),
             enter_read_protect_streak: 0,
             exit_read_protect_streak: 0,
             exit_emergency_streak: 0,
@@ -363,15 +385,15 @@ impl GovernorState {
         self.pressure_vector
     }
 
-    /// Whether L0 is instantaneously at the FSM's own WRITE_EMERGENCY
-    /// entry point — the hard survival override candidate selection
-    /// must respect regardless of what the (separately, more slowly
-    /// hysteresis-gated) `mode` currently reports. Equivalent to
-    /// checking `l0_fraction >= WRITE_EMERGENCY_ENTER_L0_FRACTION`
-    /// directly, since `pressure_vector().l0` is exactly that fraction
-    /// normalized so 1.0 is the threshold.
-    pub(crate) fn l0_survival_engaged(&self) -> bool {
-        self.pressure_vector.l0 >= 1.0
+    /// 11.17-round-3.3: which deep level `pick_best_cause_aware` is
+    /// currently committed to, if any — read by `crate::db` before
+    /// calling it and written back with `set_focus` after.
+    pub(crate) fn focus(&self) -> FocusState {
+        self.focus
+    }
+
+    pub(crate) fn set_focus(&mut self, focus: FocusState) {
+        self.focus = focus;
     }
 
     /// Appends one scheduling decision to the bounded trace (section
@@ -985,34 +1007,165 @@ fn cause_aware_score(vector: PressureVector, est: &CandidateEstimate) -> f64 {
     benefit / rewrite.sqrt()
 }
 
-/// Picks the highest cause-aware-scoring candidate, or `None` if there
-/// is nothing to do — except for one hard invariant checked first:
-/// when `l0_survival_override` is set (L0 is instantaneously at the
-/// FSM's own WRITE_EMERGENCY entry point), the L0 candidate wins
-/// outright if one exists, full stop. This is deliberately NOT folded
-/// into the smooth scoring above: L0 is what this engine's write-stall
-/// backpressure actually gates on, so approaching that ceiling must
-/// force the L0 job regardless of how a deep level's debt might
-/// otherwise score — "L0 survival still overrides everything" is a
-/// safety invariant, not a preference to be outbid.
+fn level_of(kind: CandidateKind) -> u32 {
+    match kind {
+        CandidateKind::L0 => 0,
+        CandidateKind::LevelBatch { level, .. } => level,
+        CandidateKind::TrivialMove { level } => level,
+    }
+}
+
+/// Number of consecutive PLAN calls a focus level is allowed to keep
+/// winning before selection is forced to re-evaluate from scratch —
+/// same magnitude as `WRITE_EMERGENCY_EXIT_WINDOWS` elsewhere in this
+/// file, reused rather than invented fresh. Exists only as an upper
+/// bound so a level that's genuinely never going to resolve (should not
+/// happen given real budgets, but this is a safety net, not the primary
+/// mechanism) can't hold focus forever; in the overwhelmingly common
+/// case focus clears naturally the moment the level drops under budget
+/// (see `pick_best_cause_aware`'s doc comment).
+const FOCUS_MAX_CONSECUTIVE_JOBS: u32 = 3;
+
+/// Which level (if any) candidate selection is currently committed to,
+/// and how many consecutive jobs have run against it. Threaded through
+/// `pick_best_cause_aware` explicitly (not stored inside it) so the
+/// function stays pure and testable; `crate::db` persists the returned
+/// value back onto `GovernorState` between PLAN calls.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) struct FocusState {
+    pub current_focus: Option<u32>,
+    pub streak: u32,
+}
+
+/// 11.17-round-3.3: the structural fix. A real decision trace (a
+/// six-phase benchmark run) showed candidate selection re-litigating
+/// "which of several over-budget levels is marginally best" on EVERY
+/// PLAN call — L3, then L2, then L3, then L2-trivial-move, then L3,
+/// then L4-trivial-move, then L3 again — because the previous design
+/// had no memory: each call globally re-optimized `cause_aware_score`
+/// from scratch. No reshaping of that score (three rounds tried:
+/// mode-keyed bonuses, a pure pressure-vector dot product, a per-job
+/// byte floor) could ever fix this, because target-switching is an
+/// intrinsic property of "pick the global argmax fresh every time," not
+/// a symptom the argmax's shape controls. The fix is a different
+/// mechanism entirely: commit to one level, work it down across several
+/// consecutive jobs, and only re-open the global question once that
+/// level resolves (or a bounded streak expires as a safety net).
+///
+/// Three tiers, checked in order:
+///
+/// 1. L0 is UNCONDITIONAL, exactly like `FixedPriority`: if any L0
+///    candidate exists (`generate_candidates` only emits one once
+///    `l0_count >= l0_compaction_trigger`), it wins outright, no
+///    scoring, no competition with deep-level work. This is the direct
+///    fix for the round-3.2 max-L0 regression (5 -> 12): the previous
+///    design let a high-scoring deep-level candidate occasionally
+///    outbid L0 relief even while L0 had real candidates waiting,
+///    which is exactly what let L0 grow past where `FixedPriority`
+///    ever lets it. Reproducing `FixedPriority`'s own bound here,
+///    structurally, is what actually gives the same guarantee back —
+///    no vector-weight tuning was ever going to promise it.
+/// 2. If a deep-level focus is already active (`focus.current_focus =
+///    Some(level)`), stay on it: score only THAT level's candidates
+///    and keep going, incrementing the streak. This naturally clears
+///    itself the instant the level drops under budget — `candidates`
+///    (generated only for `over_budget_levels`) simply stops
+///    containing anything for that level, `pick_best_within_level`
+///    returns `None`, and control falls through to tier 3 without any
+///    extra bookkeeping. `FOCUS_MAX_CONSECUTIVE_JOBS` is the only
+///    override, and only as a safety net.
+/// 3. No active focus (or it just expired): re-score every deep-level
+///    candidate globally via `cause_aware_score`, same as before, and
+///    commit to whichever level wins as the new focus.
 pub(crate) fn pick_best_cause_aware(
     vector: PressureVector,
-    l0_survival_override: bool,
+    focus: FocusState,
     candidates: &[(Candidate, CandidateEstimate)],
-) -> Option<&(Candidate, CandidateEstimate)> {
-    if l0_survival_override
-        && let Some(idx) = candidates
-            .iter()
-            .position(|(c, _)| c.kind == CandidateKind::L0)
+) -> (
+    Option<&(Candidate, CandidateEstimate)>,
+    FocusState,
+    SelectionTier,
+) {
+    // Tier 1: L0 is unconditional — no scoring, no focus bookkeeping.
+    if let Some(idx) = candidates
+        .iter()
+        .position(|(c, _)| c.kind == CandidateKind::L0)
     {
-        return Some(&candidates[idx]);
+        return (
+            Some(&candidates[idx]),
+            FocusState {
+                current_focus: None,
+                streak: 0,
+            },
+            SelectionTier::L0,
+        );
     }
+
+    // Tier 2: stay on the active focus level while it's still viable.
+    if let Some(level) = focus.current_focus
+        && focus.streak < FOCUS_MAX_CONSECUTIVE_JOBS
+        && let Some(best) = pick_best_within_level(vector, level, candidates)
+    {
+        return (
+            Some(best),
+            FocusState {
+                current_focus: Some(level),
+                streak: focus.streak + 1,
+            },
+            SelectionTier::FocusContinued,
+        );
+    }
+
+    // Tier 3: re-open the global question and commit to a new focus.
+    let Some(new_level) = select_focus_level(vector, candidates) else {
+        return (
+            None,
+            FocusState {
+                current_focus: None,
+                streak: 0,
+            },
+            SelectionTier::None,
+        );
+    };
+    let best = pick_best_within_level(vector, new_level, candidates);
+    (
+        best,
+        FocusState {
+            current_focus: Some(new_level),
+            streak: 1,
+        },
+        SelectionTier::FocusReselected,
+    )
+}
+
+/// Tier 3 helper: which deep level scores best right now, globally,
+/// across every over-budget level's candidates (L0 is never a
+/// candidate here — tier 1 already handles it separately).
+fn select_focus_level(
+    vector: PressureVector,
+    candidates: &[(Candidate, CandidateEstimate)],
+) -> Option<u32> {
     candidates
         .iter()
-        .enumerate()
-        .map(|(i, (_, e))| (i, cause_aware_score(vector, e)))
+        .filter(|(c, _)| c.kind != CandidateKind::L0)
+        .map(|(c, e)| (level_of(c.kind), cause_aware_score(vector, e)))
         .max_by(|a, b| a.1.total_cmp(&b.1))
-        .map(|(i, _)| &candidates[i])
+        .map(|(level, _)| level)
+}
+
+/// Tier 2 helper: the best-scoring candidate restricted to one
+/// specific level (adaptive batching still applies within it — this is
+/// just the existing scoring narrowed to a subset of candidates, not a
+/// different formula).
+fn pick_best_within_level(
+    vector: PressureVector,
+    level: u32,
+    candidates: &[(Candidate, CandidateEstimate)],
+) -> Option<&(Candidate, CandidateEstimate)> {
+    candidates
+        .iter()
+        .filter(|(c, _)| level_of(c.kind) == level)
+        .max_by(|a, b| cause_aware_score(vector, &a.1).total_cmp(&cause_aware_score(vector, &b.1)))
 }
 
 #[cfg(test)]
@@ -1507,19 +1660,21 @@ mod tests {
     // hard survival override and the age-based anti-starvation term.
 
     #[test]
-    fn calm_l0_and_heavy_deep_debt_favors_the_deep_level_job() {
+    fn calm_l0_below_trigger_and_heavy_deep_debt_favors_the_deep_level_job() {
+        // L0 is BELOW its compaction trigger (2 of 3 needed) — no L0
+        // candidate exists at all — while a deep level is heavily over
+        // budget. Tier 3 (global reselection) must pick it up.
         let tables = vec![
             t(1, 0, 100, b"a", b"b"),
             t(2, 0, 100, b"c", b"d"),
-            t(3, 0, 100, b"e", b"f"), // L0 at its trigger: a candidate exists
             t(10, 1, 900, b"m", b"n"), // one level 9x over its own budget
-            t(20, 2, 10, b"m", b"n"), // overlaps table 10: no free trivial move available
+            t(20, 2, 10, b"m", b"n"),  // overlaps table 10: no free trivial move available
         ];
         let over_budget = [(1u32, 100u64)];
         let candidates = generate_candidates(&tables, 3, &over_budget, 20);
         assert!(
-            candidates.iter().any(|c| c.kind == CandidateKind::L0),
-            "setup: an L0 candidate must exist"
+            !candidates.iter().any(|c| c.kind == CandidateKind::L0),
+            "setup: L0 must be below its trigger, no L0 candidate"
         );
         assert!(
             candidates
@@ -1527,17 +1682,9 @@ mod tests {
                 .any(|c| matches!(c.kind, CandidateKind::LevelBatch { level: 1, .. })),
             "setup: a deep-level candidate must exist"
         );
-        assert!(
-            !candidates
-                .iter()
-                .any(|c| matches!(c.kind, CandidateKind::TrivialMove { .. })),
-            "setup: no free trivial move should be available — this test is about a real rewrite decision"
-        );
 
-        // L0 is only just at its trigger, nowhere near its stall
-        // ceiling; the deep level's debt is maxed.
         let vector = PressureVector {
-            l0: 0.04,
+            l0: 0.0,
             deep_debt: 1.0,
             read: 0.0,
         };
@@ -1545,17 +1692,23 @@ mod tests {
             .iter()
             .map(|c| (c.clone(), estimate_candidate(&tables, c, 20, &over_budget)))
             .collect();
-        let (best, _) =
-            pick_best_cause_aware(vector, false, &estimated).expect("a candidate must be chosen");
+        let (best, focus, tier) = pick_best_cause_aware(vector, FocusState::default(), &estimated);
+        let best = best.expect("a candidate must be chosen");
         assert!(
-            matches!(best.kind, CandidateKind::LevelBatch { level: 1, .. }),
-            "expected the deep-level job to win when L0 is calm and debt is heavy, got {:?}",
-            best.kind
+            matches!(best.0.kind, CandidateKind::LevelBatch { level: 1, .. }),
+            "expected the deep-level job to win when there is no L0 candidate, got {:?}",
+            best.0.kind
         );
+        assert_eq!(tier, SelectionTier::FocusReselected);
+        assert_eq!(focus.current_focus, Some(1));
     }
 
     #[test]
-    fn l0_approaching_stall_overrides_deep_debt_even_when_debt_is_worse() {
+    fn l0_is_unconditional_whenever_a_candidate_exists() {
+        // 11.17-round-3.3: L0 is no longer a scored preference — it's a
+        // tier-1 hard rule, exactly like FixedPriority. It must win even
+        // when the pressure vector itself says deep debt is worse than
+        // L0.
         let tables = vec![
             t(1, 0, 100, b"a", b"b"),
             t(2, 0, 100, b"c", b"d"),
@@ -1564,11 +1717,10 @@ mod tests {
         ];
         let over_budget = [(1u32, 100u64)];
         let candidates = generate_candidates(&tables, 3, &over_budget, 20);
-        // Both pressures maxed, but L0 is the one at its actual survival
-        // threshold — the hard override must win regardless of how the
-        // smooth score alone would rank things.
+        // deep_debt outweighs l0 in the vector itself — the OLD scoring
+        // design would have let this outbid L0. Tier 1 must not care.
         let vector = PressureVector {
-            l0: 1.0,
+            l0: 0.05,
             deep_debt: 1.0,
             read: 0.0,
         };
@@ -1576,21 +1728,22 @@ mod tests {
             .iter()
             .map(|c| (c.clone(), estimate_candidate(&tables, c, 20, &over_budget)))
             .collect();
-        let (best, _) =
-            pick_best_cause_aware(vector, true, &estimated).expect("a candidate must be chosen");
+        let (best, focus, tier) = pick_best_cause_aware(vector, FocusState::default(), &estimated);
+        let best = best.expect("a candidate must be chosen");
         assert!(
-            matches!(best.kind, CandidateKind::L0),
-            "L0 survival override must win regardless of competing deep debt, got {:?}",
-            best.kind
+            matches!(best.0.kind, CandidateKind::L0),
+            "L0 must be unconditional whenever a candidate exists, got {:?}",
+            best.0.kind
+        );
+        assert_eq!(tier, SelectionTier::L0);
+        assert_eq!(
+            focus.current_focus, None,
+            "taking the L0 tier must clear any deep-level focus"
         );
     }
 
     #[test]
-    fn l0_survival_override_is_a_noop_when_no_l0_candidate_exists() {
-        // The override is a safety valve, not a requirement that L0
-        // work exist — if L0 hasn't even reached its compaction
-        // trigger, there's nothing to force, and scoring should proceed
-        // normally over whatever candidates ARE on the table.
+    fn no_l0_candidate_falls_through_to_focus_selection_normally() {
         let tables = vec![t(10, 1, 900, b"m", b"n")];
         let over_budget = [(1u32, 100u64)];
         let candidates = generate_candidates(&tables, 3, &over_budget, 20);
@@ -1604,10 +1757,139 @@ mod tests {
             .iter()
             .map(|c| (c.clone(), estimate_candidate(&tables, c, 20, &over_budget)))
             .collect();
-        let best = pick_best_cause_aware(vector, true, &estimated);
+        let (best, _, tier) = pick_best_cause_aware(vector, FocusState::default(), &estimated);
         assert!(
             best.is_some(),
-            "override with no L0 candidate must fall through to normal scoring, not return nothing"
+            "no L0 candidate must fall through to focus selection, not return nothing"
+        );
+        assert_eq!(tier, SelectionTier::FocusReselected);
+    }
+
+    #[test]
+    fn focus_persists_across_consecutive_calls_instead_of_switching_levels() {
+        // Two over-budget levels, each with its own candidate, scored
+        // so level 2 wins narrowly on the FIRST call. The old
+        // (memoryless, global-reoptimize-every-call) design would
+        // re-litigate this every time and could flip between them on
+        // sample noise; the focus mechanism must stay on level 2 across
+        // several calls without re-scoring level 3 at all.
+        let tables = vec![
+            t(1, 2, 500, b"a", b"b"),
+            t(2, 3, 480, b"c", b"d"), // slightly cheaper/similar — a close competitor
+        ];
+        let over_budget = [(2u32, 100u64), (3u32, 100u64)];
+        let candidates = generate_candidates(&tables, 100, &over_budget, 20);
+        let vector = PressureVector {
+            l0: 0.0,
+            deep_debt: 1.0,
+            read: 0.0,
+        };
+        let estimated: Vec<_> = candidates
+            .iter()
+            .map(|c| (c.clone(), estimate_candidate(&tables, c, 20, &over_budget)))
+            .collect();
+
+        let mut focus = FocusState::default();
+        let (first, focus1, tier1) = pick_best_cause_aware(vector, focus, &estimated);
+        let first_level = level_of(first.expect("a candidate must be chosen").0.kind);
+        assert_eq!(tier1, SelectionTier::FocusReselected);
+        focus = focus1;
+
+        for _ in 0..(FOCUS_MAX_CONSECUTIVE_JOBS - 1) {
+            let (chosen, next_focus, tier) = pick_best_cause_aware(vector, focus, &estimated);
+            let level = level_of(chosen.expect("a candidate must be chosen").0.kind);
+            assert_eq!(
+                level, first_level,
+                "focus must stay on the same level across consecutive calls"
+            );
+            assert_eq!(tier, SelectionTier::FocusContinued);
+            focus = next_focus;
+        }
+    }
+
+    #[test]
+    fn focus_clears_and_reselects_once_the_focused_level_resolves() {
+        let tables_busy = vec![t(1, 2, 500, b"a", b"b"), t(2, 3, 500, b"c", b"d")];
+        let over_budget_busy = [(2u32, 100u64), (3u32, 100u64)];
+        let candidates_busy = generate_candidates(&tables_busy, 100, &over_budget_busy, 20);
+        let vector = PressureVector {
+            l0: 0.0,
+            deep_debt: 1.0,
+            read: 0.0,
+        };
+        let estimated_busy: Vec<_> = candidates_busy
+            .iter()
+            .map(|c| {
+                (
+                    c.clone(),
+                    estimate_candidate(&tables_busy, c, 20, &over_budget_busy),
+                )
+            })
+            .collect();
+        let (first, focus, tier) =
+            pick_best_cause_aware(vector, FocusState::default(), &estimated_busy);
+        let focused_level = level_of(first.expect("a candidate must be chosen").0.kind);
+        assert_eq!(tier, SelectionTier::FocusReselected);
+
+        // Now simulate that level having resolved: it's no longer over
+        // budget, so it no longer generates any candidates — but the
+        // OTHER level still is.
+        let remaining_level = if focused_level == 2 { 3u32 } else { 2u32 };
+        let over_budget_after = [(remaining_level, 100u64)];
+        let candidates_after = generate_candidates(&tables_busy, 100, &over_budget_after, 20);
+        let estimated_after: Vec<_> = candidates_after
+            .iter()
+            .map(|c| {
+                (
+                    c.clone(),
+                    estimate_candidate(&tables_busy, c, 20, &over_budget_after),
+                )
+            })
+            .collect();
+        let (next, next_focus, tier) = pick_best_cause_aware(vector, focus, &estimated_after);
+        let next_level = level_of(next.expect("a candidate must be chosen").0.kind);
+        assert_eq!(
+            next_level, remaining_level,
+            "once the focused level resolves, selection must move to the level still over budget"
+        );
+        assert_eq!(tier, SelectionTier::FocusReselected);
+        assert_eq!(next_focus.current_focus, Some(remaining_level));
+    }
+
+    #[test]
+    fn focus_streak_cap_forces_a_reselection_even_if_still_over_budget() {
+        // A single over-budget level, never resolving — the streak cap
+        // is the only thing that would ever force a fresh tier-3 call
+        // here. Confirms the cap actually fires (tier flips to
+        // FocusReselected) rather than staying FocusContinued forever.
+        let tables = vec![t(1, 2, 900, b"a", b"b")];
+        let over_budget = [(2u32, 100u64)];
+        let candidates = generate_candidates(&tables, 100, &over_budget, 20);
+        let vector = PressureVector {
+            l0: 0.0,
+            deep_debt: 1.0,
+            read: 0.0,
+        };
+        let estimated: Vec<_> = candidates
+            .iter()
+            .map(|c| (c.clone(), estimate_candidate(&tables, c, 20, &over_budget)))
+            .collect();
+
+        let mut focus = FocusState::default();
+        let mut tiers = Vec::new();
+        for _ in 0..(FOCUS_MAX_CONSECUTIVE_JOBS + 2) {
+            let (_, next_focus, tier) = pick_best_cause_aware(vector, focus, &estimated);
+            tiers.push(tier);
+            focus = next_focus;
+        }
+        assert_eq!(tiers[0], SelectionTier::FocusReselected);
+        for t in &tiers[1..FOCUS_MAX_CONSECUTIVE_JOBS as usize] {
+            assert_eq!(*t, SelectionTier::FocusContinued);
+        }
+        assert_eq!(
+            tiers[FOCUS_MAX_CONSECUTIVE_JOBS as usize],
+            SelectionTier::FocusReselected,
+            "the streak cap must force a reselection, not continue indefinitely"
         );
     }
 

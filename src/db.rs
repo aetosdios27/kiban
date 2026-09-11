@@ -2792,7 +2792,7 @@ impl Kiban {
             self.read_amp.snapshot(),
         );
         let vector = self.governor.pressure_vector();
-        let l0_survival_override = self.governor.l0_survival_engaged();
+        let focus = self.governor.focus();
 
         let candidates = governor::generate_candidates(
             &tables,
@@ -2802,10 +2802,11 @@ impl Kiban {
         );
         let candidates_considered = candidates.len();
         if candidates.is_empty() {
+            self.governor.set_focus(governor::FocusState::default());
             self.governor.record_decision(governor::SchedulingDecision {
                 pressure: vector,
                 dominant: vector.dominant(),
-                l0_survival_override,
+                tier: governor::SelectionTier::None,
                 candidates_considered: 0,
                 chosen: None,
                 predicted_rewrite_bytes: 0,
@@ -2827,13 +2828,13 @@ impl Kiban {
                 (c, est)
             })
             .collect();
-        let Some((best, best_est)) =
-            governor::pick_best_cause_aware(vector, l0_survival_override, &estimated)
-        else {
+        let (chosen, new_focus, tier) = governor::pick_best_cause_aware(vector, focus, &estimated);
+        self.governor.set_focus(new_focus);
+        let Some((best, best_est)) = chosen else {
             self.governor.record_decision(governor::SchedulingDecision {
                 pressure: vector,
                 dominant: vector.dominant(),
-                l0_survival_override,
+                tier,
                 candidates_considered,
                 chosen: None,
                 predicted_rewrite_bytes: 0,
@@ -2847,7 +2848,7 @@ impl Kiban {
         self.governor.record_decision(governor::SchedulingDecision {
             pressure: vector,
             dominant: vector.dominant(),
-            l0_survival_override,
+            tier,
             candidates_considered,
             chosen: Some(best.kind.into()),
             predicted_rewrite_bytes: best_est.estimated_rewrite_bytes,

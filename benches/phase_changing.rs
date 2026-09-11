@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 
 use kiban::db::{CompactionScheduler, KibanOptions, SharedKiban};
 use kiban::governor::{
-    ChosenKind, GovernorMode, PressureSource, PressureVector, SchedulingDecision,
+    ChosenKind, GovernorMode, PressureSource, PressureVector, SchedulingDecision, SelectionTier,
 };
 
 fn temp_dir(label: &str) -> std::path::PathBuf {
@@ -744,16 +744,25 @@ fn print_decision_trace(r: &RunResult, n: usize) {
     let start = r.decision_trace.len().saturating_sub(n);
     for (i, d) in r.decision_trace[start..].iter().enumerate() {
         println!(
-            "  #{:<4} pressure(l0={:.2} debt={:.2} read={:.2}) dominant={:<9} override={:<5} considered={:<3} -> {}",
+            "  #{:<4} pressure(l0={:.2} debt={:.2} read={:.2}) dominant={:<9} tier={:<15} considered={:<3} -> {}",
             start + i,
             d.pressure.l0,
             d.pressure.deep_debt,
             d.pressure.read,
             source_label(d.dominant),
-            d.l0_survival_override,
+            tier_label(d.tier),
             d.candidates_considered,
             chosen_label(d.chosen),
         );
+    }
+}
+
+fn tier_label(t: SelectionTier) -> &'static str {
+    match t {
+        SelectionTier::None => "none",
+        SelectionTier::L0 => "L0-unconditional",
+        SelectionTier::FocusContinued => "focus-continued",
+        SelectionTier::FocusReselected => "focus-reselected",
     }
 }
 
