@@ -608,6 +608,7 @@ impl GovernorState {
         GovernorStats {
             mode: self.mode,
             pressure: self.last_pressure,
+            pressure_vector: self.pressure_vector,
             mode_switches: self.mode_switches,
             time_balanced_ms: time_in_mode[GovernorMode::Balanced.idx()].as_millis() as u64,
             time_read_protect_ms: time_in_mode[GovernorMode::ReadProtect.idx()].as_millis() as u64,
@@ -632,6 +633,12 @@ pub struct GovernorStats {
     /// actually decays smoothly across a workload transition instead of
     /// stepping with the mode.
     pub pressure: f64,
+    /// 11.17-round-3.2: the pressure vector candidate scoring actually
+    /// reads, at snapshot time — see `GovernorState::pressure_vector`.
+    /// Exposed here (rather than only via `governor_trace`) so a
+    /// frequent poller (a benchmark's sampler thread, say) can plot the
+    /// components over time cheaply.
+    pub pressure_vector: PressureVector,
     pub mode_switches: u64,
     pub time_balanced_ms: u64,
     pub time_read_protect_ms: u64,
@@ -962,6 +969,19 @@ fn cause_aware_score(vector: PressureVector, est: &CandidateEstimate) -> f64 {
         + vector.deep_debt * est.debt_relief
         + vector.read * est.read_relief
         + (est.age as f64).ln_1p() * AGE_BONUS_WEIGHT;
+    // Tried adding a fixed per-job byte overhead here (charging every
+    // candidate a minimum cost so many-tiny-jobs stopped looking
+    // categorically cheaper than fewer-larger-jobs) on the theory that
+    // job COUNT, not just bytes, has a real fixed cost — a brief
+    // foreground-excluding COMMIT per job. Real evidence (a full
+    // six-phase re-run) rejected it: trivial-move and small-batch
+    // selection share went UP, not down, and phase 3/5/6 PUT tail got
+    // WORSE. Likely cause: at this engine's actual candidate byte
+    // scale, a flat additive floor shifts small real candidates
+    // relatively MORE than it shifts the already-near-zero trivial
+    // moves, the opposite of the intended effect. Reverted rather than
+    // kept on the strength of the reasoning alone — the round's own
+    // rule against hand-tuning without evidence cuts both ways.
     benefit / rewrite.sqrt()
 }
 
@@ -1173,20 +1193,25 @@ mod tests {
 
     #[test]
     fn adaptive_batch_picker_prefers_the_cheaper_useful_batch() {
-        // [A] rewrite 40 (input 40, no overlap)
-        // [A,B] rewrite 90 (input 90)
-        // [A,B,C] rewrite 150 (input 150)
-        // [A,B,C,D] rewrite 400 (a huge D dominates the union range,
+        // Sized at realistic-SST scale (tens of KB), not toy byte
+        // counts: `cause_aware_score`'s fixed per-job overhead
+        // (JOB_OVERHEAD_BYTES) is calibrated against real rewrite
+        // sizes, and swamps everything if the candidates themselves are
+        // only tens of bytes.
+        // [A] rewrite 40_000 (input 40_000, no overlap)
+        // [A,B] rewrite 90_000 (input 90_000)
+        // [A,B,C] rewrite 150_000 (input 150_000)
+        // [A,B,C,D] rewrite 550_000 (a huge D dominates the union range,
         // pulling in a large L+1 overlap) — the task's own example
         // shape: growth suddenly gets much worse.
         let tables = vec![
-            t(1, 1, 40, b"a", b"b"),
-            t(2, 1, 50, b"c", b"d"),
-            t(3, 1, 60, b"e", b"f"),
-            t(4, 1, 220, b"g", b"z"), // wide, drags in overlap below
-            t(5, 2, 180, b"g", b"z"), // only overlaps D
+            t(1, 1, 40_000, b"a", b"b"),
+            t(2, 1, 50_000, b"c", b"d"),
+            t(3, 1, 60_000, b"e", b"f"),
+            t(4, 1, 220_000, b"g", b"z"), // wide, drags in overlap below
+            t(5, 2, 180_000, b"g", b"z"), // only overlaps D
         ];
-        let candidates = generate_candidates(&tables, 100, &[(1, 100)], 10);
+        let candidates = generate_candidates(&tables, 100, &[(1, 100_000)], 10);
         let batches: Vec<_> = candidates
             .iter()
             .filter(|c| matches!(c.kind, CandidateKind::LevelBatch { .. }))
@@ -1205,7 +1230,7 @@ mod tests {
                     CandidateKind::LevelBatch { batch_len, .. } => batch_len,
                     _ => unreachable!(),
                 };
-                let est = estimate_candidate(&tables, c, 10, &[(1, 100)]);
+                let est = estimate_candidate(&tables, c, 10, &[(1, 100_000)]);
                 (batch_len, cause_aware_score(vector, &est))
             })
             .collect();
@@ -1224,12 +1249,15 @@ mod tests {
         // forcing a real rewrite. Both are over-budget-level candidates
         // competing for the same deep-debt pressure; the trivial move
         // must win on cost alone.
+        // Realistic-SST scale, same reason as the batch-picker test
+        // above: the fixed per-job overhead in `cause_aware_score` is
+        // calibrated against real rewrite sizes.
         let tables = vec![
-            t(1, 1, 500, b"a", b"b"), // no L2 overlap: free move
-            t(2, 1, 500, b"y", b"z"),
-            t(3, 2, 500, b"y", b"z"), // overlaps table 2 only
+            t(1, 1, 500_000, b"a", b"b"), // no L2 overlap: free move
+            t(2, 1, 500_000, b"y", b"z"),
+            t(3, 2, 500_000, b"y", b"z"), // overlaps table 2 only
         ];
-        let candidates = generate_candidates(&tables, 100, &[(1, 100)], 10);
+        let candidates = generate_candidates(&tables, 100, &[(1, 100_000)], 10);
         let trivial = candidates
             .iter()
             .find(|c| matches!(c.kind, CandidateKind::TrivialMove { .. }))
@@ -1244,7 +1272,7 @@ mod tests {
         let scored: Vec<(&Candidate, f64)> = candidates
             .iter()
             .map(|c| {
-                let est = estimate_candidate(&tables, c, 10, &[(1, 100)]);
+                let est = estimate_candidate(&tables, c, 10, &[(1, 100_000)]);
                 (c, cause_aware_score(vector, &est))
             })
             .collect();

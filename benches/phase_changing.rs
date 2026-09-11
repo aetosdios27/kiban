@@ -18,7 +18,9 @@ use std::sync::{Arc, Barrier, Mutex};
 use std::time::{Duration, Instant};
 
 use kiban::db::{CompactionScheduler, KibanOptions, SharedKiban};
-use kiban::governor::GovernorMode;
+use kiban::governor::{
+    ChosenKind, GovernorMode, PressureSource, PressureVector, SchedulingDecision,
+};
 
 fn temp_dir(label: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("kiban-phasechg-{label}-{}", std::process::id()));
@@ -153,6 +155,11 @@ struct StructSample {
     /// report can show whether actuation actually decays smoothly
     /// across a workload transition instead of stepping with the mode.
     governor_pressure: f64,
+    /// 11.17-round-3.2: the pressure VECTOR candidate scoring actually
+    /// reads (l0, deep_debt, read — each 0.0 for non-Governor
+    /// schedulers) — sampled so the report can show which specific
+    /// signal was driving pressure at any point, not just its blend.
+    governor_vector: PressureVector,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -177,6 +184,12 @@ struct PhaseMetrics {
     pressure_min: f64,
     pressure_avg: f64,
     pressure_max: f64,
+    /// 11.17-round-3.2: average pressure-vector components over this
+    /// phase — which specific signal (L0, deep debt, read) was
+    /// actually driving pressure, not just the blended scalar.
+    l0_v_avg: f64,
+    debt_v_avg: f64,
+    read_v_avg: f64,
 }
 
 struct RunResult {
@@ -200,6 +213,11 @@ struct RunResult {
     /// whether pressure actually decays smoothly across a phase
     /// boundary instead of stepping with the mode.
     raw_samples: Vec<StructSample>,
+    /// 11.17-round-3.2, section 3: the governor's own recorded
+    /// scheduling-decision trace (bounded to the most recent 4096 PLAN
+    /// calls) — what pressure looked like and what was chosen, every
+    /// time. Empty for non-Governor schedulers.
+    decision_trace: Vec<SchedulingDecision>,
 }
 
 fn run_phase_changing(
@@ -281,6 +299,7 @@ fn run_phase_changing(
                         open_fds: current_open_fds(),
                         governor_mode: Some(stats.governor.mode),
                         governor_pressure: stats.governor.pressure,
+                        governor_vector: stats.governor.pressure_vector,
                     });
                 }
                 std::thread::sleep(Duration::from_millis(20));
@@ -428,6 +447,7 @@ fn run_phase_changing(
         let (mut pressure_min, mut pressure_max) = (f64::MAX, 0.0f64);
         let mut pressure_sum = 0.0f64;
         let mut pressure_n = 0usize;
+        let (mut l0_v_sum, mut debt_v_sum, mut read_v_sum) = (0.0f64, 0.0f64, 0.0f64);
         for s in struct_samples.iter().filter(|s| s.phase == idx) {
             if let Some(m) = s.governor_mode {
                 mode_ticks[mode_idx(m)] += 1;
@@ -443,8 +463,12 @@ fn run_phase_changing(
             pressure_min = pressure_min.min(s.governor_pressure);
             pressure_max = pressure_max.max(s.governor_pressure);
             pressure_sum += s.governor_pressure;
+            l0_v_sum += s.governor_vector.l0;
+            debt_v_sum += s.governor_vector.deep_debt;
+            read_v_sum += s.governor_vector.read;
             pressure_n += 1;
         }
+        let n = pressure_n.max(1) as f64;
         phases.push(PhaseMetrics {
             name: p.name,
             get_p: percentiles(gets),
@@ -477,6 +501,9 @@ fn run_phase_changing(
                 pressure_sum / pressure_n as f64
             },
             pressure_max,
+            l0_v_avg: l0_v_sum / n,
+            debt_v_avg: debt_v_sum / n,
+            read_v_avg: read_v_sum / n,
         });
     }
 
@@ -489,6 +516,7 @@ fn run_phase_changing(
         / 1e6;
     let peak_fds = struct_samples.iter().map(|s| s.open_fds).max().unwrap_or(0);
     let gstats = after_stats.governor;
+    let decision_trace = db.governor_trace().unwrap_or_default();
 
     let result = RunResult {
         label: label.to_string(),
@@ -507,6 +535,7 @@ fn run_phase_changing(
         peak_rss_mb,
         peak_fds,
         raw_samples: struct_samples,
+        decision_trace,
     };
 
     drop(db);
@@ -618,6 +647,16 @@ fn print_result(r: &RunResult) {
             p.pressure_max,
         );
     }
+    println!(
+        "  {:<28} {:>10} {:>10} {:>10}",
+        "phase", "l0 (avg)", "deep_debt (avg)", "read (avg)"
+    );
+    for p in &r.phases {
+        println!(
+            "  {:<28} {:>10.3} {:>16.3} {:>10.3}",
+            p.name, p.l0_v_avg, p.debt_v_avg, p.read_v_avg,
+        );
+    }
     let _ = mode_label; // used only if per-tick detail is added later
 }
 
@@ -649,9 +688,12 @@ fn print_transition_traces(r: &RunResult, phase_duration: Duration, window: Dura
                 .map(|m| mode_label(mode_idx(m)))
                 .unwrap_or("?");
             println!(
-                "    t={:>6.2}s  pressure={:>4.2}  mode={:<3}  L0={:<2}  stalls={}",
+                "    t={:>6.2}s  pressure={:>4.2} (l0={:>4.2} debt={:>4.2} read={:>4.2})  mode={:<3}  L0={:<2}  stalls={}",
                 s.at.as_secs_f64(),
                 s.governor_pressure,
+                s.governor_vector.l0,
+                s.governor_vector.deep_debt,
+                s.governor_vector.read,
                 mode,
                 s.l0_files,
                 s.write_stalls,
@@ -662,6 +704,270 @@ fn print_transition_traces(r: &RunResult, phase_duration: Duration, window: Dura
             println!("    (no samples captured in this window)");
         }
     }
+}
+
+fn chosen_label(c: Option<ChosenKind>) -> String {
+    match c {
+        None => "none".to_string(),
+        Some(ChosenKind::L0) => "L0".to_string(),
+        Some(ChosenKind::LevelBatch { level, batch_len }) => {
+            format!("L{level}-batch({batch_len})")
+        }
+        Some(ChosenKind::TrivialMove { level }) => format!("L{level}-trivial-move"),
+    }
+}
+
+fn source_label(s: PressureSource) -> &'static str {
+    match s {
+        PressureSource::None => "none",
+        PressureSource::L0 => "L0",
+        PressureSource::DeepDebt => "deep_debt",
+        PressureSource::Read => "read",
+    }
+}
+
+/// 11.17-round-3.2, section 3: prints the governor's own decision trace
+/// for the last `n` PLAN calls of the run — real evidence (not a
+/// synthetic reconstruction) of "pressure source -> candidates ->
+/// chosen job -> resulting pressure", since phase 6 (the recovery
+/// phase under scrutiny) is the tail of the run, this naturally shows
+/// that window.
+fn print_decision_trace(r: &RunResult, n: usize) {
+    println!(
+        "\n-- {}: last {n} governor scheduling decisions --",
+        r.label
+    );
+    if r.decision_trace.is_empty() {
+        println!("  (no decisions recorded — not the Governor scheduler)");
+        return;
+    }
+    let start = r.decision_trace.len().saturating_sub(n);
+    for (i, d) in r.decision_trace[start..].iter().enumerate() {
+        println!(
+            "  #{:<4} pressure(l0={:.2} debt={:.2} read={:.2}) dominant={:<9} override={:<5} considered={:<3} -> {}",
+            start + i,
+            d.pressure.l0,
+            d.pressure.deep_debt,
+            d.pressure.read,
+            source_label(d.dominant),
+            d.l0_survival_override,
+            d.candidates_considered,
+            chosen_label(d.chosen),
+        );
+    }
+}
+
+/// 11.17-round-3.2, section 7: isolates deep-level debt accumulation
+/// from L0 danger entirely — a single, long, sequential-mostly-new
+/// workload with `l0_write_stall_trigger` generous enough that L0
+/// survival never engages, so any pressure and any candidate selection
+/// observed here is caused by level debt alone. Answers the question
+/// section 6's six-phase bench could only show a slice of: does the
+/// governor actually pay the debt down to a stable band, or does it
+/// merely coexist with a permanently over-budget level?
+struct DebtConvergenceResult {
+    get_p: (u64, u64, u64, u64),
+    put_p: (u64, u64, u64, u64),
+    write_amp: f64,
+    max_debt_ratio_seen: f64,
+    final_debt_ratio: f64,
+    frac_time_over_2x_budget: f64,
+    level_selection_share: Vec<(u32, usize)>,
+    trivial_moves: u64,
+}
+
+fn level_budget(options: &KibanOptions, level: u32) -> u64 {
+    options.base_level_bytes.saturating_mul(
+        options
+            .level_multiplier
+            .saturating_pow(level.saturating_sub(1)),
+    )
+}
+
+fn run_debt_convergence(
+    label: &str,
+    options: KibanOptions,
+    duration: Duration,
+    writers: usize,
+    readers: usize,
+) -> DebtConvergenceResult {
+    let dir = temp_dir(label);
+    let db = SharedKiban::open_with_options(&dir, options.clone()).unwrap();
+
+    let hot_keys = 20_000usize;
+    for i in 0..hot_keys {
+        db.put(key("hot", i), [b'h'; 64]).unwrap();
+    }
+    db.sync().unwrap();
+    db.flush().unwrap();
+
+    let stop = Arc::new(AtomicBool::new(false));
+    let get_samples: Arc<Mutex<Vec<u64>>> = Arc::new(Mutex::new(Vec::new()));
+    let put_samples: Arc<Mutex<Vec<u64>>> = Arc::new(Mutex::new(Vec::new()));
+    // debt_over_time: one (max ratio over all levels) sample per tick
+    let debt_over_time: Arc<Mutex<Vec<f64>>> = Arc::new(Mutex::new(Vec::new()));
+    let start_barrier = Arc::new(Barrier::new(writers + readers + 2));
+
+    let before_stats = db.stats().unwrap();
+
+    let sampler = {
+        let db = db.clone();
+        let stop = stop.clone();
+        let debt_over_time = debt_over_time.clone();
+        let start_barrier = start_barrier.clone();
+        let options = options.clone();
+        std::thread::spawn(move || {
+            start_barrier.wait();
+            while !stop.load(Ordering::Relaxed) {
+                if let Ok(stats) = db.stats() {
+                    let max_ratio = stats
+                        .levels
+                        .iter()
+                        .filter(|l| l.level >= 1)
+                        .map(|l| l.bytes as f64 / level_budget(&options, l.level).max(1) as f64)
+                        .fold(0.0f64, f64::max);
+                    debt_over_time.lock().unwrap().push(max_ratio);
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+        })
+    };
+
+    let writer_handles: Vec<_> = (0..writers)
+        .map(|w| {
+            let db = db.clone();
+            let stop = stop.clone();
+            let put_samples = put_samples.clone();
+            let start_barrier = start_barrier.clone();
+            std::thread::spawn(move || {
+                start_barrier.wait();
+                let mut i = 0usize;
+                let mut local = Vec::new();
+                while !stop.load(Ordering::Relaxed) {
+                    let idx = w * 10_000_000 + i;
+                    i += 1;
+                    let t = Instant::now();
+                    let _ = db.put(key("seq", idx), [b'w'; 80]);
+                    local.push(t.elapsed().as_nanos() as u64);
+                }
+                put_samples.lock().unwrap().extend(local);
+            })
+        })
+        .collect();
+
+    let reader_handles: Vec<_> = (0..readers)
+        .map(|r| {
+            let db = db.clone();
+            let stop = stop.clone();
+            let get_samples = get_samples.clone();
+            let start_barrier = start_barrier.clone();
+            std::thread::spawn(move || {
+                start_barrier.wait();
+                let mut i = 0usize;
+                let mut local = Vec::new();
+                while !stop.load(Ordering::Relaxed) {
+                    let idx = (i.wrapping_mul(8191) + r * 8191) % hot_keys;
+                    i += 1;
+                    let t = Instant::now();
+                    let _ = db.get(key("hot", idx));
+                    local.push(t.elapsed().as_nanos() as u64);
+                    std::thread::sleep(Duration::from_micros(200));
+                }
+                get_samples.lock().unwrap().extend(local);
+            })
+        })
+        .collect();
+
+    start_barrier.wait();
+    std::thread::sleep(duration);
+    stop.store(true, Ordering::Relaxed);
+    for h in writer_handles {
+        h.join().unwrap();
+    }
+    for h in reader_handles {
+        h.join().unwrap();
+    }
+    sampler.join().unwrap();
+
+    let after_stats = db.stats().unwrap();
+    let put_samples = Arc::try_unwrap(put_samples).unwrap().into_inner().unwrap();
+    let get_samples = Arc::try_unwrap(get_samples).unwrap().into_inner().unwrap();
+    let debt_over_time = Arc::try_unwrap(debt_over_time)
+        .unwrap()
+        .into_inner()
+        .unwrap();
+    let decisions = db.governor_trace().unwrap_or_default();
+
+    let logical_bytes = put_samples.len() as u64 * 80;
+    let physical_bytes = after_stats.maintenance.flush_output_bytes
+        + after_stats.maintenance.compaction_output_bytes
+        - before_stats.maintenance.flush_output_bytes
+        - before_stats.maintenance.compaction_output_bytes;
+    let write_amp = if logical_bytes > 0 {
+        physical_bytes as f64 / logical_bytes as f64
+    } else {
+        0.0
+    };
+
+    let max_debt_ratio_seen = debt_over_time.iter().copied().fold(0.0f64, f64::max);
+    let final_debt_ratio = debt_over_time.last().copied().unwrap_or(0.0);
+    let frac_time_over_2x_budget = if debt_over_time.is_empty() {
+        0.0
+    } else {
+        debt_over_time.iter().filter(|&&r| r > 2.0).count() as f64 / debt_over_time.len() as f64
+    };
+
+    let mut level_counts: std::collections::BTreeMap<u32, usize> =
+        std::collections::BTreeMap::new();
+    for d in &decisions {
+        match d.chosen {
+            Some(ChosenKind::LevelBatch { level, .. })
+            | Some(ChosenKind::TrivialMove { level }) => {
+                *level_counts.entry(level).or_insert(0) += 1;
+            }
+            _ => {}
+        }
+    }
+    let trivial_moves = decisions
+        .iter()
+        .filter(|d| matches!(d.chosen, Some(ChosenKind::TrivialMove { .. })))
+        .count() as u64;
+
+    let result = DebtConvergenceResult {
+        get_p: percentiles(get_samples),
+        put_p: percentiles(put_samples),
+        write_amp,
+        max_debt_ratio_seen,
+        final_debt_ratio,
+        frac_time_over_2x_budget,
+        level_selection_share: level_counts.into_iter().collect(),
+        trivial_moves,
+    };
+
+    drop(db);
+    drop_dir(&dir);
+    println!("\n-- {label} --");
+    println!(
+        "  max debt ratio seen={:.2}  final debt ratio={:.2}  time >2x budget={:.1}%",
+        result.max_debt_ratio_seen,
+        result.final_debt_ratio,
+        result.frac_time_over_2x_budget * 100.0
+    );
+    println!(
+        "  GET p50={:.2}us p99={:.2}us p999={:.2}us  PUT p50={:.2}us p99={:.2}us p999={:.2}us  write_amp={:.2}x",
+        result.get_p.0 as f64 / 1000.0,
+        result.get_p.2 as f64 / 1000.0,
+        result.get_p.3 as f64 / 1000.0,
+        result.put_p.0 as f64 / 1000.0,
+        result.put_p.2 as f64 / 1000.0,
+        result.put_p.3 as f64 / 1000.0,
+        result.write_amp,
+    );
+    println!(
+        "  candidate selection share by level: {:?}  ({} trivial moves)",
+        result.level_selection_share, result.trivial_moves
+    );
+    result
 }
 
 fn main() {
@@ -739,6 +1045,7 @@ fn main() {
     );
     print_result(&c);
     print_transition_traces(&c, phase_duration, Duration::from_millis(600));
+    print_decision_trace(&c, 40);
 
     println!("\n== Overall summary (all phases combined) ==");
     println!(
@@ -807,4 +1114,38 @@ fn main() {
         }
         println!();
     }
+
+    println!("\n\n== Section 7: deep-debt convergence (L0 kept calm throughout) ==");
+    let debt_options = KibanOptions {
+        // Generous enough that L0 survival never engages — isolates
+        // deep-level debt as the only pressure source.
+        l0_write_stall_trigger: 200,
+        l0_compaction_trigger: 4,
+        ..base.clone()
+    };
+    let debt_duration = if quick {
+        Duration::from_secs(3)
+    } else {
+        Duration::from_secs(20)
+    };
+    let _fixed_debt = run_debt_convergence(
+        "debt-convergence-fixed",
+        KibanOptions {
+            compaction_scheduler: CompactionScheduler::FixedPriority,
+            ..debt_options.clone()
+        },
+        debt_duration,
+        writers,
+        readers,
+    );
+    let _governor_debt = run_debt_convergence(
+        "debt-convergence-governor",
+        KibanOptions {
+            compaction_scheduler: CompactionScheduler::Governor,
+            ..debt_options
+        },
+        debt_duration,
+        writers,
+        readers,
+    );
 }
