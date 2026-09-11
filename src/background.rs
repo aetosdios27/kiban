@@ -460,41 +460,6 @@ impl MaintenancePressure {
         let delay = crate::governor::pacing_delay(self.governor_mode, self.governor_pressure);
         std::thread::sleep(delay);
     }
-
-    /// 11.17-round-3.3 burst breaker. `pace()` alone still lets a long,
-    /// *sustained* run of back-to-back commits accumulate into many
-    /// tight engine-gate acquisitions in a row, because its per-commit
-    /// delay is deliberately tiny (5-40us, via `pacing_delay`) so any
-    /// single job never overpays — that tightness is correct for one
-    /// job, but a whole phase's worth of them in a row still adds up to
-    /// very little breathing room for a foreground writer stuck behind
-    /// the queue. This is a separate, additive mechanism: it does not
-    /// touch `pacing_delay`'s pressure curve or the mode FSM's
-    /// hysteresis at all. It counts commits and, every
-    /// `BREATHER_INTERVAL` of them, forces one longer mandatory pause —
-    /// unconditional on the *current* pressure reading, because the
-    /// point is to guarantee a periodic window even while pressure
-    /// stays legitimately high for the whole phase. Same headroom guard
-    /// as `pace()`: never fires while L0 is draining a real backlog
-    /// close to its stall ceiling, and the counter resets whenever that
-    /// guard trips so a genuine emergency is never slowed by a breather
-    /// left over from before it started.
-    fn maybe_breathe(&self, jobs_since_breather: &mut u32) {
-        const HEADROOM_DIVISOR: usize = 2;
-        const BREATHER_INTERVAL: u32 = 8;
-        const BREATHER_DELAY: std::time::Duration = std::time::Duration::from_micros(300);
-        if !self.pacing_enabled
-            || self.l0_count.saturating_mul(HEADROOM_DIVISOR) >= self.l0_write_stall_trigger
-        {
-            *jobs_since_breather = 0;
-            return;
-        }
-        *jobs_since_breather += 1;
-        if *jobs_since_breather >= BREATHER_INTERVAL {
-            *jobs_since_breather = 0;
-            std::thread::sleep(BREATHER_DELAY);
-        }
-    }
 }
 
 /// Runs every job the engine currently needs — flush, then compaction
@@ -509,14 +474,6 @@ impl MaintenancePressure {
 /// fresh freeze can land while this job's BUILD was running unlocked.
 fn run_pending_maintenance(engine: &Arc<ShardedRwLock<Kiban>>, m: &Arc<Maintenance>) {
     let mut cascade_level = 1u32;
-    // 11.17-round-3.3: counts commits within this wake cycle for
-    // `MaintenancePressure::maybe_breathe` (see there). Deliberately
-    // local, not carried on `Maintenance`/`GovernorState` across wake
-    // cycles — a fresh burst starting after the worker goes idle and
-    // wakes again should get a fresh budget before its first forced
-    // breather, not inherit a near-expired one from an unrelated,
-    // already-finished burst.
-    let mut jobs_since_breather: u32 = 0;
     loop {
         let flush_plan = {
             let Ok(mut guard) = engine.write() else {
@@ -546,7 +503,6 @@ fn run_pending_maintenance(engine: &Arc<ShardedRwLock<Kiban>>, m: &Arc<Maintenan
                         }
                     }
                     pressure.pace();
-                    pressure.maybe_breathe(&mut jobs_since_breather);
                 }
                 Err(e) => {
                     record_flush_error(m, e.to_string());
@@ -588,7 +544,6 @@ fn run_pending_maintenance(engine: &Arc<ShardedRwLock<Kiban>>, m: &Arc<Maintenan
                     }
                 }
                 pressure.pace();
-                pressure.maybe_breathe(&mut jobs_since_breather);
             }
             Err(e) => {
                 record_error(m, e.to_string());
