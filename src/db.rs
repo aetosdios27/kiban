@@ -1199,6 +1199,14 @@ impl Kiban {
         self.governor.pressure()
     }
 
+    /// 11.17-round-3.2: a snapshot of the governor's recent scheduling-
+    /// decision trace (`crate::governor::SchedulingDecision`), oldest
+    /// first — see `SharedKiban::governor_trace` for why this is a
+    /// separate, opt-in call rather than part of `stats()`.
+    pub(crate) fn governor_recent_decisions(&self) -> Vec<governor::SchedulingDecision> {
+        self.governor.recent_decisions()
+    }
+
     /// Whether the engine is in a poisoned (fatal) state.
     pub fn is_poisoned(&self) -> bool {
         self.poisoned.is_some()
@@ -2770,13 +2778,21 @@ impl Kiban {
             }
         }
 
-        let mode = self.governor.observe_engine(
+        // The returned mode still drives maintenance pacing (via
+        // `governor_mode`, read separately in background.rs) and
+        // telemetry; candidate selection below reads the pressure
+        // VECTOR this same call also updates, not this mode — see
+        // `governor::PressureVector` for why blending pressure into one
+        // mode was the actual bug.
+        let _mode = self.governor.observe_engine(
             self.l0_count(),
             self.options.l0_write_stall_trigger,
             max_level_debt_ratio,
             over_budget_levels.len(),
             self.read_amp.snapshot(),
         );
+        let vector = self.governor.pressure_vector();
+        let l0_survival_override = self.governor.l0_survival_engaged();
 
         let candidates = governor::generate_candidates(
             &tables,
@@ -2784,19 +2800,61 @@ impl Kiban {
             &over_budget_levels,
             self.next_file_number,
         );
+        let candidates_considered = candidates.len();
         if candidates.is_empty() {
+            self.governor.record_decision(governor::SchedulingDecision {
+                pressure: vector,
+                dominant: vector.dominant(),
+                l0_survival_override,
+                candidates_considered: 0,
+                chosen: None,
+                predicted_rewrite_bytes: 0,
+                l0_relief: 0.0,
+                debt_relief: 0.0,
+                read_relief: 0.0,
+            });
             return None;
         }
         let estimated: Vec<(governor::Candidate, governor::CandidateEstimate)> = candidates
             .into_iter()
             .map(|c| {
-                let est = governor::estimate_candidate(&tables, &c, self.next_file_number);
+                let est = governor::estimate_candidate(
+                    &tables,
+                    &c,
+                    self.next_file_number,
+                    &over_budget_levels,
+                );
                 (c, est)
             })
             .collect();
-        let (best, best_est) =
-            governor::pick_best(mode, &estimated, self.options.l0_write_stall_trigger)?;
+        let Some((best, best_est)) =
+            governor::pick_best_cause_aware(vector, l0_survival_override, &estimated)
+        else {
+            self.governor.record_decision(governor::SchedulingDecision {
+                pressure: vector,
+                dominant: vector.dominant(),
+                l0_survival_override,
+                candidates_considered,
+                chosen: None,
+                predicted_rewrite_bytes: 0,
+                l0_relief: 0.0,
+                debt_relief: 0.0,
+                read_relief: 0.0,
+            });
+            return None;
+        };
         self.governor.record_candidate_chosen(best.kind);
+        self.governor.record_decision(governor::SchedulingDecision {
+            pressure: vector,
+            dominant: vector.dominant(),
+            l0_survival_override,
+            candidates_considered,
+            chosen: Some(best.kind.into()),
+            predicted_rewrite_bytes: best_est.estimated_rewrite_bytes,
+            l0_relief: best_est.l0_relief,
+            debt_relief: best_est.debt_relief,
+            read_relief: best_est.read_relief,
+        });
 
         let mut plan = match best.kind {
             governor::CandidateKind::L0 => self.plan_compaction_at_level(0),
@@ -4694,6 +4752,20 @@ impl SharedKiban {
             read_amp: self.read_amp.snapshot(),
             governor,
         })
+    }
+
+    /// 11.17-round-3.2: a snapshot of the governor's recent scheduling-
+    /// decision trace (section 3) — pressure vector, candidates
+    /// considered, and the winning job for every recent PLAN call,
+    /// oldest first. A separate call from `stats()` (rather than a
+    /// field on `KibanStats`) deliberately: this can hold up to 4096
+    /// entries, and `stats()` is polled frequently (a benchmark's
+    /// sampler thread, say) — cloning that every call for a signal only
+    /// a governor-specific report actually wants would be real,
+    /// avoidable cost on a hot polling path.
+    pub fn governor_trace(&self) -> Result<Vec<governor::SchedulingDecision>, DbError> {
+        let guard = self.read_lock()?;
+        Ok(guard.governor_recent_decisions())
     }
 
     /// Buffered WAL append + memtable write. Not durable until `sync`.

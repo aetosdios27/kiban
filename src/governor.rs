@@ -89,6 +89,105 @@ impl GovernorMode {
     }
 }
 
+/// 11.17-round-3.2: the causal fix. `GovernorState::pressure` (the
+/// scalar from round 3.1) is still exactly what it was — a blend used
+/// only for maintenance *pacing*. But blending L0 danger and level debt
+/// into one number is precisely why candidate *selection* kept
+/// mis-firing: a badly over-budget deep level and a calm L0 produce the
+/// same high scalar, so a scorer that only sees the scalar (or the
+/// coarser `WriteEmergency` mode it drives) can't tell "clear L0 now"
+/// apart from "pay down that level now" — and the old scoring
+/// hard-coded a bias toward L0 regardless of which one was actually
+/// true. `PressureVector` keeps the components separate all the way
+/// into candidate scoring, so each candidate can be judged by how much
+/// of the pressure that's ACTUALLY present it would relieve.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct PressureVector {
+    /// Instantaneous (unsmoothed) L0-vs-stall-trigger fraction,
+    /// normalized so 1.0 is exactly the FSM's own WRITE_EMERGENCY entry
+    /// point — same signal as the pacing emergency floor, on purpose:
+    /// L0 is the only thing this engine's write-stall backpressure
+    /// actually gates on, so "is L0 dangerous" must never wait on a
+    /// smoothing window here either.
+    pub l0: f64,
+    /// EWMA of level-debt-ratio and backlog-breadth (deliberately
+    /// smoothed, unlike `l0`: a deep level being over budget is real
+    /// but not stall-imminent, so there's no requirement to react to a
+    /// single noisy sample).
+    pub deep_debt: f64,
+    /// EWMA'd tables-probed-per-get, normalized against the same
+    /// threshold that drives READ_PROTECT entry.
+    pub read: f64,
+}
+
+impl PressureVector {
+    pub fn dominant(&self) -> PressureSource {
+        let peak = self.l0.max(self.deep_debt).max(self.read);
+        if peak <= 0.05 {
+            PressureSource::None
+        } else if self.l0 >= peak {
+            PressureSource::L0
+        } else if self.deep_debt >= peak {
+            PressureSource::DeepDebt
+        } else {
+            PressureSource::Read
+        }
+    }
+}
+
+/// Which component of a `PressureVector` is currently dominant —
+/// attribution only, not itself a scoring input (`dominant()` is
+/// derived from the vector, never the other way around).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PressureSource {
+    #[default]
+    None,
+    L0,
+    DeepDebt,
+    Read,
+}
+
+/// Public mirror of `CandidateKind`, for observability
+/// (`SchedulingDecision`) without widening `CandidateKind` itself past
+/// `pub(crate)`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChosenKind {
+    L0,
+    LevelBatch { level: u32, batch_len: usize },
+    TrivialMove { level: u32 },
+}
+
+impl From<CandidateKind> for ChosenKind {
+    fn from(kind: CandidateKind) -> Self {
+        match kind {
+            CandidateKind::L0 => ChosenKind::L0,
+            CandidateKind::LevelBatch { level, batch_len } => {
+                ChosenKind::LevelBatch { level, batch_len }
+            }
+            CandidateKind::TrivialMove { level } => ChosenKind::TrivialMove { level },
+        }
+    }
+}
+
+/// One scheduling decision, recorded every PLAN call (section 3): what
+/// pressure looked like, how many candidates were on the table, and
+/// which one (if any) won and why. A run of these, read in order, is
+/// meant to be legible as a story — "deep debt high -> deep-level job
+/// chosen -> next sample's deep debt lower" — without needing to
+/// correlate against anything else.
+#[derive(Debug, Clone, Copy)]
+pub struct SchedulingDecision {
+    pub pressure: PressureVector,
+    pub dominant: PressureSource,
+    pub l0_survival_override: bool,
+    pub candidates_considered: usize,
+    pub chosen: Option<ChosenKind>,
+    pub predicted_rewrite_bytes: u64,
+    pub l0_relief: f64,
+    pub debt_relief: f64,
+    pub read_relief: f64,
+}
+
 /// One PLAN-time observation of engine pressure. Cheap to build from
 /// state `Kiban` already has in hand — no new I/O, no per-get hot-path
 /// cost (see `GovernorState::observe_engine`, which derives
@@ -188,6 +287,19 @@ pub(crate) struct GovernorState {
     /// (rather than recomputed) because `observe`'s return value is the
     /// mode, not this.
     last_pressure: f64,
+    /// EWMA of level-debt/backlog-breadth alone (11.17-round-3.2) —
+    /// kept separate from `pressure_ewma` (which blends it with read
+    /// amplification for the pacing scalar) because candidate scoring
+    /// needs to know deep-debt pressure specifically, not folded into
+    /// anything else. See `PressureVector`.
+    debt_ewma: f64,
+    /// The current pressure vector, updated every `observe` call —
+    /// what candidate scoring actually reads. See `pressure_vector`.
+    pressure_vector: PressureVector,
+    /// Bounded trace of recent scheduling decisions (section 3),
+    /// oldest dropped first. Exists purely for observability — nothing
+    /// in the engine reads this back to make a decision.
+    decisions: std::collections::VecDeque<SchedulingDecision>,
     enter_read_protect_streak: u32,
     exit_read_protect_streak: u32,
     exit_emergency_streak: u32,
@@ -213,6 +325,9 @@ impl GovernorState {
             tables_probed_ewma: 0.0,
             pressure_ewma: 0.0,
             last_pressure: 0.0,
+            debt_ewma: 0.0,
+            pressure_vector: PressureVector::default(),
+            decisions: std::collections::VecDeque::new(),
             enter_read_protect_streak: 0,
             exit_read_protect_streak: 0,
             exit_emergency_streak: 0,
@@ -240,6 +355,41 @@ impl GovernorState {
     /// smoothly.
     pub(crate) fn pressure(&self) -> f64 {
         self.last_pressure
+    }
+
+    /// The current pressure vector (11.17-round-3.2) — what candidate
+    /// scoring reads. See `PressureVector`.
+    pub(crate) fn pressure_vector(&self) -> PressureVector {
+        self.pressure_vector
+    }
+
+    /// Whether L0 is instantaneously at the FSM's own WRITE_EMERGENCY
+    /// entry point — the hard survival override candidate selection
+    /// must respect regardless of what the (separately, more slowly
+    /// hysteresis-gated) `mode` currently reports. Equivalent to
+    /// checking `l0_fraction >= WRITE_EMERGENCY_ENTER_L0_FRACTION`
+    /// directly, since `pressure_vector().l0` is exactly that fraction
+    /// normalized so 1.0 is the threshold.
+    pub(crate) fn l0_survival_engaged(&self) -> bool {
+        self.pressure_vector.l0 >= 1.0
+    }
+
+    /// Appends one scheduling decision to the bounded trace (section
+    /// 3), dropping the oldest if at capacity.
+    pub(crate) fn record_decision(&mut self, decision: SchedulingDecision) {
+        const MAX_DECISIONS_KEPT: usize = 4096;
+        if self.decisions.len() >= MAX_DECISIONS_KEPT {
+            self.decisions.pop_front();
+        }
+        self.decisions.push_back(decision);
+    }
+
+    /// Snapshot of the recorded scheduling-decision trace, oldest
+    /// first — for a caller (a benchmark, say) that wants to show the
+    /// actual pressure-source -> chosen-job -> resulting-pressure story
+    /// for a window of interest.
+    pub(crate) fn recent_decisions(&self) -> Vec<SchedulingDecision> {
+        self.decisions.iter().copied().collect()
     }
 
     /// The pure FSM step: given one pressure sample, updates the EWMA
@@ -306,6 +456,22 @@ impl GovernorState {
         self.pressure_ewma = EWMA_ALPHA * instant + (1.0 - EWMA_ALPHA) * self.pressure_ewma;
         let emergency_floor = l0_component;
         self.last_pressure = self.pressure_ewma.max(emergency_floor).clamp(0.0, 1.0);
+
+        // 11.17-round-3.2: the deep-debt component gets its OWN EWMA,
+        // separate from the blended `pressure_ewma` above — candidate
+        // scoring needs "how much deep-debt pressure exists right now"
+        // as its own number, not folded together with read/backlog
+        // signals the way the pacing scalar folds them. `l0` in the
+        // vector stays unsmoothed (same value as `emergency_floor`)
+        // for the same reason the pacing floor does: L0 danger must
+        // never wait on a smoothing window.
+        let debt_instant = debt_component.max(backlog_component);
+        self.debt_ewma = EWMA_ALPHA * debt_instant + (1.0 - EWMA_ALPHA) * self.debt_ewma;
+        self.pressure_vector = PressureVector {
+            l0: l0_component,
+            deep_debt: self.debt_ewma,
+            read: readamp_component,
+        };
 
         let new_mode = match self.mode {
             GovernorMode::WriteEmergency => {
@@ -526,13 +692,35 @@ pub(crate) struct CandidateEstimate {
     #[allow(dead_code)]
     pub overlap_bytes: u64,
     pub estimated_rewrite_bytes: u64,
-    /// Bytes this candidate removes from the pressured source (L0 or
-    /// the over-budget level) — the thing actually relieving debt.
+    /// Raw bytes this candidate removes from the pressured source (L0
+    /// or the over-budget level) — the numerator behind `debt_relief`
+    /// below, kept for inspectability now that scoring itself reads
+    /// the normalized fraction instead.
+    #[allow(dead_code)]
     pub debt_relief_bytes: u64,
+    #[allow(dead_code)]
     pub l0_files_removed: usize,
     /// File-number distance of the oldest input from the next number to
     /// be allocated — starvation proxy, same idea as `score_level_candidate`.
     pub age: u64,
+    /// 11.17-round-3.2: normalized (0.0 or 1.0) — this candidate either
+    /// fully clears L0 (the `L0` kind always takes every current L0
+    /// table) or has nothing to do with it. Paired with
+    /// `PressureVector::l0` in `cause_aware_score`.
+    pub l0_relief: f64,
+    /// 11.17-round-3.2: fraction of the TARGET level's own over-budget
+    /// excess (`level_bytes - budget`) this candidate would remove,
+    /// capped at 1.0. Zero for the `L0` kind — an L0 merge's output
+    /// lands AT the level it targets, so it grows that level rather
+    /// than relieving it. Paired with `PressureVector::deep_debt`.
+    pub debt_relief: f64,
+    /// 11.17-round-3.2: normalized (0.0 or 1.0). Equal to `l0_relief` in
+    /// this engine specifically: level >= 1 lookups already cost at
+    /// most one probe regardless of how many tables live there (range
+    /// disjointness), so only clearing L0 measurably shortens the
+    /// foreground probe chain — a level>=1 merge has no such effect to
+    /// claim credit for. Paired with `PressureVector::read`.
+    pub read_relief: f64,
 }
 
 fn overlapping<'a>(
@@ -653,6 +841,7 @@ pub(crate) fn estimate_candidate(
     tables: &[TableInfo],
     candidate: &Candidate,
     next_file_number: u64,
+    over_budget_levels: &[(u32, u64)],
 ) -> CandidateEstimate {
     let by_number = |n: u64| tables.iter().find(|t| t.number == n);
     let source_level = match candidate.kind {
@@ -700,6 +889,38 @@ pub(crate) fn estimate_candidate(
         CandidateKind::TrivialMove { .. } => 0,
         _ => input_bytes + overlap_bytes,
     };
+
+    // 11.17-round-3.2: cause-aware relief fields. `l0_relief`/
+    // `read_relief` are simple booleans-as-floats (see their doc
+    // comments on `CandidateEstimate`); `debt_relief` is a real
+    // fraction of the target level's own over-budget excess, so a
+    // candidate that only nibbles at a level far over budget scores
+    // honestly lower than one that would actually clear it.
+    let l0_relief = if matches!(candidate.kind, CandidateKind::L0) {
+        1.0
+    } else {
+        0.0
+    };
+    let read_relief = l0_relief;
+    let debt_relief = match candidate.kind {
+        CandidateKind::L0 => 0.0,
+        CandidateKind::LevelBatch { level, .. } | CandidateKind::TrivialMove { level } => {
+            over_budget_levels
+                .iter()
+                .find(|(l, _)| *l == level)
+                .map(|&(_, budget)| {
+                    let level_bytes: u64 = tables
+                        .iter()
+                        .filter(|t| t.level == level)
+                        .map(|t| t.size)
+                        .sum();
+                    let excess = level_bytes.saturating_sub(budget).max(1);
+                    (input_bytes as f64 / excess as f64).min(1.0)
+                })
+                .unwrap_or(0.0)
+        }
+    };
+
     CandidateEstimate {
         input_bytes,
         overlap_bytes,
@@ -707,87 +928,69 @@ pub(crate) fn estimate_candidate(
         debt_relief_bytes: input_bytes,
         l0_files_removed,
         age,
+        l0_relief,
+        debt_relief,
+        read_relief,
     }
 }
 
-/// Mode-dependent objective (section 5). Trivial moves are handled as a
-/// deliberate special case rather than folded into the general formula:
-/// they cost (approximately) nothing, so in every mode except
-/// `WriteEmergency` they should simply always win against any real
-/// merge competing for the same level's debt relief. In
-/// `WriteEmergency`, restoring L0 headroom specifically is what
-/// prevents a write stall — a free level-3-to-4 move that does nothing
-/// for L0 should not preempt an L0 drain.
-fn score(
-    mode: GovernorMode,
-    kind: CandidateKind,
-    est: &CandidateEstimate,
-    l0_write_stall_trigger: usize,
-) -> f64 {
-    if matches!(kind, CandidateKind::TrivialMove { .. }) {
-        return match mode {
-            GovernorMode::WriteEmergency => 0.5,
-            // Free, but does nothing for the foreground read path (it
-            // never touches L0) — stays well below an L0-relieving
-            // candidate's score band (1_000.0+ below) so READ_PROTECT
-            // never prefers a deep-level freebie over actually shrinking
-            // the probe chain, while still comfortably beating a real,
-            // costly merge competing for the same non-L0 debt.
-            GovernorMode::ReadProtect => 50.0,
-            GovernorMode::Balanced => 1_000.0,
-        };
-    }
+/// Small bonus so a candidate that has been sitting neglected the
+/// longest doesn't lose forever to ones with a marginally better
+/// relief-per-cost ratio — same idea `score_level_candidate` used
+/// before the governor existed, log-scaled so it nudges rather than
+/// dominates.
+const AGE_BONUS_WEIGHT: f64 = 0.01;
+
+/// 11.17-round-3.2: cause-aware objective. Benefit is a dot product of
+/// the CURRENT pressure vector against what this specific candidate
+/// would actually relieve — a candidate only gets credit for the kind
+/// of pressure that's really present, which is the entire fix: the old
+/// mode-keyed `score` gave every L0-relieving candidate a fixed bonus
+/// regardless of whether L0 pressure existed at all, so a badly
+/// over-budget deep level (which the L0 bonus does nothing for) could
+/// sit unaddressed while the scorer kept reaching for L0 work out of
+/// habit. Cost is rewrite bytes, square-rooted rather than used
+/// linearly: linear cost division makes ordering among same-order-of-
+/// magnitude real candidates degenerate into "whichever touches fewer
+/// bytes," even when a larger candidate provides meaningfully more
+/// relief per byte — sqrt keeps that discrimination while still making
+/// a near-zero-cost trivial move (rewrite floored at 1) dominate any
+/// real merge by orders of magnitude, exactly as intended.
+fn cause_aware_score(vector: PressureVector, est: &CandidateEstimate) -> f64 {
     let rewrite = est.estimated_rewrite_bytes.max(1) as f64;
-    match mode {
-        // Strongly penalize unnecessary rewrite bytes: score is debt
-        // relieved per byte physically rewritten (amortization
-        // efficiency), the same quantity `compaction_batch_size`
-        // tuning was chasing manually — now chosen per-decision instead
-        // of fixed globally. A small age term prevents perpetual
-        // starvation of a level that's only slightly over budget but
-        // has been waiting a long time, mirroring `score_level_candidate`.
-        GovernorMode::Balanced => {
-            est.debt_relief_bytes as f64 / rewrite + (est.age as f64).ln_1p() * 0.01
-        }
-        // What directly shortens the foreground probe chain is removing
-        // L0 files — nothing else does, since level>=1 lookups already
-        // cost at most one probe regardless of how over-budget that
-        // level is. So any L0-relieving candidate outscores every
-        // non-L0 candidate categorically (a large fixed base, not an
-        // additive term that a sufficiently tiny non-L0 rewrite could
-        // still out-divide); among L0 candidates a cheaper one is
-        // (mildly) preferred. Non-L0 candidates still score — never
-        // zero, so they aren't starved forever once L0 is healthy again
-        // and nothing better is competing — just heavily discounted.
-        GovernorMode::ReadProtect => {
-            if est.l0_files_removed > 0 {
-                1_000.0 + est.l0_files_removed as f64 - rewrite * 1e-6
-            } else {
-                est.debt_relief_bytes as f64 / rewrite / 100.0
-            }
-        }
-        // Survival: maximize L0 relief achieved, amplification mostly
-        // ignored (a small sqrt-scaled cost term only breaks ties
-        // between equally-relieving candidates, never dominates).
-        GovernorMode::WriteEmergency => {
-            let l0_bias = if est.l0_files_removed > 0 { 10.0 } else { 1.0 };
-            let stall_headroom = l0_write_stall_trigger.max(1) as f64;
-            (est.debt_relief_bytes as f64 / stall_headroom) * l0_bias - rewrite.sqrt() * 0.001
-        }
-    }
+    let benefit = vector.l0 * est.l0_relief
+        + vector.deep_debt * est.debt_relief
+        + vector.read * est.read_relief
+        + (est.age as f64).ln_1p() * AGE_BONUS_WEIGHT;
+    benefit / rewrite.sqrt()
 }
 
-/// Picks the highest-scoring candidate for the current mode, or `None`
-/// if there is nothing to do.
-pub(crate) fn pick_best(
-    mode: GovernorMode,
+/// Picks the highest cause-aware-scoring candidate, or `None` if there
+/// is nothing to do — except for one hard invariant checked first:
+/// when `l0_survival_override` is set (L0 is instantaneously at the
+/// FSM's own WRITE_EMERGENCY entry point), the L0 candidate wins
+/// outright if one exists, full stop. This is deliberately NOT folded
+/// into the smooth scoring above: L0 is what this engine's write-stall
+/// backpressure actually gates on, so approaching that ceiling must
+/// force the L0 job regardless of how a deep level's debt might
+/// otherwise score — "L0 survival still overrides everything" is a
+/// safety invariant, not a preference to be outbid.
+pub(crate) fn pick_best_cause_aware(
+    vector: PressureVector,
+    l0_survival_override: bool,
     candidates: &[(Candidate, CandidateEstimate)],
-    l0_write_stall_trigger: usize,
 ) -> Option<&(Candidate, CandidateEstimate)> {
+    if l0_survival_override
+        && let Some(idx) = candidates
+            .iter()
+            .position(|(c, _)| c.kind == CandidateKind::L0)
+    {
+        return Some(&candidates[idx]);
+    }
     candidates
         .iter()
         .enumerate()
-        .map(|(i, (c, e))| (i, score(mode, c.kind, e, l0_write_stall_trigger)))
+        .map(|(i, (_, e))| (i, cause_aware_score(vector, e)))
         .max_by(|a, b| a.1.total_cmp(&b.1))
         .map(|(i, _)| &candidates[i])
 }
@@ -935,9 +1138,11 @@ mod tests {
 
     #[test]
     fn emergency_mode_does_not_permanently_suppress_deeper_levels() {
-        // WRITE_EMERGENCY still scores level candidates (just biased);
-        // a deep-level candidate with no L0 relief still gets a
-        // nonzero, comparable score rather than being excluded outright.
+        // Even with L0 pressure maxed (the old WRITE_EMERGENCY-style
+        // condition), a deep-level candidate with real debt relief
+        // still gets a nonzero, finite score from the deep_debt term —
+        // it's just outranked, never excluded outright, by the L0
+        // survival override when one actually applies.
         let tables = vec![t(1, 2, 1000, b"a", b"m"), t(2, 3, 100, b"z", b"zz")];
         let est = estimate_candidate(
             &tables,
@@ -950,16 +1155,14 @@ mod tests {
                 output_level: 3,
             },
             10,
+            &[(2, 100)],
         );
-        let s = score(
-            GovernorMode::WriteEmergency,
-            CandidateKind::LevelBatch {
-                level: 2,
-                batch_len: 1,
-            },
-            &est,
-            100,
-        );
+        let vector = PressureVector {
+            l0: 1.0,
+            deep_debt: 1.0,
+            read: 0.0,
+        };
+        let s = cause_aware_score(vector, &est);
         assert!(
             s.is_finite() && s != 0.0,
             "deep-level candidate must still score, not be excluded"
@@ -990,6 +1193,11 @@ mod tests {
             .collect();
         assert_eq!(batches.len(), 4, "expected all four prefix lengths");
 
+        let vector = PressureVector {
+            l0: 0.0,
+            deep_debt: 1.0,
+            read: 0.0,
+        };
         let scored: Vec<(usize, f64)> = batches
             .iter()
             .map(|c| {
@@ -997,8 +1205,8 @@ mod tests {
                     CandidateKind::LevelBatch { batch_len, .. } => batch_len,
                     _ => unreachable!(),
                 };
-                let est = estimate_candidate(&tables, c, 10);
-                (batch_len, score(GovernorMode::Balanced, c.kind, &est, 1000))
+                let est = estimate_candidate(&tables, c, 10, &[(1, 100)]);
+                (batch_len, cause_aware_score(vector, &est))
             })
             .collect();
         let best = scored.iter().max_by(|a, b| a.1.total_cmp(&b.1)).unwrap();
@@ -1014,7 +1222,8 @@ mod tests {
         // Table 1 at level 1 has zero overlap with level 2 — a free
         // trivial move. Table 2 at level 1 overlaps level 2's table 3,
         // forcing a real rewrite. Both are over-budget-level candidates
-        // competing in BALANCED mode; the trivial move must win.
+        // competing for the same deep-debt pressure; the trivial move
+        // must win on cost alone.
         let tables = vec![
             t(1, 1, 500, b"a", b"b"), // no L2 overlap: free move
             t(2, 1, 500, b"y", b"z"),
@@ -1027,11 +1236,16 @@ mod tests {
             .expect("a trivial move candidate must be generated for table 1");
         assert_eq!(trivial.input_numbers, vec![1]);
 
+        let vector = PressureVector {
+            l0: 0.0,
+            deep_debt: 1.0,
+            read: 0.0,
+        };
         let scored: Vec<(&Candidate, f64)> = candidates
             .iter()
             .map(|c| {
-                let est = estimate_candidate(&tables, c, 10);
-                (c, score(GovernorMode::Balanced, c.kind, &est, 1000))
+                let est = estimate_candidate(&tables, c, 10, &[(1, 100)]);
+                (c, cause_aware_score(vector, &est))
             })
             .collect();
         let best = scored.iter().max_by(|a, b| a.1.total_cmp(&b.1)).unwrap();
@@ -1054,25 +1268,32 @@ mod tests {
     }
 
     #[test]
-    fn read_protect_prefers_l0_relief_even_if_cheaper_batch_available() {
+    fn read_pressure_with_calm_write_state_favors_the_read_relief_candidate() {
         let tables = vec![
             t(1, 0, 50, b"a", b"z"),
             t(2, 0, 50, b"a", b"z"),
             t(3, 0, 50, b"a", b"z"),
-            t(10, 1, 5, b"y", b"z"), // tiny, over budget, cheap to compact but irrelevant to L0
+            t(10, 1, 5, b"y", b"z"), // tiny, over budget, cheap to compact but irrelevant to L0/reads
         ];
         let candidates = generate_candidates(&tables, 3, &[(1, 1)], 10);
+        // read pressure high (what would have driven READ_PROTECT under
+        // the old mode-based design); L0 and deep debt both calm.
+        let vector = PressureVector {
+            l0: 0.05,
+            deep_debt: 0.05,
+            read: 1.0,
+        };
         let scored: Vec<(&Candidate, f64)> = candidates
             .iter()
             .map(|c| {
-                let est = estimate_candidate(&tables, c, 10);
-                (c, score(GovernorMode::ReadProtect, c.kind, &est, 1000))
+                let est = estimate_candidate(&tables, c, 10, &[(1, 1)]);
+                (c, cause_aware_score(vector, &est))
             })
             .collect();
         let best = scored.iter().max_by(|a, b| a.1.total_cmp(&b.1)).unwrap();
         assert!(
             matches!(best.0.kind, CandidateKind::L0),
-            "READ_PROTECT should favor L0 relief"
+            "high read pressure should favor the candidate with real read relief"
         );
     }
 
@@ -1244,5 +1465,190 @@ mod tests {
             "sustained level debt alone (L0 still empty) must not reach the emergency floor, got {}",
             g.pressure()
         );
+    }
+
+    // ---- cause-aware candidate selection tests (11.17-round-3.2) ----
+    //
+    // These are the exact failure this round set out to fix: the old
+    // mode-keyed scoring collapsed "L0 is calm but a deep level is
+    // badly over budget" and "L0 itself is genuinely close to a write
+    // stall" into the same generic WRITE_EMERGENCY treatment, so it
+    // reached for L0-relieving work out of habit even when L0 wasn't
+    // the actual problem. `PressureVector` keeps the two apart all the
+    // way into scoring; these tests exercise both directions plus the
+    // hard survival override and the age-based anti-starvation term.
+
+    #[test]
+    fn calm_l0_and_heavy_deep_debt_favors_the_deep_level_job() {
+        let tables = vec![
+            t(1, 0, 100, b"a", b"b"),
+            t(2, 0, 100, b"c", b"d"),
+            t(3, 0, 100, b"e", b"f"), // L0 at its trigger: a candidate exists
+            t(10, 1, 900, b"m", b"n"), // one level 9x over its own budget
+            t(20, 2, 10, b"m", b"n"), // overlaps table 10: no free trivial move available
+        ];
+        let over_budget = [(1u32, 100u64)];
+        let candidates = generate_candidates(&tables, 3, &over_budget, 20);
+        assert!(
+            candidates.iter().any(|c| c.kind == CandidateKind::L0),
+            "setup: an L0 candidate must exist"
+        );
+        assert!(
+            candidates
+                .iter()
+                .any(|c| matches!(c.kind, CandidateKind::LevelBatch { level: 1, .. })),
+            "setup: a deep-level candidate must exist"
+        );
+        assert!(
+            !candidates
+                .iter()
+                .any(|c| matches!(c.kind, CandidateKind::TrivialMove { .. })),
+            "setup: no free trivial move should be available — this test is about a real rewrite decision"
+        );
+
+        // L0 is only just at its trigger, nowhere near its stall
+        // ceiling; the deep level's debt is maxed.
+        let vector = PressureVector {
+            l0: 0.04,
+            deep_debt: 1.0,
+            read: 0.0,
+        };
+        let estimated: Vec<_> = candidates
+            .iter()
+            .map(|c| (c.clone(), estimate_candidate(&tables, c, 20, &over_budget)))
+            .collect();
+        let (best, _) =
+            pick_best_cause_aware(vector, false, &estimated).expect("a candidate must be chosen");
+        assert!(
+            matches!(best.kind, CandidateKind::LevelBatch { level: 1, .. }),
+            "expected the deep-level job to win when L0 is calm and debt is heavy, got {:?}",
+            best.kind
+        );
+    }
+
+    #[test]
+    fn l0_approaching_stall_overrides_deep_debt_even_when_debt_is_worse() {
+        let tables = vec![
+            t(1, 0, 100, b"a", b"b"),
+            t(2, 0, 100, b"c", b"d"),
+            t(3, 0, 100, b"e", b"f"),
+            t(10, 1, 900, b"m", b"n"),
+        ];
+        let over_budget = [(1u32, 100u64)];
+        let candidates = generate_candidates(&tables, 3, &over_budget, 20);
+        // Both pressures maxed, but L0 is the one at its actual survival
+        // threshold — the hard override must win regardless of how the
+        // smooth score alone would rank things.
+        let vector = PressureVector {
+            l0: 1.0,
+            deep_debt: 1.0,
+            read: 0.0,
+        };
+        let estimated: Vec<_> = candidates
+            .iter()
+            .map(|c| (c.clone(), estimate_candidate(&tables, c, 20, &over_budget)))
+            .collect();
+        let (best, _) =
+            pick_best_cause_aware(vector, true, &estimated).expect("a candidate must be chosen");
+        assert!(
+            matches!(best.kind, CandidateKind::L0),
+            "L0 survival override must win regardless of competing deep debt, got {:?}",
+            best.kind
+        );
+    }
+
+    #[test]
+    fn l0_survival_override_is_a_noop_when_no_l0_candidate_exists() {
+        // The override is a safety valve, not a requirement that L0
+        // work exist — if L0 hasn't even reached its compaction
+        // trigger, there's nothing to force, and scoring should proceed
+        // normally over whatever candidates ARE on the table.
+        let tables = vec![t(10, 1, 900, b"m", b"n")];
+        let over_budget = [(1u32, 100u64)];
+        let candidates = generate_candidates(&tables, 3, &over_budget, 20);
+        assert!(!candidates.iter().any(|c| c.kind == CandidateKind::L0));
+        let vector = PressureVector {
+            l0: 1.0,
+            deep_debt: 1.0,
+            read: 0.0,
+        };
+        let estimated: Vec<_> = candidates
+            .iter()
+            .map(|c| (c.clone(), estimate_candidate(&tables, c, 20, &over_budget)))
+            .collect();
+        let best = pick_best_cause_aware(vector, true, &estimated);
+        assert!(
+            best.is_some(),
+            "override with no L0 candidate must fall through to normal scoring, not return nothing"
+        );
+    }
+
+    #[test]
+    fn an_old_neglected_candidate_scores_higher_than_an_equally_relieving_young_one() {
+        // Two single-table candidates with identical debt relief and
+        // rewrite cost — the only difference is how long each has been
+        // waiting. Without an age term, these would score identically
+        // forever, and whichever loses a coin-flip-close tie could in
+        // principle lose it every single time. The age bonus breaks
+        // that tie in favor of the one that's been neglected longest.
+        let est_young = CandidateEstimate {
+            input_bytes: 100,
+            overlap_bytes: 0,
+            estimated_rewrite_bytes: 100,
+            debt_relief_bytes: 100,
+            l0_files_removed: 0,
+            age: 1,
+            l0_relief: 0.0,
+            debt_relief: 0.5,
+            read_relief: 0.0,
+        };
+        let mut est_old = est_young;
+        est_old.age = 1_000_000;
+        let vector = PressureVector {
+            l0: 0.0,
+            deep_debt: 1.0,
+            read: 0.0,
+        };
+        let young_score = cause_aware_score(vector, &est_young);
+        let old_score = cause_aware_score(vector, &est_old);
+        assert!(
+            old_score > young_score,
+            "an old candidate must score higher than an otherwise-identical young one: young={young_score} old={old_score}"
+        );
+    }
+
+    #[test]
+    fn dominant_pressure_source_reflects_which_component_actually_changed() {
+        // Section 3's attribution: a benchmark (or an operator) should
+        // be able to watch `dominant()` move as the underlying vector
+        // changes, without needing to know anything about which
+        // candidate was chosen to cause that change.
+        let before = PressureVector {
+            l0: 0.1,
+            deep_debt: 0.9,
+            read: 0.2,
+        };
+        assert_eq!(before.dominant(), PressureSource::DeepDebt);
+
+        // The deep-level job runs and actually pays down that debt;
+        // read pressure (untouched by that job) is now the largest
+        // remaining signal.
+        let after = PressureVector {
+            l0: 0.1,
+            deep_debt: 0.15,
+            read: 0.2,
+        };
+        assert_eq!(
+            after.dominant(),
+            PressureSource::Read,
+            "once deep debt falls, attribution should move to whichever signal is now largest"
+        );
+
+        let calm = PressureVector {
+            l0: 0.02,
+            deep_debt: 0.03,
+            read: 0.01,
+        };
+        assert_eq!(calm.dominant(), PressureSource::None);
     }
 }
