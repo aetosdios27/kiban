@@ -138,6 +138,7 @@ const PHASES: [Phase; 6] = [
 
 #[derive(Clone, Copy, Default, Debug)]
 struct StructSample {
+    at: Duration,
     phase: usize,
     l0_files: usize,
     total_bytes: u64,
@@ -146,6 +147,12 @@ struct StructSample {
     rss_bytes: u64,
     open_fds: usize,
     governor_mode: Option<GovernorMode>,
+    /// 11.17-round-3.1: the governor's continuous pacing-pressure
+    /// signal at sample time (0.0 for non-Governor schedulers, which
+    /// never update it) — sampled alongside `governor_mode` so the
+    /// report can show whether actuation actually decays smoothly
+    /// across a workload transition instead of stepping with the mode.
+    governor_pressure: f64,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -167,6 +174,9 @@ struct PhaseMetrics {
     bytes_max: u64,
     stalls_delta: u64,
     compactions_delta: u64,
+    pressure_min: f64,
+    pressure_avg: f64,
+    pressure_max: f64,
 }
 
 struct RunResult {
@@ -184,6 +194,12 @@ struct RunResult {
     governor_predicted_actual_mape: f64,
     peak_rss_mb: f64,
     peak_fds: usize,
+    /// 11.17-round-3.1: the raw structural time series (phase index,
+    /// governor mode, governor pressure) at ~20ms resolution, kept so
+    /// `print_result` can render a transition-window trace showing
+    /// whether pressure actually decays smoothly across a phase
+    /// boundary instead of stepping with the mode.
+    raw_samples: Vec<StructSample>,
 }
 
 fn run_phase_changing(
@@ -203,6 +219,7 @@ fn run_phase_changing(
     db.sync().unwrap();
     db.flush().unwrap();
 
+    let t0 = Instant::now();
     let current_phase = Arc::new(AtomicUsize::new(0));
     let stop = Arc::new(AtomicBool::new(false));
     let struct_samples: Arc<Mutex<Vec<StructSample>>> = Arc::new(Mutex::new(Vec::new()));
@@ -254,6 +271,7 @@ fn run_phase_changing(
                         .unwrap_or(0);
                     let total_bytes = stats.levels.iter().map(|l| l.bytes).sum();
                     struct_samples.lock().unwrap().push(StructSample {
+                        at: t0.elapsed(),
                         phase: current_phase.load(Ordering::Relaxed),
                         l0_files,
                         total_bytes,
@@ -262,6 +280,7 @@ fn run_phase_changing(
                         rss_bytes: current_rss_bytes(),
                         open_fds: current_open_fds(),
                         governor_mode: Some(stats.governor.mode),
+                        governor_pressure: stats.governor.pressure,
                     });
                 }
                 std::thread::sleep(Duration::from_millis(20));
@@ -406,6 +425,9 @@ fn run_phase_changing(
         let (mut bytes_min, mut bytes_max) = (u64::MAX, 0u64);
         let (mut stalls_lo, mut stalls_hi) = (u64::MAX, 0u64);
         let (mut compactions_lo, mut compactions_hi) = (u64::MAX, 0u64);
+        let (mut pressure_min, mut pressure_max) = (f64::MAX, 0.0f64);
+        let mut pressure_sum = 0.0f64;
+        let mut pressure_n = 0usize;
         for s in struct_samples.iter().filter(|s| s.phase == idx) {
             if let Some(m) = s.governor_mode {
                 mode_ticks[mode_idx(m)] += 1;
@@ -418,6 +440,10 @@ fn run_phase_changing(
             stalls_hi = stalls_hi.max(s.write_stalls);
             compactions_lo = compactions_lo.min(s.compactions);
             compactions_hi = compactions_hi.max(s.compactions);
+            pressure_min = pressure_min.min(s.governor_pressure);
+            pressure_max = pressure_max.max(s.governor_pressure);
+            pressure_sum += s.governor_pressure;
+            pressure_n += 1;
         }
         phases.push(PhaseMetrics {
             name: p.name,
@@ -440,6 +466,17 @@ fn run_phase_changing(
             } else {
                 compactions_lo
             }),
+            pressure_min: if pressure_min == f64::MAX {
+                0.0
+            } else {
+                pressure_min
+            },
+            pressure_avg: if pressure_n == 0 {
+                0.0
+            } else {
+                pressure_sum / pressure_n as f64
+            },
+            pressure_max,
         });
     }
 
@@ -469,6 +506,7 @@ fn run_phase_changing(
         governor_predicted_actual_mape: gstats.predicted_actual_mean_abs_pct_error,
         peak_rss_mb,
         peak_fds,
+        raw_samples: struct_samples,
     };
 
     drop(db);
@@ -518,8 +556,17 @@ fn print_result(r: &RunResult) {
         );
     }
     println!(
-        "  {:<28} {:>10} {:>10} {:>10} {:>10} {:>10} {:>9} {:>9} {:>9}",
-        "phase", "GET p50", "p99", "p999", "PUT p50", "p99", "get n", "put n", "mode(BAL/RDP/WEM)"
+        "  {:<28} {:>10} {:>10} {:>10} {:>10} {:>10} {:>10} {:>9} {:>9} {:>9}",
+        "phase",
+        "GET p50",
+        "p99",
+        "p999",
+        "PUT p50",
+        "p99",
+        "p999",
+        "get n",
+        "put n",
+        "mode(BAL/RDP/WEM)"
     );
     for p in &r.phases {
         let total_ticks: usize = p.mode_ticks.iter().sum();
@@ -534,25 +581,31 @@ fn print_result(r: &RunResult) {
             "  .  /  .  /  . ".to_string()
         };
         println!(
-            "  {:<28} {:>8.2}us {:>7.2}us {:>7.2}us {:>8.2}us {:>7.2}us {:>10} {:>9} {}",
+            "  {:<28} {:>8.2}us {:>7.2}us {:>7.2}us {:>8.2}us {:>7.2}us {:>7.2}us {:>10} {:>9} {}",
             p.name,
             p.get_p.0 as f64 / 1000.0,
             p.get_p.2 as f64 / 1000.0,
             p.get_p.3 as f64 / 1000.0,
             p.put_p.0 as f64 / 1000.0,
             p.put_p.2 as f64 / 1000.0,
+            p.put_p.3 as f64 / 1000.0,
             p.get_ops,
             p.put_ops,
             mode_str,
         );
     }
     println!(
-        "  {:<28} {:>12} {:>16} {:>10} {:>14}",
-        "phase", "L0 (min-max)", "total MB (min-max)", "+stalls", "+compactions"
+        "  {:<28} {:>12} {:>16} {:>10} {:>14} {:>18}",
+        "phase",
+        "L0 (min-max)",
+        "total MB (min-max)",
+        "+stalls",
+        "+compactions",
+        "pressure (min/avg/max)"
     );
     for p in &r.phases {
         println!(
-            "  {:<28} {:>5}-{:<6} {:>7.1}-{:<7.1} {:>10} {:>14}",
+            "  {:<28} {:>5}-{:<6} {:>7.1}-{:<7.1} {:>10} {:>14} {:>5.2}/{:>5.2}/{:>5.2}",
             p.name,
             p.l0_min,
             p.l0_max,
@@ -560,9 +613,55 @@ fn print_result(r: &RunResult) {
             p.bytes_max as f64 / 1e6,
             p.stalls_delta,
             p.compactions_delta,
+            p.pressure_min,
+            p.pressure_avg,
+            p.pressure_max,
         );
     }
     let _ = mode_label; // used only if per-tick detail is added later
+}
+
+/// 11.17-round-3.1: prints pressure and mode sample-by-sample in a
+/// window around each phase boundary, so a reader can see directly
+/// whether pressure decays smoothly across a transition (the thing the
+/// continuous controller was built to fix) or steps the way the old
+/// mode-keyed pacing did. `window` is how much time on each side of a
+/// boundary to show.
+fn print_transition_traces(r: &RunResult, phase_duration: Duration, window: Duration) {
+    println!(
+        "\n-- {}: pressure/mode trace around phase boundaries --",
+        r.label
+    );
+    for boundary in 1..PHASES.len() {
+        let t_boundary = phase_duration * boundary as u32;
+        let lo = t_boundary.saturating_sub(window);
+        let hi = t_boundary + window;
+        println!(
+            "  boundary {} -> {} ({}):",
+            PHASES[boundary - 1].name,
+            PHASES[boundary].name,
+            format_args!("t={:.2}s", t_boundary.as_secs_f64())
+        );
+        let mut shown = 0;
+        for s in r.raw_samples.iter().filter(|s| s.at >= lo && s.at <= hi) {
+            let mode = s
+                .governor_mode
+                .map(|m| mode_label(mode_idx(m)))
+                .unwrap_or("?");
+            println!(
+                "    t={:>6.2}s  pressure={:>4.2}  mode={:<3}  L0={:<2}  stalls={}",
+                s.at.as_secs_f64(),
+                s.governor_pressure,
+                mode,
+                s.l0_files,
+                s.write_stalls,
+            );
+            shown += 1;
+        }
+        if shown == 0 {
+            println!("    (no samples captured in this window)");
+        }
+    }
 }
 
 fn main() {
@@ -639,6 +738,7 @@ fn main() {
         readers,
     );
     print_result(&c);
+    print_transition_traces(&c, phase_duration, Duration::from_millis(600));
 
     println!("\n== Overall summary (all phases combined) ==");
     println!(
@@ -676,6 +776,34 @@ fn main() {
         print!("{:<20}", r.label);
         for p in &r.phases {
             print!(" {:>16.2}us", p.put_p.2 as f64 / 1000.0);
+        }
+        println!();
+    }
+
+    println!("\n== Per-phase PUT p999 (us) ==");
+    print!("{:<20}", "config");
+    for p in &PHASES {
+        print!(" {:>18}", p.name);
+    }
+    println!();
+    for r in [&a, &b, &c] {
+        print!("{:<20}", r.label);
+        for p in &r.phases {
+            print!(" {:>16.2}us", p.put_p.3 as f64 / 1000.0);
+        }
+        println!();
+    }
+
+    println!("\n== Per-phase GET p999 (us) ==");
+    print!("{:<20}", "config");
+    for p in &PHASES {
+        print!(" {:>18}", p.name);
+    }
+    println!();
+    for r in [&a, &b, &c] {
+        print!("{:<20}", r.label);
+        for p in &r.phases {
+            print!(" {:>16.2}us", p.get_p.3 as f64 / 1000.0);
         }
         println!();
     }

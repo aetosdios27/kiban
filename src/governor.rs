@@ -263,18 +263,36 @@ impl GovernorState {
             && sample.max_level_debt_ratio <= WRITE_EMERGENCY_EXIT_DEBT_RATIO;
 
         // 11.17-round-3.1: continuous pressure, computed every call
-        // regardless of mode transitions. `l0_component`/`debt_component`
-        // are normalized so 1.0 lands exactly where the FSM's own
-        // WRITE_EMERGENCY entry criteria do — the point past which
-        // maximum maintenance is unconditionally correct regardless of
-        // mode. `emergency_floor` uses those two, UNSMOOTHED, so a
-        // genuine spike forces near-maximum pacing aggressiveness on
-        // this exact call (requirement: no waiting on a smoothing
-        // window when real danger is imminent). `pressure_ewma` blends
-        // in backlog breadth and read amplification and decays
-        // gradually across calls, which is what lets pacing taper off
+        // regardless of mode transitions. `pressure_ewma` blends L0
+        // fraction, level debt, backlog breadth, and read amplification
+        // (all normalized so 1.0 lands roughly where the FSM's own
+        // WRITE_EMERGENCY/READ_PROTECT entry criteria do) and decays
+        // gradually across calls — this is what lets pacing taper off
         // smoothly after a busy stretch instead of stepping the moment
         // the (separately hysteresis-gated) mode itself flips back.
+        //
+        // `emergency_floor`, by contrast, is UNSMOOTHED and deliberately
+        // narrower than the blend: L0 fraction ONLY, never level debt.
+        // L0 count is what this engine's write-stall backpressure
+        // actually gates on (`l0_write_stall_trigger`) — a real
+        // approach to that ceiling must force maximum maintenance on
+        // this exact call, no smoothing window (requirement 1). Level
+        // debt has no such direct backpressure consequence: a deep
+        // level can legitimately sit several times over its (often
+        // small, at low levels) byte budget for a while under a
+        // sustained new-data phase without threatening a stall the way
+        // high L0 does. Two full six-phase runs caught exactly this
+        // conflation when debt was still part of the floor: a
+        // persistently over-budget deep level pinned pressure at 1.0
+        // for tens of seconds even while L0 itself sat at 1-2 (far
+        // below any real danger), because candidate selection
+        // (unchanged, out of scope this round) prioritizes L0 relief
+        // over deep-level relief in WRITE_EMERGENCY — so the debt
+        // component could stay maxed far longer than L0 ever does,
+        // producing a governor-only PUT p99 tail with no correctness
+        // justification. Level debt still drives the smoothed blend
+        // below (it should still push pacing more aggressive), it just
+        // no longer gets to hold the INSTANT floor open on its own.
         let l0_component = (l0_fraction / WRITE_EMERGENCY_ENTER_L0_FRACTION).min(1.0);
         let debt_component =
             (sample.max_level_debt_ratio / WRITE_EMERGENCY_ENTER_DEBT_RATIO).min(1.0);
@@ -286,7 +304,7 @@ impl GovernorState {
         let instant = structural * (1.0 - PRESSURE_READAMP_WEIGHT)
             + readamp_component * PRESSURE_READAMP_WEIGHT;
         self.pressure_ewma = EWMA_ALPHA * instant + (1.0 - EWMA_ALPHA) * self.pressure_ewma;
-        let emergency_floor = l0_component.max(debt_component);
+        let emergency_floor = l0_component;
         self.last_pressure = self.pressure_ewma.max(emergency_floor).clamp(0.0, 1.0);
 
         let new_mode = match self.mode {
@@ -1192,6 +1210,39 @@ mod tests {
         assert!(
             g.pressure() < 0.95,
             "this scenario is not a real emergency and must not hit the floor"
+        );
+    }
+
+    #[test]
+    fn sustained_level_debt_alone_does_not_pin_the_instant_floor() {
+        // Reproduces the exact shape two full phase-changing runs
+        // caught: L0 is calm (nowhere near the write-stall trigger) but
+        // a deep level sits persistently, heavily over its own byte
+        // budget — legitimate under a sustained new-data phase, and not
+        // something that threatens a write stall the way high L0 does.
+        // The instant floor must stay driven by L0 alone; debt still
+        // pushes the smoothed pressure up, but gradually, not to the
+        // floor on a single sample.
+        let mut g = GovernorState::new();
+        let high_debt = sample(0, 100, 10.0, 0.0); // 10x over budget, L0 empty
+        let first = g.observe(high_debt);
+        let _ = first;
+        assert!(
+            g.pressure() < 0.5,
+            "one sample of pure level debt (no L0 pressure) must not spike pressure toward the floor, got {}",
+            g.pressure()
+        );
+        // Even sustained, it must never reach the instant-floor
+        // territory that L0 danger alone reaches in a single sample —
+        // it can only push the smoothed component, capped by the same
+        // structural blend as backlog/read-amp.
+        for _ in 0..20 {
+            g.observe(high_debt);
+        }
+        assert!(
+            g.pressure() < 0.95,
+            "sustained level debt alone (L0 still empty) must not reach the emergency floor, got {}",
+            g.pressure()
         );
     }
 }
