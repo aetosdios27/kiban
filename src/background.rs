@@ -475,8 +475,17 @@ impl MaintenancePressure {
 fn run_pending_maintenance(engine: &Arc<ShardedRwLock<Kiban>>, m: &Arc<Maintenance>) {
     let mut cascade_level = 1u32;
     loop {
+        // 11.17-round-3.3: PLAN is read-only against `version` and
+        // reserves its own bookkeeping (`next_file_number`, `governor`)
+        // through their own atomic/mutex, so it no longer needs the
+        // full 8-shard reader-excluding gate `write()` requires — only
+        // COMMIT (which actually mutates `version`) does. This is what
+        // was measured to cause elevated foreground PUT tail during a
+        // read-heavy recovery phase: every PLAN attempt, including one
+        // that finds nothing to do, used to queue behind `writer_serial`
+        // and drain every shard exactly like a real mutation.
         let flush_plan = {
-            let Ok(mut guard) = engine.write() else {
+            let Ok(guard) = engine.read() else {
                 return;
             };
             guard.plan_flush()
@@ -513,7 +522,7 @@ fn run_pending_maintenance(engine: &Arc<ShardedRwLock<Kiban>>, m: &Arc<Maintenan
         }
 
         let plan = {
-            let Ok(mut guard) = engine.write() else {
+            let Ok(guard) = engine.read() else {
                 return;
             };
             guard.plan_next_compaction(&mut cascade_level)

@@ -280,11 +280,19 @@ const PRESSURE_READAMP_WEIGHT: f64 = 0.3;
 /// leveled layout; more doesn't need to push the signal harder.
 const PRESSURE_BACKLOG_NORMALIZATION: f64 = 3.0;
 
-/// Prefix lengths considered per level batch candidate: 1, 2, 3, 4 —
-/// exactly the task's own `[A] [A,B] [A,B,C] [A,B,C,D]` example. A
-/// fixed small cap, not a search: linear in this constant, never
-/// combinatorial.
-const MAX_ADAPTIVE_BATCH: usize = 4;
+/// Prefix lengths considered per level batch candidate: 1..=8. A fixed
+/// small cap, not a search: linear in this constant, never
+/// combinatorial. Originally 4 (the task's own `[A] [A,B] [A,B,C]
+/// [A,B,C,D]` example); raised in 11.17-round-3.4 on direct measured
+/// evidence, not a hunch: every job pays a full foreground-excluding
+/// COMMIT (`write()`'s 8-shard reader drain) regardless of its byte
+/// size, and on the six-phase benchmark's read-heavy recovery phase
+/// the governor was issuing 232 such commits in 6 seconds against
+/// FixedPriority's 41 on the identical workload — job COUNT, not
+/// bytes rewritten, was the actual driver of elevated foreground PUT
+/// tail there (maintenance pacing and the commit's own fsync were
+/// both tried and measured separately; neither touches job count).
+const MAX_ADAPTIVE_BATCH: usize = 8;
 
 /// Cumulative, monotonic bookkeeping plus the FSM's smoothed signal and
 /// hysteresis counters. One instance lives on `Kiban` for the whole
@@ -1175,10 +1183,56 @@ fn pick_best_within_level(
     level: u32,
     candidates: &[(Candidate, CandidateEstimate)],
 ) -> Option<&(Candidate, CandidateEstimate)> {
-    candidates
+    let level_candidates: Vec<&(Candidate, CandidateEstimate)> = candidates
         .iter()
         .filter(|(c, _)| level_of(c.kind) == level)
-        .max_by(|a, b| cause_aware_score(vector, &a.1).total_cmp(&cause_aware_score(vector, &b.1)))
+        .collect();
+    let best = *level_candidates.iter().max_by(|a, b| {
+        cause_aware_score(vector, &a.1).total_cmp(&cause_aware_score(vector, &b.1))
+    })?;
+
+    // 11.17-round-3.4: once some `LevelBatch` candidate already fully
+    // saturates this level's debt relief (`debt_relief == 1.0`), the
+    // per-job score sees no further benefit from a bigger batch and
+    // picks the smallest one that clears it — cheap in rewrite bytes,
+    // but it leaves this level to be revisited again soon, and every
+    // revisit pays a full foreground-excluding COMMIT (`write()`'s
+    // 8-shard reader drain, `engine_lock.rs`) regardless of how small
+    // the job is. Measured directly: on the six-phase benchmark's
+    // read-heavy recovery phase, the governor issued 232 compaction
+    // commits in 6 seconds against FixedPriority's 41 on the
+    // identical workload — job COUNT, not bytes rewritten, is what
+    // was driving foreground PUT tail there, and neither maintenance
+    // pacing nor the commit's own fsync (both tried and measured
+    // separately) touch that count at all. Once relief is already
+    // maxed out, prefer the LARGEST same-level `LevelBatch` candidate
+    // that is ALSO fully saturated: free, already-justified future
+    // debt headroom at effectively the same score, directly cutting
+    // how many more times this level needs a job at all. Scoped
+    // narrowly — never overrides a candidate that scored higher
+    // outright (a not-yet-saturated bigger batch already wins there
+    // on pure benefit/cost), and never touches `TrivialMove`/`L0`
+    // (a prior attempt at a similar idea, a flat per-job byte floor
+    // added to every candidate's cost uniformly, was tried and
+    // rejected — see `cause_aware_score` — precisely because it
+    // distorted the cross-kind trivial-move/L0 comparison; this
+    // redirects only among same-level `LevelBatch` variants that
+    // were already going to win, never changing which KIND wins).
+    if let CandidateKind::LevelBatch { .. } = best.0.kind
+        && best.1.debt_relief >= 1.0
+        && let Some(bigger) = level_candidates
+            .iter()
+            .filter(|(c, e)| {
+                matches!(c.kind, CandidateKind::LevelBatch { .. }) && e.debt_relief >= 1.0
+            })
+            .max_by_key(|(c, _)| match c.kind {
+                CandidateKind::LevelBatch { batch_len, .. } => batch_len,
+                _ => 0,
+            })
+    {
+        return Some(*bigger);
+    }
+    Some(best)
 }
 
 #[cfg(test)]

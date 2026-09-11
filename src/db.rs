@@ -22,6 +22,8 @@ use crate::sstable::{Kind, SstError, SstTable, TableBuilder};
 use crate::sys;
 use crate::wal::{Wal, WalError};
 use std::sync::Arc as StdArc;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Owned key/value pair yielded by scans.
 pub type ScanEntry = (Vec<u8>, Vec<u8>);
@@ -502,7 +504,20 @@ pub struct Kiban {
     next_flush_generation: u64,
     /// Highest flush generation whose SST has actually committed.
     last_completed_flush_generation: u64,
-    next_file_number: u64,
+    /// 11.17-round-3.3: an atomic, not a plain field behind the engine
+    /// gate. PLAN never touches anything a reader observes (`version`
+    /// is untouched until COMMIT), so it should never have to pay the
+    /// full 8-shard reader-drain `ShardedRwLock::write()` costs just to
+    /// reserve an output file number — the same RCU-style separation
+    /// already used for `version` itself (published via an atomic
+    /// `Arc` swap, never blocking a reader), applied to this one piece
+    /// of writer-private bookkeeping. See `governor` below for the
+    /// other half, and `background::run_pending_maintenance` for why
+    /// this specifically was measured to matter: under sustained read
+    /// pressure, every PLAN attempt — including one that finds nothing
+    /// to do — used to queue behind `writer_serial` and drain every
+    /// shard just like a real mutation would.
+    next_file_number: AtomicU64,
     wal_number: u64,
     last_sequence: u64,
     /// Sorted ascending; the oldest entry gates tombstone GC.
@@ -539,7 +554,16 @@ pub struct Kiban {
     /// reporting counters). Always present, cheap, and inert unless
     /// `options.compaction_scheduler == Governor` — same pattern as
     /// every other opt-in surface in this engine (mmap, pacing).
-    governor: governor::GovernorState,
+    ///
+    /// 11.17-round-3.3: its own `Mutex`, not a plain field, for the
+    /// same reason as `next_file_number` above — PLAN mutates this
+    /// (EWMA observe, focus, decision trace) but nothing a reader
+    /// observes depends on it, so it must not require the engine's
+    /// full reader-excluding gate. Real contention on this mutex is
+    /// impossible in practice (exactly one maintenance worker thread
+    /// ever calls a PLAN method), so this is strictly cheaper than the
+    /// gate it replaces, never a new bottleneck of its own.
+    governor: Mutex<governor::GovernorState>,
 }
 
 /// Raw counters behind `KibanStats::read_amp`. Relaxed throughout:
@@ -811,7 +835,7 @@ impl Kiban {
             // `wait_for_flush_generation` a silent no-op.
             next_flush_generation: 1,
             last_completed_flush_generation: 0,
-            next_file_number,
+            next_file_number: AtomicU64::new(next_file_number),
             wal_number,
             last_sequence,
             active_snapshots: Vec::new(),
@@ -820,7 +844,7 @@ impl Kiban {
             poisoned: None,
             read_view,
             read_amp: StdArc::new(ReadAmpCounters::default()),
-            governor: governor::GovernorState::new(),
+            governor: Mutex::new(governor::GovernorState::new()),
         })
     }
 
@@ -1189,14 +1213,14 @@ impl Kiban {
     /// `compaction_scheduler != Governor`, where it just stays
     /// `Balanced` forever and pacing behaves exactly as before.
     pub(crate) fn governor_mode(&self) -> governor::GovernorMode {
-        self.governor.mode()
+        self.governor.lock().unwrap().mode()
     }
 
     /// 11.17-round-3.1: the governor's continuous pacing-aggressiveness
     /// signal, read by `background::MaintenancePressure` alongside
     /// `governor_mode` — see `governor::GovernorState::pressure`.
     pub(crate) fn governor_pressure(&self) -> f64 {
-        self.governor.pressure()
+        self.governor.lock().unwrap().pressure()
     }
 
     /// 11.17-round-3.2: a snapshot of the governor's recent scheduling-
@@ -1204,7 +1228,7 @@ impl Kiban {
     /// first — see `SharedKiban::governor_trace` for why this is a
     /// separate, opt-in call rather than part of `stats()`.
     pub(crate) fn governor_recent_decisions(&self) -> Vec<governor::SchedulingDecision> {
-        self.governor.recent_decisions()
+        self.governor.lock().unwrap().recent_decisions()
     }
 
     /// Whether the engine is in a poisoned (fatal) state.
@@ -1240,9 +1264,9 @@ impl Kiban {
             return Ok(());
         }
 
-        let sst_number = self.next_file_number;
-        let new_wal_number = self.next_file_number + 1;
-        let new_next_file_number = self.next_file_number + 2;
+        let sst_number = self.next_file_number.load(Ordering::SeqCst);
+        let new_wal_number = sst_number + 1;
+        let new_next_file_number = sst_number + 2;
 
         let mut builder = TableBuilder::new();
         // `iter_all_versions` (not `iter`, which is live-only): a
@@ -1304,7 +1328,8 @@ impl Kiban {
 
         // D2 step 5: everything below only runs once the commit point has
         // returned success.
-        self.next_file_number = new_next_file_number;
+        self.next_file_number
+            .store(new_next_file_number, Ordering::SeqCst);
         self.wal_number = new_wal_number;
         // Flush output is always L0.
         let use_mmap = self.options.mmap_max_level.is_some();
@@ -1386,8 +1411,8 @@ impl Kiban {
             return Ok(());
         }
 
-        let new_wal_number = self.next_file_number;
-        let new_next_file_number = self.next_file_number + 1;
+        let new_wal_number = self.next_file_number.load(Ordering::SeqCst);
+        let new_next_file_number = new_wal_number + 1;
         let new_wal_path = self.dir.join(file_name(new_wal_number, WAL_EXTENSION));
 
         // The WAL a MANIFEST names must exist durably before that
@@ -1444,7 +1469,8 @@ impl Kiban {
         let old_wal_number = self.wal_number;
         self.wal = new_wal;
         self.wal_number = new_wal_number;
-        self.next_file_number = new_next_file_number;
+        self.next_file_number
+            .store(new_next_file_number, Ordering::SeqCst);
         let generation = self.next_flush_generation;
         self.next_flush_generation += 1;
         self.immutable = Some(Immutable {
@@ -1460,10 +1486,9 @@ impl Kiban {
     /// an output file number and captures everything BUILD needs —
     /// cheap, done under the engine lock. Mirrors compaction's own
     /// PLAN/BUILD/COMMIT split (11.4).
-    pub(crate) fn plan_flush(&mut self) -> Option<FlushPlan> {
+    pub(crate) fn plan_flush(&self) -> Option<FlushPlan> {
         let im = self.immutable.as_ref()?;
-        let output_number = self.next_file_number;
-        self.next_file_number += 1;
+        let output_number = self.next_file_number.fetch_add(1, Ordering::SeqCst);
         Some(FlushPlan {
             memtable: im.memtable.clone(),
             old_wal_number: im.wal_number,
@@ -1514,7 +1539,7 @@ impl Kiban {
         // The commit point: only the active WAL remains live — the
         // frozen memtable's old WAL is superseded by `output`.
         Manifest {
-            next_file_number: self.next_file_number,
+            next_file_number: self.next_file_number.load(Ordering::SeqCst),
             wal_numbers: vec![self.wal_number],
             last_sequence: self.last_sequence,
             tables: table_refs,
@@ -2734,10 +2759,7 @@ impl Kiban {
     /// meaningful to `FixedPriority` — `Scored` ignores it, since it
     /// re-scores every eligible candidate on every call instead of
     /// remembering cascade position.
-    pub(crate) fn plan_next_compaction(
-        &mut self,
-        cascade_level: &mut u32,
-    ) -> Option<CompactionPlan> {
+    pub(crate) fn plan_next_compaction(&self, cascade_level: &mut u32) -> Option<CompactionPlan> {
         if self.poisoned.is_some() {
             return None;
         }
@@ -2756,7 +2778,7 @@ impl Kiban {
     /// with_batch` for L0/level batches, `plan_trivial_move` for a
     /// metadata-only level bump. See `crate::governor` for the pure
     /// FSM/scoring logic this only adapts real engine state into.
-    fn plan_next_compaction_governor(&mut self) -> Option<CompactionPlan> {
+    fn plan_next_compaction_governor(&self) -> Option<CompactionPlan> {
         let tables: Vec<governor::TableInfo> = self
             .version
             .tables
@@ -2790,26 +2812,34 @@ impl Kiban {
         // VECTOR this same call also updates, not this mode — see
         // `governor::PressureVector` for why blending pressure into one
         // mode was the actual bug.
-        let _mode = self.governor.observe_engine(
+        //
+        // 11.17-round-3.3: one lock for the whole PLAN call, held
+        // across every governor read/mutation below — real contention
+        // is impossible (one maintenance thread ever calls this), so
+        // this costs one uncontended futex operation, nothing like the
+        // 8-shard reader-drain it replaces.
+        let mut governor = self.governor.lock().unwrap();
+        let next_file_number = self.next_file_number.load(Ordering::SeqCst);
+        let _mode = governor.observe_engine(
             self.l0_count(),
             self.options.l0_write_stall_trigger,
             max_level_debt_ratio,
             over_budget_levels.len(),
             self.read_amp.snapshot(),
         );
-        let vector = self.governor.pressure_vector();
-        let focus = self.governor.focus();
+        let vector = governor.pressure_vector();
+        let focus = governor.focus();
 
         let candidates = governor::generate_candidates(
             &tables,
             self.options.l0_compaction_trigger,
             &over_budget_levels,
-            self.next_file_number,
+            next_file_number,
         );
         let candidates_considered = candidates.len();
         if candidates.is_empty() {
-            self.governor.set_focus(governor::FocusState::default());
-            self.governor.record_decision(governor::SchedulingDecision {
+            governor.set_focus(governor::FocusState::default());
+            governor.record_decision(governor::SchedulingDecision {
                 pressure: vector,
                 dominant: vector.dominant(),
                 tier: governor::SelectionTier::None,
@@ -2828,16 +2858,16 @@ impl Kiban {
                 let est = governor::estimate_candidate(
                     &tables,
                     &c,
-                    self.next_file_number,
+                    next_file_number,
                     &over_budget_levels,
                 );
                 (c, est)
             })
             .collect();
         let (chosen, new_focus, tier) = governor::pick_best_cause_aware(vector, focus, &estimated);
-        self.governor.set_focus(new_focus);
+        governor.set_focus(new_focus);
         let Some((best, best_est)) = chosen else {
-            self.governor.record_decision(governor::SchedulingDecision {
+            governor.record_decision(governor::SchedulingDecision {
                 pressure: vector,
                 dominant: vector.dominant(),
                 tier,
@@ -2850,8 +2880,8 @@ impl Kiban {
             });
             return None;
         };
-        self.governor.record_candidate_chosen(best.kind);
-        self.governor.record_decision(governor::SchedulingDecision {
+        governor.record_candidate_chosen(best.kind);
+        governor.record_decision(governor::SchedulingDecision {
             pressure: vector,
             dominant: vector.dominant(),
             tier,
@@ -2862,6 +2892,13 @@ impl Kiban {
             debt_relief: best_est.debt_relief,
             read_relief: best_est.read_relief,
         });
+        // Never hold the maintenance-private governor lock across the
+        // real PLAN dispatch below — it only touches `self.version`
+        // and (for a real batch) `self.next_file_number`, neither of
+        // which needs it, and there is no reason to make a future
+        // reader of governor state (`governor_trace`, say) wait on
+        // this call's own table-scan work.
+        drop(governor);
 
         let mut plan = match best.kind {
             governor::CandidateKind::L0 => self.plan_compaction_at_level(0),
@@ -2898,7 +2935,7 @@ impl Kiban {
     /// would change which value wins for any key more than one L0
     /// table covers — see the module docs on why this is skipped
     /// rather than forced.
-    fn plan_trivial_move(&mut self, numbers: &[u64], level: u32) -> Option<CompactionPlan> {
+    fn plan_trivial_move(&self, numbers: &[u64], level: u32) -> Option<CompactionPlan> {
         debug_assert!(level >= 1, "trivial move source must never be L0");
         let mut inputs = Vec::with_capacity(numbers.len());
         for &number in numbers {
@@ -2937,7 +2974,7 @@ impl Kiban {
     /// `level` variable — L0 is rechecked every call (compaction there
     /// always takes priority), the level cascade only ever advances
     /// past a level once it has actually been compacted.
-    fn plan_next_compaction_fixed(&mut self, cascade_level: &mut u32) -> Option<CompactionPlan> {
+    fn plan_next_compaction_fixed(&self, cascade_level: &mut u32) -> Option<CompactionPlan> {
         if self.l0_count() >= self.options.l0_compaction_trigger {
             return self.plan_compaction_at_level(0);
         }
@@ -2965,7 +3002,7 @@ impl Kiban {
     /// unconditionally first. See `score_l0_candidate`/
     /// `score_level_candidate` for what "score" weighs; this function's
     /// only job is "gather candidates, pick the max".
-    fn plan_next_compaction_scored(&mut self) -> Option<CompactionPlan> {
+    fn plan_next_compaction_scored(&self) -> Option<CompactionPlan> {
         let mut best_level: Option<u32> = None;
         let mut best_score = f64::NEG_INFINITY;
 
@@ -3054,7 +3091,10 @@ impl Kiban {
             .iter()
             .filter(|t| t.level == level)
             .min_by_key(|t| t.number)?;
-        let age = self.next_file_number.saturating_sub(oldest.number) as f64;
+        let age = self
+            .next_file_number
+            .load(Ordering::SeqCst)
+            .saturating_sub(oldest.number) as f64;
         let overlap = self
             .version
             .tables
@@ -3076,7 +3116,7 @@ impl Kiban {
     /// cheap amount of work done under the engine lock. `None` only
     /// when the level turns out to have nothing to compact (callers
     /// already check this; kept as a safe fallback here too).
-    fn plan_compaction_at_level(&mut self, level: u32) -> Option<CompactionPlan> {
+    fn plan_compaction_at_level(&self, level: u32) -> Option<CompactionPlan> {
         self.plan_compaction_at_level_with_batch(level, self.options.compaction_batch_size.max(1))
     }
 
@@ -3087,7 +3127,7 @@ impl Kiban {
     /// round-3) choose a different batch length per decision instead of
     /// one fixed global value.
     fn plan_compaction_at_level_with_batch(
-        &mut self,
+        &self,
         level: u32,
         batch_size: usize,
     ) -> Option<CompactionPlan> {
@@ -3196,18 +3236,20 @@ impl Kiban {
             .collect();
         let input_numbers: HashSet<u64> = inputs.iter().map(|t| t.number).collect();
 
-        // Reserve a generous bound on output file numbers now, while we
-        // hold the lock, so BUILD never needs it to allocate one. Output
-        // bytes are bounded by input bytes (drop rules only remove
-        // data); the file count that produces is bounded by
-        // input_bytes/target_file_size, plus slack for the tail file and
-        // rounding.
+        // Reserve a generous bound on output file numbers now, so BUILD
+        // never needs to allocate one — an atomic `fetch_add`, not the
+        // engine gate, does the reserving (11.17-round-3.3: PLAN no
+        // longer holds it at all). Output bytes are bounded by input
+        // bytes (drop rules only remove data); the file count that
+        // produces is bounded by input_bytes/target_file_size, plus
+        // slack for the tail file and rounding.
         let total_input_bytes: u64 = inputs.iter().map(|t| t.size).sum();
         let target_file_size = self.options.target_file_size.max(1);
         let max_outputs = (total_input_bytes / target_file_size) + 8;
-        let start = self.next_file_number;
-        self.next_file_number += max_outputs;
-        let output_numbers: Vec<u64> = (start..self.next_file_number).collect();
+        let start = self
+            .next_file_number
+            .fetch_add(max_outputs, Ordering::SeqCst);
+        let output_numbers: Vec<u64> = (start..start + max_outputs).collect();
 
         let smallest_snapshot = self.oldest_active_snapshot().unwrap_or(self.last_sequence);
 
@@ -3295,7 +3337,7 @@ impl Kiban {
         new_table_refs.sort();
 
         Manifest {
-            next_file_number: self.next_file_number,
+            next_file_number: self.next_file_number.load(Ordering::SeqCst),
             // 11.8: a freeze can land while this compaction's BUILD ran
             // unlocked, so the currently-live WAL set may already
             // include a pending immutable memtable's WAL by the time
@@ -3365,10 +3407,16 @@ impl Kiban {
         // (0) is trivially exact by construction, not a data point
         // worth folding into the accuracy stat.
         if !trivial_move && let Some(predicted) = predicted_output_bytes {
-            self.governor.record_outcome(predicted, output_bytes);
+            self.governor
+                .lock()
+                .unwrap()
+                .record_outcome(predicted, output_bytes);
         }
         if trivial_move {
-            self.governor.record_trivial_move(moved_bytes);
+            self.governor
+                .lock()
+                .unwrap()
+                .record_trivial_move(moved_bytes);
         }
         Ok(CompactionOutcome {
             input_bytes,
@@ -3725,7 +3773,7 @@ mod compaction_tests {
         // a level into ONE job now, so `trivial_moves_performed` counts
         // JOBS, not tables — it's between 1 and `l1_before.len()`
         // inclusive, never more (batching only ever reduces job count).
-        let stats = db.governor.snapshot();
+        let stats = db.governor.lock().unwrap().snapshot();
         assert!(
             stats.trivial_moves_performed >= 1
                 && stats.trivial_moves_performed <= l1_before.len() as u64,
@@ -3811,7 +3859,7 @@ mod compaction_tests {
                 .iter()
                 .map(|t| (t.level, t.number))
                 .collect::<Vec<_>>(),
-            db.next_file_number
+            db.next_file_number.load(Ordering::SeqCst)
         );
         let manifest = Manifest::load(td.path()).unwrap().unwrap();
 
@@ -4761,7 +4809,7 @@ impl SharedKiban {
                 levels_from_version(&guard.version),
                 guard.cache.clone(),
                 guard.file_cache.clone(),
-                guard.governor.snapshot(),
+                guard.governor.lock().unwrap().snapshot(),
             )
         };
         Ok(KibanStats {
