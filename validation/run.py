@@ -2,6 +2,8 @@
 """Generate or execute immutable, explicitly recorded validation campaigns."""
 import argparse
 import json
+import os
+import signal
 import pathlib
 import subprocess
 import sys
@@ -75,8 +77,13 @@ with (a.output_root / "exit-codes.csv").open("x") as exits:
     for label, cmd in runs:
         with (a.output_root / f"{label}.log").open("x") as log:
             try:
-                code = subprocess.run(cmd, cwd=repo, stdout=log, stderr=subprocess.STDOUT, timeout=a.timeout).returncode
+                proc = subprocess.Popen(cmd, cwd=repo, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+                code = proc.wait(timeout=a.timeout)
             except subprocess.TimeoutExpired:
+                # Kill this campaign's process group, including torture child processes.
+                # Otherwise an engine deadlock in the child could survive the supervisor.
+                os.killpg(proc.pid, signal.SIGKILL)
+                proc.wait()
                 code = 124
             exits.write(f"{label},{code}\n"); exits.flush()
             failed |= code != 0

@@ -7,9 +7,22 @@ import pathlib
 
 p = argparse.ArgumentParser()
 p.add_argument("root", type=pathlib.Path)
+p.add_argument("--include-excluded", action="store_true")
 a = p.parse_args()
+exclusions = {}
+exclusion_root = None
+for parent in [a.root.resolve(), *a.root.resolve().parents]:
+    manifest = parent / "exclusions.json"
+    if manifest.is_file():
+        exclusions = json.loads(manifest.read_text())
+        exclusion_root = parent
+        break
 for summary in sorted(a.root.rglob("summary.csv")):
     run = summary.parent
+    if exclusion_root and not a.include_excluded:
+        relative = run.resolve().relative_to(exclusion_root).as_posix()
+        if any(relative == k or relative.startswith(k + "/") for k in exclusions):
+            continue
     with summary.open() as f:
         totals = [r for r in csv.DictReader(f) if r["stage"] == "total"]
     if not totals:
