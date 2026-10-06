@@ -46,6 +46,12 @@ pub struct MaintenanceStats {
     pub compaction_output_bytes: u64,
     pub waiting_writers: usize,
     pub write_stalls: u64,
+    /// Sum of actual backpressure wait durations across callers, excluding gate acquisition.
+    /// Concurrent waits overlap; this is caller time, not wall time.
+    pub write_stall_ns: u64,
+    /// Successful BUILD + COMMIT elapsed time, including commit gate waits, excluding pacing/PLAN.
+    pub compaction_elapsed_ns: u64,
+    pub flush_elapsed_ns: u64,
     pub flushes_completed: u64,
     pub flushes_failed: u64,
     /// Total bytes written by completed flush jobs (11.17-round-2,
@@ -98,6 +104,9 @@ struct Signal {
     /// blocked call, one stall, however many wake/recheck cycles it
     /// took (mirrors the file-cache `waits` counting rule).
     write_stalls: u64,
+    write_stall_ns: u64,
+    compaction_elapsed_ns: u64,
+    flush_elapsed_ns: u64,
     /// Phase 11.8 counters, same conventions as the compaction ones.
     flushes_completed: u64,
     flushes_failed: u64,
@@ -138,6 +147,9 @@ impl Maintenance {
                 compaction_input_bytes: 0,
                 compaction_output_bytes: 0,
                 write_stalls: 0,
+                write_stall_ns: 0,
+                compaction_elapsed_ns: 0,
+                flush_elapsed_ns: 0,
                 flushes_completed: 0,
                 flushes_failed: 0,
                 flush_output_bytes: 0,
@@ -234,6 +246,15 @@ impl Maintenance {
         }
     }
 
+    /// Times only the backpressure condvar wait, with no clock reads on unstalled calls.
+    pub(crate) fn wait_for_write_progress(&self, since: u64) {
+        let start = std::time::Instant::now();
+        self.wait_for_progress(since);
+        let elapsed = start.elapsed().as_nanos().min(u64::MAX as u128) as u64;
+        let mut s = self.state.lock().unwrap();
+        s.write_stall_ns = s.write_stall_ns.saturating_add(elapsed);
+    }
+
     /// Whether the worker has been told to stop. A writer that somehow
     /// wakes with nothing else changed (no epoch bump, no error) but
     /// finds this true must give up rather than loop forever waiting
@@ -286,6 +307,9 @@ impl Maintenance {
             compaction_output_bytes: s.compaction_output_bytes,
             waiting_writers: s.waiting_writers,
             write_stalls: s.write_stalls,
+            write_stall_ns: s.write_stall_ns,
+            compaction_elapsed_ns: s.compaction_elapsed_ns,
+            flush_elapsed_ns: s.flush_elapsed_ns,
             flushes_completed: s.flushes_completed,
             flushes_failed: s.flushes_failed,
             flush_output_bytes: s.flush_output_bytes,
@@ -494,6 +518,7 @@ fn run_pending_maintenance(engine: &Arc<ShardedRwLock<Kiban>>, m: &Arc<Maintenan
             #[cfg(test)]
             m.test.before_flush_build();
 
+            let started = std::time::Instant::now();
             match plan.build() {
                 Ok(output) => {
                     let output_bytes = output.size;
@@ -505,7 +530,7 @@ fn run_pending_maintenance(engine: &Arc<ShardedRwLock<Kiban>>, m: &Arc<Maintenan
                         (committed, MaintenancePressure::capture(&guard))
                     };
                     match committed {
-                        Ok(()) => record_flush_success(m, output_bytes),
+                        Ok(()) => record_flush_success(m, output_bytes, started.elapsed()),
                         Err(e) => {
                             record_flush_error(m, e.to_string());
                             return;
@@ -532,6 +557,7 @@ fn run_pending_maintenance(engine: &Arc<ShardedRwLock<Kiban>>, m: &Arc<Maintenan
         #[cfg(test)]
         m.test.before_build();
 
+        let started = std::time::Instant::now();
         match plan.build() {
             Ok(outputs) => {
                 let (committed, pressure) = {
@@ -546,7 +572,7 @@ fn run_pending_maintenance(engine: &Arc<ShardedRwLock<Kiban>>, m: &Arc<Maintenan
                     // stalled writer (11.5) is waiting to recheck
                     // against — wake it now, not after the whole
                     // cascade finishes.
-                    Ok(outcome) => record_compaction_success(m, outcome),
+                    Ok(outcome) => record_compaction_success(m, outcome, started.elapsed()),
                     Err(e) => {
                         record_error(m, e.to_string());
                         return;
@@ -562,9 +588,12 @@ fn run_pending_maintenance(engine: &Arc<ShardedRwLock<Kiban>>, m: &Arc<Maintenan
     }
 }
 
-fn record_flush_success(m: &Arc<Maintenance>, output_bytes: u64) {
+fn record_flush_success(m: &Arc<Maintenance>, output_bytes: u64, elapsed: std::time::Duration) {
     {
         let mut s = m.state.lock().unwrap();
+        s.flush_elapsed_ns = s
+            .flush_elapsed_ns
+            .saturating_add(elapsed.as_nanos().min(u64::MAX as u128) as u64);
         s.flushes_completed = s.flushes_completed.saturating_add(1);
         s.flush_output_bytes = s.flush_output_bytes.saturating_add(output_bytes);
         s.progress_epoch += 1;
@@ -582,9 +611,16 @@ fn record_flush_error(m: &Arc<Maintenance>, msg: String) {
     m.condvar.notify_all();
 }
 
-fn record_compaction_success(m: &Arc<Maintenance>, outcome: crate::db::CompactionOutcome) {
+fn record_compaction_success(
+    m: &Arc<Maintenance>,
+    outcome: crate::db::CompactionOutcome,
+    elapsed: std::time::Duration,
+) {
     {
         let mut s = m.state.lock().unwrap();
+        s.compaction_elapsed_ns = s
+            .compaction_elapsed_ns
+            .saturating_add(elapsed.as_nanos().min(u64::MAX as u128) as u64);
         s.compactions_completed = s.compactions_completed.saturating_add(1);
         s.compaction_input_bytes = s.compaction_input_bytes.saturating_add(outcome.input_bytes);
         s.compaction_output_bytes = s

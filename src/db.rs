@@ -2846,6 +2846,7 @@ impl Kiban {
         if candidates.is_empty() {
             governor.set_focus(governor::FocusState::default());
             governor.record_decision(governor::SchedulingDecision {
+                sequence: 0,
                 pressure: vector,
                 dominant: vector.dominant(),
                 tier: governor::SelectionTier::None,
@@ -2874,6 +2875,7 @@ impl Kiban {
         governor.set_focus(new_focus);
         let Some((best, best_est)) = chosen else {
             governor.record_decision(governor::SchedulingDecision {
+                sequence: 0,
                 pressure: vector,
                 dominant: vector.dominant(),
                 tier,
@@ -2888,6 +2890,7 @@ impl Kiban {
         };
         governor.record_candidate_chosen(best.kind);
         governor.record_decision(governor::SchedulingDecision {
+            sequence: 0,
             pressure: vector,
             dominant: vector.dominant(),
             tier,
@@ -4742,7 +4745,7 @@ impl SharedKiban {
             }
             self.maintenance.wake();
             self.maintenance.writer_started_waiting();
-            self.maintenance.wait_for_progress(epoch);
+            self.maintenance.wait_for_write_progress(epoch);
             self.maintenance.writer_stopped_waiting();
         }
     }
@@ -5008,7 +5011,7 @@ impl SharedKiban {
             }
             self.maintenance.wake();
             self.maintenance.writer_started_waiting();
-            self.maintenance.wait_for_progress(epoch);
+            self.maintenance.wait_for_write_progress(epoch);
             self.maintenance.writer_stopped_waiting();
         };
         self.maintenance.wake();
@@ -7567,6 +7570,7 @@ mod stats_tests {
         let stats = db.stats().unwrap();
         assert_eq!(stats.maintenance.waiting_writers, 0);
         assert_eq!(stats.maintenance.write_stalls, 1);
+        assert!(stats.maintenance.write_stall_ns > 0);
     }
 
     /// Test 7: a real completed compaction moves `compactions_completed`

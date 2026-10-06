@@ -177,6 +177,8 @@ impl From<CandidateKind> for ChosenKind {
 /// correlate against anything else.
 #[derive(Debug, Clone, Copy)]
 pub struct SchedulingDecision {
+    /// Monotonic per-open trace sequence, assigned when recorded. Allows pollers to detect gaps.
+    pub sequence: u64,
     pub pressure: PressureVector,
     pub dominant: PressureSource,
     /// 11.17-round-3.3: which of `pick_best_cause_aware`'s three tiers
@@ -324,6 +326,7 @@ pub(crate) struct GovernorState {
     /// oldest dropped first. Exists purely for observability — nothing
     /// in the engine reads this back to make a decision.
     decisions: std::collections::VecDeque<SchedulingDecision>,
+    decision_sequence: u64,
     /// 11.17-round-3.3: which deep level candidate selection is
     /// currently committed to, and for how many consecutive jobs — see
     /// `pick_best_cause_aware`. Unlike `decisions`, this genuinely IS
@@ -357,6 +360,7 @@ impl GovernorState {
             debt_ewma: 0.0,
             pressure_vector: PressureVector::default(),
             decisions: std::collections::VecDeque::new(),
+            decision_sequence: 0,
             focus: FocusState::default(),
             enter_read_protect_streak: 0,
             exit_read_protect_streak: 0,
@@ -406,7 +410,9 @@ impl GovernorState {
 
     /// Appends one scheduling decision to the bounded trace (section
     /// 3), dropping the oldest if at capacity.
-    pub(crate) fn record_decision(&mut self, decision: SchedulingDecision) {
+    pub(crate) fn record_decision(&mut self, mut decision: SchedulingDecision) {
+        self.decision_sequence = self.decision_sequence.saturating_add(1);
+        decision.sequence = self.decision_sequence;
         const MAX_DECISIONS_KEPT: usize = 4096;
         if self.decisions.len() >= MAX_DECISIONS_KEPT {
             self.decisions.pop_front();
