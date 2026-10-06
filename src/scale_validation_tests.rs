@@ -33,3 +33,41 @@ fn sync_after_freeze_must_durably_cover_the_older_wal() {
         "successful sync after freeze must cover the MANIFEST's older live WAL"
     );
 }
+
+#[test]
+fn repeated_simulated_recovery_sweeps_orphans_in_the_device_namespace() {
+    struct DeviceGuard;
+    impl Drop for DeviceGuard {
+        fn drop(&mut self) {
+            sys::disable_device_sim();
+        }
+    }
+    let dir = TempDir::new("scale-simulated-orphans");
+    sys::enable_device_sim();
+    let _device = DeviceGuard;
+    drop(Kiban::open(dir.path()).unwrap());
+    let sst = dir.path().join("999.sst");
+    let wal = dir.path().join("888.wal");
+    let temporary = dir.path().join(".orphan.kiban-tmp.1.1");
+    atomic::commit_file(&sst, b"unreferenced table").unwrap();
+    atomic::create_durably(&wal).unwrap();
+    atomic::create_durably(&temporary).unwrap();
+    let nested = dir.path().join("other-db");
+    std::fs::create_dir(&nested).unwrap();
+    let nested_wal = nested.join("777.wal");
+    atomic::create_durably(&nested_wal).unwrap();
+    sys::power_loss();
+    let db = Kiban::open(dir.path()).unwrap();
+    for p in [sst, wal, temporary] {
+        assert!(!sys::exists(&p), "simulated orphan survived reopen: {p:?}");
+    }
+    assert!(
+        sys::exists(&dir.path().join("1.wal")),
+        "live WAL must remain"
+    );
+    assert!(
+        sys::exists(&nested_wal),
+        "sweeping one database must not touch nested namespaces"
+    );
+    assert!(db.get(b"missing").unwrap().is_none());
+}

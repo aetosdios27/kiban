@@ -319,26 +319,41 @@ impl File {
         }
     }
 
-    /// Positioned read served through the simulated device when active.
-    pub fn read_range_at(&self, path_for_sim: &Path, offset: u64, len: u64) -> io::Result<Vec<u8>> {
+    /// Positioned read into the caller's buffer. Bulk maintenance readers use
+    /// the same device abstraction as foreground reads, without cache leases.
+    pub(crate) fn read_exact_at(
+        &self,
+        path_for_sim: &Path,
+        buf: &mut [u8],
+        offset: u64,
+    ) -> io::Result<()> {
         if self.sim_path.is_some() || sim_active() {
             let data = lookup(path_for_sim, merged)?;
-            let start = offset as usize;
-            let end = (offset + len) as usize;
+            let start = usize::try_from(offset)
+                .map_err(|_| io::Error::other("read offset exceeds address space"))?;
+            let end = start
+                .checked_add(buf.len())
+                .ok_or_else(|| io::Error::other("read range overflow"))?;
             if end > data.len() {
                 return Err(io::Error::new(
                     io::ErrorKind::UnexpectedEof,
                     "read past end of file",
                 ));
             }
-            return Ok(data[start..end].to_vec());
+            buf.copy_from_slice(&data[start..end]);
+            return Ok(());
         }
-        let mut buf = vec![0u8; len as usize];
         use std::os::unix::fs::FileExt;
         self.inner
             .as_ref()
             .expect("real file")
-            .read_exact_at(&mut buf, offset)?;
+            .read_exact_at(buf, offset)
+    }
+
+    /// Positioned read served through the simulated device when active.
+    pub fn read_range_at(&self, path_for_sim: &Path, offset: u64, len: u64) -> io::Result<Vec<u8>> {
+        let mut buf = vec![0u8; len as usize];
+        self.read_exact_at(path_for_sim, &mut buf, offset)?;
         Ok(buf)
     }
 

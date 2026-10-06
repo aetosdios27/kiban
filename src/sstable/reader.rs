@@ -390,7 +390,7 @@ impl SstTable {
         &self,
         window_bytes: u64,
     ) -> Result<CompactionIter<'_>, SstError> {
-        let file = std::fs::File::open(&self.path).map_err(|e| {
+        let file = crate::sys::File::open_read(&self.path).map_err(|e| {
             SstError::Corrupt(format!(
                 "table {} cannot be opened for compaction: {e}",
                 self.number
@@ -418,7 +418,7 @@ const COMPACTION_READ_AHEAD_BYTES: u64 = 4 * 1024 * 1024;
 
 pub(crate) struct CompactionIter<'a> {
     table: &'a SstTable,
-    file: std::fs::File,
+    file: crate::sys::File,
     next_block: usize,
     /// Bytes covering `[buffer_start, buffer_start + buffer.len())` of
     /// the file, refilled forward as blocks are consumed. Never
@@ -454,10 +454,11 @@ impl CompactionIter<'_> {
                 window_end = candidate_end;
             }
             let mut buf = vec![0u8; (window_end - start) as usize];
-            use std::os::unix::fs::FileExt;
-            self.file.read_exact_at(&mut buf, start).map_err(|e| {
-                SstError::Corrupt(format!("compaction read failed at offset {start}: {e}"))
-            })?;
+            self.file
+                .read_exact_at(&self.table.path, &mut buf, start)
+                .map_err(|e| {
+                    SstError::Corrupt(format!("compaction read failed at offset {start}: {e}"))
+                })?;
             self.buffer = buf;
             self.buffer_start = start;
         }
@@ -687,6 +688,39 @@ mod compaction_iter_tests {
             foreground, compaction,
             "compaction_iter must yield the same entries, in the same order, as the foreground path"
         );
+    }
+
+    #[test]
+    fn compaction_iter_uses_the_simulated_device_and_bypasses_caches() {
+        struct DeviceGuard;
+        impl Drop for DeviceGuard {
+            fn drop(&mut self) {
+                crate::sys::disable_device_sim();
+            }
+        }
+        let td = TempDir::new("simulated-compaction-reader");
+        crate::sys::enable_device_sim();
+        let _device = DeviceGuard;
+        let cache = Arc::new(BlockCache::new(1024 * 1024));
+        let files = Arc::new(TableFileCache::new(8));
+        let table = build_table(td.path(), 1, 300, 64, cache.clone(), files.clone());
+        assert!(
+            !td.path().join("1.sst").exists(),
+            "fixture must exist only in the simulated namespace"
+        );
+        let expected: Vec<_> = table.iter().map(Result::unwrap).collect();
+        let before_cache = cache.stats();
+        let before_files = files.stats();
+        let got: Vec<_> = table
+            .compaction_iter_with_window(1)
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        assert_eq!(got, expected);
+        assert_eq!(cache.stats().hits, before_cache.hits);
+        assert_eq!(cache.stats().misses, before_cache.misses);
+        assert_eq!(files.stats().hits, before_files.hits);
+        assert_eq!(files.stats().misses, before_files.misses);
     }
 
     /// Same equivalence property, but with a read-ahead window small

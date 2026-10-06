@@ -879,6 +879,31 @@ impl Kiban {
     }
 
     fn sweep_orphans(dir: &Path, manifest: &Manifest) -> io::Result<()> {
+        // The volatile-device backend has its own namespace. Looking only at
+        // the real directory strands orphan allocations across repeated crashes.
+        // Production retains the existing filesystem enumeration below.
+        if sys::device_sim_active() {
+            let mut paths = sys::simulated_files_under(dir);
+            paths.retain(|path| path.parent() == Some(dir));
+            paths.sort();
+            for path in paths {
+                let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+                    continue;
+                };
+                let orphan = name.contains(atomic::TEMP_MARKER)
+                    || parse_artifact_name(name).is_some_and(
+                        |(number, extension)| match extension {
+                            SST_EXTENSION => !manifest.tables.iter().any(|t| t.number == number),
+                            WAL_EXTENSION => !manifest.wal_numbers.contains(&number),
+                            _ => false,
+                        },
+                    );
+                if orphan {
+                    sys::remove_file(&path)?;
+                }
+            }
+            return Ok(());
+        }
         for entry in fs::read_dir(dir)?.flatten() {
             let name = entry.file_name();
             let Some(name) = name.to_str() else { continue };
