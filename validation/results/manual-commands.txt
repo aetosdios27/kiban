@@ -1,0 +1,17 @@
+# Executed serially after the initial campaigns completed; see exclusions.json.
+# Run from repository root; use NEW db/output paths to reproduce.
+for n in 16 32 64; do
+  target/release/examples/scale --workload mixed --operations 1000000 --keys 100000 --working-set 100000 --value-size 256 --threads "$n" --read-percent 50 --seed 42 --sync-every 0 --preload-keys 100000 --db "target/scale-data/concurrency-clean/mixed-${n}t" --output "validation/results/concurrency-clean/mixed-${n}t"
+done
+target/release/examples/scale --workload sustained-write --operations 10000000 --keys 1000000 --working-set 1000000 --value-size 128 --threads 4 --seed 42 --sync-every 0 --db target/scale-data/sustained-10m --output validation/results/sustained-10m
+target/release/examples/scale --workload random-read --operations 100000000 --keys 100000 --working-set 100000 --value-size 256 --threads 1 --seed 42 --preload-keys 0 --reuse true --cache warm --db target/scale-data/concurrency/mixed-1t --output validation/results/read-100m
+target/release/examples/scale --workload update-heavy --operations 1000000 --keys 100000 --working-set 1000 --value-size 128 --threads 4 --read-percent 10 --seed 42 --preload-keys 100000 --db target/scale-data/update-hot --output validation/results/update-hot
+target/release/examples/scale --workload random-read --operations 1000000 --keys 100000 --working-set 100000 --value-size 256 --threads 1 --seed 42 --reuse true --cache reduced --db target/scale-data/concurrency/mixed-1t --output validation/results/read-reduced
+target/release/examples/scale --workload random-read --operations 1000000 --keys 100000 --working-set 100000 --value-size 256 --threads 1 --seed 42 --reuse true --cache warm --db target/scale-data/concurrency/mixed-1t --output validation/results/read-warm
+target/release/examples/torture --mode simulated --cycles 1000 --operations 20 --keys 128 --seed 20261006 --sync-every 7 --fault-percent 80 --snapshots false --db target/scale-data/wal-recovery --output validation/results/wal-recovery
+
+# Canonical campaigns after both simulated-device integration repairs.
+target/release/examples/torture --mode simulated --cycles 1000 --operations 20 --keys 128 --seed 20261006 --sync-every 7 --fault-percent 80 --snapshots false --db target/scale-data/wal-recovery-complete --output validation/results/wal-recovery-complete
+target/release/examples/torture --mode simulated --cycles 1000 --operations 1000 --keys 1000 --seed 20261006 --sync-every 17 --fault-percent 70 --snapshots false --db target/scale-data/compaction-recovery-complete --output validation/results/compaction-recovery-complete
+# Explicitly failing correct-state regression (exit 101).
+cargo test --lib sync_after_freeze_must_durably_cover_the_older_wal -- --ignored --nocapture

@@ -1,0 +1,2 @@
+/home/aetos/dev/personal/kiban/target/release/examples/scale --workload sustained-write --operations 0 --keys 1000000 --working-set 1000000 --value-size 128 --threads 4 --read-percent 50 --seed 42 --sync-every 0 --preload-keys 0 --db target/scale-data/ten-minutes/sustained-600s --output validation/results/ten-minutes/sustained-600s --duration 600
+    Finished `release` profile [optimized] target(s) in 0.02s

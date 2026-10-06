@@ -1,0 +1,3 @@
+simulated recovery cycle 0/1000 verified
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+torture FAILED: cycle=22 op=22030: unexpected flush error without an injected fault: database i/o error: file exists

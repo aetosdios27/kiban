@@ -1,0 +1,5 @@
+elapsed_s,stage,level,tables,bytes
+0.000077872,"initial",0,1,153445
+0.04093878,"mixed",0,1,153445
+0.049628673,"final-flush",0,2,923409
+0.049960515,"final",0,2,923409

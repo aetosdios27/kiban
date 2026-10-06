@@ -1,0 +1,4 @@
+{
+  "command": "cargo test --lib sync_after_freeze_must_durably_cover_the_older_wal -- --ignored --nocapture",
+  "exit_code": 101
+}

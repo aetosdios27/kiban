@@ -1,0 +1,1 @@
+/home/aetos/dev/personal/kiban/target/release/examples/scale --workload sustained-write --operations 0 --keys 1000000 --working-set 1000000 --value-size 128 --threads 4 --read-percent 50 --seed 42 --sync-every 0 --preload-keys 0 --db target/data/hour/sustained-3600s --output target/results/hour/sustained-3600s --duration 3600

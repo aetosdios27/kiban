@@ -1,0 +1,11 @@
+   Compiling kiban v0.1.0 (/home/aetos/dev/personal/kiban)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.25s
+     Running tests/recovery_validation.rs (target/debug/deps/recovery_validation-c2e39bf301307661)
+
+running 3 tests
+test point_scan_recovery_failure_is_detected_by_torture ... ok
+test snapshot_failure_is_detected_and_reported_by_torture ... ok
+test repeated_wal_power_loss_preserves_durable_state ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+

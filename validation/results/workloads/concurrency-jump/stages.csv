@@ -1,0 +1,3 @@
+index,name,threads,read_percent,operations_cap,duration_cap_s
+0,low-concurrency,1,50,500000,0
+1,high-concurrency,4,50,500000,0

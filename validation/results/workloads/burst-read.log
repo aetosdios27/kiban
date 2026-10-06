@@ -1,0 +1,3 @@
+write-pressure: 500000 operations in 4.465s (111982 ops/s), read/write p99= / 221184 ns
+read-heavy: 500000 operations in 0.717s (696884 ops/s), read/write p99=34816 / 81920 ns
+total: 1000000 operations in 5.182s (192958 ops/s), read/write p99=34816 / 221184 ns

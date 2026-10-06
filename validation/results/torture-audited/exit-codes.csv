@@ -1,0 +1,4 @@
+run,exit_code
+torture-probes,1
+torture-simulated,1
+torture-process,1

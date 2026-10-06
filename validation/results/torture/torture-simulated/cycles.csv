@@ -1,0 +1,7 @@
+cycle,planned_ops,completed_ops,fault_index,checked_syscalls,fault_triggered,crash_elapsed_s,reopen_s,verify_s,live_keys,verification
+0,729,62,,34,false,0.000407696,0.000083723,0.000373184,49,durable-floor-and-attempt-band
+1,129,31,205,16,false,0.000219013,0.000074158,0.000481612,75,durable-floor-and-attempt-band
+2,163,31,436,16,false,0.000239738,0.00008541,0.000553066,98,durable-floor-and-attempt-band
+3,563,31,,16,false,0.000270626,0.00012847,0.000649335,120,durable-floor-and-attempt-band
+4,35,31,79,16,false,0.000345856,0.000125251,0.000751948,143,durable-floor-and-attempt-band
+5,342,31,,16,false,0.000357796,0.000159731,0.001048098,169,durable-floor-and-attempt-band

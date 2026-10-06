@@ -1,0 +1,2 @@
+mixed: 1000000 operations in 9.898s (101028 ops/s), read/write p99=71680 / 884736 ns
+total: 1000000 operations in 9.898s (101028 ops/s), read/write p99=71680 / 884736 ns

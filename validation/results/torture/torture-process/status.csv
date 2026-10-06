@@ -1,0 +1,3 @@
+status,detail
+started,incomplete until complete record
+failed,"child exited unexpectedly: exit status: 1"

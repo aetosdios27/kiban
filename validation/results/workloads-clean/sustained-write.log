@@ -1,0 +1,2 @@
+sustained-write: 1000000 operations in 9.198s (108720 ops/s), read/write p99= / 204800 ns
+total: 1000000 operations in 9.198s (108720 ops/s), read/write p99= / 204800 ns

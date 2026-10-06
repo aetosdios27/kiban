@@ -1,0 +1,3 @@
+index,name,threads,read_percent,operations_cap,duration_cap_s
+0,write-pressure,4,0,500000,0
+1,read-heavy,4,95,500000,0

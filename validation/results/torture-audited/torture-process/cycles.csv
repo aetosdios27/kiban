@@ -1,0 +1,4 @@
+cycle,acknowledged_ops,tail_budget,kill_delay_ms,reopen_s,verify_s,live_keys,verification
+0,272,68,4,0.000654388,0.001219269,208,durable-floor-and-attempt-band
+1,952,48,0,0.001048865,0.00293187,604,durable-floor-and-attempt-band
+2,204,68,6,0.004831055,0.003351951,644,durable-floor-and-attempt-band

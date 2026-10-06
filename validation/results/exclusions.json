@@ -1,0 +1,14 @@
+{
+  "sanity": "Harness smoke on tmpfs; not a storage measurement.",
+  "random-write-1m": "Harness smoke on tmpfs; not a storage measurement.",
+  "probes": "Early real-kernel-file probes on tmpfs; superseded by disk-backed torture/probes.",
+  "process": "Early process probe on tmpfs; superseded by disk-backed torture/process.",
+  "workloads": "Campaign partly overlapped the first high-thread concurrency runs; excluded from performance conclusions.",
+  "concurrency/mixed-16t": "Overlapped workload campaign; use concurrency-clean/mixed-16t.",
+  "concurrency/mixed-32t": "Overlapped workload campaign; use concurrency-clean/mixed-32t.",
+  "concurrency/mixed-64t": "Overlapped workload campaign; use concurrency-clean/mixed-64t.",
+  "torture": "Exploratory simulator run before both bulk-reader and orphan-namespace integration repairs; superseded by torture-complete and compaction-recovery-complete.",
+  "torture-audited": "Exploratory simulator run before both bulk-reader and orphan-namespace integration repairs; superseded by torture-complete and compaction-recovery-complete.",
+  "torture-final": "Exploratory simulator run before both bulk-reader and orphan-namespace integration repairs; superseded by torture-complete and compaction-recovery-complete.",
+  "compaction-recovery-final": "Exploratory simulator run before both bulk-reader and orphan-namespace integration repairs; superseded by torture-complete and compaction-recovery-complete."
+}

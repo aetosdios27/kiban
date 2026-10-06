@@ -1,0 +1,10 @@
+run,exit_code
+sequential-write,0
+random-write,0
+random-read,0
+mixed,0
+update-heavy,0
+burst-read,0
+sustained-write,0
+burst-recovery,0
+concurrency-jump,0

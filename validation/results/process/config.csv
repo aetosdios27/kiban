@@ -1,0 +1,3 @@
+parameter,value
+config,"Config { mode: ""process"", db: ""/tmp/kiban-scale-20261006/process-db"", output: ""validation/results/process"", seed: 42, cycles: 100, operations: 1000, keys: 1000, sync_every: 17, fault_percent: 70, threads: 4, snapshots: false }"
+engine_options,"KibanOptions { l0_compaction_trigger: 2, l0_write_stall_trigger: 6, base_level_bytes: 16384, level_multiplier: 4, target_file_size: 4096, block_cache_bytes: 65536, max_open_table_files: 128, write_buffer_bytes: 4096, mmap_max_level: None, compaction_scheduler: Governor, compaction_batch_size: 1, maintenance_pacing_enabled: true }"

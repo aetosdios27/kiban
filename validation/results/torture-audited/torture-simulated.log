@@ -1,0 +1,1 @@
+torture FAILED: cycle=0 op=61: unexpected flush error without an injected fault: database corrupt: table 4 cannot be opened for compaction: No such file or directory (os error 2)

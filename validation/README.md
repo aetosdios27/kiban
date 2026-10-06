@@ -6,7 +6,7 @@ This phase measures limits; it does not change engine policy. Build:
 cargo build --release --examples
 ```
 
-`scale --help` and `torture --help` list all flags. No new Rust dependencies.
+`scale --help` and `torture --help` list all flags. No new Rust dependencies. Run the commands from the repository root.
 Use a dedicated directory on the filesystem under test. **Check `findmnt -T DIR`:
 `/tmp` is tmpfs on this machine and is unsuitable for storage measurements.**
 Database directories are never automatically deleted. Output files use exclusive
@@ -203,9 +203,13 @@ cargo test --examples
 cargo test --features loom -- --test-threads=1 loom_
 cargo clippy --all-targets --features loom -- -D warnings
 cargo test --lib every_single_syscall_failure_recovers_correctly_under_governor
+# Known failing regression, deliberately run separately; must not be reported as a pass.
+cargo test --lib sync_after_freeze_must_durably_cover_the_older_wal -- --ignored --nocapture
 ```
 
-The full library suite includes existing single/pairwise faults, power-loss,
+The frozen-WAL durability reproducer is retained with its assertion intact and
+is ignored by default; the report records its explicit failure. The full library
+suite includes existing single/pairwise faults, power-loss,
 background flush failure and snapshot tests. New integration tests validate the
 oracle and failure detection; their success is **not** evidence that the known
 storage defects pass scale validation. See REPORT.md for measured results and

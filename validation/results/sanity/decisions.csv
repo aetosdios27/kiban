@@ -1,0 +1,2 @@
+observed_elapsed_s,stage,sequence,gap_before,pressure_l0,pressure_debt,pressure_read,dominant,tier,chosen,candidates,predicted_rewrite_bytes,l0_relief,debt_relief,read_relief
+0.049628673,"final-flush",1,0,0.3333333333333333,0,0.18749999999999997,L0,None,"None",0,0,0,0,0

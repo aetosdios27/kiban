@@ -1,0 +1,7 @@
+cycle,operation_id,operation,message,fault_index,checked_syscalls,fault_triggered
+10,10135,sync,"wal append failed; engine poisoned",111,112,true
+11,11278,flush,"manifest install failed; previous state intact: injected i/o failure",376,378,true
+16,16123,flush,"manifest install failed; previous state intact: injected i/o failure",93,95,true
+17,17154,flush,"manifest install failed; previous state intact: injected i/o failure",348,350,true
+21,21092,flush,"manifest install failed; previous state intact: injected i/o failure",165,166,true
+22,22030,flush,"database i/o error: file exists",244,8,false
