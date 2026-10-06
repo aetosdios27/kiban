@@ -20,6 +20,11 @@ fn campaign(c: &Config) -> io::Result<()> {
         out,
         "cycle,planned_ops,completed_ops,fault_index,checked_syscalls,fault_triggered,crash_elapsed_s,reopen_s,verify_s,live_keys,verification"
     )?;
+    let mut errors = telemetry::create(&c.output.join("operation-errors.csv"))?;
+    writeln!(
+        errors,
+        "cycle,operation_id,operation,message,fault_index,checked_syscalls,fault_triggered"
+    )?;
     let mut floor = Model::new();
     for cycle in 0..c.cycles {
         let mut db = Kiban::open_with_options(&c.db, model::options()).map_err(io::Error::other)?;
@@ -41,6 +46,7 @@ fn campaign(c: &Config) -> io::Result<()> {
         sys::install_fault(fault.unwrap_or(usize::MAX));
         let start = Instant::now();
         let mut completed = 0u64;
+        let mut operation_error = None;
         for i in 0..crash_after {
             let id = cycle * c.operations + i;
             let (k, v) = model::mutation(c.seed, id, c.keys);
@@ -48,14 +54,16 @@ fn campaign(c: &Config) -> io::Result<()> {
                 Some(v) => db.put(&k, v),
                 None => db.delete(&k),
             };
-            if result.is_err() {
+            if let Err(e) = result {
+                operation_error = Some((id, "mutation", e.to_string()));
                 break;
             }
             allowed.entry(k.clone()).or_default().push(v.clone());
             model::apply(&mut live, k, v);
             completed += 1;
             if completed.is_multiple_of(c.sync_every) {
-                if db.sync().is_err() {
+                if let Err(e) = db.sync() {
+                    operation_error = Some((id, "sync", e.to_string()));
                     break;
                 }
                 floor = live.clone();
@@ -64,7 +72,8 @@ fn campaign(c: &Config) -> io::Result<()> {
             }
             // Explicit flush needed for direct Kiban: it has no auto-freeze worker.
             if completed.is_multiple_of(31) {
-                if db.flush().is_err() {
+                if let Err(e) = db.flush() {
+                    operation_error = Some((id, "flush", e.to_string()));
                     ambiguous_flush = true;
                     break;
                 }
@@ -75,6 +84,20 @@ fn campaign(c: &Config) -> io::Result<()> {
         }
         let checked = sys::op_count();
         sys::clear_fault();
+        let fault_triggered = fault.is_some_and(|f| checked > f);
+        if let Some((id, operation, message)) = operation_error {
+            writeln!(
+                errors,
+                "{cycle},{id},{operation},{},{},{checked},{fault_triggered}",
+                telemetry::csv(&message),
+                fault.map(|f| f.to_string()).unwrap_or_default()
+            )?;
+            if !fault_triggered {
+                return Err(io::Error::other(format!(
+                    "cycle={cycle} op={id}: unexpected {operation} error without an injected fault: {message}"
+                )));
+            }
+        }
         if let Some(snapshot) = snapshot {
             let snap_scan: Model = db
                 .scan_at(&snapshot)
@@ -119,7 +142,7 @@ fn campaign(c: &Config) -> io::Result<()> {
             out,
             "{cycle},{crash_after},{completed},{},{checked},{},{crash_elapsed},{reopen},{verify},{},{}",
             fault.map(|f| f.to_string()).unwrap_or_default(),
-            fault.is_some_and(|f| checked > f),
+            fault_triggered,
             floor.len(),
             verification
         )?;

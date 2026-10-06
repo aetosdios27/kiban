@@ -14,12 +14,15 @@ mod telemetry {
         io,
         path::Path,
     };
+    pub fn csv(s: &str) -> String {
+        format!("\"{}\"", s.replace('"', "\"\""))
+    }
     pub fn create(p: &Path) -> io::Result<File> {
         OpenOptions::new().write(true).create_new(true).open(p)
     }
 }
 #[test]
-fn repeated_seeded_power_loss_preserves_durable_state() {
+fn repeated_wal_power_loss_preserves_durable_state() {
     let root = std::env::temp_dir().join(format!("kiban-repeated-recovery-{}", std::process::id()));
     std::fs::create_dir(&root).unwrap();
     struct Cleanup(std::path::PathBuf);

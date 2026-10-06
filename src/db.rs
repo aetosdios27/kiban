@@ -8504,3 +8504,7 @@ mod flush_pipeline_tests {
         assert!(checked > 20, "barely exercised anything: {checked}");
     }
 }
+
+#[cfg(test)]
+#[path = "scale_validation_tests.rs"]
+mod scale_validation_tests;
