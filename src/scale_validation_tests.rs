@@ -1,11 +1,8 @@
-//! Explicit regression probe for a durability boundary not exercised by the
-//! existing flush fault sweep (that sweep syncs BEFORE every freeze).
-//! Kept as a failing reproducer: scale validation does not repair engine policy.
+//! Regression coverage for durability boundaries exposed by scale validation.
 use super::*;
 use crate::testutil::TempDir;
 
 #[test]
-#[ignore = "Explicit scale probe: run separately to check sync after an unsynced WAL freeze"]
 fn sync_after_freeze_must_durably_cover_the_older_wal() {
     struct DeviceGuard;
     impl Drop for DeviceGuard {
@@ -70,4 +67,162 @@ fn repeated_simulated_recovery_sweeps_orphans_in_the_device_namespace() {
         "sweeping one database must not touch nested namespaces"
     );
     assert!(db.get(b"missing").unwrap().is_none());
+}
+
+struct DeviceGuard;
+impl DeviceGuard {
+    fn new() -> Self {
+        sys::enable_device_sim();
+        Self
+    }
+}
+impl Drop for DeviceGuard {
+    fn drop(&mut self) {
+        sys::clear_fault();
+        sys::disable_device_sim();
+    }
+}
+
+/// Sweep freeze, both generations' syncs, SST creation/fsync/rename,
+/// MANIFEST installation, and WAL cleanup. Each failed syscall is a
+/// deterministic crash boundary; no acknowledgement is inferred from errors.
+#[test]
+fn frozen_wal_barrier_survives_every_flush_fault_and_power_loss() {
+    fn run(faults: &[usize]) -> usize {
+        let dir = TempDir::new("frozen-wal-barrier-sweep");
+        let _device = DeviceGuard::new();
+        let mut db = Kiban::open(dir.path()).unwrap();
+        db.put(b"baseline", b"durable").unwrap();
+        db.put(b"deleted", b"old").unwrap();
+        db.sync().unwrap();
+        db.put(b"frozen", b"older-generation").unwrap();
+        db.delete(b"deleted").unwrap();
+        sys::install_faults(faults);
+        let mut barrier = false;
+        let result = (|| -> Result<(), DbError> {
+            db.freeze()?;
+            db.put(b"active", b"newer-generation")?;
+            db.sync()?;
+            barrier = true;
+            let plan = db.plan_flush().unwrap();
+            let output = plan.build()?;
+            db.commit_flush(plan, output)?;
+            Ok(())
+        })();
+        let count = sys::op_count();
+        if faults.is_empty() {
+            result.unwrap();
+        }
+        // No post-error retry/flush. Buffered bytes may reach the volatile
+        // layer on drop, but must be discarded by the simulated power loss.
+        drop(db);
+        sys::clear_fault();
+        sys::power_loss();
+        let recovered = Kiban::open(dir.path()).unwrap();
+        assert_eq!(
+            recovered.get(b"baseline").unwrap(),
+            Some(b"durable".to_vec()),
+            "{faults:?}"
+        );
+        if barrier {
+            assert_eq!(
+                recovered.get(b"frozen").unwrap(),
+                Some(b"older-generation".to_vec()),
+                "{faults:?}"
+            );
+            assert_eq!(
+                recovered.get(b"active").unwrap(),
+                Some(b"newer-generation".to_vec()),
+                "{faults:?}"
+            );
+            assert_eq!(
+                recovered.get(b"deleted").unwrap(),
+                None,
+                "{faults:?}: deleted data resurrected"
+            );
+        } else {
+            assert!(
+                matches!(
+                    recovered.get(b"deleted").unwrap().as_deref(),
+                    None | Some(b"old")
+                ),
+                "{faults:?}"
+            );
+        }
+        let manifest = Manifest::load(dir.path()).unwrap().unwrap();
+        assert_eq!(
+            manifest.wal_numbers.len(),
+            1,
+            "recovery consolidates the live generations"
+        );
+        for number in manifest.wal_numbers {
+            assert!(sys::exists(
+                &dir.path().join(file_name(number, WAL_EXTENSION))
+            ));
+        }
+        count
+    }
+    let count = run(&[]);
+    assert!(count > 20);
+    for a in 0..count {
+        run(&[a]);
+        for b in a + 1..count {
+            run(&[a, b]);
+        }
+    }
+}
+
+#[test]
+fn frozen_wal_sync_failure_poisoning_covers_both_generations() {
+    for fault in 0..4 {
+        let dir = TempDir::new("frozen-wal-sync-failure");
+        let _device = DeviceGuard::new();
+        let mut db = Kiban::open(dir.path()).unwrap();
+        db.put(b"old", b"v").unwrap();
+        db.freeze().unwrap();
+        db.put(b"new", b"v").unwrap();
+        sys::install_fault(fault);
+        assert!(
+            db.sync().is_err(),
+            "fault {fault} must hit a WAL write or sync"
+        );
+        assert!(db.is_poisoned());
+        assert!(db.put(b"unsafe", b"ack").is_err());
+        assert!(db.sync().is_err());
+    }
+}
+
+#[test]
+fn repeated_frozen_wal_generations_remain_durable_before_and_after_commit() {
+    let dir = TempDir::new("frozen-wal-generations");
+    let _device = DeviceGuard::new();
+    for stop in 0..3 {
+        let mut db = Kiban::open(dir.path()).unwrap();
+        for round in 0..4 {
+            let key = format!("{stop}-{round}");
+            db.put(&key, b"durable").unwrap();
+            db.freeze().unwrap();
+            db.sync().unwrap();
+            if round == 3 && stop == 0 {
+                break; // crash with immutable + active WAL, before BUILD
+            }
+            let plan = db.plan_flush().unwrap();
+            let output = plan.build().unwrap();
+            if round == 3 && stop == 1 {
+                break; // durable orphan SST, old WAL still MANIFEST-live
+            }
+            db.commit_flush(plan, output).unwrap();
+        }
+        drop(db);
+        sys::power_loss();
+        let recovered = Kiban::open(dir.path()).unwrap();
+        for previous in 0..=stop {
+            for round in 0..4 {
+                assert_eq!(
+                    recovered.get(format!("{previous}-{round}")).unwrap(),
+                    Some(b"durable".to_vec())
+                );
+            }
+        }
+    }
 }

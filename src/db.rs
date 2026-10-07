@@ -478,6 +478,9 @@ impl WriteBatch {
 /// can reference the exact same frozen data cheaply.
 struct Immutable {
     memtable: StdArc<Memtable>,
+    /// Keep the writer (including buffered records) until durable SST
+    /// installation. A sync barrier must cover this generation too.
+    wal: Wal,
     wal_number: u64,
     generation: u64,
 }
@@ -1064,11 +1067,18 @@ impl Kiban {
         Ok(())
     }
 
+    /// Makes every accepted mutation durable, including the frozen WAL
+    /// generation until its SST has been durably installed in the MANIFEST.
     pub fn sync(&mut self) -> io::Result<()> {
         if let Err(e) = self.check_poisoned() {
             return Err(io::Error::other(e.to_string()));
         }
-        match self.wal.sync() {
+        let result = self
+            .immutable
+            .as_mut()
+            .map_or(Ok(()), |im| im.wal.sync())
+            .and_then(|()| self.wal.sync());
+        match result {
             Ok(()) => Ok(()),
             Err(crate::wal::SyncPhase::Flush(e)) => {
                 self.poison(PoisonCause::WalAppendFailed(e.to_string()));
@@ -1498,7 +1508,7 @@ impl Kiban {
         // captured independently below via `Immutable::memtable`.
         self.shared_memtable = StdArc::new(ShardedRwLock::new(Memtable::new()));
         let old_wal_number = self.wal_number;
-        self.wal = new_wal;
+        let old_wal = std::mem::replace(&mut self.wal, new_wal);
         self.wal_number = new_wal_number;
         self.next_file_number
             .store(new_next_file_number, Ordering::SeqCst);
@@ -1506,6 +1516,7 @@ impl Kiban {
         self.next_flush_generation += 1;
         self.immutable = Some(Immutable {
             memtable: StdArc::new(old_memtable),
+            wal: old_wal,
             wal_number: old_wal_number,
             generation,
         });
@@ -4945,7 +4956,8 @@ impl SharedKiban {
     }
 
     /// Makes every record appended by *any* thread so far durable in one
-    /// device flush (group commit). Never subject to backpressure:
+    /// durability barrier (group commit), covering every live WAL generation.
+    /// Never subject to backpressure:
     /// `sync` durably persists WAL state already accepted, it does not
     /// publish another L0 table, so durability must never depend on
     /// compaction catching up (11.5).
