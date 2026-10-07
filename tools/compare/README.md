@@ -107,7 +107,10 @@ reopening follow the same lifecycle in both adapters.
 
 Defaults cases retain native storage settings: Kiban 4 MiB memtable/32 MiB cache
 and no compression; RocksDB's defaults include larger memtables and Snappy.
-Native RocksDB OPTIONS files are copied into run output. Match/defaults must be
+Native RocksDB OPTIONS files are copied into run output. For checked-in evidence,
+`python3 tools/compare/archive_options.py CAMPAIGN_ROOT ...` replaces them with
+byte-exact gzip archives and an original-byte SHA-256 manifest. It verifies each
+archive before removing the plain copy; `gzip -dc OPTIONS-....gz` restores it. Match/defaults must be
 reported separately; default results do not imply equal resource budgets.
 
 `sync-every=0` acknowledges buffered acceptance and ends with explicit durable

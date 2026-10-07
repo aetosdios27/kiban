@@ -58,7 +58,7 @@ for (campaign,case,engine),trials in sorted(groups.items()):
 out=a.output or a.roots[0]
 out.mkdir(parents=True,exist_ok=True)
 with (out/'comparison.csv').open('w',newline='') as f:
-    writer=csv.DictWriter(f,fieldnames=list(rows[0]) if rows else ['campaign']);writer.writeheader();writer.writerows(rows)
+    writer=csv.DictWriter(f,fieldnames=list(rows[0]) if rows else ['campaign'],lineterminator='\n');writer.writeheader();writer.writerows(rows)
 (out/'comparison.json').write_text(json.dumps({'analyzer_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'trials':rows,'aggregates':aggregates,'paired_ratios':paired,'invalid':invalid,'policy':'only complete verified trials; median per-trial percentiles, not pooled percentile; unknown metrics remain null'},indent=2)+'\n')
 lines=['| Case | Engine | Trials | Median ops/s (min–max) | GET p99 µs | PUT p99 µs |','| --- | --- | ---: | ---: | ---: | ---: |']
 for g in aggregates:

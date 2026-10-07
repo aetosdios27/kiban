@@ -1,0 +1,74 @@
+[
+  {
+    "original": "writes-statistics-off-r0-rocksdb/OPTIONS-000007",
+    "archive": "writes-statistics-off-r0-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "writes-statistics-off-r0-rocksdb/OPTIONS-000011",
+    "archive": "writes-statistics-off-r0-rocksdb/OPTIONS-000011.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "writes-statistics-off-r1-rocksdb/OPTIONS-000007",
+    "archive": "writes-statistics-off-r1-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "writes-statistics-off-r1-rocksdb/OPTIONS-000011",
+    "archive": "writes-statistics-off-r1-rocksdb/OPTIONS-000011.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "writes-statistics-off-r2-rocksdb/OPTIONS-000007",
+    "archive": "writes-statistics-off-r2-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "writes-statistics-off-r2-rocksdb/OPTIONS-000011",
+    "archive": "writes-statistics-off-r2-rocksdb/OPTIONS-000011.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "writes-statistics-on-r0-rocksdb/OPTIONS-000007",
+    "archive": "writes-statistics-on-r0-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "writes-statistics-on-r0-rocksdb/OPTIONS-000011",
+    "archive": "writes-statistics-on-r0-rocksdb/OPTIONS-000011.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "writes-statistics-on-r1-rocksdb/OPTIONS-000007",
+    "archive": "writes-statistics-on-r1-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "writes-statistics-on-r1-rocksdb/OPTIONS-000011",
+    "archive": "writes-statistics-on-r1-rocksdb/OPTIONS-000011.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "writes-statistics-on-r2-rocksdb/OPTIONS-000007",
+    "archive": "writes-statistics-on-r2-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "writes-statistics-on-r2-rocksdb/OPTIONS-000011",
+    "archive": "writes-statistics-on-r2-rocksdb/OPTIONS-000011.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  }
+]

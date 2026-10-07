@@ -1,0 +1,110 @@
+[
+  {
+    "original": "defaults-mixed-r0-rocksdb/OPTIONS-000007",
+    "archive": "defaults-mixed-r0-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "6dea763d6deeb6a6da07e8050b99b4c2153ed71ed5f4d7e6083efa460fae730e",
+    "original_bytes": 8990
+  },
+  {
+    "original": "defaults-mixed-r0-rocksdb/OPTIONS-000015",
+    "archive": "defaults-mixed-r0-rocksdb/OPTIONS-000015.gz",
+    "original_sha256": "6dea763d6deeb6a6da07e8050b99b4c2153ed71ed5f4d7e6083efa460fae730e",
+    "original_bytes": 8990
+  },
+  {
+    "original": "defaults-mixed-r1-rocksdb/OPTIONS-000007",
+    "archive": "defaults-mixed-r1-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "6dea763d6deeb6a6da07e8050b99b4c2153ed71ed5f4d7e6083efa460fae730e",
+    "original_bytes": 8990
+  },
+  {
+    "original": "defaults-mixed-r1-rocksdb/OPTIONS-000015",
+    "archive": "defaults-mixed-r1-rocksdb/OPTIONS-000015.gz",
+    "original_sha256": "6dea763d6deeb6a6da07e8050b99b4c2153ed71ed5f4d7e6083efa460fae730e",
+    "original_bytes": 8990
+  },
+  {
+    "original": "defaults-mixed-r2-rocksdb/OPTIONS-000007",
+    "archive": "defaults-mixed-r2-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "6dea763d6deeb6a6da07e8050b99b4c2153ed71ed5f4d7e6083efa460fae730e",
+    "original_bytes": 8990
+  },
+  {
+    "original": "defaults-mixed-r2-rocksdb/OPTIONS-000015",
+    "archive": "defaults-mixed-r2-rocksdb/OPTIONS-000015.gz",
+    "original_sha256": "6dea763d6deeb6a6da07e8050b99b4c2153ed71ed5f4d7e6083efa460fae730e",
+    "original_bytes": 8990
+  },
+  {
+    "original": "defaults-random-read-r0-rocksdb/OPTIONS-000007",
+    "archive": "defaults-random-read-r0-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "6dea763d6deeb6a6da07e8050b99b4c2153ed71ed5f4d7e6083efa460fae730e",
+    "original_bytes": 8990
+  },
+  {
+    "original": "defaults-random-read-r0-rocksdb/OPTIONS-000015",
+    "archive": "defaults-random-read-r0-rocksdb/OPTIONS-000015.gz",
+    "original_sha256": "6dea763d6deeb6a6da07e8050b99b4c2153ed71ed5f4d7e6083efa460fae730e",
+    "original_bytes": 8990
+  },
+  {
+    "original": "defaults-random-read-r1-rocksdb/OPTIONS-000007",
+    "archive": "defaults-random-read-r1-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "6dea763d6deeb6a6da07e8050b99b4c2153ed71ed5f4d7e6083efa460fae730e",
+    "original_bytes": 8990
+  },
+  {
+    "original": "defaults-random-read-r1-rocksdb/OPTIONS-000015",
+    "archive": "defaults-random-read-r1-rocksdb/OPTIONS-000015.gz",
+    "original_sha256": "6dea763d6deeb6a6da07e8050b99b4c2153ed71ed5f4d7e6083efa460fae730e",
+    "original_bytes": 8990
+  },
+  {
+    "original": "defaults-random-read-r2-rocksdb/OPTIONS-000007",
+    "archive": "defaults-random-read-r2-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "6dea763d6deeb6a6da07e8050b99b4c2153ed71ed5f4d7e6083efa460fae730e",
+    "original_bytes": 8990
+  },
+  {
+    "original": "defaults-random-read-r2-rocksdb/OPTIONS-000015",
+    "archive": "defaults-random-read-r2-rocksdb/OPTIONS-000015.gz",
+    "original_sha256": "6dea763d6deeb6a6da07e8050b99b4c2153ed71ed5f4d7e6083efa460fae730e",
+    "original_bytes": 8990
+  },
+  {
+    "original": "defaults-random-write-r0-rocksdb/OPTIONS-000007",
+    "archive": "defaults-random-write-r0-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "6dea763d6deeb6a6da07e8050b99b4c2153ed71ed5f4d7e6083efa460fae730e",
+    "original_bytes": 8990
+  },
+  {
+    "original": "defaults-random-write-r0-rocksdb/OPTIONS-000015",
+    "archive": "defaults-random-write-r0-rocksdb/OPTIONS-000015.gz",
+    "original_sha256": "6dea763d6deeb6a6da07e8050b99b4c2153ed71ed5f4d7e6083efa460fae730e",
+    "original_bytes": 8990
+  },
+  {
+    "original": "defaults-random-write-r1-rocksdb/OPTIONS-000007",
+    "archive": "defaults-random-write-r1-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "6dea763d6deeb6a6da07e8050b99b4c2153ed71ed5f4d7e6083efa460fae730e",
+    "original_bytes": 8990
+  },
+  {
+    "original": "defaults-random-write-r1-rocksdb/OPTIONS-000015",
+    "archive": "defaults-random-write-r1-rocksdb/OPTIONS-000015.gz",
+    "original_sha256": "6dea763d6deeb6a6da07e8050b99b4c2153ed71ed5f4d7e6083efa460fae730e",
+    "original_bytes": 8990
+  },
+  {
+    "original": "defaults-random-write-r2-rocksdb/OPTIONS-000007",
+    "archive": "defaults-random-write-r2-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "6dea763d6deeb6a6da07e8050b99b4c2153ed71ed5f4d7e6083efa460fae730e",
+    "original_bytes": 8990
+  },
+  {
+    "original": "defaults-random-write-r2-rocksdb/OPTIONS-000015",
+    "archive": "defaults-random-write-r2-rocksdb/OPTIONS-000015.gz",
+    "original_sha256": "6dea763d6deeb6a6da07e8050b99b4c2153ed71ed5f4d7e6083efa460fae730e",
+    "original_bytes": 8990
+  }
+]

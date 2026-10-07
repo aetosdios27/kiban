@@ -221,7 +221,9 @@ retains per-trial ranges, resource use, maxima and the analysis-source hash.
 
 The per-campaign [raw results](comparison-results) include machine-readable
 JSON/CSV, periodic state, exact configurations, verification markers, source
-snapshots and commands. Database directories are retained locally under
+snapshots and commands. Native OPTIONS files are archived byte-for-byte as gzip,
+with original-byte SHA-256 manifests; decompression restores their original
+format, including trailing blanks. CSV exports use LF line endings. Database directories are retained locally under
 `target/comparison-data`, outside the published crate. Generated results and the
 comparison tool are excluded from crate packaging, but remain in the repository.
 The initial `scaling` directory records a **build setup failure before any trial**:

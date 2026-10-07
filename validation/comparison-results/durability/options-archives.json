@@ -1,0 +1,110 @@
+[
+  {
+    "original": "write-sync-0-r0-rocksdb/OPTIONS-000007",
+    "archive": "write-sync-0-r0-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "write-sync-0-r0-rocksdb/OPTIONS-000011",
+    "archive": "write-sync-0-r0-rocksdb/OPTIONS-000011.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "write-sync-0-r1-rocksdb/OPTIONS-000007",
+    "archive": "write-sync-0-r1-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "write-sync-0-r1-rocksdb/OPTIONS-000011",
+    "archive": "write-sync-0-r1-rocksdb/OPTIONS-000011.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "write-sync-0-r2-rocksdb/OPTIONS-000007",
+    "archive": "write-sync-0-r2-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "write-sync-0-r2-rocksdb/OPTIONS-000011",
+    "archive": "write-sync-0-r2-rocksdb/OPTIONS-000011.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "write-sync-1-r0-rocksdb/OPTIONS-000007",
+    "archive": "write-sync-1-r0-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "write-sync-1-r0-rocksdb/OPTIONS-000011",
+    "archive": "write-sync-1-r0-rocksdb/OPTIONS-000011.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "write-sync-1-r1-rocksdb/OPTIONS-000007",
+    "archive": "write-sync-1-r1-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "write-sync-1-r1-rocksdb/OPTIONS-000011",
+    "archive": "write-sync-1-r1-rocksdb/OPTIONS-000011.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "write-sync-1-r2-rocksdb/OPTIONS-000007",
+    "archive": "write-sync-1-r2-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "write-sync-1-r2-rocksdb/OPTIONS-000011",
+    "archive": "write-sync-1-r2-rocksdb/OPTIONS-000011.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "write-sync-1000-r0-rocksdb/OPTIONS-000007",
+    "archive": "write-sync-1000-r0-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "write-sync-1000-r0-rocksdb/OPTIONS-000011",
+    "archive": "write-sync-1000-r0-rocksdb/OPTIONS-000011.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "write-sync-1000-r1-rocksdb/OPTIONS-000007",
+    "archive": "write-sync-1000-r1-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "write-sync-1000-r1-rocksdb/OPTIONS-000011",
+    "archive": "write-sync-1000-r1-rocksdb/OPTIONS-000011.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "write-sync-1000-r2-rocksdb/OPTIONS-000007",
+    "archive": "write-sync-1000-r2-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "write-sync-1000-r2-rocksdb/OPTIONS-000011",
+    "archive": "write-sync-1000-r2-rocksdb/OPTIONS-000011.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  }
+]

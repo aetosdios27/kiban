@@ -1,0 +1,254 @@
+[
+  {
+    "original": "burst-read-1m-r0-rocksdb/OPTIONS-000007",
+    "archive": "burst-read-1m-r0-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "burst-read-1m-r0-rocksdb/OPTIONS-000023",
+    "archive": "burst-read-1m-r0-rocksdb/OPTIONS-000023.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "burst-read-1m-r1-rocksdb/OPTIONS-000007",
+    "archive": "burst-read-1m-r1-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "burst-read-1m-r1-rocksdb/OPTIONS-000023",
+    "archive": "burst-read-1m-r1-rocksdb/OPTIONS-000023.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "burst-read-1m-r2-rocksdb/OPTIONS-000007",
+    "archive": "burst-read-1m-r2-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "burst-read-1m-r2-rocksdb/OPTIONS-000023",
+    "archive": "burst-read-1m-r2-rocksdb/OPTIONS-000023.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "burst-recovery-1m-r0-rocksdb/OPTIONS-000007",
+    "archive": "burst-recovery-1m-r0-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "burst-recovery-1m-r0-rocksdb/OPTIONS-000023",
+    "archive": "burst-recovery-1m-r0-rocksdb/OPTIONS-000023.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "burst-recovery-1m-r1-rocksdb/OPTIONS-000007",
+    "archive": "burst-recovery-1m-r1-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "burst-recovery-1m-r1-rocksdb/OPTIONS-000023",
+    "archive": "burst-recovery-1m-r1-rocksdb/OPTIONS-000023.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "burst-recovery-1m-r2-rocksdb/OPTIONS-000007",
+    "archive": "burst-recovery-1m-r2-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "burst-recovery-1m-r2-rocksdb/OPTIONS-000023",
+    "archive": "burst-recovery-1m-r2-rocksdb/OPTIONS-000023.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "mixed-1m-r0-rocksdb/OPTIONS-000007",
+    "archive": "mixed-1m-r0-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "mixed-1m-r0-rocksdb/OPTIONS-000023",
+    "archive": "mixed-1m-r0-rocksdb/OPTIONS-000023.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "mixed-1m-r1-rocksdb/OPTIONS-000007",
+    "archive": "mixed-1m-r1-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "mixed-1m-r1-rocksdb/OPTIONS-000023",
+    "archive": "mixed-1m-r1-rocksdb/OPTIONS-000023.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "mixed-1m-r2-rocksdb/OPTIONS-000007",
+    "archive": "mixed-1m-r2-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "mixed-1m-r2-rocksdb/OPTIONS-000023",
+    "archive": "mixed-1m-r2-rocksdb/OPTIONS-000023.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "random-write-1m-r0-rocksdb/OPTIONS-000007",
+    "archive": "random-write-1m-r0-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "random-write-1m-r0-rocksdb/OPTIONS-000011",
+    "archive": "random-write-1m-r0-rocksdb/OPTIONS-000011.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "random-write-1m-r1-rocksdb/OPTIONS-000007",
+    "archive": "random-write-1m-r1-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "random-write-1m-r1-rocksdb/OPTIONS-000011",
+    "archive": "random-write-1m-r1-rocksdb/OPTIONS-000011.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "random-write-1m-r2-rocksdb/OPTIONS-000007",
+    "archive": "random-write-1m-r2-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "random-write-1m-r2-rocksdb/OPTIONS-000011",
+    "archive": "random-write-1m-r2-rocksdb/OPTIONS-000011.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "read-1m-r0-rocksdb/OPTIONS-000007",
+    "archive": "read-1m-r0-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "read-1m-r0-rocksdb/OPTIONS-000023",
+    "archive": "read-1m-r0-rocksdb/OPTIONS-000023.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "read-1m-r1-rocksdb/OPTIONS-000007",
+    "archive": "read-1m-r1-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "read-1m-r1-rocksdb/OPTIONS-000023",
+    "archive": "read-1m-r1-rocksdb/OPTIONS-000023.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "read-1m-r2-rocksdb/OPTIONS-000007",
+    "archive": "read-1m-r2-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "read-1m-r2-rocksdb/OPTIONS-000023",
+    "archive": "read-1m-r2-rocksdb/OPTIONS-000023.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "sequential-1m-r0-rocksdb/OPTIONS-000007",
+    "archive": "sequential-1m-r0-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "sequential-1m-r0-rocksdb/OPTIONS-000011",
+    "archive": "sequential-1m-r0-rocksdb/OPTIONS-000011.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "sequential-1m-r1-rocksdb/OPTIONS-000007",
+    "archive": "sequential-1m-r1-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "sequential-1m-r1-rocksdb/OPTIONS-000011",
+    "archive": "sequential-1m-r1-rocksdb/OPTIONS-000011.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "sequential-1m-r2-rocksdb/OPTIONS-000007",
+    "archive": "sequential-1m-r2-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "sequential-1m-r2-rocksdb/OPTIONS-000011",
+    "archive": "sequential-1m-r2-rocksdb/OPTIONS-000011.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "updates-1m-r0-rocksdb/OPTIONS-000007",
+    "archive": "updates-1m-r0-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "updates-1m-r0-rocksdb/OPTIONS-000023",
+    "archive": "updates-1m-r0-rocksdb/OPTIONS-000023.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "updates-1m-r1-rocksdb/OPTIONS-000007",
+    "archive": "updates-1m-r1-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "updates-1m-r1-rocksdb/OPTIONS-000023",
+    "archive": "updates-1m-r1-rocksdb/OPTIONS-000023.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "updates-1m-r2-rocksdb/OPTIONS-000007",
+    "archive": "updates-1m-r2-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "updates-1m-r2-rocksdb/OPTIONS-000023",
+    "archive": "updates-1m-r2-rocksdb/OPTIONS-000023.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  }
+]

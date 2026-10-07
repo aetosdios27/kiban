@@ -1,0 +1,74 @@
+[
+  {
+    "original": "reads-cache-reduced-r0-rocksdb/OPTIONS-000007",
+    "archive": "reads-cache-reduced-r0-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "reads-cache-reduced-r0-rocksdb/OPTIONS-000095",
+    "archive": "reads-cache-reduced-r0-rocksdb/OPTIONS-000095.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "reads-cache-reduced-r1-rocksdb/OPTIONS-000007",
+    "archive": "reads-cache-reduced-r1-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "reads-cache-reduced-r1-rocksdb/OPTIONS-000095",
+    "archive": "reads-cache-reduced-r1-rocksdb/OPTIONS-000095.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "reads-cache-reduced-r2-rocksdb/OPTIONS-000007",
+    "archive": "reads-cache-reduced-r2-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "reads-cache-reduced-r2-rocksdb/OPTIONS-000095",
+    "archive": "reads-cache-reduced-r2-rocksdb/OPTIONS-000095.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "reads-cache-warm-r0-rocksdb/OPTIONS-000007",
+    "archive": "reads-cache-warm-r0-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "reads-cache-warm-r0-rocksdb/OPTIONS-000095",
+    "archive": "reads-cache-warm-r0-rocksdb/OPTIONS-000095.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "reads-cache-warm-r1-rocksdb/OPTIONS-000007",
+    "archive": "reads-cache-warm-r1-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "reads-cache-warm-r1-rocksdb/OPTIONS-000095",
+    "archive": "reads-cache-warm-r1-rocksdb/OPTIONS-000095.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "reads-cache-warm-r2-rocksdb/OPTIONS-000007",
+    "archive": "reads-cache-warm-r2-rocksdb/OPTIONS-000007.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  },
+  {
+    "original": "reads-cache-warm-r2-rocksdb/OPTIONS-000095",
+    "archive": "reads-cache-warm-r2-rocksdb/OPTIONS-000095.gz",
+    "original_sha256": "fb5f2c0c3b26a7b8a261c004829fff466dc820399a0cbbfed5966c3c59d069c4",
+    "original_bytes": 8983
+  }
+]
