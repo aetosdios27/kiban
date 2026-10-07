@@ -1,0 +1,467 @@
+   Compiling kiban v0.1.0 (/home/aetos/dev/personal/kiban)
+    Finished `bench` profile [optimized] target(s) in 1.39s
+     Running benches/phase_changing.rs (target/release/deps/phase_changing-5268c160b60a6d52)
+Kiban phase-changing torture: 6 phases x 6s each, 4 writers / 4 readers
+  1-read-heavy (writer_duty=0.05 reader_duty=1.00 churny=false)
+  2-write-burst (writer_duty=1.00 reader_duty=0.05 churny=false)
+  3-mixed (writer_duty=0.60 reader_duty=0.60 churny=false)
+  4-overwrite-delete-churn (writer_duty=1.00 reader_duty=0.30 churny=true)
+  5-sequential-new-writes (writer_duty=1.00 reader_duty=0.30 churny=false)
+  6-read-heavy-recovery (writer_duty=0.05 reader_duty=1.00 churny=false)
+
+-- A-fixed --
+  write_amp=12.37x  avg SST tables probed/get=3.12  write_stalls=1438  max L0=8
+  RSS peak=291.3MB  open FDs peak=297
+  phase                           GET p50        p99       p999    PUT p50        p99       p999     get n     put n mode(BAL/RDP/WEM)
+  1-read-heavy                     2.13us    4.47us    8.72us    11.84us  998.91us 17946.08us   10252392      4708 100%/  0%/  0%
+  2-write-burst                   32.15us  100.20us  264.22us     3.20us  536.64us 66818.21us       4961     87627 100%/  0%/  0%
+  3-mixed                          4.92us   29.61us   69.34us     4.57us 2425.22us 435902.65us     136767     21330 100%/  0%/  0%
+  4-overwrite-delete-churn        11.94us   83.36us  399.71us     6.52us 1733.67us 13506.68us      38947    254315 100%/  0%/  0%
+  5-sequential-new-writes         10.58us   69.08us  139.73us     4.43us 1744.11us 394866.89us      39089     36285 100%/  0%/  0%
+  6-read-heavy-recovery            3.70us   10.36us   14.16us    15.23us 2479.53us 19988.62us    5936990      4793 100%/  0%/  0%
+  phase                        L0 (min-max) total MB (min-max)    +stalls   +compactions pressure (min/avg/max)
+  1-read-heavy                     0-5          1.8-2.2              0             13  0.00/ 0.00/ 0.00
+  2-write-burst                    0-8          2.2-11.4           485             40  0.00/ 0.00/ 0.00
+  3-mixed                          0-8         11.4-13.7            40             68  0.00/ 0.00/ 0.00
+  4-overwrite-delete-churn         0-7         13.7-14.4           751            260  0.00/ 0.00/ 0.00
+  5-sequential-new-writes          0-7         14.0-17.7           162             26  0.00/ 0.00/ 0.00
+  6-read-heavy-recovery            0-4         17.7-18.3             0             31  0.00/ 0.00/ 0.00
+  phase                          l0 (avg) deep_debt (avg) read (avg)
+  1-read-heavy                      0.000            0.000      0.000
+  2-write-burst                     0.000            0.000      0.000
+  3-mixed                           0.000            0.000      0.000
+  4-overwrite-delete-churn          0.000            0.000      0.000
+  5-sequential-new-writes           0.000            0.000      0.000
+  6-read-heavy-recovery             0.000            0.000      0.000
+
+-- B-scored+batch4 --
+  write_amp=10.66x  avg SST tables probed/get=2.93  write_stalls=2177  max L0=14
+  RSS peak=304.3MB  open FDs peak=296
+  phase                           GET p50        p99       p999    PUT p50        p99       p999     get n     put n mode(BAL/RDP/WEM)
+  1-read-heavy                     2.19us    4.33us    9.54us    11.89us  798.85us 6389.90us   10052857      4731 100%/  0%/  0%
+  2-write-burst                   19.14us   96.66us  351.11us     3.25us  281.35us 66443.67us       4946    121780 100%/  0%/  0%
+  3-mixed                          6.06us   31.39us  108.46us     4.49us 2042.57us 94544.79us     133563     53687 100%/  0%/  0%
+  4-overwrite-delete-churn        14.09us   81.89us  412.02us     6.16us 1635.60us 14421.92us      38885    255696 100%/  0%/  0%
+  5-sequential-new-writes         13.80us   78.11us  231.84us     3.61us  432.60us 72345.09us      39266    103480 100%/  0%/  0%
+  6-read-heavy-recovery            5.08us   15.27us   22.31us    21.41us 3261.90us 8066.62us    4322200      4702 100%/  0%/  0%
+  phase                        L0 (min-max) total MB (min-max)    +stalls   +compactions pressure (min/avg/max)
+  1-read-heavy                     0-4          1.8-2.2              0             11  0.00/ 0.00/ 0.00
+  2-write-burst                    0-14         2.2-15.1           738            100  0.00/ 0.00/ 0.00
+  3-mixed                          0-10        15.1-20.8           128            108  0.00/ 0.00/ 0.00
+  4-overwrite-delete-churn         0-8         20.8-21.5           745            131  0.00/ 0.00/ 0.00
+  5-sequential-new-writes          0-12        21.2-31.9           558             84  0.00/ 0.00/ 0.00
+  6-read-heavy-recovery            0-8         31.9-32.4             0            108  0.00/ 0.00/ 0.00
+  phase                          l0 (avg) deep_debt (avg) read (avg)
+  1-read-heavy                      0.000            0.000      0.000
+  2-write-burst                     0.000            0.000      0.000
+  3-mixed                           0.000            0.000      0.000
+  4-overwrite-delete-churn          0.000            0.000      0.000
+  5-sequential-new-writes           0.000            0.000      0.000
+  6-read-heavy-recovery             0.000            0.000      0.000
+
+-- C-governor --
+  write_amp=7.81x  avg SST tables probed/get=2.83  write_stalls=2102  max L0=8
+  RSS peak=362.3MB  open FDs peak=239
+  governor: 9 mode switches, avg batch size=4.35, 186 trivial moves (66801223 bytes avoided), predicted-vs-actual: 367 samples, MAPE=19.2%
+  phase                           GET p50        p99       p999    PUT p50        p99       p999     get n     put n mode(BAL/RDP/WEM)
+  1-read-heavy                     1.93us    4.01us    7.39us    10.78us  151.58us 8154.40us   11341227      4736  34%/ 65%/  0%
+  2-write-burst                   29.77us  108.03us  370.89us     3.29us 1470.80us 64247.06us       4934    127089   0%/  6%/ 93%
+  3-mixed                          5.87us   30.14us   94.11us     4.82us 2195.28us 66559.45us     133912     52226   1%/ 19%/ 79%
+  4-overwrite-delete-churn        13.30us   80.67us  401.00us     6.19us 1680.32us 12801.91us      39107    313361   0%/100%/  0%
+  5-sequential-new-writes         13.96us   76.86us  276.52us     4.61us 2093.21us 66938.46us      39257    101625   0%/  6%/ 93%
+  6-read-heavy-recovery            5.32us    9.57us   17.12us    17.64us 3052.30us 11190.33us    4300692      4592   6%/ 72%/ 21%
+  phase                        L0 (min-max) total MB (min-max)    +stalls   +compactions pressure (min/avg/max)
+  1-read-heavy                     0-4          1.8-2.2              0              7  0.38/ 0.41/ 0.46
+  2-write-burst                    0-8          2.2-15.6           661             94  0.43/ 0.97/ 1.00
+  3-mixed                          0-5         15.6-21.1           112            156  0.42/ 0.90/ 1.00
+  4-overwrite-delete-churn         0-7         21.2-21.8           844            134  0.44/ 0.48/ 0.67
+  5-sequential-new-writes          0-8         21.6-32.0           481             83  0.46/ 0.97/ 1.00
+  6-read-heavy-recovery            0-6         32.0-32.6             0             70  0.44/ 0.58/ 1.00
+  phase                          l0 (avg) deep_debt (avg) read (avg)
+  1-read-heavy                      0.124            0.109      0.968
+  2-write-burst                     0.408            0.950      1.000
+  3-mixed                           0.171            0.849      0.998
+  4-overwrite-delete-churn          0.294            0.013      1.000
+  5-sequential-new-writes           0.391            0.954      1.000
+  6-read-heavy-recovery             0.148            0.322      1.000
+
+-- C-governor: pressure/mode trace around phase boundaries --
+  boundary 1-read-heavy -> 2-write-burst (t=6.00s):
+    t=  5.42s  pressure=0.46 (l0=0.00 debt=0.16 read=1.00)  mode=RDP  L0=0   stalls=32
+    t=  5.44s  pressure=0.46 (l0=0.00 debt=0.16 read=1.00)  mode=RDP  L0=0   stalls=32
+    t=  5.46s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=1   stalls=32
+    t=  5.48s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=1   stalls=32
+    t=  5.50s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=1   stalls=32
+    t=  5.52s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=1   stalls=32
+    t=  5.54s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=1   stalls=32
+    t=  5.56s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=1   stalls=32
+    t=  5.58s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=1   stalls=32
+    t=  5.60s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=1   stalls=32
+    t=  5.62s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=1   stalls=32
+    t=  5.64s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=1   stalls=32
+    t=  5.66s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=1   stalls=32
+    t=  5.68s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=1   stalls=32
+    t=  5.70s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=1   stalls=32
+    t=  5.72s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=1   stalls=32
+    t=  5.74s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=1   stalls=32
+    t=  5.76s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=1   stalls=32
+    t=  5.78s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=1   stalls=32
+    t=  5.80s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=1   stalls=32
+    t=  5.82s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=1   stalls=32
+    t=  5.84s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=1   stalls=32
+    t=  5.86s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=1   stalls=32
+    t=  5.88s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=1   stalls=32
+    t=  5.90s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=1   stalls=32
+    t=  5.92s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=1   stalls=32
+    t=  5.94s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=1   stalls=32
+    t=  5.97s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=1   stalls=32
+    t=  5.99s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=1   stalls=32
+    t=  6.01s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=1   stalls=32
+    t=  6.03s  pressure=0.43 (l0=0.08 debt=0.11 read=1.00)  mode=RDP  L0=4   stalls=44
+    t=  6.05s  pressure=0.50 (l0=0.50 debt=0.08 read=1.00)  mode=RDP  L0=6   stalls=52
+    t=  6.07s  pressure=0.50 (l0=0.50 debt=0.08 read=1.00)  mode=RDP  L0=1   stalls=52
+    t=  6.09s  pressure=0.50 (l0=0.50 debt=0.08 read=1.00)  mode=RDP  L0=5   stalls=63
+    t=  6.11s  pressure=0.54 (l0=0.50 debt=0.18 read=1.00)  mode=RDP  L0=6   stalls=67
+    t=  6.13s  pressure=0.54 (l0=0.50 debt=0.18 read=1.00)  mode=RDP  L0=0   stalls=67
+    t=  6.15s  pressure=0.71 (l0=0.17 debt=0.50 read=1.00)  mode=RDP  L0=2   stalls=67
+    t=  6.17s  pressure=0.71 (l0=0.17 debt=0.50 read=1.00)  mode=RDP  L0=2   stalls=71
+    t=  6.19s  pressure=0.66 (l0=0.33 debt=0.45 read=1.00)  mode=RDP  L0=4   stalls=75
+    t=  6.21s  pressure=0.66 (l0=0.33 debt=0.45 read=1.00)  mode=RDP  L0=1   stalls=75
+    t=  6.23s  pressure=0.69 (l0=0.25 debt=0.53 read=1.00)  mode=RDP  L0=3   stalls=79
+    t=  6.25s  pressure=0.69 (l0=0.25 debt=0.53 read=1.00)  mode=RDP  L0=3   stalls=83
+    t=  6.27s  pressure=0.71 (l0=0.42 debt=0.57 read=1.00)  mode=RDP  L0=5   stalls=87
+    t=  6.30s  pressure=0.71 (l0=0.42 debt=0.57 read=1.00)  mode=RDP  L0=1   stalls=87
+    t=  6.32s  pressure=0.71 (l0=0.42 debt=0.57 read=1.00)  mode=RDP  L0=4   stalls=95
+    t=  6.34s  pressure=0.71 (l0=0.42 debt=0.57 read=1.00)  mode=RDP  L0=7   stalls=107
+    t=  6.36s  pressure=0.74 (l0=0.67 debt=0.61 read=1.00)  mode=RDP  L0=8   stalls=115
+    t=  6.38s  pressure=0.74 (l0=0.67 debt=0.61 read=1.00)  mode=RDP  L0=0   stalls=115
+    t=  6.40s  pressure=0.82 (l0=0.17 debt=0.73 read=1.00)  mode=WEM  L0=3   stalls=119
+    t=  6.42s  pressure=0.87 (l0=0.42 debt=0.81 read=1.00)  mode=WEM  L0=5   stalls=127
+    t=  6.44s  pressure=0.87 (l0=0.42 debt=0.81 read=1.00)  mode=WEM  L0=5   stalls=127
+    t=  6.46s  pressure=0.87 (l0=0.42 debt=0.81 read=1.00)  mode=WEM  L0=0   stalls=127
+    t=  6.48s  pressure=0.87 (l0=0.42 debt=0.81 read=1.00)  mode=WEM  L0=3   stalls=135
+    t=  6.50s  pressure=0.87 (l0=0.42 debt=0.81 read=1.00)  mode=WEM  L0=6   stalls=140
+    t=  6.52s  pressure=0.91 (l0=0.67 debt=0.87 read=1.00)  mode=WEM  L0=8   stalls=151
+    t=  6.54s  pressure=0.91 (l0=0.67 debt=0.87 read=1.00)  mode=WEM  L0=8   stalls=151
+    t=  6.56s  pressure=0.91 (l0=0.67 debt=0.87 read=1.00)  mode=WEM  L0=8   stalls=151
+    t=  6.58s  pressure=0.91 (l0=0.67 debt=0.87 read=1.00)  mode=WEM  L0=1   stalls=151
+  boundary 2-write-burst -> 3-mixed (t=12.00s):
+    t= 11.41s  pressure=1.00 (l0=0.33 debt=1.00 read=1.00)  mode=WEM  L0=4   stalls=650
+    t= 11.43s  pressure=1.00 (l0=0.33 debt=1.00 read=1.00)  mode=WEM  L0=4   stalls=650
+    t= 11.45s  pressure=1.00 (l0=0.33 debt=1.00 read=1.00)  mode=WEM  L0=4   stalls=650
+    t= 11.47s  pressure=1.00 (l0=0.33 debt=1.00 read=1.00)  mode=WEM  L0=4   stalls=650
+    t= 11.49s  pressure=1.00 (l0=0.33 debt=1.00 read=1.00)  mode=WEM  L0=0   stalls=650
+    t= 11.51s  pressure=1.00 (l0=0.17 debt=1.00 read=1.00)  mode=WEM  L0=2   stalls=654
+    t= 11.53s  pressure=1.00 (l0=0.33 debt=1.00 read=1.00)  mode=WEM  L0=4   stalls=654
+    t= 11.55s  pressure=1.00 (l0=0.33 debt=1.00 read=1.00)  mode=WEM  L0=4   stalls=658
+    t= 11.57s  pressure=1.00 (l0=0.33 debt=1.00 read=1.00)  mode=WEM  L0=4   stalls=658
+    t= 11.59s  pressure=1.00 (l0=0.33 debt=1.00 read=1.00)  mode=WEM  L0=4   stalls=658
+    t= 11.61s  pressure=1.00 (l0=0.33 debt=1.00 read=1.00)  mode=WEM  L0=4   stalls=658
+    t= 11.63s  pressure=1.00 (l0=0.33 debt=1.00 read=1.00)  mode=WEM  L0=4   stalls=658
+    t= 11.66s  pressure=1.00 (l0=0.33 debt=1.00 read=1.00)  mode=WEM  L0=4   stalls=658
+    t= 11.68s  pressure=1.00 (l0=0.33 debt=1.00 read=1.00)  mode=WEM  L0=4   stalls=658
+    t= 11.70s  pressure=1.00 (l0=0.33 debt=1.00 read=1.00)  mode=WEM  L0=4   stalls=658
+    t= 11.72s  pressure=1.00 (l0=0.33 debt=1.00 read=1.00)  mode=WEM  L0=2   stalls=658
+    t= 11.74s  pressure=1.00 (l0=0.17 debt=1.00 read=1.00)  mode=WEM  L0=3   stalls=666
+    t= 11.76s  pressure=1.00 (l0=0.17 debt=1.00 read=1.00)  mode=WEM  L0=6   stalls=674
+    t= 11.78s  pressure=1.00 (l0=0.67 debt=1.00 read=1.00)  mode=WEM  L0=8   stalls=682
+    t= 11.80s  pressure=1.00 (l0=0.67 debt=1.00 read=1.00)  mode=WEM  L0=8   stalls=682
+    t= 11.82s  pressure=1.00 (l0=0.67 debt=1.00 read=1.00)  mode=WEM  L0=8   stalls=682
+    t= 11.84s  pressure=1.00 (l0=0.67 debt=1.00 read=1.00)  mode=WEM  L0=8   stalls=682
+    t= 11.86s  pressure=1.00 (l0=0.67 debt=1.00 read=1.00)  mode=WEM  L0=8   stalls=682
+    t= 11.88s  pressure=1.00 (l0=0.67 debt=1.00 read=1.00)  mode=WEM  L0=8   stalls=682
+    t= 11.90s  pressure=1.00 (l0=0.67 debt=1.00 read=1.00)  mode=WEM  L0=8   stalls=682
+    t= 11.92s  pressure=1.00 (l0=0.67 debt=1.00 read=1.00)  mode=WEM  L0=8   stalls=682
+    t= 11.94s  pressure=1.00 (l0=0.67 debt=1.00 read=1.00)  mode=WEM  L0=0   stalls=682
+    t= 11.96s  pressure=1.00 (l0=0.67 debt=1.00 read=1.00)  mode=WEM  L0=2   stalls=686
+    t= 11.98s  pressure=1.00 (l0=0.42 debt=1.00 read=1.00)  mode=WEM  L0=5   stalls=693
+    t= 12.00s  pressure=1.00 (l0=0.42 debt=1.00 read=1.00)  mode=WEM  L0=5   stalls=697
+    t= 12.02s  pressure=1.00 (l0=0.42 debt=1.00 read=1.00)  mode=WEM  L0=5   stalls=697
+    t= 12.04s  pressure=1.00 (l0=0.42 debt=1.00 read=1.00)  mode=WEM  L0=5   stalls=697
+    t= 12.06s  pressure=1.00 (l0=0.42 debt=1.00 read=1.00)  mode=WEM  L0=5   stalls=697
+    t= 12.08s  pressure=1.00 (l0=0.42 debt=1.00 read=1.00)  mode=WEM  L0=5   stalls=697
+    t= 12.10s  pressure=1.00 (l0=0.42 debt=1.00 read=1.00)  mode=WEM  L0=5   stalls=697
+    t= 12.12s  pressure=1.00 (l0=0.42 debt=1.00 read=1.00)  mode=WEM  L0=5   stalls=697
+    t= 12.14s  pressure=1.00 (l0=0.42 debt=1.00 read=1.00)  mode=WEM  L0=5   stalls=697
+    t= 12.16s  pressure=1.00 (l0=0.42 debt=1.00 read=1.00)  mode=WEM  L0=1   stalls=697
+    t= 12.19s  pressure=1.00 (l0=0.17 debt=1.00 read=1.00)  mode=WEM  L0=2   stalls=697
+    t= 12.21s  pressure=1.00 (l0=0.17 debt=1.00 read=1.00)  mode=WEM  L0=2   stalls=697
+    t= 12.23s  pressure=1.00 (l0=0.17 debt=1.00 read=1.00)  mode=WEM  L0=2   stalls=701
+    t= 12.25s  pressure=1.00 (l0=0.17 debt=1.00 read=1.00)  mode=WEM  L0=2   stalls=701
+    t= 12.27s  pressure=1.00 (l0=0.17 debt=1.00 read=1.00)  mode=WEM  L0=2   stalls=701
+    t= 12.29s  pressure=1.00 (l0=0.17 debt=1.00 read=1.00)  mode=WEM  L0=3   stalls=701
+    t= 12.31s  pressure=1.00 (l0=0.33 debt=1.00 read=1.00)  mode=WEM  L0=4   stalls=701
+    t= 12.33s  pressure=1.00 (l0=0.33 debt=1.00 read=1.00)  mode=WEM  L0=4   stalls=701
+    t= 12.35s  pressure=1.00 (l0=0.33 debt=1.00 read=1.00)  mode=WEM  L0=4   stalls=705
+    t= 12.37s  pressure=1.00 (l0=0.33 debt=1.00 read=1.00)  mode=WEM  L0=4   stalls=705
+    t= 12.39s  pressure=1.00 (l0=0.33 debt=1.00 read=1.00)  mode=WEM  L0=4   stalls=705
+    t= 12.41s  pressure=1.00 (l0=0.33 debt=1.00 read=1.00)  mode=WEM  L0=0   stalls=705
+    t= 12.43s  pressure=1.00 (l0=0.17 debt=1.00 read=1.00)  mode=WEM  L0=2   stalls=705
+    t= 12.45s  pressure=1.00 (l0=0.17 debt=1.00 read=1.00)  mode=WEM  L0=2   stalls=705
+    t= 12.47s  pressure=1.00 (l0=0.17 debt=1.00 read=1.00)  mode=WEM  L0=3   stalls=705
+    t= 12.49s  pressure=1.00 (l0=0.25 debt=1.00 read=1.00)  mode=WEM  L0=3   stalls=705
+    t= 12.51s  pressure=1.00 (l0=0.25 debt=1.00 read=1.00)  mode=WEM  L0=3   stalls=709
+    t= 12.53s  pressure=1.00 (l0=0.25 debt=1.00 read=1.00)  mode=WEM  L0=3   stalls=709
+    t= 12.55s  pressure=1.00 (l0=0.25 debt=1.00 read=1.00)  mode=WEM  L0=3   stalls=709
+    t= 12.57s  pressure=1.00 (l0=0.25 debt=1.00 read=1.00)  mode=WEM  L0=3   stalls=709
+    t= 12.59s  pressure=1.00 (l0=0.25 debt=1.00 read=1.00)  mode=WEM  L0=3   stalls=709
+  boundary 3-mixed -> 4-overwrite-delete-churn (t=18.00s):
+    t= 17.42s  pressure=0.51 (l0=0.33 debt=0.09 read=1.00)  mode=RDP  L0=4   stalls=801
+    t= 17.44s  pressure=0.45 (l0=0.00 debt=0.06 read=1.00)  mode=RDP  L0=0   stalls=801
+    t= 17.46s  pressure=0.42 (l0=0.08 debt=0.04 read=1.00)  mode=RDP  L0=1   stalls=801
+    t= 17.48s  pressure=0.42 (l0=0.17 debt=0.03 read=1.00)  mode=RDP  L0=2   stalls=801
+    t= 17.50s  pressure=0.42 (l0=0.17 debt=0.03 read=1.00)  mode=RDP  L0=3   stalls=801
+    t= 17.53s  pressure=0.44 (l0=0.25 debt=0.02 read=1.00)  mode=RDP  L0=3   stalls=801
+    t= 17.55s  pressure=0.47 (l0=0.33 debt=0.01 read=1.00)  mode=RDP  L0=4   stalls=801
+    t= 17.57s  pressure=0.61 (l0=0.08 debt=0.33 read=1.00)  mode=RDP  L0=1   stalls=801
+    t= 17.59s  pressure=0.61 (l0=0.08 debt=0.33 read=1.00)  mode=RDP  L0=1   stalls=801
+    t= 17.61s  pressure=0.65 (l0=0.17 debt=0.43 read=1.00)  mode=RDP  L0=2   stalls=801
+    t= 17.63s  pressure=0.65 (l0=0.17 debt=0.43 read=1.00)  mode=RDP  L0=2   stalls=801
+    t= 17.65s  pressure=0.65 (l0=0.17 debt=0.43 read=1.00)  mode=RDP  L0=4   stalls=805
+    t= 17.67s  pressure=0.68 (l0=0.00 debt=0.51 read=1.00)  mode=RDP  L0=0   stalls=805
+    t= 17.69s  pressure=0.68 (l0=0.00 debt=0.51 read=1.00)  mode=RDP  L0=0   stalls=805
+    t= 17.71s  pressure=0.68 (l0=0.00 debt=0.51 read=1.00)  mode=RDP  L0=0   stalls=809
+    t= 17.73s  pressure=0.68 (l0=0.00 debt=0.51 read=1.00)  mode=RDP  L0=0   stalls=809
+    t= 17.75s  pressure=0.68 (l0=0.00 debt=0.51 read=1.00)  mode=RDP  L0=0   stalls=809
+    t= 17.77s  pressure=0.68 (l0=0.00 debt=0.51 read=1.00)  mode=RDP  L0=0   stalls=809
+    t= 17.79s  pressure=0.68 (l0=0.00 debt=0.51 read=1.00)  mode=RDP  L0=0   stalls=809
+    t= 17.81s  pressure=0.68 (l0=0.00 debt=0.51 read=1.00)  mode=RDP  L0=0   stalls=809
+    t= 17.84s  pressure=0.68 (l0=0.00 debt=0.51 read=1.00)  mode=RDP  L0=0   stalls=809
+    t= 17.86s  pressure=0.51 (l0=0.17 debt=0.21 read=1.00)  mode=RDP  L0=2   stalls=809
+    t= 17.88s  pressure=0.51 (l0=0.17 debt=0.21 read=1.00)  mode=RDP  L0=2   stalls=809
+    t= 17.90s  pressure=0.50 (l0=0.25 debt=0.15 read=1.00)  mode=RDP  L0=3   stalls=809
+    t= 17.92s  pressure=0.51 (l0=0.33 debt=0.10 read=1.00)  mode=RDP  L0=4   stalls=809
+    t= 17.94s  pressure=0.56 (l0=0.00 debt=0.30 read=1.00)  mode=RDP  L0=0   stalls=809
+    t= 17.96s  pressure=0.54 (l0=0.08 debt=0.32 read=1.00)  mode=RDP  L0=1   stalls=809
+    t= 17.98s  pressure=0.54 (l0=0.08 debt=0.32 read=1.00)  mode=RDP  L0=1   stalls=809
+    t= 18.00s  pressure=0.54 (l0=0.08 debt=0.32 read=1.00)  mode=RDP  L0=2   stalls=809
+    t= 18.02s  pressure=0.50 (l0=0.33 debt=0.11 read=1.00)  mode=RDP  L0=4   stalls=813
+    t= 18.04s  pressure=0.50 (l0=0.33 debt=0.11 read=1.00)  mode=RDP  L0=4   stalls=817
+    t= 18.07s  pressure=0.55 (l0=0.17 debt=0.27 read=1.00)  mode=RDP  L0=2   stalls=817
+    t= 18.09s  pressure=0.55 (l0=0.17 debt=0.27 read=1.00)  mode=RDP  L0=3   stalls=825
+    t= 18.11s  pressure=0.56 (l0=0.42 debt=0.29 read=1.00)  mode=RDP  L0=5   stalls=825
+    t= 18.13s  pressure=0.56 (l0=0.42 debt=0.29 read=1.00)  mode=RDP  L0=2   stalls=833
+    t= 18.15s  pressure=0.60 (l0=0.25 debt=0.37 read=1.00)  mode=RDP  L0=3   stalls=837
+    t= 18.17s  pressure=0.60 (l0=0.25 debt=0.37 read=1.00)  mode=RDP  L0=3   stalls=837
+    t= 18.19s  pressure=0.60 (l0=0.25 debt=0.37 read=1.00)  mode=RDP  L0=5   stalls=841
+    t= 18.21s  pressure=0.61 (l0=0.50 debt=0.36 read=1.00)  mode=RDP  L0=0   stalls=845
+    t= 18.23s  pressure=0.49 (l0=0.25 debt=0.12 read=1.00)  mode=RDP  L0=3   stalls=845
+    t= 18.25s  pressure=0.49 (l0=0.25 debt=0.12 read=1.00)  mode=RDP  L0=5   stalls=853
+    t= 18.27s  pressure=0.54 (l0=0.50 debt=0.09 read=1.00)  mode=RDP  L0=6   stalls=857
+    t= 18.29s  pressure=0.50 (l0=0.17 debt=0.06 read=1.00)  mode=RDP  L0=2   stalls=857
+    t= 18.31s  pressure=0.48 (l0=0.25 debt=0.03 read=1.00)  mode=RDP  L0=4   stalls=861
+    t= 18.33s  pressure=0.51 (l0=0.42 debt=0.02 read=1.00)  mode=RDP  L0=5   stalls=865
+    t= 18.36s  pressure=0.46 (l0=0.17 debt=0.01 read=1.00)  mode=RDP  L0=2   stalls=865
+    t= 18.38s  pressure=0.50 (l0=0.42 debt=0.00 read=1.00)  mode=RDP  L0=5   stalls=865
+    t= 18.40s  pressure=0.50 (l0=0.42 debt=0.00 read=1.00)  mode=RDP  L0=2   stalls=873
+    t= 18.42s  pressure=0.50 (l0=0.33 debt=0.00 read=1.00)  mode=RDP  L0=4   stalls=873
+    t= 18.44s  pressure=0.50 (l0=0.33 debt=0.00 read=1.00)  mode=RDP  L0=1   stalls=877
+    t= 18.46s  pressure=0.49 (l0=0.25 debt=0.00 read=1.00)  mode=RDP  L0=4   stalls=881
+    t= 18.49s  pressure=0.50 (l0=0.33 debt=0.00 read=1.00)  mode=RDP  L0=1   stalls=885
+    t= 18.51s  pressure=0.46 (l0=0.25 debt=0.00 read=1.00)  mode=RDP  L0=4   stalls=885
+    t= 18.53s  pressure=0.48 (l0=0.33 debt=0.00 read=1.00)  mode=RDP  L0=1   stalls=889
+    t= 18.55s  pressure=0.46 (l0=0.25 debt=0.00 read=1.00)  mode=RDP  L0=3   stalls=889
+    t= 18.57s  pressure=0.48 (l0=0.33 debt=0.00 read=1.00)  mode=RDP  L0=1   stalls=893
+    t= 18.59s  pressure=0.46 (l0=0.25 debt=0.00 read=1.00)  mode=RDP  L0=4   stalls=895
+  boundary 4-overwrite-delete-churn -> 5-sequential-new-writes (t=24.00s):
+    t= 23.41s  pressure=0.49 (l0=0.33 debt=0.00 read=1.00)  mode=RDP  L0=0   stalls=1577
+    t= 23.43s  pressure=0.46 (l0=0.25 debt=0.00 read=1.00)  mode=RDP  L0=3   stalls=1577
+    t= 23.45s  pressure=0.48 (l0=0.33 debt=0.00 read=1.00)  mode=RDP  L0=0   stalls=1581
+    t= 23.47s  pressure=0.45 (l0=0.17 debt=0.00 read=1.00)  mode=RDP  L0=3   stalls=1581
+    t= 23.49s  pressure=0.48 (l0=0.33 debt=0.00 read=1.00)  mode=RDP  L0=4   stalls=1585
+    t= 23.51s  pressure=0.45 (l0=0.17 debt=0.00 read=1.00)  mode=RDP  L0=2   stalls=1585
+    t= 23.53s  pressure=0.48 (l0=0.33 debt=0.00 read=1.00)  mode=RDP  L0=4   stalls=1589
+    t= 23.55s  pressure=0.48 (l0=0.33 debt=0.00 read=1.00)  mode=RDP  L0=2   stalls=1593
+    t= 23.57s  pressure=0.49 (l0=0.33 debt=0.00 read=1.00)  mode=RDP  L0=4   stalls=1597
+    t= 23.60s  pressure=0.45 (l0=0.17 debt=0.00 read=1.00)  mode=RDP  L0=2   stalls=1597
+    t= 23.62s  pressure=0.48 (l0=0.33 debt=0.00 read=1.00)  mode=RDP  L0=4   stalls=1601
+    t= 23.64s  pressure=0.46 (l0=0.17 debt=0.00 read=1.00)  mode=RDP  L0=2   stalls=1601
+    t= 23.66s  pressure=0.48 (l0=0.33 debt=0.00 read=1.00)  mode=RDP  L0=4   stalls=1605
+    t= 23.68s  pressure=0.45 (l0=0.17 debt=0.00 read=1.00)  mode=RDP  L0=2   stalls=1609
+    t= 23.70s  pressure=0.47 (l0=0.33 debt=0.00 read=1.00)  mode=RDP  L0=4   stalls=1613
+    t= 23.72s  pressure=0.45 (l0=0.17 debt=0.00 read=1.00)  mode=RDP  L0=3   stalls=1621
+    t= 23.74s  pressure=0.47 (l0=0.33 debt=0.00 read=1.00)  mode=RDP  L0=0   stalls=1625
+    t= 23.76s  pressure=0.45 (l0=0.25 debt=0.00 read=1.00)  mode=RDP  L0=3   stalls=1625
+    t= 23.79s  pressure=0.48 (l0=0.33 debt=0.00 read=1.00)  mode=RDP  L0=1   stalls=1629
+    t= 23.81s  pressure=0.45 (l0=0.25 debt=0.00 read=1.00)  mode=RDP  L0=4   stalls=1633
+    t= 23.83s  pressure=0.50 (l0=0.42 debt=0.00 read=1.00)  mode=RDP  L0=0   stalls=1637
+    t= 23.85s  pressure=0.46 (l0=0.17 debt=0.00 read=1.00)  mode=RDP  L0=3   stalls=1637
+    t= 23.87s  pressure=0.48 (l0=0.33 debt=0.00 read=1.00)  mode=RDP  L0=0   stalls=1641
+    t= 23.89s  pressure=0.46 (l0=0.25 debt=0.00 read=1.00)  mode=RDP  L0=3   stalls=1641
+    t= 23.91s  pressure=0.48 (l0=0.33 debt=0.00 read=1.00)  mode=RDP  L0=0   stalls=1645
+    t= 23.93s  pressure=0.46 (l0=0.25 debt=0.00 read=1.00)  mode=RDP  L0=3   stalls=1645
+    t= 23.95s  pressure=0.48 (l0=0.33 debt=0.00 read=1.00)  mode=RDP  L0=0   stalls=1649
+    t= 23.97s  pressure=0.46 (l0=0.25 debt=0.00 read=1.00)  mode=RDP  L0=3   stalls=1649
+    t= 23.99s  pressure=0.48 (l0=0.33 debt=0.00 read=1.00)  mode=RDP  L0=1   stalls=1653
+    t= 24.02s  pressure=0.46 (l0=0.25 debt=0.00 read=1.00)  mode=RDP  L0=4   stalls=1653
+    t= 24.04s  pressure=0.48 (l0=0.33 debt=0.00 read=1.00)  mode=RDP  L0=1   stalls=1657
+    t= 24.06s  pressure=0.46 (l0=0.17 debt=0.05 read=1.00)  mode=RDP  L0=3   stalls=1661
+    t= 24.08s  pressure=0.48 (l0=0.33 debt=0.04 read=1.00)  mode=RDP  L0=0   stalls=1665
+    t= 24.10s  pressure=0.54 (l0=0.17 debt=0.24 read=1.00)  mode=RDP  L0=2   stalls=1669
+    t= 24.12s  pressure=0.54 (l0=0.17 debt=0.24 read=1.00)  mode=RDP  L0=4   stalls=1673
+    t= 24.14s  pressure=0.54 (l0=0.17 debt=0.24 read=1.00)  mode=RDP  L0=7   stalls=1681
+    t= 24.16s  pressure=0.59 (l0=0.58 debt=0.27 read=1.00)  mode=RDP  L0=7   stalls=1685
+    t= 24.18s  pressure=0.59 (l0=0.58 debt=0.27 read=1.00)  mode=RDP  L0=1   stalls=1685
+    t= 24.20s  pressure=0.73 (l0=0.17 debt=0.54 read=1.00)  mode=RDP  L0=2   stalls=1689
+    t= 24.22s  pressure=0.73 (l0=0.17 debt=0.54 read=1.00)  mode=RDP  L0=3   stalls=1689
+    t= 24.24s  pressure=0.74 (l0=0.33 debt=0.58 read=1.00)  mode=RDP  L0=4   stalls=1693
+    t= 24.26s  pressure=0.74 (l0=0.33 debt=0.58 read=1.00)  mode=RDP  L0=2   stalls=1693
+    t= 24.28s  pressure=0.75 (l0=0.17 debt=0.60 read=1.00)  mode=RDP  L0=4   stalls=1693
+    t= 24.30s  pressure=0.75 (l0=0.33 debt=0.62 read=1.00)  mode=RDP  L0=4   stalls=1697
+    t= 24.32s  pressure=0.75 (l0=0.33 debt=0.62 read=1.00)  mode=RDP  L0=4   stalls=1697
+    t= 24.35s  pressure=0.75 (l0=0.33 debt=0.62 read=1.00)  mode=RDP  L0=2   stalls=1697
+    t= 24.37s  pressure=0.81 (l0=0.17 debt=0.71 read=1.00)  mode=RDP  L0=4   stalls=1701
+    t= 24.39s  pressure=0.85 (l0=0.33 debt=0.77 read=1.00)  mode=RDP  L0=4   stalls=1705
+    t= 24.41s  pressure=0.85 (l0=0.33 debt=0.77 read=1.00)  mode=RDP  L0=0   stalls=1705
+    t= 24.43s  pressure=0.93 (l0=0.17 debt=0.90 read=1.00)  mode=WEM  L0=2   stalls=1705
+    t= 24.45s  pressure=0.93 (l0=0.17 debt=0.90 read=1.00)  mode=WEM  L0=2   stalls=1709
+    t= 24.47s  pressure=0.93 (l0=0.17 debt=0.90 read=1.00)  mode=WEM  L0=2   stalls=1709
+    t= 24.49s  pressure=0.88 (l0=0.33 debt=0.83 read=1.00)  mode=WEM  L0=4   stalls=1709
+    t= 24.51s  pressure=0.88 (l0=0.33 debt=0.83 read=1.00)  mode=WEM  L0=1   stalls=1713
+    t= 24.53s  pressure=0.89 (l0=0.17 debt=0.85 read=1.00)  mode=WEM  L0=2   stalls=1717
+    t= 24.56s  pressure=0.93 (l0=0.33 debt=0.89 read=1.00)  mode=WEM  L0=4   stalls=1717
+    t= 24.58s  pressure=0.93 (l0=0.33 debt=0.89 read=1.00)  mode=WEM  L0=4   stalls=1721
+    t= 24.60s  pressure=0.93 (l0=0.33 debt=0.89 read=1.00)  mode=WEM  L0=0   stalls=1721
+  boundary 5-sequential-new-writes -> 6-read-heavy-recovery (t=30.00s):
+    t= 29.41s  pressure=1.00 (l0=0.42 debt=1.00 read=1.00)  mode=WEM  L0=5   stalls=2091
+    t= 29.43s  pressure=1.00 (l0=0.42 debt=1.00 read=1.00)  mode=WEM  L0=5   stalls=2095
+    t= 29.45s  pressure=1.00 (l0=0.42 debt=1.00 read=1.00)  mode=WEM  L0=5   stalls=2095
+    t= 29.47s  pressure=1.00 (l0=0.42 debt=1.00 read=1.00)  mode=WEM  L0=5   stalls=2095
+    t= 29.49s  pressure=1.00 (l0=0.42 debt=1.00 read=1.00)  mode=WEM  L0=5   stalls=2095
+    t= 29.51s  pressure=1.00 (l0=0.42 debt=1.00 read=1.00)  mode=WEM  L0=5   stalls=2095
+    t= 29.53s  pressure=1.00 (l0=0.42 debt=1.00 read=1.00)  mode=WEM  L0=5   stalls=2095
+    t= 29.55s  pressure=1.00 (l0=0.42 debt=1.00 read=1.00)  mode=WEM  L0=5   stalls=2095
+    t= 29.57s  pressure=1.00 (l0=0.42 debt=1.00 read=1.00)  mode=WEM  L0=5   stalls=2095
+    t= 29.59s  pressure=1.00 (l0=0.42 debt=1.00 read=1.00)  mode=WEM  L0=5   stalls=2095
+    t= 29.61s  pressure=1.00 (l0=0.42 debt=1.00 read=1.00)  mode=WEM  L0=5   stalls=2095
+    t= 29.64s  pressure=1.00 (l0=0.42 debt=1.00 read=1.00)  mode=WEM  L0=2   stalls=2099
+    t= 29.66s  pressure=1.00 (l0=0.42 debt=1.00 read=1.00)  mode=WEM  L0=4   stalls=2106
+    t= 29.68s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=6   stalls=2110
+    t= 29.70s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=6   stalls=2114
+    t= 29.72s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=6   stalls=2114
+    t= 29.74s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=6   stalls=2114
+    t= 29.76s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=6   stalls=2114
+    t= 29.79s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=6   stalls=2114
+    t= 29.81s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=6   stalls=2114
+    t= 29.83s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=6   stalls=2114
+    t= 29.85s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=6   stalls=2114
+    t= 29.87s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=6   stalls=2114
+    t= 29.89s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=6   stalls=2114
+    t= 29.91s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=1   stalls=2114
+    t= 29.94s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=3   stalls=2122
+    t= 29.96s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=5   stalls=2130
+    t= 29.98s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=6   stalls=2134
+    t= 30.00s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=6   stalls=2134
+    t= 30.02s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=6   stalls=2134
+    t= 30.04s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=6   stalls=2134
+    t= 30.06s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=6   stalls=2134
+    t= 30.08s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=6   stalls=2134
+    t= 30.10s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=6   stalls=2134
+    t= 30.12s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=6   stalls=2134
+    t= 30.14s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=6   stalls=2134
+    t= 30.16s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=6   stalls=2134
+    t= 30.18s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=6   stalls=2134
+    t= 30.20s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=6   stalls=2134
+    t= 30.22s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=6   stalls=2134
+    t= 30.24s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=6   stalls=2134
+    t= 30.26s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=6   stalls=2134
+    t= 30.29s  pressure=1.00 (l0=0.50 debt=1.00 read=1.00)  mode=WEM  L0=0   stalls=2134
+    t= 30.31s  pressure=1.00 (l0=0.17 debt=1.00 read=1.00)  mode=WEM  L0=2   stalls=2134
+    t= 30.33s  pressure=1.00 (l0=0.17 debt=1.00 read=1.00)  mode=WEM  L0=2   stalls=2134
+    t= 30.35s  pressure=1.00 (l0=0.17 debt=1.00 read=1.00)  mode=WEM  L0=2   stalls=2134
+    t= 30.38s  pressure=1.00 (l0=0.17 debt=1.00 read=1.00)  mode=WEM  L0=2   stalls=2134
+    t= 30.40s  pressure=1.00 (l0=0.17 debt=1.00 read=1.00)  mode=WEM  L0=2   stalls=2134
+    t= 30.42s  pressure=1.00 (l0=0.17 debt=1.00 read=1.00)  mode=WEM  L0=2   stalls=2134
+    t= 30.44s  pressure=1.00 (l0=0.17 debt=1.00 read=1.00)  mode=WEM  L0=2   stalls=2134
+    t= 30.46s  pressure=1.00 (l0=0.17 debt=1.00 read=1.00)  mode=WEM  L0=2   stalls=2134
+    t= 30.48s  pressure=1.00 (l0=0.17 debt=1.00 read=1.00)  mode=WEM  L0=2   stalls=2134
+    t= 30.50s  pressure=1.00 (l0=0.17 debt=1.00 read=1.00)  mode=WEM  L0=2   stalls=2134
+    t= 30.52s  pressure=1.00 (l0=0.17 debt=1.00 read=1.00)  mode=WEM  L0=2   stalls=2134
+    t= 30.54s  pressure=1.00 (l0=0.17 debt=1.00 read=1.00)  mode=WEM  L0=2   stalls=2134
+    t= 30.57s  pressure=1.00 (l0=0.17 debt=1.00 read=1.00)  mode=WEM  L0=2   stalls=2134
+    t= 30.59s  pressure=1.00 (l0=0.17 debt=1.00 read=1.00)  mode=WEM  L0=2   stalls=2134
+
+-- C-governor: last 40 governor scheduling decisions --
+  #888  pressure(l0=0.17 debt=1.00 read=1.00) dominant=read      tier=focus-continued considered=25  -> L4-trivial-move
+  #889  pressure(l0=0.17 debt=1.00 read=1.00) dominant=read      tier=focus-reselected considered=16  -> L1-batch(8)
+  #890  pressure(l0=0.17 debt=0.99 read=1.00) dominant=read      tier=focus-continued considered=14  -> L1-batch(2)
+  #891  pressure(l0=0.17 debt=1.00 read=1.00) dominant=read      tier=focus-continued considered=12  -> L1-batch(4)
+  #892  pressure(l0=0.17 debt=1.00 read=1.00) dominant=read      tier=focus-reselected considered=9   -> L2-trivial-move
+  #893  pressure(l0=0.17 debt=1.00 read=1.00) dominant=read      tier=focus-continued considered=17  -> L2-batch(8)
+  #894  pressure(l0=0.17 debt=0.97 read=1.00) dominant=read      tier=focus-continued considered=17  -> L2-batch(8)
+  #895  pressure(l0=0.25 debt=0.90 read=1.00) dominant=read      tier=focus-reselected considered=17  -> L3-trivial-move
+  #896  pressure(l0=0.25 debt=0.93 read=1.00) dominant=read      tier=focus-continued considered=26  -> L3-trivial-move
+  #897  pressure(l0=0.25 debt=0.95 read=1.00) dominant=read      tier=focus-continued considered=26  -> L3-trivial-move
+  #898  pressure(l0=0.25 debt=0.89 read=1.00) dominant=read      tier=focus-reselected considered=18  -> L4-trivial-move
+  #899  pressure(l0=0.25 debt=0.85 read=1.00) dominant=read      tier=focus-continued considered=18  -> L4-trivial-move
+  #900  pressure(l0=0.25 debt=0.82 read=1.00) dominant=read      tier=focus-continued considered=18  -> L4-trivial-move
+  #901  pressure(l0=0.25 debt=0.80 read=1.00) dominant=read      tier=focus-reselected considered=9   -> L2-trivial-move
+  #902  pressure(l0=0.25 debt=0.77 read=1.00) dominant=read      tier=focus-continued considered=8   -> L2-batch(8)
+  #903  pressure(l0=0.25 debt=0.74 read=1.00) dominant=read      tier=focus-continued considered=12  -> L2-batch(2)
+  #904  pressure(l0=0.25 debt=0.72 read=1.00) dominant=read      tier=focus-reselected considered=10  -> L3-trivial-move
+  #905  pressure(l0=0.25 debt=0.70 read=1.00) dominant=read      tier=focus-reselected considered=10  -> L4-trivial-move
+  #906  pressure(l0=0.25 debt=0.65 read=1.00) dominant=read      tier=focus-reselected considered=1   -> L2-batch(1)
+  #907  pressure(l0=0.25 debt=0.60 read=1.00) dominant=read      tier=focus-continued considered=8   -> L2-batch(8)
+  #908  pressure(l0=0.25 debt=0.53 read=1.00) dominant=read      tier=focus-reselected considered=9   -> L3-trivial-move
+  #909  pressure(l0=0.25 debt=0.37 read=1.00) dominant=read      tier=none            considered=0   -> none
+  #910  pressure(l0=0.25 debt=0.26 read=1.00) dominant=read      tier=none            considered=0   -> none
+  #911  pressure(l0=0.33 debt=0.18 read=1.00) dominant=read      tier=L0-unconditional considered=1   -> L0
+  #912  pressure(l0=0.00 debt=0.13 read=1.00) dominant=read      tier=none            considered=0   -> none
+  #913  pressure(l0=0.08 debt=0.09 read=1.00) dominant=read      tier=none            considered=0   -> none
+  #914  pressure(l0=0.17 debt=0.06 read=1.00) dominant=read      tier=none            considered=0   -> none
+  #915  pressure(l0=0.25 debt=0.04 read=1.00) dominant=read      tier=none            considered=0   -> none
+  #916  pressure(l0=0.33 debt=0.03 read=1.00) dominant=read      tier=L0-unconditional considered=1   -> L0
+  #917  pressure(l0=0.00 debt=0.19 read=1.00) dominant=read      tier=focus-reselected considered=8   -> L1-trivial-move
+  #918  pressure(l0=0.00 debt=0.25 read=1.00) dominant=read      tier=focus-reselected considered=9   -> L2-trivial-move
+  #919  pressure(l0=0.00 debt=0.38 read=1.00) dominant=read      tier=focus-continued considered=17  -> L2-batch(8)
+  #920  pressure(l0=0.00 debt=0.38 read=1.00) dominant=read      tier=focus-reselected considered=9   -> L3-trivial-move
+  #921  pressure(l0=0.00 debt=0.38 read=1.00) dominant=read      tier=focus-continued considered=8   -> L3-batch(7)
+  #922  pressure(l0=0.00 debt=0.46 read=1.00) dominant=read      tier=focus-continued considered=17  -> L3-batch(8)
+  #923  pressure(l0=0.00 debt=0.43 read=1.00) dominant=read      tier=focus-reselected considered=9   -> L4-trivial-move
+  #924  pressure(l0=0.00 debt=0.40 read=1.00) dominant=read      tier=focus-continued considered=9   -> L4-trivial-move
+  #925  pressure(l0=0.00 debt=0.28 read=1.00) dominant=read      tier=none            considered=0   -> none
+  #926  pressure(l0=0.08 debt=0.20 read=1.00) dominant=read      tier=none            considered=0   -> none
+  #927  pressure(l0=0.17 debt=0.14 read=1.00) dominant=read      tier=none            considered=0   -> none
+
+== Overall summary (all phases combined) ==
+config                       WA  avg probe     stalls     max L0
+A-fixed                   12.37       3.12       1438          8
+B-scored+batch4           10.66       2.93       2177         14
+C-governor                 7.81       2.83       2102          8
+
+== Per-phase GET p99 (us) ==
+config                     1-read-heavy      2-write-burst            3-mixed 4-overwrite-delete-churn 5-sequential-new-writes 6-read-heavy-recovery
+A-fixed                          4.47us           100.20us            29.61us            83.36us            69.08us            10.36us
+B-scored+batch4                  4.33us            96.66us            31.39us            81.89us            78.11us            15.27us
+C-governor                       4.01us           108.03us            30.14us            80.67us            76.86us             9.57us
+
+== Per-phase PUT p99 (us) ==
+config                     1-read-heavy      2-write-burst            3-mixed 4-overwrite-delete-churn 5-sequential-new-writes 6-read-heavy-recovery
+A-fixed                        998.91us           536.64us          2425.22us          1733.67us          1744.11us          2479.53us
+B-scored+batch4                798.85us           281.35us          2042.57us          1635.60us           432.60us          3261.90us
+C-governor                     151.58us          1470.80us          2195.28us          1680.32us          2093.21us          3052.30us
+
+== Per-phase PUT p999 (us) ==
+config                     1-read-heavy      2-write-burst            3-mixed 4-overwrite-delete-churn 5-sequential-new-writes 6-read-heavy-recovery
+A-fixed                      17946.08us         66818.21us        435902.65us         13506.68us        394866.89us         19988.62us
+B-scored+batch4               6389.90us         66443.67us         94544.79us         14421.92us         72345.09us          8066.62us
+C-governor                    8154.40us         64247.06us         66559.45us         12801.91us         66938.46us         11190.33us
+
+== Per-phase GET p999 (us) ==
+config                     1-read-heavy      2-write-burst            3-mixed 4-overwrite-delete-churn 5-sequential-new-writes 6-read-heavy-recovery
+A-fixed                          8.72us           264.22us            69.34us           399.71us           139.73us            14.16us
+B-scored+batch4                  9.54us           351.11us           108.46us           412.02us           231.84us            22.31us
+C-governor                       7.39us           370.89us            94.11us           401.00us           276.52us            17.12us
+
+
+== Section 7: deep-debt convergence (L0 kept calm throughout) ==
+
+-- debt-convergence-fixed --
+  max debt ratio seen=68.16  final debt ratio=67.91  time >2x budget=100.0%
+  GET p50=7.73us p99=53.51us p999=172.83us  PUT p50=3.18us p99=643.08us p999=38223.07us  write_amp=24.78x
+  candidate selection share by level: []  (0 trivial moves)
+
+-- debt-convergence-governor --
+  max debt ratio seen=28.59  final debt ratio=27.09  time >2x budget=99.4%
+  GET p50=8.96us p99=63.12us p999=282.27us  PUT p50=4.93us p99=1969.42us p999=74756.83us  write_amp=13.58x
+  candidate selection share by level: [(1, 86), (2, 68), (3, 24)]  (116 trivial moves)

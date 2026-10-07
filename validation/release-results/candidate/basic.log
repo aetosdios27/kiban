@@ -1,0 +1,262 @@
+   Compiling kiban v0.1.0 (/home/aetos/dev/personal/kiban)
+    Finished `bench` profile [optimized] target(s) in 7.97s
+     Running benches/basic.rs (target/release/deps/basic-b918ba9027b97a7d)
+Kiban benchmarks: 5 median samples
+
+== Tiny-read synchronization controls ==
+raw RwLock read / 1 threads                25538394 ops/s   (3.915673ms median)
+raw RwLock read / 2 threads                 7922218 ops/s   (12.622727ms median)
+raw RwLock read / 4 threads                 6364009 ops/s   (15.713366ms median)
+raw RwLock read / 8 threads                 4119179 ops/s   (24.276684ms median)
+raw RwLock read / 16 threads                3408639 ops/s   (29.337226ms median)
+raw RwLock read / 32 threads                2885124 ops/s   (34.660557ms median)
+raw Arc clone / 1 threads                  24993877 ops/s   (4.00098ms median)
+raw Arc clone / 2 threads                  11601051 ops/s   (8.619909ms median)
+raw Arc clone / 4 threads                  11114082 ops/s   (8.997594ms median)
+raw Arc clone / 8 threads                  10174147 ops/s   (9.828834ms median)
+raw Arc clone / 16 threads                  9514386 ops/s   (10.5104ms median)
+raw Arc clone / 32 threads                 10103570 ops/s   (9.897492ms median)
+RwLock + Arc / 1 threads                   15603976 ops/s   (6.408623ms median)
+RwLock + Arc / 2 threads                    4772106 ops/s   (20.955107ms median)
+RwLock + Arc / 4 threads                    3826434 ops/s   (26.133992ms median)
+RwLock + Arc / 8 threads                    3158759 ops/s   (31.658005ms median)
+RwLock + Arc / 16 threads                   2849409 ops/s   (35.094996ms median)
+RwLock + Arc / 32 threads                   2629073 ops/s   (38.03622ms median)
+
+== Benchmark-only sharded gate control ==
+sharded gate 4 / 1 threads                 22654393 ops/s   (4.414155ms median)
+sharded gate 4 / 2 threads                 10987855 ops/s   (9.100957ms median)
+sharded gate 4 / 4 threads                 11835779 ops/s   (8.448958ms median)
+sharded gate 4 / 8 threads                  5011280 ops/s   (19.954982ms median)
+sharded gate 4 / 16 threads                 4486007 ops/s   (22.291541ms median)
+sharded gate 4 / 32 threads                 3831270 ops/s   (26.101008ms median)
+sharded gate 8 / 1 threads                 23792886 ops/s   (4.202937ms median)
+sharded gate 8 / 2 threads                  9091111 ops/s   (10.999756ms median)
+sharded gate 8 / 4 threads                 11695737 ops/s   (8.550124ms median)
+sharded gate 8 / 8 threads                  9141680 ops/s   (10.938908ms median)
+sharded gate 8 / 16 threads                 7775452 ops/s   (12.860988ms median)
+sharded gate 8 / 32 threads                 6856582 ops/s   (14.584527ms median)
+sharded gate 16 / 1 threads                35818582 ops/s   (2.791847ms median)
+sharded gate 16 / 2 threads                 8580709 ops/s   (11.654049ms median)
+sharded gate 16 / 4 threads                 8053367 ops/s   (12.417166ms median)
+sharded gate 16 / 8 threads                 7943944 ops/s   (12.588206ms median)
+sharded gate 16 / 16 threads               12704525 ops/s   (7.871211ms median)
+sharded gate 16 / 32 threads               11882885 ops/s   (8.415465ms median)
+
+== Bet A: memtable-only, gate-free RwLock<Memtable> (11.17 mechanism control) ==
+  (Memtable::get through its own RwLock, no engine-wide gate at all)
+  100R/0W   1 threads (1R/0W)       1227426 gets/s   p50=  0.59us p95=   1.49us p99=    2.56us
+  100R/0W   2 threads (2R/0W)       2710593 gets/s   p50=  0.57us p95=   1.02us p99=    1.41us
+  100R/0W   4 threads (4R/0W)       4319236 gets/s   p50=  0.64us p95=   1.24us p99=    1.49us
+  100R/0W   8 threads (8R/0W)       3099967 gets/s   p50=  1.15us p95=   5.01us p99=    8.65us
+  100R/0W  16 threads (16R/0W)       2671980 gets/s   p50=  2.62us p95=  12.51us p99=   23.68us
+  100R/0W  32 threads (32R/0W)       2765137 gets/s   p50=  3.43us p95=  13.65us p99=   26.95us
+  99R/1W    1 threads (1R/1W)         28799 gets/s   p50=  7.78us p95= 156.21us p99=  317.81us
+  99R/1W    2 threads (1R/1W)         34880 gets/s   p50=  5.96us p95= 133.45us p99=  309.05us
+  99R/1W    4 threads (3R/1W)        657487 gets/s   p50=  0.97us p95=  14.69us p99=   25.30us
+  99R/1W    8 threads (7R/1W)       1186975 gets/s   p50=  1.46us p95=  15.45us p99=   27.64us
+  99R/1W   16 threads (15R/1W)       2145379 gets/s   p50=  2.40us p95=  15.61us p99=   40.74us
+  99R/1W   32 threads (31R/1W)       2073999 gets/s   p50=  3.25us p95=  16.66us p99=   35.43us
+  95R/5W    1 threads (1R/1W)         36215 gets/s   p50=  4.38us p95= 131.41us p99=  279.86us
+  95R/5W    2 threads (1R/1W)         35917 gets/s   p50=  4.46us p95= 135.48us p99=  301.04us
+  95R/5W    4 threads (3R/1W)        908279 gets/s   p50=  0.82us p95=  13.11us p99=   21.98us
+  95R/5W    8 threads (7R/1W)       1820415 gets/s   p50=  1.35us p95=   9.94us p99=   24.69us
+  95R/5W   16 threads (15R/1W)       1911323 gets/s   p50=  1.84us p95=  15.62us p99=   34.89us
+  95R/5W   32 threads (30R/2W)       2197471 gets/s   p50=  3.35us p95=  21.88us p99=   81.86us
+  90R/10W   1 threads (1R/1W)         39974 gets/s   p50=  4.14us p95= 117.92us p99=  268.43us
+  90R/10W   2 threads (1R/1W)         42887 gets/s   p50=  4.60us p95= 108.97us p99=  252.59us
+  90R/10W   4 threads (3R/1W)       1021065 gets/s   p50=  0.81us p95=  13.52us p99=   21.53us
+  90R/10W   8 threads (7R/1W)       1409964 gets/s   p50=  1.40us p95=  11.08us p99=   24.94us
+  90R/10W  16 threads (14R/2W)       1675863 gets/s   p50=  2.50us p95=  23.02us p99=   48.85us
+  90R/10W  32 threads (29R/3W)       2080441 gets/s   p50=  3.17us p95=  21.23us p99=  141.23us
+
+== Bet A: same workload through the real gated SharedKiban (memtable hits only) ==
+  100R/0W   1 threads (1R/0W)       1290542 gets/s   p50=  0.61us p95=   1.19us p99=    1.57us  [flushes +0 compactions +0 stalls +0 l0=0]
+  100R/0W   2 threads (2R/0W)       1977491 gets/s   p50=  0.82us p95=   1.44us p99=    2.31us  [flushes +0 compactions +0 stalls +0 l0=0]
+  100R/0W   4 threads (4R/0W)       2666310 gets/s   p50=  1.32us p95=   2.10us p99=    2.73us  [flushes +0 compactions +0 stalls +0 l0=0]
+  100R/0W   8 threads (8R/0W)       3107933 gets/s   p50=  2.15us p95=   3.55us p99=    4.34us  [flushes +0 compactions +0 stalls +0 l0=0]
+  100R/0W  16 threads (16R/0W)       2757893 gets/s   p50=  4.10us p95=   9.30us p99=   12.35us  [flushes +0 compactions +0 stalls +0 l0=0]
+  100R/0W  32 threads (32R/0W)       2410641 gets/s   p50=  7.22us p95=  13.32us p99=   18.18us  [flushes +0 compactions +0 stalls +0 l0=0]
+  99R/1W    1 threads (1R/1W)        665580 gets/s   p50=  0.97us p95=   2.64us p99=    4.91us  [flushes +0 compactions +0 stalls +0 l0=0]
+  99R/1W    2 threads (1R/1W)        548555 gets/s   p50=  1.22us p95=   2.82us p99=    5.20us  [flushes +1 compactions +0 stalls +0 l0=1]
+  99R/1W    4 threads (3R/1W)       1154163 gets/s   p50=  2.14us p95=   4.50us p99=    6.36us  [flushes +1 compactions +0 stalls +0 l0=2]
+  99R/1W    8 threads (7R/1W)       1545704 gets/s   p50=  3.74us p95=   6.55us p99=    9.27us  [flushes +0 compactions +0 stalls +0 l0=2]
+  99R/1W   16 threads (15R/1W)       1848156 gets/s   p50=  5.66us p95=  13.91us p99=   24.07us  [flushes +0 compactions +0 stalls +0 l0=2]
+  99R/1W   32 threads (31R/1W)       2186902 gets/s   p50=  6.18us p95=  18.88us p99=   65.24us  [flushes +0 compactions +0 stalls +0 l0=2]
+  95R/5W    1 threads (1R/1W)        497219 gets/s   p50=  1.28us p95=   3.24us p99=    4.97us  [flushes +1 compactions +0 stalls +0 l0=3]
+  95R/5W    2 threads (1R/1W)        536075 gets/s   p50=  1.28us p95=   2.68us p99=    4.68us  [flushes +1 compactions +1 stalls +0 l0=0]
+  95R/5W    4 threads (3R/1W)       1224814 gets/s   p50=  2.13us p95=   3.88us p99=    5.52us  [flushes +1 compactions +1 stalls +0 l0=1]
+  95R/5W    8 threads (7R/1W)       1548393 gets/s   p50=  3.17us p95=   6.18us p99=    7.37us  [flushes +0 compactions +0 stalls +0 l0=1]
+  95R/5W   16 threads (15R/1W)       2127900 gets/s   p50=  5.17us p95=  10.61us p99=   15.85us  [flushes +0 compactions +0 stalls +0 l0=1]
+  95R/5W   32 threads (30R/2W)       2409259 gets/s   p50=  5.43us p95=  14.02us p99=   35.72us  [flushes +0 compactions +0 stalls +0 l0=1]
+  90R/10W   1 threads (1R/1W)        574359 gets/s   p50=  1.31us p95=   3.44us p99=    5.14us  [flushes +1 compactions +0 stalls +0 l0=2]
+  90R/10W   2 threads (1R/1W)        470301 gets/s   p50=  1.50us p95=   3.60us p99=    5.22us  [flushes +2 compactions +0 stalls +0 l0=4]
+  90R/10W   4 threads (3R/1W)       1071025 gets/s   p50=  2.34us p95=   4.15us p99=    6.01us  [flushes +0 compactions +0 stalls +0 l0=4]
+  90R/10W   8 threads (7R/1W)       1439588 gets/s   p50=  3.42us p95=   6.96us p99=   10.63us  [flushes +0 compactions +1 stalls +0 l0=0]
+  90R/10W  16 threads (14R/2W)       1199416 gets/s   p50=  4.55us p95=  10.40us p99=   15.04us  [flushes +1 compactions +0 stalls +0 l0=1]
+  90R/10W  32 threads (29R/3W)       2290548 gets/s   p50=  5.22us p95=  12.59us p99=   49.40us  [flushes +0 compactions +0 stalls +0 l0=1]
+
+== Empty and active SharedKiban controls ==
+empty Shared miss / 1 threads               8718569 gets/s   (11.469772ms median)
+empty Shared miss / 2 threads               3309430 gets/s   (30.216681ms median)
+empty Shared miss / 4 threads               2638519 gets/s   (37.900052ms median)
+empty Shared miss / 8 threads               2615363 gets/s   (38.235612ms median)
+empty Shared miss / 16 threads              2919441 gets/s   (34.25313ms median)
+empty Shared miss / 32 threads              1779377 gets/s   (56.199456ms median)
+
+== Direct BlockCache hit control ==
+cache same block / 1 readers               11552325 hits/s   (8.656266ms median)
+cache same block / 2 readers                3881360 hits/s   (25.764164ms median)
+cache same block / 4 readers                3353708 hits/s   (29.817744ms median)
+cache same block / 8 readers                3413715 hits/s   (29.293601ms median)
+cache same block / 16 readers               2966191 hits/s   (33.713268ms median)
+cache same block / 32 readers               2343459 hits/s   (42.671973ms median)
+cache scattered / 1 readers                12815571 hits/s   (7.803008ms median)
+cache scattered / 2 readers                 4316057 hits/s   (23.169294ms median)
+cache scattered / 4 readers                 4076025 hits/s   (24.533705ms median)
+cache scattered / 8 readers                 4113907 hits/s   (24.307794ms median)
+cache scattered / 16 readers                3527329 hits/s   (28.350062ms median)
+cache scattered / 32 readers                2848663 hits/s   (35.104189ms median)
+
+== Buffered write baseline ==
+put, buffered (Kiban)                        658270 ops/s   (30.382656ms median)
+
+== Durability cost ==
+put + sync every operation                     1105 ops/s   (452.407375ms median)
+put + sync every 500 writes                  186383 ops/s   (107.305711ms median)
+
+== Shared point reads: hot block-cache working set ==
+hot / 1 readers                             1085345 gets/s   (92.136587ms median)
+  scaling: 1.00x
+hot / 2 readers                             1449743 gets/s   (68.977729ms median)
+  scaling: 1.34x
+hot / 4 readers                             1751476 gets/s   (57.094703ms median)
+  scaling: 1.61x
+hot / 8 readers                             2403317 gets/s   (41.609167ms median)
+  scaling: 2.21x
+hot / 16 readers                            2619209 gets/s   (38.179463ms median)
+  scaling: 2.41x
+hot / 32 readers                            2182646 gets/s   (45.815954ms median)
+  scaling: 2.01x
+
+== Shared point reads: wide working set (Kiban cache misses) ==
+wide / 1 readers                              46605 gets/s   (2.145672061s median)
+  scaling: 1.00x
+wide / 2 readers                              88621 gets/s   (1.128398775s median)
+  scaling: 1.90x
+wide / 4 readers                             180210 gets/s   (554.907852ms median)
+  scaling: 3.87x
+wide / 8 readers                             271507 gets/s   (368.314417ms median)
+  scaling: 5.83x
+wide / 16 readers                            404136 gets/s   (247.441495ms median)
+  scaling: 8.67x
+wide / 32 readers                            383876 gets/s   (260.500624ms median)
+  scaling: 8.24x
+
+== Shared point reads: wide working set, mmap_max_level enabled ==
+wide+mmap / 1 readers                         48985 gets/s   (2.041445219s median)
+  scaling: 1.00x
+wide+mmap / 2 readers                         96223 gets/s   (1.039255339s median)
+  scaling: 1.96x
+wide+mmap / 4 readers                        196193 gets/s   (509.700977ms median)
+  scaling: 4.01x
+wide+mmap / 8 readers                        289037 gets/s   (345.976971ms median)
+  scaling: 5.90x
+wide+mmap / 16 readers                       439444 gets/s   (227.560449ms median)
+  scaling: 8.97x
+wide+mmap / 32 readers                       399771 gets/s   (250.143102ms median)
+  scaling: 8.16x
+
+== Shared Bloom-rejected misses ==
+bloom miss / 1 readers                      6687177 gets/s   (14.953993ms median)
+bloom miss / 4 readers                      2654311 gets/s   (37.674555ms median)
+bloom miss / 8 readers                      2505038 gets/s   (39.919553ms median)
+
+== FD-cache pressure ==
+FD pressure / 1 readers                      180809 gets/s   (553.068929ms median)
+  table files: hits +1, misses +99999, evictions +99999, waits +0
+FD pressure / 4 readers                      162524 gets/s   (615.29243ms median)
+  table files: hits +2729, misses +85530, evictions +85530, waits +16094
+FD pressure / 8 readers                      121278 gets/s   (824.551527ms median)
+  table files: hits +1176, misses +73796, evictions +73796, waits +27614
+
+== Bet F: single-flight cache-miss coalescing ==
+  stampede  1 threads on 1 cold key  256.10µs   [block-cache misses +1 coalesced +0 | file hits +1 misses +0]
+  stampede  2 threads on 1 cold key  154.68µs   [block-cache misses +2 coalesced +1 | file hits +1 misses +0]
+  stampede  4 threads on 1 cold key  292.78µs   [block-cache misses +4 coalesced +3 | file hits +1 misses +0]
+  stampede  8 threads on 1 cold key  365.23µs   [block-cache misses +8 coalesced +7 | file hits +1 misses +0]
+  stampede 16 threads on 1 cold key  596.28µs   [block-cache misses +16 coalesced +15 | file hits +1 misses +0]
+  stampede 32 threads on 1 cold key    1.15ms   [block-cache misses +22 coalesced +21 | file hits +1 misses +0]
+  no-collision  1 threads, distinct cold keys  174.19µs   [coalesced +0]
+  no-collision  2 threads, distinct cold keys  189.38µs   [coalesced +0]
+  no-collision  4 threads, distinct cold keys  244.00µs   [coalesced +0]
+  no-collision  8 threads, distinct cold keys  342.52µs   [coalesced +0]
+  no-collision 16 threads, distinct cold keys  485.89µs   [coalesced +0]
+  no-collision 32 threads, distinct cold keys  874.71µs   [coalesced +0]
+
+== Shared writer scaling: buffered ==
+buffered / 1 writers                         458982 ops/s   (43.574713ms median)
+  scaling: 1.00x
+buffered / 2 writers                         355617 ops/s   (56.240336ms median)
+  scaling: 0.77x
+buffered / 4 writers                         300457 ops/s   (66.565371ms median)
+  scaling: 0.65x
+buffered / 8 writers                         261942 ops/s   (76.352889ms median)
+  scaling: 0.57x
+buffered / 16 writers                        251494 ops/s   (79.52471ms median)
+  scaling: 0.55x
+buffered / 32 writers                        247654 ops/s   (80.757882ms median)
+  scaling: 0.54x
+
+== Shared writer scaling: sync every 250 writes ==
+durable / 1 writers                          153842 ops/s   (130.003737ms median)
+  scaling: 1.00x
+durable / 2 writers                          125866 ops/s   (158.89887ms median)
+  scaling: 0.82x
+durable / 4 writers                          129071 ops/s   (154.953858ms median)
+  scaling: 0.84x
+durable / 8 writers                          123704 ops/s   (161.675949ms median)
+  scaling: 0.80x
+durable / 16 writers                         127325 ops/s   (157.077852ms median)
+  scaling: 0.83x
+durable / 32 writers                         101244 ops/s   (197.542723ms median)
+  scaling: 0.66x
+
+== Mixed workload: 4 readers + 1 writer ==
+mixed SST reads and updates                  112868 ops/s   (885.994185ms median)
+  maintenance: flushes +103, compactions +26, write stalls +103, input +2585377 B, output +2581348 B
+  final tables: 27, final table bytes: 2593947
+  table files: hits +690, misses +129, evictions +0, waits +0
+  block cache: hits +80829, misses +1226
+
+== 8 readers / 1 writer liveness control (Phase 11.15) ==
+8R/1W writer progress under read pressure        50282 ops/s   (1.988774975s median)
+  maintenance: flushes +110, compactions +33, write stalls +110, input +65471954 B, output +65462989 B
+  final tables: 3, final table bytes: 2609114
+  writer completed all 20000 ops under 8-reader pressure without hanging
+
+== Maintenance pressure ==
+small buffers under sustained writes           3025 ops/s   (6.610832065s median)
+  maintenance: flushes +605, compactions +231, write stalls +605, input +2162397 B, output +2158384 B
+  final tables: 605, final table bytes: 2161964
+
+== Bet D: foreground GET p99 under sustained compaction debt (Bet C context) ==
+  40000 writes in 34.526767314s; concurrent GET: 2495798 ops,      72286 ops/s
+  GET p50= 10.51us p95=   34.99us p99=    51.46us   L0 files: median=5 max=30
+  PUT p50=  4.87us p95= 8563.76us p99= 17734.95us
+  maintenance: flushes +2221, compactions +530, write stalls +2221, input +4853265 B, output +4858173 B
+  final tables: 2338, final table bytes: 4866168
+
+== Range scan baseline (direct Kiban) ==
+range scan, 1000 keys                          5185 scans/s   (19.285025ms median)
+
+== SharedSnapshot read-scaling control ==
+snapshot hot / 1 readers                    1055280 gets/s   (94.761581ms median)
+snapshot hot / 2 readers                    1094468 gets/s   (91.368614ms median)
+snapshot hot / 4 readers                    1442576 gets/s   (69.320452ms median)
+snapshot hot / 8 readers                    2408992 gets/s   (41.511145ms median)
+snapshot hot / 16 readers                   2639419 gets/s   (37.88713ms median)
+snapshot hot / 32 readers                   2794091 gets/s   (35.789817ms median)
+snapshot Bloom miss / 1 readers             7829896 gets/s   (12.771561ms median)
+snapshot Bloom miss / 4 readers             4956761 gets/s   (20.174465ms median)
+snapshot Bloom miss / 8 readers             5407728 gets/s   (18.492054ms median)

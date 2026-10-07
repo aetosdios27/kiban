@@ -1,0 +1,109 @@
+   Compiling kiban v0.1.0 (/home/aetos/dev/personal/kiban)
+    Finished `bench` profile [optimized] target(s) in 1.13s
+     Running benches/steady_state.rs (target/release/deps/steady_state-20b8a3b1f1f0f331)
+Kiban steady-state torture: 300000 writes (4 writers) / 300000 gets (4 readers)
+
+-- A: fixed priority, no pacing --
+  300000 puts in 36.655503252s (8184 ops/s), 300000 gets (8184 ops/s)
+  GET p50=   2.53us p95=    4.42us p99=     7.63us p999=     34.90us
+  PUT p50=   3.17us p95=   74.29us p99=   421.58us p999= 142668.66us
+  write_amp=24.12x  avg SST tables probed/get=4.13  write_stalls=2054  L0 final=4 max=5
+  RSS: start=5.7MB peak=21.2MB end=18.0MB   open FDs: start=40 peak=210 end=118
+  L0 files/decile (min-max):       0-4    0-4    0-5    0-4    0-4    0-4    0-4    0-5    0-5    0-5  
+  total MB/decile (min-max):       2-5    4-6    6-7    7-7    7-8    8-9    9-9    9-10  10-10  10-11 
+  compactions completed/decile:       98     62     56     50     42     41     39     39     35     34
+  write stalls/decile:               361    280    244    224    176    168    164    160    144    125
+
+-- B: fixed priority + pacing --
+  300000 puts in 29.635237182s (10123 ops/s), 300000 gets (10123 ops/s)
+  GET p50=   2.58us p95=    4.26us p99=     7.11us p999=     34.31us
+  PUT p50=   3.08us p95=   66.95us p99=   395.63us p999=  46012.18us
+  write_amp=16.39x  avg SST tables probed/get=4.31  write_stalls=1900  L0 final=7 max=8
+  RSS: start=19.0MB peak=30.1MB end=24.7MB   open FDs: start=35 peak=266 end=134
+  L0 files/decile (min-max):       0-8    0-8    0-8    0-8    0-8    0-8    0-8    0-8    0-8    0-8  
+  total MB/decile (min-max):       2-5    4-6    6-7    6-7    7-8    8-9    8-9    9-10   9-10  10-11 
+  compactions completed/decile:       22     16     12      9      8      9      7     10      7      6
+  write stalls/decile:               402    296    242    202    132    148    140    128    101    103
+
+-- C: scored scheduler + pacing --
+  300000 puts in 17.647426923s (17000 ops/s), 300000 gets (17000 ops/s)
+  GET p50=   2.94us p95=    6.17us p99=     9.01us p999=     34.13us
+  PUT p50=   3.01us p95=   67.04us p99=   406.90us p999=  44515.80us
+  write_amp=8.93x  avg SST tables probed/get=8.32  write_stalls=1946  L0 final=15 max=16
+  RSS: start=24.9MB peak=26.4MB end=26.4MB   open FDs: start=48 peak=172 end=135
+  L0 files/decile (min-max):       0-16   0-16   0-16   0-16   0-16   0-16   0-16   0-16   0-16   0-16 
+  total MB/decile (min-max):       2-5    5-6    6-7    6-7    7-8    8-9    9-10  10-10  10-11  10-12 
+  compactions completed/decile:       54     39     40     42     50     40     43     32     43     34
+  write stalls/decile:               300    252    230    209    180    188    149    113    144    153
+
+-- D: scored scheduler + batching(4) + pacing --
+  300000 puts in 20.237171621s (14824 ops/s), 300000 gets (14824 ops/s)
+  GET p50=   2.92us p95=    5.17us p99=     8.64us p999=     35.50us
+  PUT p50=   3.21us p95=   72.91us p99=   394.58us p999=  76702.62us
+  write_amp=10.02x  avg SST tables probed/get=7.45  write_stalls=1864  L0 final=2 max=11
+  RSS: start=26.4MB peak=27.1MB end=27.1MB   open FDs: start=39 peak=181 end=96
+  L0 files/decile (min-max):       0-10   1-9    0-10   0-10   0-10   0-10   0-10   0-11   0-10   0-10 
+  total MB/decile (min-max):       2-5    4-5    5-6    6-8    7-8    8-9    9-10  10-10  10-11  11-12 
+  compactions completed/decile:       27     26     20     19     15     19     19     18     14     13
+  write stalls/decile:               289    157    218    247    136    178    167    176    138    129
+
+-- E: governor (11.17-round-3) --
+  300000 puts in 16.319815269s (18383 ops/s), 300000 gets (18383 ops/s)
+  GET p50=   2.49us p95=    4.61us p99=     7.00us p999=     33.33us
+  PUT p50=   3.25us p95=   71.07us p99=   408.04us p999=  67969.37us
+  write_amp=8.26x  avg SST tables probed/get=4.21  write_stalls=1844  L0 final=7 max=9
+  RSS: start=27.1MB peak=29.2MB end=29.2MB   open FDs: start=34 peak=211 end=87
+  L0 files/decile (min-max):       0-8    0-8    0-8    0-8    0-8    1-8    0-9    0-9    0-8    0-8  
+  total MB/decile (min-max):       2-5    5-6    6-8    7-8    8-9    8-9    9-10  10-11  11-11  11-12 
+  compactions completed/decile:       26     15     12     12     11      9      9      8      9      8
+  write stalls/decile:               216    247    227    173    192    101    153    231    147    137
+
+== Summary ==
+config                                         GET p99(us)  PUT p99(us)         WA     stalls
+A: fixed priority, no pacing                          7.63       421.58      24.12       2054
+B: fixed priority + pacing                            7.11       395.63      16.39       1900
+C: scored scheduler + pacing                          9.01       406.90       8.93       1946
+D: scored scheduler + batching(4) + pacing            8.64       394.58      10.02       1864
+E: governor (11.17-round-3)                           7.00       408.04       8.26       1844
+
+
+Kiban steady-state torture (SEQUENTIAL, low-churn workload): 300000 writes / 300000 gets
+
+-- A-seq: fixed priority, no pacing --
+  300000 puts in 118.454350751s (2533 ops/s), 300000 gets (2533 ops/s)
+  GET p50=   2.43us p95=    4.54us p99=     6.78us p999=     29.72us
+  PUT p50=   2.97us p95=   81.49us p99=  2327.52us p999= 668574.46us
+  write_amp=67.63x  avg SST tables probed/get=3.62  write_stalls=2078  L0 final=4 max=7
+  RSS: start=29.2MB peak=49.2MB end=49.2MB   open FDs: start=39 peak=466 end=134
+  L0 files/decile (min-max):       0-7    0-4    0-5    0-4    0-5    0-4    0-4    0-4    0-4    0-4  
+  total MB/decile (min-max):       2-12  12-16  16-19  19-22  22-24  24-26  26-28  28-30  30-32  32-33 
+  compactions completed/decile:      161     72     55     45     37     35     30     28     28     30
+  write stalls/decile:               692    290    222    175    145    129    112    112    106     90
+
+-- D-seq: scored scheduler + batching(4) + pacing --
+  300000 puts in 26.742935097s (11218 ops/s), 300000 gets (11218 ops/s)
+  GET p50=   2.45us p95=    5.49us p99=     7.87us p999=     46.95us
+  PUT p50=   3.08us p95=   70.26us p99=   362.27us p999= 110579.57us
+  write_amp=15.97x  avg SST tables probed/get=4.96  write_stalls=2023  L0 final=14 max=16
+  RSS: start=49.2MB peak=50.5MB end=50.5MB   open FDs: start=43 peak=255 end=139
+  L0 files/decile (min-max):       0-12   0-13   0-14   0-15   0-15   0-15   1-16   1-15   0-16   1-15 
+  total MB/decile (min-max):       2-8    8-12  12-15  15-18  18-22  22-25  25-27  27-30  30-32  32-33 
+  compactions completed/decile:       40     34     32     24     29     33     25     25     34     12
+  write stalls/decile:               338    270    215    234    220    216    114    191    177     44
+
+-- E-seq: governor (11.17-round-3) --
+  300000 puts in 52.499612947s (5714 ops/s), 300000 gets (5714 ops/s)
+  GET p50=   2.25us p95=    4.88us p99=     7.08us p999=     31.42us
+  PUT p50=   2.85us p95=   68.68us p99=   425.18us p999=  37824.27us
+  write_amp=29.05x  avg SST tables probed/get=3.61  write_stalls=1965  L0 final=8 max=9
+  RSS: start=49.5MB peak=49.9MB end=49.9MB   open FDs: start=39 peak=365 end=134
+  L0 files/decile (min-max):       0-8    0-8    0-8    0-8    0-8    0-8    0-8    0-8    0-9    0-8  
+  total MB/decile (min-max):       2-11  11-15  15-19  19-22  22-24  24-26  26-28  28-30  30-32  32-33 
+  compactions completed/decile:       39     22      8      8      5     11     10      7      9      6
+  write stalls/decile:               569    294    245    170    156    129    110    109    124     59
+
+== Sequential-workload summary ==
+config                                         GET p99(us)  PUT p99(us)         WA     stalls
+A-seq: fixed priority, no pacing                      6.78      2327.52      67.63       2078
+D-seq: scored scheduler + batching(4) + pacing         7.87       362.27      15.97       2023
+E-seq: governor (11.17-round-3)                       7.08       425.18      29.05       1965
