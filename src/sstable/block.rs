@@ -141,7 +141,10 @@ impl VerifiedBlock {
         if num_restarts == 0 {
             return Err(bad("zero restart points".to_string()));
         }
-        let restart_start = raw.len() - 9 - num_restarts * 4;
+        let restart_start = num_restarts
+            .checked_mul(4)
+            .and_then(|bytes| (raw.len() - 9).checked_sub(bytes))
+            .ok_or_else(|| bad("restart array exceeds block bounds".to_string()))?;
         let entries_end = restart_start;
         if entries_end < ENTRY_FIXED_LEN {
             return Err(bad("no room for a single entry".to_string()));
@@ -549,6 +552,23 @@ mod tests {
                 VerifiedBlock::from_raw(raw[..cut].to_vec()).is_err(),
                 "cut={cut} accepted"
             );
+        }
+    }
+
+    #[test]
+    fn checksum_valid_oversized_restart_arrays_return_corruption() {
+        let raw = build(&[("k", "v")]);
+        for count in [u32::MAX, u32::MAX / 4, raw.len() as u32] {
+            let mut bad = raw.clone();
+            let at = bad.len() - 9;
+            bad[at..at + 4].copy_from_slice(&count.to_le_bytes());
+            let crc_at = bad.len() - 4;
+            let checksum = crc32::crc32(&bad[..crc_at]);
+            bad[crc_at..].copy_from_slice(&checksum.to_le_bytes());
+            assert!(matches!(
+                VerifiedBlock::verify(&bad),
+                Err(SstError::Corrupt(_))
+            ));
         }
     }
 }

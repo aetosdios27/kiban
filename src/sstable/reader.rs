@@ -195,10 +195,14 @@ impl SstTable {
         let filter_offset = u64::from_le_bytes(footer[20..28].try_into().unwrap());
         let filter_len = u64::from_le_bytes(footer[28..36].try_into().unwrap());
         let data_end = file_len - FOOTER_LEN as u64;
-        if index_offset > data_end || index_len == 0 || index_offset + index_len > data_end {
+        if index_len == 0
+            || index_offset
+                .checked_add(index_len)
+                .is_none_or(|end| end > data_end)
+        {
             return Err(bad("index block out of file bounds".to_string()));
         }
-        if filter_offset + filter_len != index_offset || filter_len < 10 {
+        if filter_offset.checked_add(filter_len) != Some(index_offset) || filter_len < 10 {
             return Err(bad(
                 "filter block does not sit directly before the index".to_string()
             ));
@@ -617,6 +621,31 @@ mod compaction_iter_tests {
     use super::*;
     use crate::sstable::TableBuilder;
     use crate::testutil::TempDir;
+
+    #[test]
+    fn overflowed_footer_ranges_return_corruption_before_reading_blocks() {
+        let td = TempDir::new("overflowed-footer");
+        let mut builder = TableBuilder::new();
+        builder.add(Kind::Put, b"k", b"v", 1).unwrap();
+        let raw = builder.finish().unwrap();
+        for field in [8, 20, 28] {
+            let mut bad = raw.clone();
+            let at = bad.len() - FOOTER_LEN + field;
+            bad[at..at + 8].copy_from_slice(&u64::MAX.to_le_bytes());
+            let path = td.path().join(format!("{field}.sst"));
+            std::fs::write(&path, bad).unwrap();
+            assert!(matches!(
+                SstTable::open(
+                    field as u64,
+                    &path,
+                    Arc::new(BlockCache::new(0)),
+                    Arc::new(TableFileCache::new(1)),
+                    false
+                ),
+                Err(SstError::Corrupt(_))
+            ));
+        }
+    }
 
     /// Builds a real, on-disk SstTable with `entries` (key, value)
     /// pairs, each key `k{i:06}`. Enough entries at a big-enough value
