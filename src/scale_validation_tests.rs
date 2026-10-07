@@ -226,3 +226,97 @@ fn repeated_frozen_wal_generations_remain_durable_before_and_after_commit() {
         }
     }
 }
+
+#[test]
+fn durable_acknowledgements_after_a_flush_error_remain_recoverable() {
+    fn run(fault: Option<usize>) -> usize {
+        let dir = TempDir::new("flush-error-then-ack");
+        let _device = DeviceGuard::new();
+        let mut db = Kiban::open(dir.path()).unwrap();
+        db.put(b"baseline", b"durable").unwrap();
+        db.sync().unwrap();
+        sys::install_faults_with_read_opens(&fault.into_iter().collect::<Vec<_>>());
+        let result = db.flush_without_compaction();
+        let count = sys::op_count();
+        sys::clear_fault();
+        if fault.is_none() {
+            result.as_ref().unwrap();
+        }
+        let acknowledged = !db.is_poisoned();
+        if acknowledged {
+            db.put(b"later", b"durable-after-error").unwrap();
+            db.sync().unwrap();
+        } else {
+            assert!(result.is_err());
+            assert!(db.put(b"later", b"unsafe").is_err());
+            assert!(db.sync().is_err());
+        }
+        drop(db);
+        sys::power_loss();
+        let recovered = Kiban::open(dir.path()).unwrap();
+        assert_eq!(
+            recovered.get(b"baseline").unwrap(),
+            Some(b"durable".to_vec()),
+            "fault={fault:?}"
+        );
+        if acknowledged {
+            assert_eq!(
+                recovered.get(b"later").unwrap(),
+                Some(b"durable-after-error".to_vec()),
+                "fault={fault:?}: accepted durable write went to a retired WAL"
+            );
+        }
+        count
+    }
+    let count = run(None);
+    for fault in 0..count {
+        run(Some(fault));
+    }
+}
+
+#[test]
+fn failed_flush_retry_never_reuses_a_cached_sst_identity() {
+    fn run(fault: Option<usize>) -> usize {
+        let dir = TempDir::new("flush-retry-cache-identity");
+        let _device = DeviceGuard::new();
+        let mut db = Kiban::open(dir.path()).unwrap();
+        db.put(b"key", b"first").unwrap();
+        db.sync().unwrap();
+        sys::install_faults_with_read_opens(&fault.into_iter().collect::<Vec<_>>());
+        let first = db.flush_without_compaction();
+        let count = sys::op_count();
+        sys::clear_fault();
+        if !db.is_poisoned() {
+            let next = db.next_file_number.load(Ordering::SeqCst);
+            assert!(
+                next >= 4,
+                "even a failed attempt must reserve its file identities"
+            );
+            db.put(b"key", b"second").unwrap();
+            db.sync().unwrap();
+            db.flush_without_compaction().unwrap();
+            assert_eq!(
+                db.get(b"key").unwrap(),
+                Some(b"second".to_vec()),
+                "fault={fault:?}"
+            );
+            let scan: Vec<_> = db.iter().map(Result::unwrap).collect();
+            assert_eq!(scan, vec![(b"key".to_vec(), b"second".to_vec())]);
+            drop(db);
+            sys::power_loss();
+            let recovered = Kiban::open(dir.path()).unwrap();
+            assert_eq!(
+                recovered.get(b"key").unwrap(),
+                Some(b"second".to_vec()),
+                "fault={fault:?}"
+            );
+        } else {
+            assert!(first.is_err());
+        }
+        count
+    }
+    let count = run(None);
+    for fault in 0..count {
+        run(Some(fault));
+    }
+}

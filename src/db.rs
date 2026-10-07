@@ -1107,11 +1107,11 @@ impl Kiban {
         }
         // 11.8: the frozen memtable, if any, is older than active but
         // may not have reached an SST yet — check it before tables.
-        if let Some(im) = &self.immutable {
-            if let Some(entry) = im.memtable.entry(key) {
-                self.read_amp.resolved_in_immutable.fetch_add(1, Relaxed);
-                return Ok(entry.as_value().map(ToOwned::to_owned));
-            }
+        if let Some(im) = &self.immutable
+            && let Some(entry) = im.memtable.entry(key)
+        {
+            self.read_amp.resolved_in_immutable.fetch_add(1, Relaxed);
+            return Ok(entry.as_value().map(ToOwned::to_owned));
         }
         // Live iteration is unbounded too; explicit snapshot reads pass
         // their sequence boundary through this same resolver.
@@ -1288,7 +1288,9 @@ impl Kiban {
             return Ok(());
         }
 
-        let sst_number = self.next_file_number.load(Ordering::SeqCst);
+        // Reserve identities before preparing cached SST handles. A failed
+        // attempt must never reuse a number whose inode/blocks were cached.
+        let sst_number = self.next_file_number.fetch_add(2, Ordering::SeqCst);
         let new_wal_number = sst_number + 1;
         let new_next_file_number = sst_number + 2;
 
@@ -1317,6 +1319,29 @@ impl Kiban {
         // durably before that MANIFEST does.
         let new_wal_path = self.dir.join(file_name(new_wal_number, WAL_EXTENSION));
         atomic::create_durably(&new_wal_path)?;
+
+        // Prepare every fallible handle before committing. Otherwise a
+        // post-install open failure leaves RAM using a MANIFEST-retired WAL
+        // and later successful sync acknowledgements become unrecoverable.
+        // Flush output is always L0.
+        let use_mmap = self.options.mmap_max_level.is_some();
+        let table = SstTable::open(
+            sst_number,
+            &self.dir.join(file_name(sst_number, SST_EXTENSION)),
+            self.cache.clone(),
+            self.file_cache.clone(),
+            use_mmap,
+        )?;
+        let entry = StdArc::new(TableEntry {
+            level: 0,
+            number: sst_number,
+            size: table.size_on_disk(),
+            first_key: table.smallest_key().to_vec(),
+            last_key: table.largest_key().to_vec(),
+            table,
+        });
+        let mut fresh_memtable = Memtable::new();
+        let (wal, _report) = Wal::open(&new_wal_path, &mut fresh_memtable)?;
 
         // D2 step 4: the commit point.
         let mut table_refs: Vec<TableRef> = self
@@ -1355,23 +1380,6 @@ impl Kiban {
         self.next_file_number
             .store(new_next_file_number, Ordering::SeqCst);
         self.wal_number = new_wal_number;
-        // Flush output is always L0.
-        let use_mmap = self.options.mmap_max_level.is_some();
-        let table = SstTable::open(
-            sst_number,
-            &self.dir.join(file_name(sst_number, SST_EXTENSION)),
-            self.cache.clone(),
-            self.file_cache.clone(),
-            use_mmap,
-        )?;
-        let entry = StdArc::new(TableEntry {
-            level: 0,
-            number: sst_number,
-            size: table.size_on_disk(),
-            first_key: table.smallest_key().to_vec(),
-            last_key: table.largest_key().to_vec(),
-            table,
-        });
         // Publish Version N+1: current tables + the flushed sstable.
         let mut new_tables = self.version.tables.clone();
         let pos = new_tables.partition_point(|t| (t.level, t.number) < (entry.level, entry.number));
@@ -1383,8 +1391,6 @@ impl Kiban {
         });
 
         let old_wal_path = self.wal.path().to_path_buf();
-        let mut fresh_memtable = Memtable::new();
-        let (wal, _report) = Wal::open(&new_wal_path, &mut fresh_memtable)?;
         self.wal = wal;
         self.memtable = fresh_memtable.clone();
         // See `freeze`'s identical reset: the shadow rotates alongside

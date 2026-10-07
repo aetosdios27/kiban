@@ -24,6 +24,8 @@ struct FaultState {
     /// Fail when the operation counter hits any of these values.
     fail_at: HashSet<usize>,
     counter: usize,
+    #[cfg(test)]
+    fail_read_opens: bool,
 }
 
 thread_local! {
@@ -41,8 +43,24 @@ pub fn install_faults(indices: &[usize]) {
         *f.borrow_mut() = Some(FaultState {
             fail_at: indices.iter().copied().collect(),
             counter: 0,
+            #[cfg(test)]
+            fail_read_opens: false,
         });
     });
+}
+
+/// Extend the same deterministic sweep to fallible handle preparation.
+/// Ordinary durability sweeps keep their original syscall numbering.
+#[cfg(test)]
+pub(crate) fn install_faults_with_read_opens(indices: &[usize]) {
+    install_faults(indices);
+    FAULT.with(|f| f.borrow_mut().as_mut().unwrap().fail_read_opens = true);
+}
+
+#[cfg(test)]
+fn check_read_open() -> io::Result<()> {
+    let enabled = FAULT.with(|f| f.borrow().as_ref().is_some_and(|s| s.fail_read_opens));
+    if enabled { check() } else { Ok(()) }
 }
 
 pub fn clear_fault() {
@@ -209,6 +227,8 @@ impl File {
     }
 
     pub fn open_rw(path: &Path) -> io::Result<File> {
+        #[cfg(test)]
+        check_read_open()?;
         if sim_active() {
             if !lookup_exists(path) {
                 return Err(io::Error::new(io::ErrorKind::NotFound, "no such file"));
@@ -231,6 +251,8 @@ impl File {
     }
 
     pub fn open_read(path: &Path) -> io::Result<File> {
+        #[cfg(test)]
+        check_read_open()?;
         let known = with_sim(|files| files.contains_key(path));
         if sim_active() {
             // Unknown paths are allowed here: directories are not
