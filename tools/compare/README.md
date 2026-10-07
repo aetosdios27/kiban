@@ -29,7 +29,10 @@ cargo test --release --manifest-path tools/compare/Cargo.toml
 python3 -m unittest discover -s tools/compare/tests -p 'test_*.py'
 ```
 
-The first RocksDB build compiles native C++; subsequent builds reuse it. This
+The first RocksDB build compiles native C++; subsequent builds reuse it. For further
+campaigns with identical compiled sources, `--prebuilt-from PATH_TO_VALIDATED_CAMPAIGN`
+checks the binary and all compiled-source hashes before reusing it. It refuses a
+changed binary/source instead of silently running stale code. This
 Fedora host has libclang but lacks its resource headers. The supported workaround
 for bindgen is to supply the installed GCC standard headers:
 

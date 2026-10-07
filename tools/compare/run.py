@@ -83,6 +83,7 @@ def main():
     p.add_argument('--output-root', type=Path, required=True)
     p.add_argument('--data-root', type=Path, required=True)
     p.add_argument('--execute', action='store_true')
+    p.add_argument('--prebuilt-from', type=Path, help='reuse a previously validated binary only after checking binary/source hashes')
     a = p.parse_args()
     repo = Path(__file__).resolve().parents[2]
     plan = validate(json.loads(a.plan.read_text()))
@@ -114,10 +115,22 @@ def main():
         (snapshots / str(path).replace('/', '__')).write_bytes(content)
     metadata['resolved_packages'] = [(x['name'], x['version'], x.get('source')) for x in tomllib.loads((repo/'tools/compare/Cargo.lock').read_text())['package']]
     (a.output_root / 'metadata.json').write_text(json.dumps(metadata, indent=2) + '\n')
-    with (a.output_root / 'build.log').open('x') as log:
-        result = subprocess.run(['cargo', 'build', '--release', '--locked', '--manifest-path', 'tools/compare/Cargo.toml'], cwd=repo, stdout=log, stderr=subprocess.STDOUT)
-    if result.returncode:
-        raise SystemExit('comparison build failed; inspect build.log')
+    if a.prebuilt_from:
+        previous = json.loads((a.prebuilt_from / 'metadata.json').read_text())
+        if previous.get('binary_sha256') != hashlib.sha256(binary.read_bytes()).hexdigest():
+            raise SystemExit('prebuilt binary hash differs from validated campaign')
+        inputs = [p for p in metadata['source_hashes'] if p.endswith(('.rs', 'Cargo.toml', 'Cargo.lock'))]
+        if any(metadata['source_hashes'][p] != previous['source_hashes'].get(p) for p in inputs):
+            raise SystemExit('compiled sources differ from validated campaign; rebuild required')
+        metadata['build_reused_from'] = str(a.prebuilt_from.resolve())
+        metadata['validated_build_env'] = previous['build_env']
+    else:
+        with (a.output_root / 'build.log').open('x') as log:
+            result = subprocess.run(['cargo', 'build', '--release', '--locked', '--manifest-path', 'tools/compare/Cargo.toml'], cwd=repo, stdout=log, stderr=subprocess.STDOUT)
+        if result.returncode:
+            raise SystemExit('comparison build failed; inspect build.log')
+    metadata['binary_sha256'] = hashlib.sha256(binary.read_bytes()).hexdigest()
+    (a.output_root / 'metadata.json').write_text(json.dumps(metadata, indent=2) + '\n')
     results = []
     for index, job in enumerate(commands):
         print(f"[{index+1}/{len(commands)}] {job['label']}", flush=True)
