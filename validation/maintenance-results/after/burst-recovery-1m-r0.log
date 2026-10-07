@@ -1,0 +1,4 @@
+steady: 333334 operations in 0.614s (543005 ops/s), read/write p99=18944 / 41984 ns
+write-burst: 333333 operations in 1.239s (269108 ops/s), read/write p99= / 51200 ns
+read-recovery: 333333 operations in 0.292s (1141560 ops/s), read/write p99=27136 / 17920 ns
+total: 1000000 operations in 2.145s (466304 ops/s), read/write p99=25600 / 48128 ns

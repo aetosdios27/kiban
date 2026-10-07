@@ -1,0 +1,10 @@
+   Compiling kiban v0.1.0 (/home/aetos/dev/personal/kiban)
+    Finished `release` profile [optimized] target(s) in 5.09s
+     Running unittests src/lib.rs (target/release/deps/kiban-9b697395093ef19c)
+
+running 2 tests
+test engine_lock::tests::mixed_stress_exclusion_invariants_hold ... ok
+writes=387344 (774688/s), reads=651706 (1303412/s), worst reader gap=1.877105ms
+test engine_lock::tests::reader_starvation_under_sustained_writes ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 260 filtered out; finished in 0.50s

@@ -1,0 +1,611 @@
+//! The write-ahead log: one framed record per mutation, explicit
+//! durability, replay-and-truncate recovery.
+//!
+//! Implements `docs/design/wal.md`. `append`-family methods do not make
+//! data durable; only a successful `sync()` does.
+
+use std::fmt;
+use std::io::{self, BufReader, BufWriter, Read, Seek, SeekFrom, Write};
+use std::path::{Path, PathBuf};
+
+use crate::atomic;
+use crate::frame::{FrameReader, FrameWriter, ReadRecordError};
+use crate::memtable::Memtable;
+use crate::sstable::Kind;
+use crate::sys;
+
+const OP_PUT: u8 = 0x01;
+const OP_DELETE: u8 = 0x02;
+/// A batch record: one frame, many mutations, one contiguous sequence
+/// interval. Atomicity comes from framing — a torn or failed write
+/// discards the whole batch at recovery, never a prefix.
+pub const OP_BATCH: u8 = 0x03;
+const PAYLOAD_FIXED_LEN: usize = 17;
+
+/// Fixed per-op header inside a batch payload:
+/// [op u8][klen u32][vlen u32].
+const BATCH_OP_FIXED_LEN: usize = 9;
+
+#[derive(Debug)]
+pub enum WalError {
+    Io(io::Error),
+    Corrupt { offset: u64, reason: String },
+}
+
+impl fmt::Display for WalError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            WalError::Io(e) => write!(f, "wal i/o error: {e}"),
+            WalError::Corrupt { offset, reason } => {
+                write!(f, "wal corrupt at offset {offset}: {reason}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for WalError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            WalError::Io(e) => Some(e),
+            WalError::Corrupt { .. } => None,
+        }
+    }
+}
+
+/// Which phase of [`Wal::sync`] failed.
+#[derive(Debug)]
+pub enum SyncPhase {
+    /// Bytes never left process buffering; nothing reached the kernel
+    /// on their behalf (append-phase failure).
+    Flush(io::Error),
+    /// Bytes reached the kernel; the fdatasync itself failed and
+    /// durability is ambiguous (engine-poisoning.md D2).
+    Fdatasync(io::Error),
+}
+
+pub struct RecoveryReport {
+    pub records_replayed: usize,
+    pub torn_tail_truncated: bool,
+    pub bytes_truncated: u64,
+    /// Highest sequence number seen in the replayed log.
+    pub max_sequence: u64,
+}
+
+fn encode_put(seq: u64, key: &[u8], value: &[u8], payload: &mut Vec<u8>) {
+    payload.clear();
+    payload.push(OP_PUT);
+    payload.extend_from_slice(&seq.to_le_bytes());
+    payload.extend_from_slice(&(key.len() as u32).to_le_bytes());
+    payload.extend_from_slice(&(value.len() as u32).to_le_bytes());
+    payload.extend_from_slice(key);
+    payload.extend_from_slice(value);
+}
+
+fn encode_delete(seq: u64, key: &[u8], payload: &mut Vec<u8>) {
+    payload.clear();
+    payload.push(OP_DELETE);
+    payload.extend_from_slice(&seq.to_le_bytes());
+    payload.extend_from_slice(&(key.len() as u32).to_le_bytes());
+    payload.extend_from_slice(&0u32.to_le_bytes());
+    payload.extend_from_slice(key);
+}
+
+/// Encodes a whole batch as one WAL payload. Sequence numbers are
+/// implicit: the i-th operation receives first_seq + i.
+///
+/// Layout:
+/// ```text
+/// [OP_BATCH u8][count u32][first_seq u64]
+/// ([op u8][klen u32][vlen u32][key][value]) * count
+/// ```
+pub(crate) fn encode_batch(
+    ops: &[(Kind, Vec<u8>, Vec<u8>)],
+    first_seq: u64,
+    payload: &mut Vec<u8>,
+) {
+    payload.clear();
+    payload.push(OP_BATCH);
+    payload.extend_from_slice(&(ops.len() as u32).to_le_bytes());
+    payload.extend_from_slice(&first_seq.to_le_bytes());
+    for (kind, key, value) in ops {
+        let vlen = if *kind == Kind::Put { value.len() } else { 0 };
+        payload.push(if *kind == Kind::Put {
+            OP_PUT
+        } else {
+            OP_DELETE
+        });
+        payload.extend_from_slice(&(key.len() as u32).to_le_bytes());
+        payload.extend_from_slice(&(vlen as u32).to_le_bytes());
+        payload.extend_from_slice(key);
+        if *kind == Kind::Put {
+            payload.extend_from_slice(value);
+        }
+    }
+}
+
+/// Decodes a batch payload, applying every operation with its derived
+/// sequence number. Strict validation: count and per-op headers must
+/// exactly consume the payload, and sequence numbers must be contiguous
+/// from `first_seq`. A violation is corruption, never a partial
+/// application.
+pub(crate) fn decode_batch_into_memtable(
+    payload: &[u8],
+    offset: u64,
+    memtable: &mut Memtable,
+    max_seq: &mut u64,
+) -> Result<(), WalError> {
+    let bad = |reason: String| WalError::Corrupt { offset, reason };
+    // payload[0] is OP_BATCH; the fixed header follows it
+    if payload.len() < 13 {
+        return Err(bad(format!(
+            "batch payload is {} bytes, shorter than the fixed header",
+            payload.len()
+        )));
+    }
+    let count = u32::from_le_bytes(payload[1..5].try_into().unwrap()) as usize;
+    let first_seq = u64::from_le_bytes(payload[5..13].try_into().unwrap());
+    let mut pos = 13usize;
+    for i in 0..count {
+        let expected_seq = first_seq + i as u64;
+        if pos + BATCH_OP_FIXED_LEN > payload.len() {
+            return Err(bad("batch op header runs past payload".to_string()));
+        }
+        let kind = match payload[pos] {
+            OP_PUT => Kind::Put,
+            OP_DELETE => Kind::Tombstone,
+            other => return Err(bad(format!("unknown batch op byte {other:#04x}"))),
+        };
+        let klen = u32::from_le_bytes(payload[pos + 1..pos + 5].try_into().unwrap()) as usize;
+        let vlen = u32::from_le_bytes(payload[pos + 5..pos + 9].try_into().unwrap()) as usize;
+        let end = pos + BATCH_OP_FIXED_LEN + klen + vlen;
+        if end > payload.len() {
+            return Err(bad("batch op key/value runs past payload".to_string()));
+        }
+        let key = &payload[pos + BATCH_OP_FIXED_LEN..pos + BATCH_OP_FIXED_LEN + klen];
+        let value = if vlen > 0 {
+            &payload[end - vlen..end]
+        } else {
+            &[]
+        };
+        match kind {
+            Kind::Put => memtable.put(key, value, expected_seq),
+            Kind::Tombstone => memtable.delete(key, expected_seq),
+        }
+        *max_seq = (*max_seq).max(expected_seq);
+        pos = end;
+    }
+    Ok(())
+}
+
+fn decode_into_memtable(
+    payload: &[u8],
+    offset: u64,
+    memtable: &mut Memtable,
+    max_seq: &mut u64,
+) -> Result<(), WalError> {
+    let bad = |reason: String| WalError::Corrupt { offset, reason };
+    if payload.len() < PAYLOAD_FIXED_LEN {
+        return Err(bad(format!(
+            "payload is {} bytes, shorter than the {}-byte header",
+            payload.len(),
+            PAYLOAD_FIXED_LEN
+        )));
+    }
+    let op = payload[0];
+    let seq = u64::from_le_bytes(payload[1..9].try_into().unwrap());
+    let klen = u32::from_le_bytes(payload[9..13].try_into().unwrap()) as usize;
+    let vlen = u32::from_le_bytes(payload[13..17].try_into().unwrap()) as usize;
+    *max_seq = (*max_seq).max(seq);
+    let key_end = PAYLOAD_FIXED_LEN
+        .checked_add(klen)
+        .ok_or_else(|| bad("key length overflows payload".to_string()))?;
+    let value_end = key_end
+        .checked_add(vlen)
+        .ok_or_else(|| bad("value length overflows payload".to_string()))?;
+    if payload.len() != value_end {
+        return Err(bad(format!(
+            "payload is {} bytes but header declares {}",
+            payload.len(),
+            value_end
+        )));
+    }
+    let key = &payload[PAYLOAD_FIXED_LEN..key_end];
+    match op {
+        OP_PUT => memtable.put(key, &payload[key_end..value_end], seq),
+        OP_DELETE => memtable.delete(key, seq),
+        other => return Err(bad(format!("unknown op byte {other:#04x}"))),
+    }
+    Ok(())
+}
+
+struct Counting<R> {
+    inner: R,
+    pos: u64,
+}
+
+impl<R: Read> Read for Counting<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let n = self.inner.read(buf)?;
+        self.pos += n as u64;
+        Ok(n)
+    }
+}
+
+pub struct Wal {
+    writer: BufWriter<sys::File>,
+    path: PathBuf,
+    payload_scratch: Vec<u8>,
+}
+
+impl Wal {
+    /// Opens (or durably creates) the WAL at `path`, replaying any valid
+    /// prefix of an existing log into `memtable`. A torn tail left by a
+    /// crash is truncated and reported; corruption short of the tail is
+    /// returned as an error and left untouched.
+    pub fn open(
+        path: impl AsRef<Path>,
+        memtable: &mut Memtable,
+    ) -> Result<(Wal, RecoveryReport), WalError> {
+        let path = path.as_ref().to_path_buf();
+
+        if !sys::exists(&path) {
+            atomic::create_durably(&path).map_err(WalError::Io)?;
+        }
+
+        let file = sys::File::open_rw(&path).map_err(WalError::Io)?;
+
+        let report = Self::recover(&file, memtable)?;
+
+        let mut writer = BufWriter::new(file);
+        writer.seek(SeekFrom::End(0)).map_err(WalError::Io)?;
+
+        Ok((
+            Wal {
+                writer,
+                path,
+                payload_scratch: Vec::new(),
+            },
+            report,
+        ))
+    }
+
+    fn recover(file: &sys::File, memtable: &mut Memtable) -> Result<RecoveryReport, WalError> {
+        let mut reader = FrameReader::new(Counting {
+            inner: BufReader::new(file.try_clone().map_err(WalError::Io)?),
+            pos: 0,
+        });
+
+        let mut records_replayed = 0usize;
+        let mut last_good_offset = 0u64;
+        let mut max_sequence = 0u64;
+        let mut outcome = Result::<Option<u64>, ReadRecordError>::Ok(None);
+
+        loop {
+            let offset = reader.get_ref().pos;
+            match reader.read_record() {
+                Ok(Some(payload)) => {
+                    // Batch records carry their own multi-op payload and
+                    // are applied atomically (all-or-corruption).
+                    if payload.first() == Some(&OP_BATCH) {
+                        decode_batch_into_memtable(&payload, offset, memtable, &mut max_sequence)?;
+                        records_replayed += 1;
+                        last_good_offset = reader.get_ref().pos;
+                        continue;
+                    }
+                    decode_into_memtable(&payload, offset, memtable, &mut max_sequence)?;
+                    records_replayed += 1;
+                    last_good_offset = reader.get_ref().pos;
+                }
+                Ok(None) => break,
+                Err(e @ ReadRecordError::TornTail) => {
+                    outcome = Err(e);
+                    break;
+                }
+                Err(ReadRecordError::Io(e)) => return Err(WalError::Io(e)),
+                Err(
+                    e @ (ReadRecordError::ChecksumMismatch { .. }
+                    | ReadRecordError::LengthInvalid(_)),
+                ) => {
+                    return Err(WalError::Corrupt {
+                        offset,
+                        reason: e.to_string(),
+                    });
+                }
+            }
+        }
+
+        let end = file.len().map_err(WalError::Io)?;
+        let bytes_truncated = end.saturating_sub(last_good_offset);
+        let torn_tail_truncated = outcome.is_err();
+
+        if bytes_truncated > 0 {
+            file.set_len(last_good_offset).map_err(WalError::Io)?;
+            file.sync_all().map_err(WalError::Io)?;
+        }
+
+        Ok(RecoveryReport {
+            records_replayed,
+            torn_tail_truncated,
+            bytes_truncated,
+            max_sequence,
+        })
+    }
+
+    pub fn put(
+        &mut self,
+        seq: u64,
+        key: impl AsRef<[u8]>,
+        value: impl AsRef<[u8]>,
+    ) -> io::Result<()> {
+        encode_put(seq, key.as_ref(), value.as_ref(), &mut self.payload_scratch);
+        self.append_scratch()
+    }
+
+    pub fn delete(&mut self, seq: u64, key: impl AsRef<[u8]>) -> io::Result<()> {
+        encode_delete(seq, key.as_ref(), &mut self.payload_scratch);
+        self.append_scratch()
+    }
+
+    /// Appends a whole batch as ONE framed record so recovery either
+    /// applies every mutation or none (frame atomicity). The i-th op
+    /// receives sequence number first_seq + i.
+    pub fn append_batch(
+        &mut self,
+        first_seq: u64,
+        ops: &[(Kind, Vec<u8>, Vec<u8>)],
+    ) -> io::Result<()> {
+        encode_batch(ops, first_seq, &mut self.payload_scratch);
+        self.append_scratch()
+    }
+
+    fn append_scratch(&mut self) -> io::Result<()> {
+        let mut frame_writer = FrameWriter::new(&mut self.writer);
+        frame_writer.write_record(&self.payload_scratch)?;
+        Ok(())
+    }
+
+    /// Makes all appended records durable: flushes userspace buffers,
+    /// then fdatasyncs. Only after this returns success may the write be
+    /// acknowledged; per docs/design/wal.md D6, a failure here must not
+    /// be retried into oblivion — treat it as fatal upstream.
+    pub fn sync(&mut self) -> Result<(), SyncPhase> {
+        self.writer.flush().map_err(SyncPhase::Flush)?;
+        self.writer
+            .get_ref()
+            .sync_data()
+            .map_err(SyncPhase::Fdatasync)
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    #[cfg(test)]
+    pub(crate) fn writer_flush_for_test(&mut self) {
+        self.writer.flush().unwrap();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn writer_get_mut_for_test(&mut self) -> &mut sys::File {
+        self.writer.get_mut()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::memtable::Entry;
+    use std::env;
+    use std::fs;
+
+    static DIR_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+    struct TempDir(PathBuf);
+
+    impl TempDir {
+        fn new(label: &str) -> Self {
+            let base = env::temp_dir();
+            let n = DIR_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let path = base.join(format!("kiban-wal-{label}-{}-{}", std::process::id(), n));
+            fs::create_dir_all(&path).unwrap();
+            TempDir(path)
+        }
+
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn snapshot(m: &Memtable) -> Vec<(Vec<u8>, Entry)> {
+        m.iter().map(|(k, e)| (k.to_vec(), e.clone())).collect()
+    }
+
+    #[test]
+    fn fresh_wal_is_created_empty_and_replays_nothing() {
+        let td = TempDir::new("fresh");
+        let wal_path = td.path().join("WAL");
+        let mut m = Memtable::new();
+        let (mut wal, report) = Wal::open(&wal_path, &mut m).unwrap();
+        assert_eq!(report.records_replayed, 0);
+        assert!(!report.torn_tail_truncated);
+        assert_eq!(snapshot(&m), vec![]);
+        wal.put(1, b"a", b"1").unwrap();
+        wal.sync().unwrap();
+        drop(wal);
+
+        let mut m2 = Memtable::new();
+        let (_, report2) = Wal::open(&wal_path, &mut m2).unwrap();
+        assert_eq!(report2.records_replayed, 1);
+        assert_eq!(m2.get("a"), Some(b"1".to_vec()));
+    }
+
+    #[test]
+    fn put_and_delete_roundtrip_through_recovery() {
+        let td = TempDir::new("roundtrip");
+        let wal_path = td.path().join("WAL");
+        {
+            let mut m = Memtable::new();
+            let (mut wal, _) = Wal::open(&wal_path, &mut m).unwrap();
+            wal.put(2, b"alpha", b"value-one").unwrap();
+            wal.put(3, b"beta", b"value-two").unwrap();
+            wal.delete(99, b"alpha").unwrap();
+            wal.put(4, b"", b"empty-key").unwrap();
+            wal.sync().unwrap();
+        }
+        let mut m = Memtable::new();
+        let (_, report) = Wal::open(&wal_path, &mut m).unwrap();
+        assert_eq!(report.records_replayed, 4);
+        assert_eq!(
+            snapshot(&m),
+            vec![
+                (
+                    b"".to_vec(),
+                    Entry::Value {
+                        value: b"empty-key".to_vec(),
+                        seq: 4
+                    }
+                ),
+                (b"alpha".to_vec(), Entry::Tombstone { seq: 99 }),
+                (
+                    b"beta".to_vec(),
+                    Entry::Value {
+                        value: b"value-two".to_vec(),
+                        seq: 3
+                    }
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn unsynced_appends_survive_process_crash_via_flushed_file() {
+        // append() without sync() must still have reached the kernel page
+        // cache via the BufWriter once flushed; here we simulate a clean
+        // handoff by flushing explicitly, proving the two-step contract:
+        // flush gets it to the OS, sync gets it to the device.
+        let td = TempDir::new("flush-vs-sync");
+        let wal_path = td.path().join("WAL");
+        let mut m = Memtable::new();
+        let (mut wal, _) = Wal::open(&wal_path, &mut m).unwrap();
+        wal.put(5, b"k", b"v").unwrap();
+        wal.writer.flush().unwrap();
+        drop(wal);
+
+        let mut m2 = Memtable::new();
+        let (_, _) = Wal::open(&wal_path, &mut m2).unwrap();
+        assert_eq!(m2.get("k"), Some(b"v".to_vec()));
+    }
+
+    #[test]
+    fn torn_tail_is_truncated_to_last_valid_record() {
+        let td = TempDir::new("torn-tail");
+        let wal_path = td.path().join("WAL");
+        {
+            let mut m = Memtable::new();
+            let (mut wal, _) = Wal::open(&wal_path, &mut m).unwrap();
+            wal.put(6, b"good1", b"v1").unwrap();
+            wal.put(7, b"good2", b"v2").unwrap();
+            wal.sync().unwrap();
+            // simulate a crash mid-append: partial record reaches the OS
+            wal.writer.flush().unwrap();
+            wal.writer.get_mut().write_all(&[0x00, 0x00, 0x00]).unwrap();
+        }
+
+        let mut m = Memtable::new();
+        let (mut wal, report) = Wal::open(&wal_path, &mut m).unwrap();
+        assert_eq!(report.records_replayed, 2);
+        assert!(report.torn_tail_truncated);
+        assert!(report.bytes_truncated > 0);
+        assert_eq!(m.get("good2"), Some(b"v2".to_vec()));
+
+        // the truncated WAL accepts appends and reopens cleanly
+        wal.put(8, b"after", b"recovery").unwrap();
+        wal.sync().unwrap();
+        drop(wal);
+
+        let mut m2 = Memtable::new();
+        let (_, report2) = Wal::open(&wal_path, &mut m2).unwrap();
+        assert_eq!(report2.records_replayed, 3);
+        assert!(!report2.torn_tail_truncated);
+        assert_eq!(m2.get("after"), Some(b"recovery".to_vec()));
+    }
+
+    #[test]
+    fn corrupted_record_is_reported_not_truncated() {
+        let td = TempDir::new("corrupt");
+        let wal_path = td.path().join("WAL");
+        {
+            let mut m = Memtable::new();
+            let (mut wal, _) = Wal::open(&wal_path, &mut m).unwrap();
+            wal.put(9, b"first", b"record").unwrap();
+            wal.put(10, b"second", b"record").unwrap();
+            wal.sync().unwrap();
+        }
+        // flip one payload bit inside the first record's frame region
+        let mut raw = fs::read(&wal_path).unwrap();
+        let header_len = 8usize;
+        raw[header_len + 9 + 1] ^= 0x08;
+        fs::write(&wal_path, &raw).unwrap();
+
+        let original_len = raw.len() as u64;
+        let mut m = Memtable::new();
+        let err = match Wal::open(&wal_path, &mut m) {
+            Err(e) => e,
+            Ok(_) => panic!("expected corruption error"),
+        };
+        assert!(matches!(err, WalError::Corrupt { .. }), "got {err:?}");
+        // untouched: no truncation happened behind the caller's back
+        assert_eq!(fs::metadata(&wal_path).unwrap().len(), original_len);
+    }
+
+    #[test]
+    fn unknown_op_byte_is_corruption() {
+        let mut m = Memtable::new();
+        let payload = [0x7Fu8, 1, 0, 0, 0, 0, 0, 0, 0];
+        let err = decode_into_memtable(&payload, 42, &mut m, &mut 0).unwrap_err();
+        assert!(matches!(err, WalError::Corrupt { offset: 42, .. }));
+    }
+
+    #[test]
+    fn truncated_payload_header_is_corruption() {
+        let mut m = Memtable::new();
+        let err = decode_into_memtable(&[OP_PUT, 4, 0], 0, &mut m, &mut 0).unwrap_err();
+        assert!(matches!(err, WalError::Corrupt { .. }));
+    }
+
+    #[test]
+    fn declared_lengths_must_match_payload_exactly() {
+        let mut m = Memtable::new();
+        let mut payload = vec![OP_PUT];
+        payload.extend_from_slice(&16u32.to_le_bytes());
+        payload.extend_from_slice(&0u32.to_le_bytes());
+        payload.extend_from_slice(b"short");
+        let err = decode_into_memtable(&payload, 0, &mut m, &mut 0).unwrap_err();
+        assert!(matches!(err, WalError::Corrupt { .. }));
+    }
+
+    #[test]
+    fn reopening_after_clean_close_appends_continue() {
+        let td = TempDir::new("reopen");
+        let wal_path = td.path().join("WAL");
+        for round in 0..3 {
+            let mut m = Memtable::new();
+            let (mut wal, report) = Wal::open(&wal_path, &mut m).unwrap();
+            assert_eq!(report.records_replayed, round);
+            assert!(!report.torn_tail_truncated);
+            wal.put(round as u64 + 1, format!("key-{round}"), "val")
+                .unwrap();
+            wal.sync().unwrap();
+        }
+        let mut m = Memtable::new();
+        let (_, report) = Wal::open(&wal_path, &mut m).unwrap();
+        assert_eq!(report.records_replayed, 3);
+        assert_eq!(m.get("key-2"), Some(b"val".to_vec()));
+    }
+}

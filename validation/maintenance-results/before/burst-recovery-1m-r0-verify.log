@@ -1,0 +1,4 @@
+stage=steady threads=4 operations=333334
+stage=write-burst threads=4 operations=333333
+stage=read-recovery threads=4 operations=333333
+verified_keys=100000

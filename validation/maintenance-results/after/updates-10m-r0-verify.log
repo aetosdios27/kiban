@@ -1,0 +1,2 @@
+stage=update-heavy threads=4 operations=10000000
+verified_keys=100000

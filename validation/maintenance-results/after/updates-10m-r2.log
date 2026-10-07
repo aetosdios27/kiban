@@ -1,0 +1,2 @@
+update-heavy: 10000000 operations in 31.296s (319527 ops/s), read/write p99=69632 / 46080 ns
+total: 10000000 operations in 31.296s (319527 ops/s), read/write p99=69632 / 46080 ns

@@ -1,0 +1,30 @@
+   Compiling kiban v0.1.0 (/home/aetos/dev/personal/kiban)
+warning: variable does not need to be mutable
+   --> src/background.rs:610:13
+    |
+610 |         let mut flush_time = std::time::Duration::ZERO;
+    |             ----^^^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: `kiban` (lib test) generated 1 warning (run `cargo fix --lib -p kiban --tests` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.87s
+     Running unittests src/lib.rs (target/debug/deps/kiban-60f9814aeb7cdf24)
+
+running 1 test
+
+thread 'db::background_tests::pending_flush_commits_before_compaction_build_finishes' (372897) panicked at src/db.rs:6283:9:
+flush was not serviced during BUILD
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test db::background_tests::pending_flush_commits_before_compaction_build_finishes ... FAILED
+
+failures:
+
+failures:
+    db::background_tests::pending_flush_commits_before_compaction_build_finishes
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 263 filtered out; finished in 5.00s
+
+error: test failed, to rerun pass `--lib`

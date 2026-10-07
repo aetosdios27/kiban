@@ -1,0 +1,183 @@
+[
+  {
+    "command": [
+      "cargo",
+      "fmt",
+      "--check"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 0.1799647699954221
+  },
+  {
+    "command": [
+      "cargo",
+      "clippy",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 0.046720655998797156
+  },
+  {
+    "command": [
+      "cargo",
+      "clippy",
+      "--all-targets",
+      "--features",
+      "loom",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 0.812445433002722
+  },
+  {
+    "command": [
+      "cargo",
+      "test"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 41.152848248995724
+  },
+  {
+    "command": [
+      "cargo",
+      "test",
+      "--examples"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 0.2543643239987432
+  },
+  {
+    "command": [
+      "cargo",
+      "test",
+      "--features",
+      "loom",
+      "--lib",
+      "--",
+      "--test-threads=1",
+      "loom_"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 16.73700616900169
+  },
+  {
+    "command": [
+      "cargo",
+      "test",
+      "--release",
+      "--lib",
+      "--",
+      "--ignored",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 6.565721800005122
+  },
+  {
+    "command": [
+      "cargo",
+      "package",
+      "--locked"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 2.433239935999154
+  },
+  {
+    "command": [
+      "cargo",
+      "package",
+      "--list"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 0.040879706000851
+  },
+  {
+    "command": [
+      "target/release/examples/torture",
+      "--mode",
+      "probes",
+      "--seed",
+      "20261008",
+      "--cycles",
+      "1000",
+      "--operations",
+      "1000",
+      "--keys",
+      "1000",
+      "--threads",
+      "4",
+      "--snapshots",
+      "true",
+      "--sync-every",
+      "17",
+      "--fault-percent",
+      "70",
+      "--db",
+      "target/maintenance-torture/probes",
+      "--output",
+      "validation/maintenance-results/torture-probes"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "target/release/examples/torture",
+      "--mode",
+      "simulated",
+      "--seed",
+      "20261008",
+      "--cycles",
+      "1000",
+      "--operations",
+      "1000",
+      "--keys",
+      "1000",
+      "--threads",
+      "4",
+      "--snapshots",
+      "true",
+      "--sync-every",
+      "17",
+      "--fault-percent",
+      "70",
+      "--db",
+      "target/maintenance-torture/simulated",
+      "--output",
+      "validation/maintenance-results/torture-simulated"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "target/release/examples/torture",
+      "--mode",
+      "process",
+      "--seed",
+      "20261008",
+      "--cycles",
+      "1000",
+      "--operations",
+      "1000",
+      "--keys",
+      "1000",
+      "--threads",
+      "4",
+      "--snapshots",
+      "true",
+      "--sync-every",
+      "17",
+      "--fault-percent",
+      "70",
+      "--db",
+      "target/maintenance-torture/process",
+      "--output",
+      "validation/maintenance-results/torture-process"
+    ],
+    "exit_code": 0
+  }
+]

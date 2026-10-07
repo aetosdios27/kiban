@@ -1,0 +1,6 @@
+   Packaging kiban v0.1.0 (/home/aetos/dev/personal/kiban)
+    Updating crates.io index
+    Packaged 66 files, 1019.5KiB (253.5KiB compressed)
+   Verifying kiban v0.1.0 (/home/aetos/dev/personal/kiban)
+   Compiling kiban v0.1.0 (/home/aetos/dev/personal/kiban/target/package/kiban-0.1.0)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.41s

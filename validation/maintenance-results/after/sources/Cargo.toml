@@ -1,0 +1,41 @@
+[package]
+name = "kiban"
+version = "0.1.0"
+edition = "2024"
+description = "An embedded LSM-tree key-value storage engine with WAL durability, snapshots, and leveled compaction"
+repository = "https://github.com/aetosdios27/kiban"
+readme = "README.md"
+license = "MIT"
+keywords = ["database", "key-value", "storage", "lsm", "embedded"]
+categories = ["database-implementations"]
+exclude = ["validation/results/**", "validation/correctness-results/**", "validation/release-results/**", "validation/comparison-results/**", "validation/maintenance-results/**", "tools/**"]
+
+[features]
+# Test-only: enables the exhaustive loom interleaving models for the
+# engine gate (`src/engine_lock.rs::loom_tests`). Never enabled in
+# production builds; run with
+# `cargo test --features loom -- --test-threads=1 loom_`.
+loom = ["dep:loom"]
+
+[dependencies]
+loom = { version = "0.7", optional = true }
+
+[[bench]]
+name = "basic"
+harness = false
+
+[[bench]]
+name = "steady_state"
+harness = false
+
+[[bench]]
+name = "phase_changing"
+harness = false
+
+[[example]]
+name = "scale"
+path = "examples/scale/main.rs"
+
+[[example]]
+name = "torture"
+path = "examples/torture/main.rs"

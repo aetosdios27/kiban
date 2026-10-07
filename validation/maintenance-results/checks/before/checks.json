@@ -1,0 +1,81 @@
+[
+  {
+    "command": [
+      "cargo",
+      "fmt",
+      "--check"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 0.1974595589999808
+  },
+  {
+    "command": [
+      "cargo",
+      "clippy",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 0.07966568900155835
+  },
+  {
+    "command": [
+      "cargo",
+      "clippy",
+      "--all-targets",
+      "--features",
+      "loom",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 1.220428130000073
+  },
+  {
+    "command": [
+      "cargo",
+      "test"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 28.811555731001135
+  },
+  {
+    "command": [
+      "cargo",
+      "test",
+      "--examples"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 0.30862553100450896
+  },
+  {
+    "command": [
+      "cargo",
+      "test",
+      "--features",
+      "loom",
+      "--lib",
+      "--",
+      "--test-threads=1",
+      "loom_"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 16.24744142399868
+  },
+  {
+    "command": [
+      "cargo",
+      "test",
+      "--release",
+      "--lib",
+      "--",
+      "--ignored",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 5.618129488000704
+  }
+]
