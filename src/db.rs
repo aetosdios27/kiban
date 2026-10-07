@@ -206,7 +206,6 @@ fn get_from_version_at(
     sequence: u64,
     read_amp: &ReadAmpCounters,
 ) -> Result<Option<Vec<u8>>, DbError> {
-    use std::sync::atomic::Ordering::Relaxed;
     let mut newest: Option<crate::sstable::Found> = None;
     for entry in version
         .tables
@@ -216,12 +215,12 @@ fn get_from_version_at(
         .chain(version.tables.iter().filter(|t| t.level >= 1))
     {
         if entry.level == 0 {
-            read_amp.l0_tables_probed.fetch_add(1, Relaxed);
+            read_amp.l0_tables_probed.increment();
         } else {
             if key < entry.first_key.as_slice() || key > entry.last_key.as_slice() {
                 continue;
             }
-            read_amp.leveled_tables_probed.fetch_add(1, Relaxed);
+            read_amp.leveled_tables_probed.increment();
         }
         if let Some(found) = entry.table.get(key, Some(sequence))?
             && newest.as_ref().is_none_or(|best| found.seq > best.seq)
@@ -238,7 +237,7 @@ fn get_from_version_at(
             Kind::Tombstone => None,
         }),
         None => {
-            read_amp.resolved_not_found.fetch_add(1, Relaxed);
+            read_amp.resolved_not_found.increment();
             Ok(None)
         }
     }
@@ -552,20 +551,20 @@ pub struct Kiban {
 /// hit/miss counters applies — see there.
 #[derive(Debug, Default)]
 pub(crate) struct ReadAmpCounters {
-    gets_total: std::sync::atomic::AtomicU64,
-    resolved_in_memtable: std::sync::atomic::AtomicU64,
-    resolved_in_immutable: std::sync::atomic::AtomicU64,
+    gets_total: crate::counter::Counter,
+    resolved_in_memtable: crate::counter::Counter,
+    resolved_in_immutable: crate::counter::Counter,
     /// Every `SstTable::get` call against an L0 table, whether it hits
     /// or not — L0 tables can overlap, so a lookup may need to probe
     /// several before finding (or ruling out) a key, newest first.
-    l0_tables_probed: std::sync::atomic::AtomicU64,
+    l0_tables_probed: crate::counter::Counter,
     /// Every `SstTable::get` call against a level >= 1 table. Levels
     /// are range-disjoint, so this is normally 0 or 1 per get that
     /// reaches this far — a value consistently above 1 would mean the
     /// disjointness invariant is somehow violated, which is itself a
     /// useful thing for this counter to be able to reveal.
-    leveled_tables_probed: std::sync::atomic::AtomicU64,
-    resolved_not_found: std::sync::atomic::AtomicU64,
+    leveled_tables_probed: crate::counter::Counter,
+    resolved_not_found: crate::counter::Counter,
 }
 
 /// A point-in-time snapshot of `ReadAmpCounters` (phase 11.17-round-2)
@@ -587,14 +586,13 @@ pub struct ReadAmpStats {
 
 impl ReadAmpCounters {
     fn snapshot(&self) -> ReadAmpStats {
-        use std::sync::atomic::Ordering::Relaxed;
         ReadAmpStats {
-            gets_total: self.gets_total.load(Relaxed),
-            resolved_in_memtable: self.resolved_in_memtable.load(Relaxed),
-            resolved_in_immutable: self.resolved_in_immutable.load(Relaxed),
-            l0_tables_probed: self.l0_tables_probed.load(Relaxed),
-            leveled_tables_probed: self.leveled_tables_probed.load(Relaxed),
-            resolved_not_found: self.resolved_not_found.load(Relaxed),
+            gets_total: self.gets_total.load(),
+            resolved_in_memtable: self.resolved_in_memtable.load(),
+            resolved_in_immutable: self.resolved_in_immutable.load(),
+            l0_tables_probed: self.l0_tables_probed.load(),
+            leveled_tables_probed: self.leveled_tables_probed.load(),
+            resolved_not_found: self.resolved_not_found.load(),
         }
     }
 }
@@ -1066,11 +1064,10 @@ impl Kiban {
     }
 
     pub fn get(&self, key: impl AsRef<[u8]>) -> Result<Option<Vec<u8>>, DbError> {
-        use std::sync::atomic::Ordering::Relaxed;
         let key = key.as_ref();
-        self.read_amp.gets_total.fetch_add(1, Relaxed);
+        self.read_amp.gets_total.increment();
         if let Some(entry) = self.memtable.entry(key) {
-            self.read_amp.resolved_in_memtable.fetch_add(1, Relaxed);
+            self.read_amp.resolved_in_memtable.increment();
             return Ok(entry.as_value().map(ToOwned::to_owned));
         }
         // 11.8: the frozen memtable, if any, is older than active but
@@ -1078,7 +1075,7 @@ impl Kiban {
         if let Some(im) = &self.immutable
             && let Some(entry) = im.memtable.entry(key)
         {
-            self.read_amp.resolved_in_immutable.fetch_add(1, Relaxed);
+            self.read_amp.resolved_in_immutable.increment();
             return Ok(entry.as_value().map(ToOwned::to_owned));
         }
         // Live iteration is unbounded too; explicit snapshot reads pass
@@ -1124,13 +1121,12 @@ impl Kiban {
         snap: &Snapshot,
         key: impl AsRef<[u8]>,
     ) -> Result<Option<Vec<u8>>, DbError> {
-        use std::sync::atomic::Ordering::Relaxed;
         let key = key.as_ref();
-        self.read_amp.gets_total.fetch_add(1, Relaxed);
+        self.read_amp.gets_total.increment();
         // Use captured sources: current memtables may have rotated or
         // flushed into an SST that is absent from the pinned Version.
         if let Some(entry) = snap.memtable.entry_at(key, snap.seq) {
-            self.read_amp.resolved_in_memtable.fetch_add(1, Relaxed);
+            self.read_amp.resolved_in_memtable.increment();
             return Ok(match entry {
                 MemEntry::Value { value, .. } => Some(value.clone()),
                 MemEntry::Tombstone { .. } => None,
@@ -1142,7 +1138,7 @@ impl Kiban {
         if let Some(immutable) = &snap.immutable
             && let Some(entry) = immutable.entry_at(key, snap.seq)
         {
-            self.read_amp.resolved_in_immutable.fetch_add(1, Relaxed);
+            self.read_amp.resolved_in_immutable.increment();
             return Ok(match entry {
                 MemEntry::Value { value, .. } => Some(value.clone()),
                 MemEntry::Tombstone { .. } => None,
@@ -4505,17 +4501,16 @@ impl SharedSnapshot {
     /// Reads `key` as of this snapshot.
     #[allow(dead_code)]
     pub fn get(&self, key: impl AsRef<[u8]>) -> Result<Option<Vec<u8>>, DbError> {
-        use std::sync::atomic::Ordering::Relaxed;
         let key = key.as_ref();
-        self.read_amp.gets_total.fetch_add(1, Relaxed);
+        self.read_amp.gets_total.increment();
         if let Some(entry) = self.memtable.entry_at(key, self.seq) {
-            self.read_amp.resolved_in_memtable.fetch_add(1, Relaxed);
+            self.read_amp.resolved_in_memtable.increment();
             return Ok(entry.as_value().map(ToOwned::to_owned));
         }
         if let Some(immutable) = &self.immutable
             && let Some(entry) = immutable.entry_at(key, self.seq)
         {
-            self.read_amp.resolved_in_immutable.fetch_add(1, Relaxed);
+            self.read_amp.resolved_in_immutable.increment();
             return Ok(entry.as_value().map(ToOwned::to_owned));
         }
         get_from_version_at(&self.version, key, self.seq, &self.read_amp)
@@ -4925,9 +4920,8 @@ impl SharedKiban {
     /// necessarily written at or before the moment this exact `view`
     /// was published (see `ReadView`, `Kiban::publish_read_view`).
     pub fn get(&self, key: impl AsRef<[u8]>) -> Result<Option<Vec<u8>>, DbError> {
-        use std::sync::atomic::Ordering::Relaxed;
         let key = key.as_ref();
-        self.read_amp.gets_total.fetch_add(1, Relaxed);
+        self.read_amp.gets_total.increment();
         let view = measured!(ReadViewRead, self.read_view.read())
             .map_err(|_| DbError::Corrupt("read_view lock poisoned".to_string()))?
             .clone();
@@ -4935,7 +4929,7 @@ impl SharedKiban {
             let mem = measured!(MemtableRead, view.memtable.read())
                 .map_err(|_| DbError::Corrupt("shared memtable lock poisoned".to_string()))?;
             if let Some(entry) = mem.entry(key) {
-                self.read_amp.resolved_in_memtable.fetch_add(1, Relaxed);
+                self.read_amp.resolved_in_memtable.increment();
                 return Ok(entry.as_value().map(ToOwned::to_owned));
             }
         }
@@ -4944,7 +4938,7 @@ impl SharedKiban {
         if let Some(immutable) = &view.immutable
             && let Some(entry) = immutable.entry(key)
         {
-            self.read_amp.resolved_in_immutable.fetch_add(1, Relaxed);
+            self.read_amp.resolved_in_immutable.increment();
             return Ok(entry.as_value().map(ToOwned::to_owned));
         }
         get_from_version_at(&view.version, key, view.last_sequence, &self.read_amp)

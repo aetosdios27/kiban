@@ -28,6 +28,7 @@ pub mod atomic;
 pub mod background;
 pub mod bloom;
 pub mod cache;
+mod counter;
 pub mod crc32;
 pub mod db;
 #[cfg(feature = "diagnostics")]

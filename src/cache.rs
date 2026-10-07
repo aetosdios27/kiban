@@ -5,8 +5,9 @@
 //! Insertion and second-chance eviction own the write lock; capacity is a
 //! hard global byte bound.
 
+use crate::counter::Counter;
 use std::collections::{HashMap, VecDeque};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, PoisonError, RwLock};
 
 /// Parsed layout of a verified data block, relative to its raw bytes.
@@ -76,9 +77,9 @@ pub struct BlockCache {
     capacity: usize,
     /// Observational counters; they do not publish correctness state, so
     /// relaxed atomics avoid turning successful hits into write-lock work.
-    hits: AtomicU64,
-    misses: AtomicU64,
-    evictions: AtomicU64,
+    hits: Counter,
+    misses: Counter,
+    evictions: Counter,
     /// Single-flight state for `get_or_load` (11.17-F): one entry per
     /// key with a physical load currently running. Misses that don't
     /// collide with a concurrent load for the same key never touch
@@ -88,7 +89,7 @@ pub struct BlockCache {
     /// already in flight and reused its result instead of issuing a
     /// second physical read — the duplicate I/O `get_or_load` exists to
     /// avoid.
-    coalesced: AtomicU64,
+    coalesced: Counter,
 }
 
 /// Raw counters for a [`BlockCache`] (phase 11.7, extended 11.17-F) —
@@ -116,11 +117,11 @@ impl BlockCache {
                 bytes: 0,
             }),
             capacity: capacity_bytes,
-            hits: AtomicU64::new(0),
-            misses: AtomicU64::new(0),
-            evictions: AtomicU64::new(0),
+            hits: Counter::default(),
+            misses: Counter::default(),
+            evictions: Counter::default(),
             in_flight: Mutex::new(HashMap::new()),
-            coalesced: AtomicU64::new(0),
+            coalesced: Counter::default(),
         }
     }
 
@@ -149,10 +150,10 @@ impl BlockCache {
             capacity_bytes: self.capacity,
             resident_bytes: inner.bytes,
             resident_entries: inner.map.len(),
-            hits: self.hits.load(Ordering::Relaxed),
-            misses: self.misses.load(Ordering::Relaxed),
-            evictions: self.evictions.load(Ordering::Relaxed),
-            coalesced: self.coalesced.load(Ordering::Relaxed),
+            hits: self.hits.load(),
+            misses: self.misses.load(),
+            evictions: self.evictions.load(),
+            coalesced: self.coalesced.load(),
         }
     }
 
@@ -162,12 +163,12 @@ impl BlockCache {
     pub fn get(&self, key: &CacheKey) -> Option<CachedBlock> {
         let inner = self.inner.read().expect("block cache lock poisoned");
         let Some(entry) = inner.map.get(key) else {
-            self.misses.fetch_add(1, Ordering::Relaxed);
+            self.misses.increment();
             return None;
         };
         let block = entry.block.clone();
         entry.referenced.store(true, Ordering::Relaxed);
-        self.hits.fetch_add(1, Ordering::Relaxed);
+        self.hits.increment();
         Some(block)
     }
 
@@ -204,7 +205,7 @@ impl BlockCache {
                 .remove(&victim)
                 .expect("clock key must be resident");
             inner.bytes -= removed.block.data.len();
-            self.evictions.fetch_add(1, Ordering::Relaxed);
+            self.evictions.increment();
         }
         inner.bytes += bytes;
         inner.clock.push_back(key);
@@ -267,7 +268,7 @@ impl BlockCache {
 
             match role {
                 Role::Waiter(slot) => {
-                    self.coalesced.fetch_add(1, Ordering::Relaxed);
+                    self.coalesced.increment();
                     let mut outcome = slot.outcome.lock().unwrap_or_else(PoisonError::into_inner);
                     loop {
                         match &*outcome {
@@ -365,6 +366,7 @@ impl BlockCache {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::AtomicU64;
     use std::sync::{Arc, Barrier};
 
     fn block(size: usize, fill: u8) -> CachedBlock {

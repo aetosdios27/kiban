@@ -38,6 +38,11 @@ thread_local! {
     static READER_SHARD: usize = const { 0 };
 }
 
+/// Same stable per-thread slot as reader gates; counter placement is not safety state.
+pub(crate) fn counter_shard() -> usize {
+    READER_SHARD.with(|slot| *slot)
+}
+
 /// One engine value guarded by eight independent reader gates.
 ///
 /// SAFETY: a read guard owns one shard read lock before exposing `&T`. A
