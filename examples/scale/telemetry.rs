@@ -71,7 +71,7 @@ impl Reporter {
         let mut samples = create(&c.output.join("samples.csv"))?;
         writeln!(
             samples,
-            "elapsed_s,stage,interval_s,reads,writes,read_ops_s,write_ops_s,all_p50_ns,all_p95_ns,all_p99_ns,all_p999_ns,read_p50_ns,read_p95_ns,read_p99_ns,read_p999_ns,write_p50_ns,write_p95_ns,write_p99_ns,write_p999_ns,read_misses,app_bytes_total,sst_bytes_written,sst_write_amp,db_bytes,l0_files,debt_bytes,max_debt_ratio,overbudget_levels,pending_flush,memtable_bytes,immutable_bytes,compactions,compaction_input_bytes,compaction_output_bytes,compaction_elapsed_ns,flushes,flush_elapsed_ns,stalls,stall_ns,waiting_writers,maintenance_running,rss_bytes,fds,process_read_bytes,process_write_bytes,cache_hits,cache_misses,file_waits,governor_mode,governor_pressure,pressure_l0,pressure_debt,pressure_read,mode_switches,avg_batch_size,trivial_moves,obsolete_files,sample_cost_ns"
+            "elapsed_s,stage,interval_s,reads,writes,read_ops_s,write_ops_s,all_p50_ns,all_p95_ns,all_p99_ns,all_p999_ns,read_p50_ns,read_p95_ns,read_p99_ns,read_p999_ns,write_p50_ns,write_p95_ns,write_p99_ns,write_p999_ns,read_misses,app_bytes_total,sst_bytes_written,sst_write_amp,db_bytes,l0_files,debt_bytes,max_debt_ratio,overbudget_levels,pending_flush,memtable_bytes,immutable_bytes,compactions,compaction_input_bytes,compaction_output_bytes,compaction_elapsed_ns,flushes,flush_elapsed_ns,stalls,stall_ns,waiting_writers,maintenance_running,rss_bytes,fds,process_read_bytes,process_write_bytes,cache_hits,cache_misses,file_waits,governor_mode,governor_pressure,pressure_l0,pressure_debt,pressure_read,mode_switches,avg_batch_size,trivial_moves,obsolete_files,immutable_stalls,l0_stalls,both_stalls,immutable_wait_ns,l0_wait_ns,both_wait_ns,flush_queue_ns,flush_queue_max_ns,flush_build_ns,flush_commit_wait_ns,flush_commit_ns,compaction_build_ns,compaction_commit_wait_ns,compaction_commit_ns,sample_cost_ns"
         )?;
         let mut levels = create(&c.output.join("levels.csv"))?;
         writeln!(levels, "elapsed_s,stage,level,tables,bytes")?;
@@ -83,7 +83,7 @@ impl Reporter {
         let mut summaries = create(&c.output.join("summary.csv"))?;
         writeln!(
             summaries,
-            "stage,threads,elapsed_s,operations,reads,writes,total_ops_s,read_ops_s,write_ops_s,all_p50_ns,all_p95_ns,all_p99_ns,all_p999_ns,read_p50_ns,read_p95_ns,read_p99_ns,read_p999_ns,write_p50_ns,write_p95_ns,write_p99_ns,write_p999_ns,read_misses,app_bytes,sync_calls"
+            "stage,threads,elapsed_s,operations,reads,writes,total_ops_s,read_ops_s,write_ops_s,all_p50_ns,all_p95_ns,all_p99_ns,all_p999_ns,read_p50_ns,read_p95_ns,read_p99_ns,read_p999_ns,write_p50_ns,write_p95_ns,write_p99_ns,write_p999_ns,read_misses,app_bytes,sync_calls,all_max_ns,read_max_ns,write_max_ns"
         )?;
         let now = Instant::now();
         Ok(Self {
@@ -192,6 +192,20 @@ impl Reporter {
             g.avg_batch_size.to_string(),
             g.trivial_moves_performed.to_string(),
             s.obsolete_files_pending.to_string(),
+            (m.timings.immutable_stalls - b.timings.immutable_stalls).to_string(),
+            (m.timings.l0_stalls - b.timings.l0_stalls).to_string(),
+            (m.timings.both_stalls - b.timings.both_stalls).to_string(),
+            (m.timings.immutable_wait_ns - b.timings.immutable_wait_ns).to_string(),
+            (m.timings.l0_wait_ns - b.timings.l0_wait_ns).to_string(),
+            (m.timings.both_wait_ns - b.timings.both_wait_ns).to_string(),
+            (m.timings.flush_queue_ns - b.timings.flush_queue_ns).to_string(),
+            m.timings.flush_queue_max_ns.to_string(),
+            (m.timings.flush_build_ns - b.timings.flush_build_ns).to_string(),
+            (m.timings.flush_commit_wait_ns - b.timings.flush_commit_wait_ns).to_string(),
+            (m.timings.flush_commit_ns - b.timings.flush_commit_ns).to_string(),
+            (m.timings.compaction_build_ns - b.timings.compaction_build_ns).to_string(),
+            (m.timings.compaction_commit_wait_ns - b.timings.compaction_commit_wait_ns).to_string(),
+            (m.timings.compaction_commit_ns - b.timings.compaction_commit_ns).to_string(),
         ];
         for l in &s.levels {
             writeln!(
@@ -246,7 +260,7 @@ impl Reporter {
         let ops = m.reads.count + m.writes.count;
         writeln!(
             self.summaries,
-            "{},{threads},{elapsed},{ops},{},{},{},{},{},{},{},{},{},{},{}",
+            "{},{threads},{elapsed},{ops},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             csv(stage),
             m.reads.count,
             m.writes.count,
@@ -258,7 +272,10 @@ impl Reporter {
             m.writes.fields(),
             m.misses,
             m.app_bytes,
-            m.syncs
+            m.syncs,
+            m.all().max,
+            optional((m.reads.count > 0).then_some(m.reads.max)),
+            optional((m.writes.count > 0).then_some(m.writes.max))
         )?;
         eprintln!(
             "{stage}: {ops} operations in {elapsed:.3}s ({:.0} ops/s), read/write p99={} / {} ns",

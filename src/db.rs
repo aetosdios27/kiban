@@ -11,7 +11,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::atomic;
-use crate::background::{Maintenance, MaintenanceError};
+use crate::background::{Maintenance, MaintenanceError, WritePressure};
 use crate::cache::BlockCache;
 use crate::engine_lock::ShardedRwLock;
 use crate::file_cache::TableFileCache;
@@ -446,6 +446,7 @@ struct Immutable {
     wal: Wal,
     wal_number: u64,
     generation: u64,
+    queued_at: std::time::Instant,
 }
 
 /// A single-owner embedded database handle.
@@ -1480,6 +1481,7 @@ impl Kiban {
             wal: old_wal,
             wal_number: old_wal_number,
             generation,
+            queued_at: std::time::Instant::now(),
         });
         self.publish_read_view();
         Ok(())
@@ -1496,6 +1498,7 @@ impl Kiban {
             memtable: im.memtable.clone(),
             old_wal_number: im.wal_number,
             generation: im.generation,
+            queued_at: im.queued_at,
             output_number,
             dir: self.dir.clone(),
             cache: self.cache.clone(),
@@ -2691,6 +2694,7 @@ pub(crate) struct FlushPlan {
     /// plan's `commit_flush` retires it.
     old_wal_number: u64,
     generation: u64,
+    pub(crate) queued_at: std::time::Instant,
     output_number: u64,
     dir: PathBuf,
     cache: StdArc<BlockCache>,
@@ -4728,7 +4732,7 @@ impl SharedKiban {
                     "maintenance worker is shutting down".to_string(),
                 )));
             }
-            let epoch = {
+            let (epoch, pressure) = {
                 let mut guard = self.write_lock()?;
                 guard.check_poisoned()?;
                 let l0_ok = guard.l0_count() < guard.options().l0_write_stall_trigger;
@@ -4744,15 +4748,18 @@ impl SharedKiban {
                     }
                     return Ok(());
                 }
-                self.maintenance.progress_epoch()
+                (
+                    self.maintenance.progress_epoch(),
+                    WritePressure::from_checks(l0_ok, immutable_ok),
+                )
             };
             if !stalled {
-                self.maintenance.record_write_stall();
+                self.maintenance.record_write_stall(pressure);
                 stalled = true;
             }
             self.maintenance.wake();
             self.maintenance.writer_started_waiting();
-            self.maintenance.wait_for_write_progress(epoch);
+            self.maintenance.wait_for_write_progress(epoch, pressure);
             self.maintenance.writer_stopped_waiting();
         }
     }
@@ -4996,11 +5003,12 @@ impl SharedKiban {
                     "maintenance worker is shutting down".to_string(),
                 )));
             }
-            let epoch = {
+            let (epoch, pressure) = {
                 let mut guard = self.write_lock()?;
                 guard.check_poisoned()?;
                 let l0_ok = guard.l0_count() < guard.options().l0_write_stall_trigger;
-                if l0_ok && guard.immutable.is_none() {
+                let immutable_ok = guard.immutable.is_none();
+                if l0_ok && immutable_ok {
                     if guard.memtable.is_empty() {
                         return Ok(());
                     }
@@ -5011,15 +5019,18 @@ impl SharedKiban {
                         .expect("freeze just populated it")
                         .generation;
                 }
-                self.maintenance.progress_epoch()
+                (
+                    self.maintenance.progress_epoch(),
+                    WritePressure::from_checks(l0_ok, immutable_ok),
+                )
             };
             if !stalled {
-                self.maintenance.record_write_stall();
+                self.maintenance.record_write_stall(pressure);
                 stalled = true;
             }
             self.maintenance.wake();
             self.maintenance.writer_started_waiting();
-            self.maintenance.wait_for_write_progress(epoch);
+            self.maintenance.wait_for_write_progress(epoch, pressure);
             self.maintenance.writer_stopped_waiting();
         };
         self.maintenance.wake();
@@ -7579,6 +7590,10 @@ mod stats_tests {
         assert_eq!(stats.maintenance.waiting_writers, 0);
         assert_eq!(stats.maintenance.write_stalls, 1);
         assert!(stats.maintenance.write_stall_ns > 0);
+        let t = stats.maintenance.timings;
+        assert_eq!(t.l0_stalls, 1);
+        assert_eq!(t.immutable_stalls + t.both_stalls, 0);
+        assert_eq!(t.l0_wait_ns, stats.maintenance.write_stall_ns);
     }
 
     /// Test 7: a real completed compaction moves `compactions_completed`
@@ -8043,6 +8058,14 @@ mod flush_pipeline_tests {
 
         m.release_before_flush_build();
         handle.join().unwrap();
+        let stats = db.stats().unwrap().maintenance;
+        assert!(stats.write_stalls > 0);
+        assert_eq!(stats.timings.immutable_stalls, stats.write_stalls);
+        assert_eq!(stats.timings.l0_stalls + stats.timings.both_stalls, 0);
+        assert_eq!(stats.timings.immutable_wait_ns, stats.write_stall_ns);
+        assert!(stats.timings.flush_queue_ns > 0);
+        assert!(stats.timings.flush_build_ns > 0);
+        assert!(stats.timings.flush_commit_ns > 0);
 
         for i in 0..8u32 {
             assert_eq!(

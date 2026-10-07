@@ -63,6 +63,69 @@ pub struct MaintenanceStats {
     /// overwrites make that a workload-dependent question the caller is
     /// already in a better position to answer).
     pub flush_output_bytes: u64,
+    /// Detailed maintenance phases and pressure causes.
+    pub timings: MaintenanceTimings,
+}
+
+/// Maintenance phase and backpressure counters. Times are cumulative nanoseconds;
+/// overlapping caller waits are not wall time. Stall counts classify the first
+/// wait of each blocked call; wait durations classify every wait separately.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct MaintenanceTimings {
+    /// Blocked calls whose first observed pressure was immutable capacity only.
+    pub immutable_stalls: u64,
+    /// Blocked calls whose first observed pressure was L0 only.
+    pub l0_stalls: u64,
+    /// Blocked calls whose first observed pressure was both immutable capacity and L0.
+    pub both_stalls: u64,
+    /// Cumulative caller wait time attributed to immutable capacity only.
+    pub immutable_wait_ns: u64,
+    /// Cumulative caller wait time attributed to L0 only.
+    pub l0_wait_ns: u64,
+    /// Cumulative caller wait time attributed to both pressures.
+    pub both_wait_ns: u64,
+    /// Sum of freeze-to-BUILD delays for successful background flushes.
+    pub flush_queue_ns: u64,
+    /// Largest freeze-to-BUILD delay for a successful background flush.
+    pub flush_queue_max_ns: u64,
+    /// Successful flush BUILD time, excluding queue and COMMIT.
+    pub flush_build_ns: u64,
+    /// Successful flush time waiting to acquire the COMMIT engine gate.
+    pub flush_commit_wait_ns: u64,
+    /// Successful flush COMMIT time while holding the engine gate.
+    pub flush_commit_ns: u64,
+    /// Successful compaction BUILD time, excluding COMMIT.
+    pub compaction_build_ns: u64,
+    /// Successful compaction time waiting to acquire the COMMIT engine gate.
+    pub compaction_commit_wait_ns: u64,
+    /// Successful compaction COMMIT time while holding the engine gate.
+    pub compaction_commit_ns: u64,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum WritePressure {
+    Immutable,
+    L0,
+    Both,
+}
+impl WritePressure {
+    pub(crate) fn from_checks(l0_ok: bool, immutable_ok: bool) -> Self {
+        match (l0_ok, immutable_ok) {
+            (true, false) => Self::Immutable,
+            (false, true) => Self::L0,
+            (false, false) => Self::Both,
+            (true, true) => unreachable!("write pressure requires a failed room check"),
+        }
+    }
+}
+#[derive(Clone, Copy)]
+struct PhaseTimes {
+    build_ns: u64,
+    commit_wait_ns: u64,
+    commit_ns: u64,
+}
+fn nanos(d: std::time::Duration) -> u64 {
+    d.as_nanos().min(u64::MAX as u128) as u64
 }
 
 struct Signal {
@@ -111,6 +174,7 @@ struct Signal {
     flushes_completed: u64,
     flushes_failed: u64,
     flush_output_bytes: u64,
+    timings: MaintenanceTimings,
 }
 
 /// Owns the worker thread and the signal used to wake, stop, and query
@@ -153,6 +217,7 @@ impl Maintenance {
                 flushes_completed: 0,
                 flushes_failed: 0,
                 flush_output_bytes: 0,
+                timings: MaintenanceTimings::default(),
             }),
             condvar: Condvar::new(),
             thread: Mutex::new(None),
@@ -247,12 +312,18 @@ impl Maintenance {
     }
 
     /// Times only the backpressure condvar wait, with no clock reads on unstalled calls.
-    pub(crate) fn wait_for_write_progress(&self, since: u64) {
+    pub(crate) fn wait_for_write_progress(&self, since: u64, pressure: WritePressure) {
         let start = std::time::Instant::now();
         self.wait_for_progress(since);
         let elapsed = start.elapsed().as_nanos().min(u64::MAX as u128) as u64;
         let mut s = self.state.lock().unwrap();
         s.write_stall_ns = s.write_stall_ns.saturating_add(elapsed);
+        let classified = match pressure {
+            WritePressure::Immutable => &mut s.timings.immutable_wait_ns,
+            WritePressure::L0 => &mut s.timings.l0_wait_ns,
+            WritePressure::Both => &mut s.timings.both_wait_ns,
+        };
+        *classified = classified.saturating_add(elapsed);
     }
 
     /// Whether the worker has been told to stop. A writer that somehow
@@ -290,9 +361,15 @@ impl Maintenance {
     /// Records that one `SharedKiban` mutation call genuinely had to
     /// wait for L0 room — call exactly once per call that blocks, not
     /// once per wake/recheck cycle within it (11.7).
-    pub(crate) fn record_write_stall(&self) {
+    pub(crate) fn record_write_stall(&self, pressure: WritePressure) {
         let mut s = self.state.lock().unwrap();
         s.write_stalls = s.write_stalls.saturating_add(1);
+        let classified = match pressure {
+            WritePressure::Immutable => &mut s.timings.immutable_stalls,
+            WritePressure::L0 => &mut s.timings.l0_stalls,
+            WritePressure::Both => &mut s.timings.both_stalls,
+        };
+        *classified = classified.saturating_add(1);
     }
 
     /// A cheap, lock-once read of every maintenance counter (11.7). No
@@ -313,6 +390,7 @@ impl Maintenance {
             flushes_completed: s.flushes_completed,
             flushes_failed: s.flushes_failed,
             flush_output_bytes: s.flush_output_bytes,
+            timings: s.timings,
         }
     }
 
@@ -519,18 +597,38 @@ fn run_pending_maintenance(engine: &Arc<ShardedRwLock<Kiban>>, m: &Arc<Maintenan
             m.test.before_flush_build();
 
             let started = std::time::Instant::now();
+            let queue_ns = nanos(started.duration_since(plan.queued_at));
             match plan.build() {
                 Ok(output) => {
                     let output_bytes = output.size;
-                    let (committed, pressure) = {
+                    let build_ns = nanos(started.elapsed());
+                    let gate_started = std::time::Instant::now();
+                    let (committed, pressure, phases) = {
                         let Ok(mut guard) = engine.write() else {
                             return;
                         };
+                        let commit_wait_ns = nanos(gate_started.elapsed());
+                        let commit_started = std::time::Instant::now();
                         let committed = guard.commit_flush(plan, output);
-                        (committed, MaintenancePressure::capture(&guard))
+                        let commit_ns = nanos(commit_started.elapsed());
+                        (
+                            committed,
+                            MaintenancePressure::capture(&guard),
+                            PhaseTimes {
+                                build_ns,
+                                commit_wait_ns,
+                                commit_ns,
+                            },
+                        )
                     };
                     match committed {
-                        Ok(()) => record_flush_success(m, output_bytes, started.elapsed()),
+                        Ok(()) => record_flush_success(
+                            m,
+                            output_bytes,
+                            started.elapsed(),
+                            queue_ns,
+                            phases,
+                        ),
                         Err(e) => {
                             record_flush_error(m, e.to_string());
                             return;
@@ -560,19 +658,32 @@ fn run_pending_maintenance(engine: &Arc<ShardedRwLock<Kiban>>, m: &Arc<Maintenan
         let started = std::time::Instant::now();
         match plan.build() {
             Ok(outputs) => {
-                let (committed, pressure) = {
+                let build_ns = nanos(started.elapsed());
+                let gate_started = std::time::Instant::now();
+                let (committed, pressure, phases) = {
                     let Ok(mut guard) = engine.write() else {
                         return;
                     };
+                    let commit_wait_ns = nanos(gate_started.elapsed());
+                    let commit_started = std::time::Instant::now();
                     let committed = guard.commit_compaction(plan, outputs);
-                    (committed, MaintenancePressure::capture(&guard))
+                    let commit_ns = nanos(commit_started.elapsed());
+                    (
+                        committed,
+                        MaintenancePressure::capture(&guard),
+                        PhaseTimes {
+                            build_ns,
+                            commit_wait_ns,
+                            commit_ns,
+                        },
+                    )
                 };
                 match committed {
                     // A successful commit is exactly the progress a
                     // stalled writer (11.5) is waiting to recheck
                     // against — wake it now, not after the whole
                     // cascade finishes.
-                    Ok(outcome) => record_compaction_success(m, outcome, started.elapsed()),
+                    Ok(outcome) => record_compaction_success(m, outcome, started.elapsed(), phases),
                     Err(e) => {
                         record_error(m, e.to_string());
                         return;
@@ -588,12 +699,26 @@ fn run_pending_maintenance(engine: &Arc<ShardedRwLock<Kiban>>, m: &Arc<Maintenan
     }
 }
 
-fn record_flush_success(m: &Arc<Maintenance>, output_bytes: u64, elapsed: std::time::Duration) {
+fn record_flush_success(
+    m: &Arc<Maintenance>,
+    output_bytes: u64,
+    elapsed: std::time::Duration,
+    queue_ns: u64,
+    phases: PhaseTimes,
+) {
     {
         let mut s = m.state.lock().unwrap();
         s.flush_elapsed_ns = s
             .flush_elapsed_ns
             .saturating_add(elapsed.as_nanos().min(u64::MAX as u128) as u64);
+        s.timings.flush_queue_ns = s.timings.flush_queue_ns.saturating_add(queue_ns);
+        s.timings.flush_queue_max_ns = s.timings.flush_queue_max_ns.max(queue_ns);
+        s.timings.flush_build_ns = s.timings.flush_build_ns.saturating_add(phases.build_ns);
+        s.timings.flush_commit_wait_ns = s
+            .timings
+            .flush_commit_wait_ns
+            .saturating_add(phases.commit_wait_ns);
+        s.timings.flush_commit_ns = s.timings.flush_commit_ns.saturating_add(phases.commit_ns);
         s.flushes_completed = s.flushes_completed.saturating_add(1);
         s.flush_output_bytes = s.flush_output_bytes.saturating_add(output_bytes);
         s.progress_epoch += 1;
@@ -615,9 +740,22 @@ fn record_compaction_success(
     m: &Arc<Maintenance>,
     outcome: crate::db::CompactionOutcome,
     elapsed: std::time::Duration,
+    phases: PhaseTimes,
 ) {
     {
         let mut s = m.state.lock().unwrap();
+        s.timings.compaction_build_ns = s
+            .timings
+            .compaction_build_ns
+            .saturating_add(phases.build_ns);
+        s.timings.compaction_commit_wait_ns = s
+            .timings
+            .compaction_commit_wait_ns
+            .saturating_add(phases.commit_wait_ns);
+        s.timings.compaction_commit_ns = s
+            .timings
+            .compaction_commit_ns
+            .saturating_add(phases.commit_ns);
         s.compaction_elapsed_ns = s
             .compaction_elapsed_ns
             .saturating_add(elapsed.as_nanos().min(u64::MAX as u128) as u64);
