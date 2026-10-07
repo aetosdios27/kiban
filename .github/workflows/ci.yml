@@ -1,0 +1,20 @@
+name: Rust release gate
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo clippy --all-targets --features loom -- -D warnings
+      - run: cargo test
+      - run: cargo test --examples
+      - run: cargo test --features loom --lib -- --test-threads=1 loom_
+      - run: cargo test --release --lib -- --ignored --nocapture
+      - run: cargo run --example basic -- "$RUNNER_TEMP/kiban-example"
+      - run: cargo package
+      - run: cargo publish --dry-run

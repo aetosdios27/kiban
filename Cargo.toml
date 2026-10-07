@@ -2,6 +2,13 @@
 name = "kiban"
 version = "0.1.0"
 edition = "2024"
+description = "An embedded LSM-tree key-value storage engine with WAL durability, snapshots, and leveled compaction"
+repository = "https://github.com/aetosdios27/kiban"
+readme = "README.md"
+license = "MIT"
+keywords = ["database", "key-value", "storage", "lsm", "embedded"]
+categories = ["database-implementations"]
+exclude = ["validation/results/**", "validation/correctness-results/**", "validation/release-results/**"]
 
 [features]
 # Test-only: enables the exhaustive loom interleaving models for the

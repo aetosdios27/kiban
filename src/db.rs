@@ -303,29 +303,9 @@ pub struct KibanOptions {
     /// over-budget level) and always runs the highest-scoring one — see
     /// `score_l0_candidate`/`score_level_candidate`.
     ///
-    /// Measured (steady-state torture bench, `benches/steady_state.rs`,
-    /// 300K writes, two workload shapes, `Scored` combined with
-    /// `compaction_batch_size: 4`): write amplification 2.3-4.3x lower
-    /// (24-62x down to 10-14x) and 2-6x higher sustained throughput —
-    /// `FixedPriority` unconditionally draining L0 every time it hits a
-    /// small trigger means small, frequent L0->L1 merges keep re-
-    /// touching the same overlapping L1 range for comparatively little
-    /// new data each time; `Scored` lets L0 accumulate more before
-    /// compacting when a deeper level's urgency wins instead, so each
-    /// eventual merge amortizes over more new data. That is a genuine,
-    /// substantial win, not why this isn't the default: on one of the
-    /// two workload shapes tested, `Scored`'s higher and more variable
-    /// L0 file count (it's less eager to drain L0 than `FixedPriority`)
-    /// cost GET p99 about 45% (a fatter tail from more L0 tables to
-    /// probe on the worst gets, not a change in the average) even
-    /// though PUT p99 improved there too. `FixedPriority` keeps L0
-    /// small and predictable by construction, which is the safer
-    /// default for foreground read tail latency specifically — the
-    /// stated priority of this whole round ("bounded foreground tail
-    /// latency... not maximum throughput"). Opt into `Scored` (with
-    /// `compaction_batch_size` > 1) for a write/compaction-throughput-
-    /// and write-amplification-sensitive deployment that can tolerate a
-    /// wider L0 and its GET tail.
+    /// The default options select [`CompactionScheduler::Governor`].
+    /// Scheduler performance depends on workload; see the recorded release
+    /// benchmark baseline rather than historical tuning measurements.
     pub compaction_scheduler: CompactionScheduler,
     /// 11.17-round-2, section 2: for a level-N (N>=1) compaction, how
     /// many of that level's oldest tables to fold into ONE job instead
@@ -363,27 +343,6 @@ pub enum CompactionScheduler {
     /// against level + 1 relabels down for free instead of paying for a
     /// real merge).
     ///
-    /// Measured (`benches/steady_state.rs`, 20K-op quick run, both
-    /// workload shapes; `benches/phase_changing.rs`, a six-phase
-    /// changing workload, full 6s/phase run): on the stationary
-    /// workloads, `Governor` matched or beat every static config on
-    /// BOTH GET p99 and write amplification simultaneously — the
-    /// tradeoff `Scored`+batching accepts (wider L0, worse GET tail, in
-    /// exchange for lower write-amp) didn't have to be paid. On the
-    /// changing workload the picture is more mixed: write-amp varied
-    /// run to run (sometimes best of the three, sometimes not) and GET
-    /// tail stayed mid-pack-to-good, but one real, specific weakness
-    /// showed up — `WriteEmergency`'s exit hysteresis (3 consecutive
-    /// recovered samples required) can lag a few PLAN cycles into a
-    /// newly write-light phase, and during that lag window a burst of
-    /// commits landed with reduced-but-nonzero pacing, spiking PUT p999
-    /// to ~1.5ms (down from ~4.7ms before quartering, rather than
-    /// zeroing, the pacing delay in that mode — see
-    /// `background::MaintenancePressure::pace`) versus the static
-    /// schedulers' tens-of-microseconds tail in the same window. Not
-    /// fully closed; not chased further to avoid overfitting hysteresis
-    /// constants to one noisy benchmark. See `crate::governor` and the
-    /// round-3 final report for the full comparison and verdict.
     Governor,
 }
 
@@ -400,12 +359,7 @@ impl Default for KibanOptions {
             max_open_table_files: 128,
             write_buffer_bytes: 4 * MIB as usize,
             mmap_max_level: None,
-            // 11.17-round-3.4: the governor's causal-mismatch, level-
-            // thrashing, and transition-tail problems are all fixed and
-            // measured (see governor.rs, background.rs) — it now
-            // dominates FixedPriority on every tracked metric with no
-            // remaining tradeoff, so it is the default rather than an
-            // opt-in scheduler.
+            // Adaptive maintenance policy; no universal performance guarantee.
             compaction_scheduler: CompactionScheduler::Governor,
             compaction_batch_size: 1,
             maintenance_pacing_enabled: true,
@@ -494,6 +448,13 @@ struct Immutable {
     generation: u64,
 }
 
+/// A single-owner embedded database handle.
+///
+/// Writes become durable only after a successful [`Kiban::sync`] or
+/// durable flush. Call sync before drop when persistence is required;
+/// dropping a handle is not a durability acknowledgement. Use
+/// [`SharedKiban`] for concurrent access to the same engine. Independent
+/// owners opening the same directory concurrently are not validated.
 pub struct Kiban {
     dir: PathBuf,
     options: KibanOptions,
@@ -1008,6 +969,8 @@ impl Kiban {
             .expect("read_view lock poisoned by a panic during a prior publish") = view;
     }
 
+    /// Appends a value to the WAL and makes it visible in memory.
+    /// A successful return does not promise crash durability; call [`Self::sync`].
     pub fn put(&mut self, key: impl AsRef<[u8]>, value: impl AsRef<[u8]>) -> io::Result<()> {
         if let Err(e) = self.check_poisoned() {
             return Err(io::Error::other(e.to_string()));
@@ -1027,6 +990,8 @@ impl Kiban {
         Ok(())
     }
 
+    /// Records a tombstone hiding older values. Call [`Self::sync`] to
+    /// make the deletion crash-durable, including deletion of an absent key.
     pub fn delete(&mut self, key: impl AsRef<[u8]>) -> io::Result<()> {
         if let Err(e) = self.check_poisoned() {
             return Err(io::Error::other(e.to_string()));
@@ -1142,6 +1107,8 @@ impl Kiban {
         }
     }
 
+    /// Releases the engine's retention bookkeeping for a direct snapshot.
+    /// Drop the snapshot too when its captured memory/files are no longer needed.
     pub fn release_snapshot(&mut self, snap: &Snapshot) {
         if let Some(pos) = self.active_snapshots.iter().position(|s| *s == snap.seq) {
             self.active_snapshots.remove(pos);
@@ -4360,8 +4327,9 @@ mod crash_sweep_tests {
 
 /// A clonable, thread-safe handle to one engine.
 ///
-/// The engine mutex chooses a read's world. A normal point read releases
-/// it before consulting the immutable memtable or any SST state.
+/// Clones share one database and maintenance worker. Point reads use a
+/// captured read view; sync covers writes accepted by all clones. The
+/// last shared handle stops and joins maintenance; drop is not a sync.
 pub struct SharedKiban {
     inner: std::sync::Arc<ShardedRwLock<Kiban>>,
     /// 11.17-readview: a direct clone of `Kiban::read_view`'s own

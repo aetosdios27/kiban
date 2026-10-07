@@ -1,261 +1,112 @@
-# Kiban DB
+# Kiban
 
-An embedded LSM-tree storage engine in Rust. Single node. Zero
-dependencies. Byte keys, byte values, sorted.
+Kiban is an embedded LSM-tree key-value storage engine written in Rust. It stores
+ordered byte keys and byte values and targets Linux. **v0.1.0 is an early public
+release**, with no pre-1.0 API or storage-format compatibility promise.
 
-Writes go to a write-ahead log, then to an in-memory memtable. Flushes
-produce sorted SSTables. Compaction merges SSTables and drops versions
-that no active snapshot can observe. Reads check sources from newest
-to oldest; sequence numbers order everything.
+## Installation
 
-## Status
+These are the release installation commands. Use the Git dependency after the
+`v0.1.0` tag is pushed:
 
-Implemented:
-
-- Write-ahead log with two-phase durability: `put` reaches the kernel,
-  `sync` reaches the device. Durability is claimed only after sync
-  returns success.
-- SSTables: prefix-compressed blocks with restart points, per-block
-  CRC-32, bloom filters (10 bits/key), fixed footer with magic number.
-- Leveled compaction: L0 compacts as a whole, L1+ maintain disjoint
-  key ranges, outputs split at key boundaries.
-- Snapshots: pin a sequence number and the file set at capture time.
-  Reads through a snapshot are unaffected by later writes and
-  compactions.
-- Deterministic fault injection at syscall boundaries: single-fault and
-  pairwise sweeps over pipeline operations, plus a simulated volatile
-  device where power loss discards exactly the unsynced bytes. After
-  every tested crash point, recovered state must equal the last
-  acknowledged state.
-- Engine poisoning: WAL sync failures and commit ambiguities set a
-  fatal state that refuses mutations until reopen. Reads remain
-  available.
-- Multi-version memtable: superseded entries are retained while an
-  active snapshot can observe them.
-- `WriteBatch`: multiple mutations committed as one WAL record with a
-  contiguous sequence interval. Recovery applies all operations or none.
-- Block cache, lazy table loading, and a bounded shared table-file cache:
-  opening touches footers and indexes only.
-- `SharedKiban::stats()`: a cheap, observation-only snapshot — memtable
-  size, per-level table counts and bytes, snapshot/obsolete-file
-  counts, and raw block-cache/file-cache/compaction/flush counters. No
-  disk I/O, no derived verdicts.
-- Background flush and compaction: the active memtable freezes on a
-  size threshold and hands writers a fresh memtable and WAL
-  immediately; the frozen memtable and compaction both build off the
-  foreground lock, on one shared maintenance worker (flush first),
-  paced to protect foreground read latency (see Performance).
-- Gate-free reads: `SharedKiban::get` never acquires the engine-wide
-  write gate, at any point. A published `ReadView` (shadow memtable +
-  frozen memtable + version, swapped atomically at each structural
-  commit) lets readers run fully decoupled from writers/compaction.
-- Dedicated cache-bypassing bulk reader for compaction: compaction
-  reads input tables through an owned file handle with large
-  sequential read-ahead, never touching the foreground block cache or
-  the shared table-file cache.
-- Adaptive compaction governor (default): a continuous pressure vector
-  (L0 / deep-level debt / read-amp) attributed to whichever source is
-  actually causing it, instead of blended into one mode; candidate
-  scoring weighted by which of those a job would actually relieve; a
-  focus mechanism that commits to a level and works it down instead of
-  re-optimizing from scratch every cycle; adaptive batching that keeps
-  taking free headroom past "just enough" relief instead of stopping
-  the instant a candidate clears the immediate debt. See Performance
-  for the measured before/after.
-- Evidence-scored compaction scheduler (opt-in): scores L0 and
-  per-level candidates by urgency/stall-risk/overlap-cost instead of a
-  fixed drain order, plus key-contiguous batching of a level's oldest
-  tables into one job.
-- Fixed-priority compaction scheduler (opt-in): always drains L0
-  first, then cascades levels in order — tight, predictable L0 at the
-  cost of the highest write amplification of the three.
-- Opt-in mmap hybrid read path: maps low-level (hot) SSTables whole
-  instead of leasing through the block/file cache; cold levels keep
-  the pread path. Off by default.
-- Read/write amplification counters (`KibanStats::read_amp`,
-  `MaintenanceStats`): per-get resolution point and physical
-  flush/compaction bytes, for evaluating scheduler and I/O-path
-  changes against evidence rather than intuition.
-
-Not implemented:
-
-- Compression (format reserves a type byte)
-- Range deletes, reverse iterators, transactions
-
-## Architecture
-
-```mermaid
-flowchart TD
-    W[writer] --> WB["WriteBatch<br/>(optional group)"]
-    WB --> WAL["WAL record<br/>one frame = one atomic unit"]
-    WAL --> MEM["memtable<br/>(retains versions<br/>snapshots still need)"]
-    MEM -- "sync()" --> DISK1[fdatasync]
-    MEM -- "flush" --> IMM["frozen memtable"] --> SST0["L0 sstable"]
-    SST0 -- "L0 count >= trigger" --> COMP["merge:<br/>newest version per key wins,<br/>versions dropped only when no<br/>active snapshot can read them"]
-    COMP --> SSTN["L1..Ln sstables<br/>(disjoint key ranges)"]
+```toml
+[dependencies]
+kiban = { git = "https://github.com/aetosdios27/kiban", tag = "v0.1.0" }
 ```
 
-```mermaid
-flowchart TD
-    Q[get key] --> A{active memtable<br/>contains key?}
-    A -- "value" --> R[value]
-    A -- "tombstone" --> R0[not found]
-    A -- "absent" --> I{immutable memtable<br/>contains key?}
-    I -- "value" --> R
-    I -- "tombstone" --> R0
-    I -- "absent" --> B{"bloom filter<br/>admits key?"}
-    B -- "no" --> R0
-    B -- "yes" --> T[SSTable probe:<br/>index binary search,<br/>then block restart points] --> R
+Crates.io installation becomes available only after publication succeeds. Check
+the [crate listing](https://crates.io/crates/kiban) for publication status before
+running:
+
+```sh
+cargo add kiban
 ```
 
-Reads consult sources newest-first. A tombstone terminates the search:
-older values may still exist in older files until compaction removes
-them. Sequence numbers define recency; log order equals sequence order.
+Until the tag/publication is available, build from a local checkout. Runtime
+builds have no non-optional dependencies; Loom is optional testing support.
 
-## Concurrency
+## Usage
 
-One primitive, `ShardedRwLock<T>`, does both jobs in the engine:
+```rust
+use kiban::db::Kiban;
 
-- As the **engine-wide gate**: 8 independent shards instead of one
-  lock. A reader takes a read lock on a single shard (round-robin per
-  thread), so readers on different shards never contend with each
-  other at all. A writer takes a serial lock plus every shard's write
-  lock, in ascending order — real exclusivity, no deadlock by
-  construction. A `writer_pending` flag lets an approaching reader
-  bail out early instead of piling up behind a writer; it's a liveness
-  hint only, never load-bearing for safety.
-- As the **published read view**: the same primitive, reused at a
-  smaller scope, holds a shadow memtable and a `ReadView` (memtable +
-  frozen memtable + version, swapped atomically at each structural
-  commit). `SharedKiban::get` reads through this and never touches the
-  engine-wide gate — writers and compactors no longer block readers at
-  all.
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut db = Kiban::open("example-db")?;
+    db.put(b"hello", b"world")?;
+    db.sync()?;
+    assert_eq!(db.get(b"hello")?, Some(b"world".to_vec()));
+    drop(db);
 
-Every acquire/release interleaving of the protocol is checked with
-[loom](https://github.com/tokio-rs/loom) (`cargo test --features loom`),
-bounded to a preemption depth of 3 to keep the search tractable — loom's
-own documented answer for exhaustive search that doesn't finish, since
-almost every real concurrency bug is reachable within a few context
-switches. The bound isn't vacuous: a real guard-lifetime bug found
-during development (`if gate.write().is_some() { .. }`, which drops
-the guard before the body runs) is still caught by the model in well
-under a second.
+    let reopened = Kiban::open("example-db")?;
+    assert_eq!(reopened.get(b"hello")?, Some(b"world".to_vec()));
+    Ok(())
+}
+```
 
-## Correctness rules
+Run the same workflow with `cargo run --example basic -- /path/to/example-db`.
+`open` creates or recovers the directory. `delete(key)` writes a tombstone;
+call `sync()` to make it durable. `iter()` yields ordered live key/value pairs.
+A missing or deleted key returns `None`.
 
-1. Acknowledged durability matches the documented contract exactly.
-2. A crash cannot cause sequence-number reuse.
-3. The MANIFEST is authoritative. Files it does not name are deleted.
-4. Internal ordering: user key ASC, sequence DESC.
-5. A snapshot reads the newest version whose sequence is at or below
-   its own.
-6. Newer invisible versions never hide older visible ones.
-7. Tombstones are dropped only when no older value can be resurrected.
-8. Point reads and scans agree.
+For a consistent logical view, use `let snapshot = db.snapshot()`,
+`db.get_at(&snapshot, key)` and `db.scan_at(&snapshot)`. Later writes, flushes and
+compactions do not change the captured view. Finish with
+`db.release_snapshot(&snapshot)` and drop the snapshot. Shared snapshots release
+bookkeeping on drop. `SharedKiban` offers clonable concurrent handles to one
+engine with background flush/compaction; its snapshot exposes `get` and `scan`.
+Use one engine owner per directory; independent owners are not validated.
 
-These rules are enforced by tests, including exhaustive fault sweeps
-over pipeline syscalls (single faults and pairs) and simulated
-power-loss runs asserting exact equality between recovered state and
-the last acknowledged state.
+## Supported operations
 
-## Failure model
+- WAL-backed puts, deletes and atomic WAL write batches with explicit sync.
+- Mutable/frozen memtables, SSTables and leveled compaction with an adaptive
+  governor by default; optional fixed-priority and scored schedulers.
+- Point reads, scans/iterators, tombstones and sequence-bounded snapshots.
+- Recovery from WAL/MANIFEST state; poisoning after unsafe WAL/commit failures.
+- Bloom filters, block cache, bounded SST descriptor cache and optional mmap.
+- Maintenance/read-amplification metrics and reproducible validation tooling.
 
-- `write()` reaches the kernel page cache, not the device.
-- `fsync` reaching the device is the durability boundary.
-- A rename requires an fsync of the containing directory.
-- Storage media can corrupt bytes. Every block, record, and manifest
-  carries a CRC. Readers validate before use; corruption is reported
-  as an error and never repaired in place.
-- A crash during append leaves a torn tail. Recovery truncates it.
-- `fsync` can fail after the kernel discarded dirty pages. Kiban treats
-  such failures as fatal: the engine enters a poisoned state and
-  refuses further mutations until reopen.
+Compression, range deletes, reverse iterators and transactions are not implemented.
 
-Kiban's design and research notes are private; this README is the
-public design overview.
+## Durability and limitations
 
-## Performance
+A successful put/delete applies a mutation in memory and appends to a buffered
+WAL; it does **not** acknowledge crash durability. A successful `sync()` covers
+previously accepted writes in every live WAL generation. Durable flush commits
+an SST and its MANIFEST state before retiring the WAL. Dropping a handle is not
+a substitute for sync. Sync depends on the OS/filesystem/device honoring its
+persistence contract; failures are reported, and unsafe engines reject mutations
+until reopened.
 
-Local dev-workstation numbers (`cargo bench --bench basic` /
-`--bench steady_state`), treat as relative, not absolute.
+Snapshots retain captured state conservatively. Point reads and scans select the
+newest visible sequence; a visible tombstone hides older values, while a future
+invisible tombstone cannot hide a snapshot's value.
 
-**Gate-free reads** — same data, hot in Kiban's own block cache before
-and after, so this isolates the gate's own cost:
+WAL records and SST blocks have checksums. MANIFEST has structural validation
+but **no checksum**. Independent processes opening the same directory are not
+validated. SIGKILL testing preserves the OS cache and is not machine power-loss
+testing. The volatile-device model and Loom models are bounded; arbitrary
+OS/device behavior and every thread schedule have not been proved correct.
+These results do not establish production readiness or formal correctness.
 
-| workload            | threads | before          | after            |
-|----------------------|--------|-----------------|------------------|
-| 90R/10W              | 16     | 468K gets/s, p99 368us  | 4.22M gets/s, p99 7.48us (9.0x, 49x)  |
-| 95R/5W               | 32     | 280K gets/s, p99 647us  | 4.91M gets/s, p99 24.8us (17.5x, 26x) |
-| 99R/1W               | 32     | 1.91M gets/s, p99 37us  | 4.59M gets/s, p99 18.5us (2.4x, 2x)   |
-| 100R/0W              | 32     | 5.10M gets/s, p99 13us  | 8.58M gets/s, p99 4.42us (1.7x, 2.9x) |
+## Validation and performance
 
-**Compaction isolation** — dedicated sequential-read-ahead reader for
-compaction, bypassing the foreground block/file cache (tiny-buffer
-stress workload, concurrent foreground reader on a hot keyspace):
+[Correctness repairs and evidence](validation/CORRECTNESS.md) includes the recorded
+1,000-cycle recovery campaigns and their model limits. [Validation guide](validation/README.md)
+documents workloads, cache treatment, fault injection and reproduction commands.
+The [first scale report](validation/REPORT.md) is historical evidence from before
+the correctness repairs; its numbers are not v0.1.0 performance results.
 
-| metric              | before   | after     |
-|----------------------|---------|-----------|
-| wall clock, 40K writes | 948ms  | ~470ms (2x)   |
-| GET p99               | 224us  | ~110-120us (-47%) |
-| compaction throughput | ~8.85 MB/s | ~18 MB/s (2x) |
+The [release baseline and gate](validation/RELEASE.md) records post-correctness
+benchmarks, exact source/environment metadata, limitations and release commands.
+Throughput and tail latency depend on workload, durability mode and cache state.
 
-**Maintenance pacing** — best-effort sleep between background jobs
-while L0 has headroom, same stress workload:
-
-| metric        | before        | after                |
-|----------------|--------------|------------------------|
-| GET p99        | ~122us        | ~50-60us (2-2.4x)      |
-| GET throughput | ~71K ops/s    | ~210-315K ops/s (3-4.5x) |
-| PUT p99        | ~234us        | ~120-145us (better)    |
-
-**Compaction governor** (default `Governor` vs. `FixedPriority`) —
-six-phase changing-workload benchmark, 3-trial median, isolating the
-read-heavy recovery phase that follows a sustained write burst:
-
-| metric                        | FixedPriority | Governor (before fix) | Governor (after fix) |
-|--------------------------------|--------------|------------------------|------------------------|
-| recovery-phase PUT p99        | ~65us         | ~1990us                | ~115us (17.2x vs. before) |
-| recovery-phase compactions/6s | 41            | 232                    | 16-18                 |
-| steady-state write amp (churny) | ~23-25x     | ~23-25x                 | ~8.6-9.5x              |
-| steady-state throughput       | baseline      | baseline                | ~3x                    |
-
-The scoring bug: `Governor` kept stopping a compaction job the instant
-it cleared a level's *immediate* over-budget excess, so it revisited
-the same level constantly instead of taking the larger, already-cheap
-batch that would have held for longer — 232 separate
-foreground-excluding commits in one 6-second recovery window against
-`FixedPriority`'s 41, driving its own PUT tail worse than the
-scheduler it was meant to replace, even though its rewrite-bytes
-accounting looked fine. Fixed by widening adaptive batching so a job
-takes the largest same-cost batch that's already justified, not the
-smallest one that clears the threshold — job *count*, not bytes
-rewritten, was what mattered; write amplification improved as a
-side effect of the same change, not the target of it. `Scored`
-(evidence-weighted single-pass scoring, no pressure model) sits
-between the two and remains available for workloads that don't need
-the adaptive behavior.
-
-**mmap hybrid** (opt-in, hot/low levels only) — modest and consistent,
-smaller than a mmap-vs-pread microbenchmark suggests because real
-working sets partly fit the OS page cache either way:
-
-- ~5-10% throughput improvement across 1-32 threads, no observed tail
-  regression, on a cache-miss-heavy workload.
-
-## Building
-
-```bash
-cargo test
-cargo clippy --all-targets --all-features -- -D warnings
+```sh
 cargo fmt --check
-
-# exhaustive concurrency model of the sharded gate protocol
-cargo test --features loom -- --test-threads=1 loom_
-
-# benchmarks
-cargo bench --bench basic
-cargo bench --bench steady_state
+cargo clippy --all-targets -- -D warnings
+cargo test
+cargo test --examples
+cargo test --features loom --lib -- --test-threads=1 loom_
 ```
 
-Zero non-dev dependencies (`loom` is test-only, behind a feature
-flag). Linux-only (POSIX fsync semantics are part of the contract).
+Licensed under [MIT](LICENSE).

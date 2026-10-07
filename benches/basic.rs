@@ -40,23 +40,29 @@ fn memtable_rwlock_mixed(
         seed.put(k.clone(), [b'v'; 40], (i + 1) as u64);
     }
     let mem = Arc::new(RwLock::new(seed));
+    let next_seq = Arc::new(std::sync::atomic::AtomicU64::new(key_space as u64 + 1));
     let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let start = Arc::new(Barrier::new(readers + writers + 1));
 
     let writer_handles: Vec<_> = (0..writers)
-        .map(|w| {
+        .map(|_| {
             let mem = mem.clone();
+            let next_seq = next_seq.clone();
             let stop = stop.clone();
             let start = start.clone();
             let all_keys = all_keys.clone();
             std::thread::spawn(move || {
                 start.wait();
-                let mut seq = (key_space as u64 + 1) + w as u64 * 10_000_000;
                 let mut i: usize = 0;
                 while !stop.load(std::sync::atomic::Ordering::Relaxed) {
                     let k = &all_keys[i % key_space];
-                    mem.write().unwrap().put(k.clone(), [b'w'; 40], seq);
-                    seq += 1;
+                    // Sequence assignment must follow mutation order under
+                    // this lock, as it does in the real engine. Per-thread
+                    // ranges violated Memtable's ascending-sequence contract.
+                    let mut guard = mem.write().unwrap();
+                    let seq = next_seq.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    guard.put(k.clone(), [b'w'; 40], seq);
+                    drop(guard);
                     i += 1;
                 }
             })
