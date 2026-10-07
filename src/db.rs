@@ -2521,6 +2521,17 @@ impl CompactionPlan {
     /// through leaves at most orphan sst files, cleaned by the next
     /// reopen's sweep — never anything the MANIFEST references).
     pub(crate) fn build(&self) -> Result<Vec<TableEntry>, DbError> {
+        self.build_with_progress(|| Ok(()))
+    }
+
+    /// Same merge/drop/split rules, with cooperative maintenance checkpoints.
+    /// The callback runs off the engine gate, without changing captured inputs.
+    /// It may durably flush a newer generation; COMMIT still applies this plan
+    /// as a delta against the then-current Version. Direct Kiban uses a no-op.
+    pub(crate) fn build_with_progress(
+        &self,
+        mut progress: impl FnMut() -> Result<(), DbError>,
+    ) -> Result<Vec<TableEntry>, DbError> {
         if self.trivial_move {
             // No merge, no new bytes: reopen each SAME file (numbers
             // unchanged) so each returned `TableEntry` carries the new
@@ -2592,9 +2603,22 @@ impl CompactionPlan {
         let mut current_key: Option<Vec<u8>> = None;
         let mut last_seq_for_key = u64::MAX;
         let mut last_added_key: Option<Vec<u8>> = None;
+        // Count processed input, including dropped versions/tombstones, so a
+        // merge producing little output still services pending flushes. The
+        // quantum is bounded independently of very large target SST settings.
+        let quantum = self.target_file_size.clamp(1, 4 * 1024 * 1024);
+        let mut progress_bytes = 0u64;
 
         while let Some(item) = core.next_internal() {
             let v = item?;
+            progress_bytes = progress_bytes
+                .saturating_add(v.key.len() as u64)
+                .saturating_add(v.value.len() as u64)
+                .saturating_add(9);
+            if progress_bytes >= quantum {
+                progress_bytes = 0;
+                progress()?;
+            }
 
             if current_key.as_deref() != Some(v.key.as_slice()) {
                 current_key = Some(v.key.clone());
@@ -6222,6 +6246,134 @@ mod background_tests {
             db.sync().unwrap();
             db.flush_sync_for_test().unwrap();
         }
+    }
+
+    struct ReleaseProgress<'a>(&'a Maintenance);
+    impl Drop for ReleaseProgress<'_> {
+        fn drop(&mut self) {
+            self.0.release_before_build();
+            self.0.release_before_compaction_progress();
+            self.0.release_after_compaction_flush();
+        }
+    }
+
+    #[test]
+    fn pending_flush_commits_before_compaction_build_finishes() {
+        let td = TempDir::new("cooperative-flush-progress");
+        let opts = KibanOptions {
+            write_buffer_bytes: 1024,
+            max_open_table_files: 1,
+            ..tiny_options()
+        };
+        let db = SharedKiban::open_with_options(td.path(), opts.clone()).unwrap();
+        let m = db.maintenance_for_test();
+        let release = ReleaseProgress(m);
+        m.arm_before_build();
+        seed_for_compaction(&db, 3, "old");
+        m.wait_before_build_reached();
+        let old = db.snapshot().unwrap();
+        m.arm_after_compaction_flush();
+        db.delete(b"k001").unwrap();
+        let newer = vec![b'n'; 1100];
+        db.put(b"k000", &newer).unwrap(); // freezes the newer generation
+        db.sync().unwrap();
+        let new = db.snapshot().unwrap();
+        assert!(db.stats().unwrap().immutable_present);
+        m.release_before_build();
+        assert!(
+            m.wait_after_compaction_flush(),
+            "flush was not serviced during BUILD"
+        );
+
+        // The new SST/WAL installation is complete while the original
+        // compaction is still building, not merely after it has committed.
+        let stats = db.stats().unwrap();
+        assert!(!stats.immutable_present);
+        assert_eq!(stats.maintenance.flushes_completed, 1);
+        assert_eq!(stats.maintenance.compactions_completed, 0);
+        assert_eq!(db.get(b"k000").unwrap(), Some(newer.clone()));
+        assert_eq!(db.get(b"k001").unwrap(), None);
+        assert_eq!(old.get(b"k000").unwrap(), Some(b"old2-0".to_vec()));
+        assert_eq!(old.get(b"k001").unwrap(), Some(b"old2-1".to_vec()));
+        assert_eq!(new.get(b"k000").unwrap(), Some(newer.clone()));
+        assert_eq!(new.get(b"k001").unwrap(), None);
+        db.put(b"while-building", b"accepted").unwrap();
+        db.sync().unwrap();
+
+        m.release_after_compaction_flush();
+        m.wait_settled();
+        assert!(db.maintenance_error().is_none());
+        assert_eq!(old.get(b"k000").unwrap(), Some(b"old2-0".to_vec()));
+        assert_eq!(new.get(b"k000").unwrap(), Some(newer.clone()));
+        assert_eq!(db.get(b"k001").unwrap(), None);
+        drop(old);
+        drop(new);
+        drop(release);
+        drop(db);
+        let reopened = Kiban::open_with_options(td.path(), opts).unwrap();
+        assert_eq!(reopened.get(b"k000").unwrap(), Some(newer));
+        assert_eq!(reopened.get(b"k001").unwrap(), None);
+        assert_eq!(
+            reopened.get(b"while-building").unwrap(),
+            Some(b"accepted".to_vec())
+        );
+        let scanned = reopened
+            .iter()
+            .map(|r| r.unwrap())
+            .collect::<std::collections::BTreeMap<_, _>>();
+        assert!(!scanned.contains_key(b"k001".as_slice()));
+        for (key, value) in scanned {
+            assert_eq!(reopened.get(&key).unwrap(), Some(value));
+        }
+    }
+
+    #[test]
+    fn cooperative_flush_faults_preserve_acknowledged_overwrites_and_deletes() {
+        let mut failures = 0;
+        for fault in 0..24 {
+            let td = TempDir::new("cooperative-flush-fault");
+            let opts = KibanOptions {
+                write_buffer_bytes: 1024,
+                ..tiny_options()
+            };
+            let db = SharedKiban::open_with_options(td.path(), opts.clone()).unwrap();
+            let m = db.maintenance_for_test();
+            let release = ReleaseProgress(m);
+            m.arm_before_build();
+            m.arm_before_compaction_progress();
+            seed_for_compaction(&db, 3, "old");
+            m.wait_before_build_reached();
+            m.release_before_build();
+            assert!(m.wait_before_compaction_progress());
+            // Install the fault on the worker AFTER compaction has started,
+            // so its next flush BUILD consumes it, not the initial compaction.
+            db.delete(b"k001").unwrap();
+            let newer = vec![b'n'; 1100];
+            db.put(b"k000", &newer).unwrap();
+            db.sync().unwrap();
+            m.inject_on_worker(move || sys::install_fault(fault));
+            m.release_before_compaction_progress();
+            m.wait_settled();
+            failures += usize::from(db.maintenance_error().is_some());
+            drop(release);
+            drop(db);
+            let reopened = Kiban::open_with_options(td.path(), opts).unwrap();
+            assert_eq!(reopened.get(b"k000").unwrap(), Some(newer), "fault {fault}");
+            assert_eq!(reopened.get(b"k001").unwrap(), None, "fault {fault}");
+            for i in 2..20u32 {
+                assert_eq!(
+                    reopened.get(format!("k{i:03}")).unwrap(),
+                    Some(format!("old2-{i}").into_bytes()),
+                    "fault {fault}"
+                );
+            }
+            let count = reopened
+                .iter()
+                .try_fold(0, |n, r| r.map(|_| n + 1))
+                .unwrap();
+            assert_eq!(count, 19, "fault {fault}");
+        }
+        assert!(failures > 0, "fault campaign did not exercise a failure");
     }
 
     /// Like `seed_for_compaction`, but tolerates `put`/`sync`/`flush`

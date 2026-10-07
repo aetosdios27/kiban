@@ -4,8 +4,10 @@
 //! phase 11.4): PLAN and COMMIT run under the engine lock and are
 //! cheap; BUILD — the merge and sstable construction — runs here, on
 //! this worker thread, outside the lock, so foreground reads and
-//! writes are never blocked behind it. There is exactly one worker per
-//! engine: compaction jobs cannot race with each other, and MANIFEST
+//! writes do not wait for BUILD's engine gate. Capacity pressure can still
+//! stall writers; that same worker services pending flushes at bounded input
+//! checkpoints during a compaction. There is exactly one worker per engine:
+//! compaction jobs cannot race with each other, and MANIFEST
 //! publication stays single-writer.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -14,7 +16,7 @@ use std::thread::JoinHandle;
 
 use crate::engine_lock::ShardedRwLock;
 
-use crate::db::Kiban;
+use crate::db::{DbError, Kiban};
 
 /// A background maintenance failure. Sticky: nothing was waiting on the
 /// call that failed, so the failure must be surfaced some other way
@@ -49,7 +51,8 @@ pub struct MaintenanceStats {
     /// Sum of actual backpressure wait durations across callers, excluding gate acquisition.
     /// Concurrent waits overlap; this is caller time, not wall time.
     pub write_stall_ns: u64,
-    /// Successful BUILD + COMMIT elapsed time, including commit gate waits, excluding pacing/PLAN.
+    /// Successful BUILD + COMMIT elapsed time, including commit gate waits,
+    /// excluding pacing/PLAN and nested flush work.
     pub compaction_elapsed_ns: u64,
     pub flush_elapsed_ns: u64,
     pub flushes_completed: u64,
@@ -94,7 +97,7 @@ pub struct MaintenanceTimings {
     pub flush_commit_wait_ns: u64,
     /// Successful flush COMMIT time while holding the engine gate.
     pub flush_commit_ns: u64,
-    /// Successful compaction BUILD time, excluding COMMIT.
+    /// Successful compaction BUILD time, excluding COMMIT and nested flush work.
     pub compaction_build_ns: u64,
     /// Successful compaction time waiting to acquire the COMMIT engine gate.
     pub compaction_commit_wait_ns: u64,
@@ -586,62 +589,10 @@ fn run_pending_maintenance(engine: &Arc<ShardedRwLock<Kiban>>, m: &Arc<Maintenan
         // read-heavy recovery phase: every PLAN attempt, including one
         // that finds nothing to do, used to queue behind `writer_serial`
         // and drain every shard exactly like a real mutation.
-        let flush_plan = {
-            let Ok(guard) = engine.read() else {
-                return;
-            };
-            guard.plan_flush()
-        };
-        if let Some(plan) = flush_plan {
-            #[cfg(test)]
-            m.test.before_flush_build();
-
-            let started = std::time::Instant::now();
-            let queue_ns = nanos(started.duration_since(plan.queued_at));
-            match plan.build() {
-                Ok(output) => {
-                    let output_bytes = output.size;
-                    let build_ns = nanos(started.elapsed());
-                    let gate_started = std::time::Instant::now();
-                    let (committed, pressure, phases) = {
-                        let Ok(mut guard) = engine.write() else {
-                            return;
-                        };
-                        let commit_wait_ns = nanos(gate_started.elapsed());
-                        let commit_started = std::time::Instant::now();
-                        let committed = guard.commit_flush(plan, output);
-                        let commit_ns = nanos(commit_started.elapsed());
-                        (
-                            committed,
-                            MaintenancePressure::capture(&guard),
-                            PhaseTimes {
-                                build_ns,
-                                commit_wait_ns,
-                                commit_ns,
-                            },
-                        )
-                    };
-                    match committed {
-                        Ok(()) => record_flush_success(
-                            m,
-                            output_bytes,
-                            started.elapsed(),
-                            queue_ns,
-                            phases,
-                        ),
-                        Err(e) => {
-                            record_flush_error(m, e.to_string());
-                            return;
-                        }
-                    }
-                    pressure.pace();
-                }
-                Err(e) => {
-                    record_flush_error(m, e.to_string());
-                    return;
-                }
-            }
-            continue;
+        match run_one_flush(engine, m, false) {
+            Ok(true) => continue,
+            Ok(false) => (),
+            Err(_) => return, // run_one_flush recorded the sticky failure
         }
 
         let plan = {
@@ -656,9 +607,22 @@ fn run_pending_maintenance(engine: &Arc<ShardedRwLock<Kiban>>, m: &Arc<Maintenan
         m.test.before_build();
 
         let started = std::time::Instant::now();
-        match plan.build() {
+        let mut flush_time = std::time::Duration::ZERO;
+        let outputs = plan.build_with_progress(|| {
+            #[cfg(test)]
+            m.test.before_compaction_progress.hit();
+            let flush_started = std::time::Instant::now();
+            if run_one_flush(engine, m, true)? {
+                #[cfg(test)]
+                m.test.after_compaction_flush.hit();
+                flush_time += flush_started.elapsed();
+            }
+            Ok(())
+        });
+        match outputs {
             Ok(outputs) => {
-                let build_ns = nanos(started.elapsed());
+                // Nested flush work belongs to flush counters, not compaction.
+                let build_ns = nanos(started.elapsed().saturating_sub(flush_time));
                 let gate_started = std::time::Instant::now();
                 let (committed, pressure, phases) = {
                     let Ok(mut guard) = engine.write() else {
@@ -683,7 +647,12 @@ fn run_pending_maintenance(engine: &Arc<ShardedRwLock<Kiban>>, m: &Arc<Maintenan
                     // stalled writer (11.5) is waiting to recheck
                     // against — wake it now, not after the whole
                     // cascade finishes.
-                    Ok(outcome) => record_compaction_success(m, outcome, started.elapsed(), phases),
+                    Ok(outcome) => record_compaction_success(
+                        m,
+                        outcome,
+                        started.elapsed().saturating_sub(flush_time),
+                        phases,
+                    ),
                     Err(e) => {
                         record_error(m, e.to_string());
                         return;
@@ -697,6 +666,65 @@ fn run_pending_maintenance(engine: &Arc<ShardedRwLock<Kiban>>, m: &Arc<Maintenan
             }
         }
     }
+}
+
+/// Service one frozen generation on the same worker, using the normal durable
+/// flush path. During an unfinished compaction, do not fill L0 past its hard
+/// ceiling: complete that compaction before servicing further flushes. One job
+/// per checkpoint bounds how much new writing can postpone compaction progress.
+fn run_one_flush(
+    engine: &Arc<ShardedRwLock<Kiban>>,
+    m: &Arc<Maintenance>,
+    during_compaction: bool,
+) -> Result<bool, DbError> {
+    let result: Result<bool, DbError> = (|| {
+        let plan = {
+            let guard = engine.read().map_err(|_| {
+                DbError::Maintenance(MaintenanceError(
+                    "engine gate poisoned during flush planning".into(),
+                ))
+            })?;
+            if during_compaction && guard.l0_count() >= guard.options().l0_write_stall_trigger {
+                return Ok(false);
+            }
+            guard.plan_flush()
+        };
+        let Some(plan) = plan else { return Ok(false) };
+        #[cfg(test)]
+        m.test.before_flush_build();
+        let started = std::time::Instant::now();
+        let queue_ns = nanos(started.duration_since(plan.queued_at));
+        let output = plan.build()?;
+        let output_bytes = output.size;
+        let build_ns = nanos(started.elapsed());
+        let gate_started = std::time::Instant::now();
+        let (pressure, phases) = {
+            let mut guard = engine.write().map_err(|_| {
+                DbError::Maintenance(MaintenanceError(
+                    "engine gate poisoned during flush commit".into(),
+                ))
+            })?;
+            let commit_wait_ns = nanos(gate_started.elapsed());
+            let commit_started = std::time::Instant::now();
+            guard.commit_flush(plan, output)?;
+            let commit_ns = nanos(commit_started.elapsed());
+            (
+                MaintenancePressure::capture(&guard),
+                PhaseTimes {
+                    build_ns,
+                    commit_wait_ns,
+                    commit_ns,
+                },
+            )
+        };
+        record_flush_success(m, output_bytes, started.elapsed(), queue_ns, phases);
+        pressure.pace();
+        Ok(true)
+    })();
+    if let Err(e) = &result {
+        record_flush_error(m, e.to_string());
+    }
+    result
 }
 
 fn record_flush_success(
@@ -831,6 +859,17 @@ impl Checkpoint {
         }
     }
 
+    fn wait_reached_bounded(&self) -> bool {
+        let state = self.state.lock().unwrap();
+        let (state, _) = self
+            .condvar
+            .wait_timeout_while(state, std::time::Duration::from_secs(5), |s| {
+                *s != CheckpointState::Reached
+            })
+            .unwrap();
+        *state == CheckpointState::Reached
+    }
+
     fn release(&self) {
         *self.state.lock().unwrap() = CheckpointState::Idle;
         self.condvar.notify_all();
@@ -850,6 +889,8 @@ struct TestHooks {
     /// ordinary `flush()` calls) must not also freeze every flush
     /// those seed calls themselves depend on to ever return.
     before_flush_build: Checkpoint,
+    before_compaction_progress: Checkpoint,
+    after_compaction_flush: Checkpoint,
     pending: Mutex<Option<Box<dyn FnOnce() + Send>>>,
 }
 
@@ -917,6 +958,25 @@ impl Maintenance {
     /// thread-local and must be set on the thread that will do the I/O.
     pub(crate) fn inject_on_worker(&self, f: impl FnOnce() + Send + 'static) {
         *self.test.pending.lock().unwrap() = Some(Box::new(f));
+    }
+
+    pub(crate) fn arm_before_compaction_progress(&self) {
+        self.test.before_compaction_progress.arm();
+    }
+    pub(crate) fn wait_before_compaction_progress(&self) -> bool {
+        self.test.before_compaction_progress.wait_reached_bounded()
+    }
+    pub(crate) fn release_before_compaction_progress(&self) {
+        self.test.before_compaction_progress.release();
+    }
+    pub(crate) fn arm_after_compaction_flush(&self) {
+        self.test.after_compaction_flush.arm();
+    }
+    pub(crate) fn wait_after_compaction_flush(&self) -> bool {
+        self.test.after_compaction_flush.wait_reached_bounded()
+    }
+    pub(crate) fn release_after_compaction_flush(&self) {
+        self.test.after_compaction_flush.release();
     }
 
     /// Blocks until the worker is idle and has no outstanding wake —
