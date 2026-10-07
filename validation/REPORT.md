@@ -1,5 +1,11 @@
 # First scale-validation report
 
+**Historical evidence from before the correctness repairs.** The recorded defects
+are repaired in the current code; see [CORRECTNESS.md](CORRECTNESS.md). Reproduce
+this report’s failures on revision `6c29f8f`. The frozen-WAL probe is now an
+ordinary passing test, so its historical `--ignored` command does not run it on
+current code. Performance figures below remain tied to their recorded binaries.
+
 Kiban fails correctness validation at small scale. These failures were exposed
 by the new harness without changing engine policy, durability, or assertions.
 Performance measurements therefore describe behavior, not a production-readiness

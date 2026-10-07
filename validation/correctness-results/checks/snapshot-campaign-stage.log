@@ -1,0 +1,20 @@
+   Compiling kiban v0.1.0 (/home/aetos/dev/personal/kiban)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running tests/recovery_validation.rs (target/debug/deps/recovery_validation-c2e39bf301307661)
+
+running 1 test
+simulated recovery cycle 0/20 verified
+
+thread 'snapshots_survive_repeated_recovery_and_faults' (63103) panicked at tests/recovery_validation.rs:88:12:
+every pinned snapshot must retain its captured logical view: Custom { kind: Other, error: "cycle=2 fault=Some(34): get/scan mismatch key=[0, 0, 0, 0, 0, 0, 0, 33] scan=[224, 0, 0, 0, 0, 0, 0, 0, 247, 62, 224, 204, 224, 224, 2, 254, 215, 3, 174, 82, 104, 43, 71, 9, 94, 11, 95, 194, 53, 96, 187, 137, 72, 216, 215, 59, 96, 13, 255, 9, 35, 135, 156, 27, 221, 199, 69, 113, 87, 171, 211, 182, 141, 214, 168, 65, 83, 109, 43, 194, 151, 114, 28, 244] get=None" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test snapshots_survive_repeated_recovery_and_faults ... FAILED
+
+failures:
+
+failures:
+    snapshots_survive_repeated_recovery_and_faults
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--test recovery_validation`

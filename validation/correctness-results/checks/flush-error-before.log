@@ -1,0 +1,23 @@
+   Compiling kiban v0.1.0 (/home/aetos/dev/personal/kiban)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.76s
+     Running unittests src/lib.rs (target/debug/deps/kiban-60f9814aeb7cdf24)
+
+running 1 test
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+
+thread 'db::scale_validation_tests::durable_acknowledgements_after_a_flush_error_remain_recoverable' (70518) panicked at src/scale_validation_tests.rs:263:13:
+assertion `left == right` failed: fault=Some(16): accepted durable write went to a retired WAL
+  left: None
+ right: Some([100, 117, 114, 97, 98, 108, 101, 45, 97, 102, 116, 101, 114, 45, 101, 114, 114, 111, 114])
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test db::scale_validation_tests::durable_acknowledgements_after_a_flush_error_remain_recoverable ... FAILED
+
+failures:
+
+failures:
+    db::scale_validation_tests::durable_acknowledgements_after_a_flush_error_remain_recoverable
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 259 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`

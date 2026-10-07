@@ -1,0 +1,87 @@
+   Compiling kiban v0.1.0 (/home/aetos/dev/personal/kiban)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.04s
+     Running unittests src/lib.rs (target/debug/deps/kiban-60f9814aeb7cdf24)
+
+running 3 tests
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+test db::scale_validation_tests::frozen_wal_sync_failure_poisoning_covers_both_generations ... ok
+test db::scale_validation_tests::repeated_frozen_wal_generations_remain_durable_before_and_after_commit ... ok
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+test db::scale_validation_tests::frozen_wal_barrier_survives_every_flush_fault_and_power_loss ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 250 filtered out; finished in 0.03s
+

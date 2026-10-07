@@ -1,0 +1,23 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/kiban-60f9814aeb7cdf24)
+
+running 1 test
+test sstable::block::tests::restart_lookup_matches_iteration_at_every_sequence_and_tombstone ... FAILED
+
+failures:
+
+---- sstable::block::tests::restart_lookup_matches_iteration_at_every_sequence_and_tombstone stdout ----
+
+thread 'sstable::block::tests::restart_lookup_matches_iteration_at_every_sequence_and_tombstone' (63648) panicked at src/sstable/block.rs:453:17:
+assertion `left == right` failed: prefix=0, limit=Some(17)
+  left: Some((Put, 16, [118, 97, 108, 117, 101]))
+ right: Some((Put, 17, [118, 97, 108, 117, 101]))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    sstable::block::tests::restart_lookup_matches_iteration_at_every_sequence_and_tombstone
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 258 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`

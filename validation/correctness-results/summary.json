@@ -1,0 +1,35 @@
+{
+  "engine_revision": "4dc901e826ed962b968e42398bc79c02d9f00d5e",
+  "formatting": "passed",
+  "clippy": "passed",
+  "clippy_loom": "passed",
+  "library_passed": 260,
+  "default_ignored": 2,
+  "preexisting_ignored_executed_passed": 2,
+  "integration_passed": 3,
+  "example_passed": 3,
+  "loom_passed": 3,
+  "campaigns": {
+    "simulated": {
+      "verified_cycles": 1000,
+      "snapshots_enabled": true,
+      "completed_mutations": 415929,
+      "faults_fired": 332,
+      "exact_recoveries": 728,
+      "band_recoveries": 272
+    },
+    "process": {
+      "verified_cycles": 1000,
+      "snapshots_enabled": true,
+      "acknowledged_mutations": 530100,
+      "attempt_tail_budget": 62272,
+      "verification": "durable-floor-and-attempt-band"
+    },
+    "probes": {
+      "passed": 2,
+      "failed": 0
+    }
+  },
+  "benchmark_changes": false,
+  "performance_runs": false
+}

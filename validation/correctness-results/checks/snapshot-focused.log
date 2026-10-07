@@ -1,0 +1,10 @@
+   Compiling kiban v0.1.0 (/home/aetos/dev/personal/kiban)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.40s
+     Running unittests src/lib.rs (target/debug/deps/kiban-60f9814aeb7cdf24)
+
+running 2 tests
+test db::correctness_tests::snapshot_before_first_flush_preserves_old_value_and_visible_delete ... ok
+test db::correctness_tests::snapshot_captures_unflushed_versions_across_rotation_flush_and_compaction ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 253 filtered out; finished in 0.00s
+

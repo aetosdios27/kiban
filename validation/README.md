@@ -203,14 +203,13 @@ cargo test --examples
 cargo test --features loom -- --test-threads=1 loom_
 cargo clippy --all-targets --features loom -- -D warnings
 cargo test --lib every_single_syscall_failure_recovers_correctly_under_governor
-# Known failing regression, deliberately run separately; must not be reported as a pass.
-cargo test --lib sync_after_freeze_must_durably_cover_the_older_wal -- --ignored --nocapture
+# Former failing durability probe, now included in the ordinary suite.
+cargo test --lib sync_after_freeze_must_durably_cover_the_older_wal -- --nocapture
 ```
 
-The frozen-WAL durability reproducer is retained with its assertion intact and
-is ignored by default; the report records its explicit failure. The full library
-suite includes existing single/pairwise faults, power-loss,
-background flush failure and snapshot tests. New integration tests validate the
-oracle and failure detection; their success is **not** evidence that the known
-storage defects pass scale validation. See REPORT.md for measured results and
-remaining unexecuted campaigns.
+The frozen-WAL durability assertion is unchanged and now passes in the ordinary
+suite. Recovery integration tests now require the repaired snapshot and point-read
+semantics to pass the unchanged torture oracle. See [CORRECTNESS.md](CORRECTNESS.md)
+for the fixes, regression coverage, and new recovery campaign evidence.
+[REPORT.md](REPORT.md) preserves the historical pre-fix scale measurements and
+failures; those performance measurements do not describe the repaired binary.

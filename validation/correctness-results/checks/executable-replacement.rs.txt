@@ -1,0 +1,11 @@
+fn main() {
+    if std::env::args().any(|a| a == "child") { return; }
+    println!("before={}", std::env::current_exe().unwrap().display());
+    let mut line = String::new();
+    std::io::stdin().read_line(&mut line).unwrap();
+    let path = std::env::current_exe().unwrap();
+    println!("after={}", path.display());
+    let error = std::process::Command::new(path).arg("child").status().unwrap_err();
+    println!("spawn_error={error}; errno={:?}", error.raw_os_error());
+    assert_eq!(error.raw_os_error(), Some(2));
+}

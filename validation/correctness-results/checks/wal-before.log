@@ -1,0 +1,20 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running unittests src/lib.rs (target/debug/deps/kiban-60f9814aeb7cdf24)
+
+running 1 test
+
+thread 'db::scale_validation_tests::sync_after_freeze_must_durably_cover_the_older_wal' (58207) panicked at src/scale_validation_tests.rs:30:5:
+assertion `left == right` failed: successful sync after freeze must cover the MANIFEST's older live WAL
+  left: None
+ right: Some([109, 117, 115, 116, 45, 115, 117, 114, 118, 105, 118, 101])
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test db::scale_validation_tests::sync_after_freeze_must_durably_cover_the_older_wal ... FAILED
+
+failures:
+
+failures:
+    db::scale_validation_tests::sync_after_freeze_must_durably_cover_the_older_wal
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 249 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`

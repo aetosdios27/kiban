@@ -1,0 +1,19 @@
+   Compiling kiban v0.1.0 (/home/aetos/dev/personal/kiban)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.88s
+     Running unittests src/lib.rs (target/debug/deps/kiban-60f9814aeb7cdf24)
+
+running 1 test
+
+thread 'db::correctness_tests::snapshots_pin_the_same_sst_across_repeated_metadata_moves_and_rewrite' (96528) panicked at src/correctness_tests.rs:306:5:
+old metadata views still pin the physical SST
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test db::correctness_tests::snapshots_pin_the_same_sst_across_repeated_metadata_moves_and_rewrite ... FAILED
+
+failures:
+
+failures:
+    db::correctness_tests::snapshots_pin_the_same_sst_across_repeated_metadata_moves_and_rewrite
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 261 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`

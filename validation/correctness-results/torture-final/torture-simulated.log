@@ -1,0 +1,51 @@
+simulated recovery cycle 0/1000 verified
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+simulated recovery cycle 100/1000 verified
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+simulated recovery cycle 200/1000 verified
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+simulated recovery cycle 300/1000 verified
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+simulated recovery cycle 400/1000 verified
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+simulated recovery cycle 500/1000 verified
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+simulated recovery cycle 600/1000 verified
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+simulated recovery cycle 700/1000 verified
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+simulated recovery cycle 800/1000 verified
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+simulated recovery cycle 900/1000 verified
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure

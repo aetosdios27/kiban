@@ -1,0 +1,56 @@
+cycle,operation_id,operation,message,fault_index,checked_syscalls,fault_triggered
+11,11309,flush,"manifest install failed; previous state intact: injected i/o failure",376,378,true
+16,16061,flush,"manifest install failed; previous state intact: injected i/o failure",93,95,true
+17,17247,flush,"manifest install failed; previous state intact: injected i/o failure",348,350,true
+21,21123,flush,"manifest install failed; previous state intact: injected i/o failure",165,167,true
+23,23588,flush,"manifest install failed; previous state intact: injected i/o failure",657,659,true
+27,27061,flush,"manifest install failed; previous state intact: injected i/o failure",43,45,true
+29,29433,flush,"manifest install failed; previous state intact: injected i/o failure",722,724,true
+30,30123,flush,"manifest install failed; previous state intact: injected i/o failure",176,177,true
+34,34433,flush,"manifest install failed; previous state intact: injected i/o failure",742,744,true
+35,35030,flush,"manifest install failed; previous state intact: injected i/o failure",26,28,true
+39,39371,flush,"manifest install failed; previous state intact: injected i/o failure",574,576,true
+41,41402,flush,"manifest install failed; previous state intact: injected i/o failure",491,492,true
+49,49371,flush,"manifest install failed; previous state intact: injected i/o failure",444,446,true
+53,53185,flush,"manifest install failed; previous state intact: injected i/o failure",167,169,true
+56,56433,flush,"manifest install failed; previous state intact: injected i/o failure",771,773,true
+60,60433,flush,"manifest install failed; previous state intact: injected i/o failure",534,535,true
+61,61247,flush,"manifest install failed; previous state intact: injected i/o failure",466,468,true
+64,64154,flush,"manifest install failed; previous state intact: injected i/o failure",134,136,true
+65,65433,flush,"manifest install failed; previous state intact: injected i/o failure",731,733,true
+67,67061,flush,"database i/o error: injected i/o failure",25,26,true
+72,72371,flush,"manifest install failed; previous state intact: injected i/o failure",640,642,true
+80,80278,flush,"manifest rename not known durable; recovery must resolve: injected i/o failure",346,347,true
+88,88061,flush,"manifest rename not known durable; recovery must resolve: injected i/o failure",75,76,true
+89,89030,flush,"manifest install failed; previous state intact: injected i/o failure",32,34,true
+90,90030,flush,"manifest install failed; previous state intact: injected i/o failure",4,6,true
+93,93033,sync,"wal append failed; engine poisoned",42,43,true
+97,97774,flush,"manifest install failed; previous state intact: injected i/o failure",1091,1093,true
+101,101712,flush,"manifest install failed; previous state intact: injected i/o failure",1092,1094,true
+103,103743,flush,"manifest rename not known durable; recovery must resolve: injected i/o failure",1104,1105,true
+104,104247,flush,"manifest install failed; previous state intact: injected i/o failure",442,444,true
+107,107030,flush,"manifest install failed; previous state intact: injected i/o failure",4,6,true
+109,109030,flush,"manifest install failed; previous state intact: injected i/o failure",36,38,true
+111,111588,flush,"manifest rename not known durable; recovery must resolve: injected i/o failure",889,890,true
+116,116123,flush,"manifest install failed; previous state intact: injected i/o failure",81,82,true
+118,118557,flush,"manifest install failed; previous state intact: injected i/o failure",804,806,true
+124,124203,sync,"wal sync failed; engine poisoned",177,178,true
+125,125278,flush,"manifest install failed; previous state intact: injected i/o failure",459,460,true
+126,126557,flush,"manifest install failed; previous state intact: injected i/o failure",954,956,true
+127,127030,flush,"manifest install failed; previous state intact: injected i/o failure",72,74,true
+129,129092,flush,"manifest install failed; previous state intact: injected i/o failure",85,87,true
+131,131247,flush,"database i/o error: injected i/o failure",309,310,true
+134,134030,flush,"manifest install failed; previous state intact: injected i/o failure",5,6,true
+138,138278,flush,"manifest install failed; previous state intact: injected i/o failure",339,341,true
+142,142340,flush,"manifest install failed; previous state intact: injected i/o failure",416,417,true
+144,144216,flush,"manifest rename not known durable; recovery must resolve: injected i/o failure",303,304,true
+149,149154,flush,"manifest install failed; previous state intact: injected i/o failure",186,188,true
+151,151154,flush,"manifest install failed; previous state intact: injected i/o failure",200,201,true
+152,152424,sync,"wal append failed; engine poisoned",571,572,true
+161,161185,flush,"database i/o error: injected i/o failure",225,226,true
+162,162061,flush,"database i/o error: injected i/o failure",46,47,true
+164,164588,flush,"manifest install failed; previous state intact: injected i/o failure",657,659,true
+167,167030,flush,"manifest install failed; previous state intact: injected i/o failure",3,5,true
+168,168402,flush,"database i/o error: injected i/o failure",489,490,true
+171,171900,sync,"wal sync failed; engine poisoned",1448,1449,true
+172,172061,flush,"manifest install failed; previous state intact: injected i/o failure",66,68,true

@@ -1,0 +1,7 @@
+simulated recovery cycle 0/1000 verified
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+simulated recovery cycle 100/1000 verified
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal append failure: injected i/o failure
+kiban: engine POISONED — mutations refused until reopen: wal sync failure: injected i/o failure
+torture FAILED: database corrupt: sstable corrupt: read failed at offset 0: no such file

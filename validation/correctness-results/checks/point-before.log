@@ -1,0 +1,47 @@
+   Compiling kiban v0.1.0 (/home/aetos/dev/personal/kiban)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.06s
+     Running unittests src/lib.rs (target/debug/deps/kiban-60f9814aeb7cdf24)
+
+running 8 tests
+test db::flush_tests::crash_before_commit_point_loses_nothing_and_sweeps_orphan ... ok
+test db::flush_tests::crash_after_commit_point_but_before_wal_deletion ... ok
+test db::correctness_tests::point_selection_uses_sequence_not_file_or_level_order ... FAILED
+test db::correctness_tests::point_and_scan_agree_on_many_versions_after_flush_and_reopen ... FAILED
+test db::correctness_tests::point_scan_and_snapshots_agree_through_overlapping_generations_and_compaction ... FAILED
+test db::scan_tests::point_gets_agree_with_scan_contents ... ok
+test db::snapshot_tests::snapshot_scan_matches_point_reads_at_same_boundary ... ok
+test db::background_tests::point_reads_and_scans_agree_through_shared_kiban_under_compaction ... ok
+
+failures:
+
+---- db::correctness_tests::point_selection_uses_sequence_not_file_or_level_order stdout ----
+
+thread 'db::correctness_tests::point_selection_uses_sequence_not_file_or_level_order' (63614) panicked at src/correctness_tests.rs:98:5:
+assertion `left == right` failed
+  left: Some([118, 97, 108, 117, 101])
+ right: None
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- db::correctness_tests::point_and_scan_agree_on_many_versions_after_flush_and_reopen stdout ----
+
+thread 'db::correctness_tests::point_and_scan_agree_on_many_versions_after_flush_and_reopen' (63612) panicked at src/correctness_tests.rs:98:5:
+assertion `left == right` failed
+  left: Some([0, 0, 0, 0, 0, 0, 0, 8])
+ right: Some([0, 0, 0, 0, 0, 0, 0, 40])
+
+---- db::correctness_tests::point_scan_and_snapshots_agree_through_overlapping_generations_and_compaction stdout ----
+
+thread 'db::correctness_tests::point_scan_and_snapshots_agree_through_overlapping_generations_and_compaction' (63613) panicked at src/correctness_tests.rs:98:5:
+assertion `left == right` failed
+  left: Some([49, 45, 56])
+ right: None
+
+
+failures:
+    db::correctness_tests::point_and_scan_agree_on_many_versions_after_flush_and_reopen
+    db::correctness_tests::point_scan_and_snapshots_agree_through_overlapping_generations_and_compaction
+    db::correctness_tests::point_selection_uses_sequence_not_file_or_level_order
+
+test result: FAILED. 5 passed; 3 failed; 0 ignored; 0 measured; 251 filtered out; finished in 0.03s
+
+error: test failed, to rerun pass `--lib`

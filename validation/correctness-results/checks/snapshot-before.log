@@ -1,0 +1,28 @@
+   Compiling kiban v0.1.0 (/home/aetos/dev/personal/kiban)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.42s
+     Running unittests src/lib.rs (target/debug/deps/kiban-60f9814aeb7cdf24)
+
+running 2 tests
+
+thread 'db::correctness_tests::snapshot_captures_unflushed_versions_across_rotation_flush_and_compaction' (61191) panicked at src/correctness_tests.rs:6:5:
+assertion `left == right` failed
+  left: None
+ right: Some([118, 49])
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'db::correctness_tests::snapshot_before_first_flush_preserves_old_value_and_visible_delete' (61190) panicked at src/correctness_tests.rs:6:5:
+assertion `left == right` failed
+  left: None
+ right: Some([98, 101, 102, 111, 114, 101])
+test db::correctness_tests::snapshot_captures_unflushed_versions_across_rotation_flush_and_compaction ... FAILED
+test db::correctness_tests::snapshot_before_first_flush_preserves_old_value_and_visible_delete ... FAILED
+
+failures:
+
+failures:
+    db::correctness_tests::snapshot_before_first_flush_preserves_old_value_and_visible_delete
+    db::correctness_tests::snapshot_captures_unflushed_versions_across_rotation_flush_and_compaction
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 253 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`
