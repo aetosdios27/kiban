@@ -937,15 +937,13 @@ impl Kiban {
     /// write guard) is treated the same as every other engine-fatal
     /// condition here: panic, don't silently diverge from `memtable`.
     fn mirror_put(&self, key: &[u8], value: &[u8], seq: u64) {
-        self.shared_memtable
-            .write()
+        measured!(MemtableWrite, self.shared_memtable.write())
             .expect("shared_memtable poisoned by a panic during a prior mutation")
             .put(key, value, seq);
     }
 
     fn mirror_delete(&self, key: &[u8], seq: u64) {
-        self.shared_memtable
-            .write()
+        measured!(MemtableWrite, self.shared_memtable.write())
             .expect("shared_memtable poisoned by a panic during a prior mutation")
             .delete(key, seq);
     }
@@ -4698,8 +4696,7 @@ impl SharedKiban {
     }
 
     fn write_lock(&self) -> Result<crate::engine_lock::WriteGuard<'_, Kiban>, DbError> {
-        self.inner
-            .write()
+        measured!(EngineWrite, self.inner.write())
             .map_err(|_| DbError::Corrupt("engine lock poisoned".to_string()))
     }
 
@@ -4931,15 +4928,11 @@ impl SharedKiban {
         use std::sync::atomic::Ordering::Relaxed;
         let key = key.as_ref();
         self.read_amp.gets_total.fetch_add(1, Relaxed);
-        let view = self
-            .read_view
-            .read()
+        let view = measured!(ReadViewRead, self.read_view.read())
             .map_err(|_| DbError::Corrupt("read_view lock poisoned".to_string()))?
             .clone();
         {
-            let mem = view
-                .memtable
-                .read()
+            let mem = measured!(MemtableRead, view.memtable.read())
                 .map_err(|_| DbError::Corrupt("shared memtable lock poisoned".to_string()))?;
             if let Some(entry) = mem.entry(key) {
                 self.read_amp.resolved_in_memtable.fetch_add(1, Relaxed);

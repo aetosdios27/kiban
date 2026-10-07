@@ -19,6 +19,7 @@ p.add_argument('--plan', type=Path, required=True)
 p.add_argument('--output', type=Path, required=True)
 p.add_argument('--data', type=Path, required=True)
 p.add_argument('--perf', type=Path, help='separate diagnostic campaign, not primary rates')
+p.add_argument('--diagnostic', action='store_true', help='label diagnostic-only builds/rates')
 a = p.parse_args()
 builds = {}
 for pair in a.pair:
@@ -27,6 +28,8 @@ for pair in a.pair:
         p.error('unique alphanumeric build labels required')
     directory = Path(directory).resolve()
     receipt = json.loads((directory/'build.json').read_text())
+    if 'diagnostics' in receipt.get('features', []) and not (a.diagnostic or a.perf):
+        p.error('diagnostics builds require --diagnostic or --perf')
     for name, digest in receipt['binary_hashes'].items():
         if hashlib.sha256((directory/name).read_bytes()).hexdigest() != digest:
             raise SystemExit('frozen binary hash mismatch')
@@ -40,7 +43,7 @@ if a.output.resolve().is_relative_to(a.data.resolve()) or a.data.resolve().is_re
 a.output.mkdir(parents=True,exist_ok=False)
 a.data.mkdir(parents=True,exist_ok=False)
 plan = json.loads(a.plan.read_text())
-metadata = {'plan':plan,'builds':builds,'profiling':a.perf is not None,
+metadata = {'plan':plan,'builds':builds,'profiling':a.perf is not None or a.diagnostic,
             'revision':subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip(),
             'rustc':subprocess.check_output(['rustc','-Vv'],text=True),
             'uname':subprocess.check_output(['uname','-a'],text=True),

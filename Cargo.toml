@@ -16,6 +16,8 @@ exclude = ["validation/results/**", "validation/correctness-results/**", "valida
 # production builds; run with
 # `cargo test --features loom -- --test-threads=1 loom_`.
 loom = ["dep:loom"]
+# Opt-in sampled acquisition timings for diagnosis; absent from normal builds.
+diagnostics = []
 
 [dependencies]
 loom = { version = "0.7", optional = true }

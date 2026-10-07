@@ -10,12 +10,28 @@
 //! opening one directory concurrently are not validated. Low-level modules
 //! are exposed for tooling and do not promise stable pre-1.0 APIs.
 
+// Diagnostic clocks and sampling disappear entirely from ordinary builds.
+macro_rules! measured {
+    ($phase:ident, $operation:expr) => {{
+        #[cfg(feature = "diagnostics")]
+        {
+            crate::diagnostics::measure(crate::diagnostics::Phase::$phase, || $operation)
+        }
+        #[cfg(not(feature = "diagnostics"))]
+        {
+            $operation
+        }
+    }};
+}
+
 pub mod atomic;
 pub mod background;
 pub mod bloom;
 pub mod cache;
 pub mod crc32;
 pub mod db;
+#[cfg(feature = "diagnostics")]
+pub mod diagnostics;
 pub(crate) mod engine_lock;
 pub mod file_cache;
 pub mod frame;

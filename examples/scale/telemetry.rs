@@ -59,6 +59,8 @@ pub struct Reporter {
     levels: File,
     decisions: File,
     summaries: File,
+    #[cfg(feature = "diagnostics")]
+    acquisitions: File,
     pub start: Instant,
     last: Instant,
     last_sequence: u64,
@@ -86,11 +88,19 @@ impl Reporter {
             "stage,threads,elapsed_s,operations,reads,writes,total_ops_s,read_ops_s,write_ops_s,all_p50_ns,all_p95_ns,all_p99_ns,all_p999_ns,read_p50_ns,read_p95_ns,read_p99_ns,read_p999_ns,write_p50_ns,write_p95_ns,write_p99_ns,write_p999_ns,read_misses,app_bytes,sync_calls,all_max_ns,read_max_ns,write_max_ns"
         )?;
         let now = Instant::now();
+        #[cfg(feature = "diagnostics")]
+        let acquisitions = {
+            let mut f = create(&c.output.join("acquisitions.csv"))?;
+            writeln!(f, "elapsed_s,stage,phase,samples,elapsed_ns,maximum_ns")?;
+            f
+        };
         Ok(Self {
             samples,
             levels,
             decisions,
             summaries,
+            #[cfg(feature = "diagnostics")]
+            acquisitions,
             start: now,
             last: now,
             last_sequence: 0,
@@ -112,6 +122,14 @@ impl Reporter {
         let dt = self.last.elapsed().as_secs_f64().max(1e-9);
         self.last = Instant::now();
         let s = db.stats().map_err(io::Error::other)?;
+        #[cfg(feature = "diagnostics")]
+        for d in kiban::diagnostics::stats() {
+            writeln!(
+                self.acquisitions,
+                "{at},{stage},{},{},{},{}",
+                d.phase, d.samples, d.elapsed_ns, d.maximum_ns
+            )?;
+        }
         if let Some(e) = db.maintenance_error() {
             return Err(io::Error::other(e));
         }
