@@ -10,6 +10,10 @@ p = argparse.ArgumentParser()
 p.add_argument('root',type=Path)
 a = p.parse_args()
 runs = json.loads((a.root/'runs.json').read_text())
+metadata = json.loads((a.root/'metadata.json').read_text())
+expected = len(metadata['plan']['cases'])*metadata['plan']['repetitions']*len(metadata['builds'])
+if len(runs) != expected or not all(r['valid'] for r in runs):
+    raise SystemExit('incomplete or invalid campaign; cannot summarize as success')
 windows = []
 trends = []
 for run in runs:

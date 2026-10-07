@@ -1,0 +1,34 @@
+{
+  "repetitions": 1,
+  "order_seed": 20261008,
+  "ordered": true,
+  "cases": [
+    {
+      "name": "overnight-transitions-8h",
+      "timeout_s": 30000,
+      "args": {
+        "operations": 0,
+        "keys": 1000000,
+        "working-set": 1000000,
+        "value-size": 128,
+        "threads": 4,
+        "seed": 20261008,
+        "read-percent": 10,
+        "preload-keys": 1000000,
+        "sync-every": 0,
+        "cache": "as-is",
+        "duration": 28800,
+        "sample-ms": 1000,
+        "write-buffer": 4194304,
+        "block-cache": 33554432,
+        "target-file-size": 4194304,
+        "base-level-bytes": 4194304,
+        "level-multiplier": 10,
+        "l0-trigger": 4,
+        "l0-stall": 8,
+        "max-open-files": 128,
+        "workload": "burst-recovery"
+      }
+    }
+  ]
+}
