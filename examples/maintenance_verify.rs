@@ -10,15 +10,18 @@ use kiban::db::Kiban;
 use std::io;
 
 fn verify(c: config::Config) -> io::Result<()> {
-    if c.duration != 0.0 || c.operations == 0 {
+    if c.duration != 0.0 && c.preload_keys != c.keys {
         return Err(io::Error::other(
-            "verification requires an exact operation budget",
+            "timed verification requires the entire key space to be preloaded",
         ));
     }
     let mut expected = vec![false; usize::try_from(c.keys).map_err(io::Error::other)?];
     expected[..c.preload_keys as usize].fill(true);
     let stages = workload::stages(&c);
     for (index, stage) in stages.iter().enumerate() {
+        if c.duration != 0.0 {
+            break;
+        } // all preloaded keys retain deterministic per-key values
         let n = c.operations / stages.len() as u64
             + u64::from((index as u64) < c.operations % stages.len() as u64);
         println!(
@@ -35,7 +38,7 @@ fn verify(c: config::Config) -> io::Result<()> {
             }
         }
     }
-    let value = random::value(c.seed, c.value_size);
+    let mut value = random::value(c.seed, c.value_size);
     let db = Kiban::open_with_options(&c.db, c.options).map_err(io::Error::other)?;
     let mut count = 0usize;
     let mut previous = None;
@@ -43,6 +46,9 @@ fn verify(c: config::Config) -> io::Result<()> {
         let (key, got) = item.map_err(io::Error::other)?;
         let bytes: [u8; 8] = key.as_slice().try_into().map_err(io::Error::other)?;
         let k = usize::try_from(u64::from_be_bytes(bytes)).map_err(io::Error::other)?;
+        if c.value_pattern == "keyed" {
+            random::keyed_value(c.seed, k as u64, &mut value);
+        }
         if k >= expected.len() || !expected[k] || previous.is_some_and(|p| p >= k) || got != value {
             return Err(io::Error::other("post-run key/value/ordering mismatch"));
         }

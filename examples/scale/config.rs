@@ -7,6 +7,7 @@ pub struct Config {
     pub keys: u64,
     pub working_set: u64,
     pub value_size: usize,
+    pub value_pattern: String,
     pub operations: u64,
     pub read_percent: u64,
     pub threads: usize,
@@ -15,6 +16,7 @@ pub struct Config {
     pub sample_ms: u64,
     pub sync_every: u64,
     pub preload_keys: u64,
+    pub preload_mode: String,
     pub cache: String,
     pub reuse: bool,
     pub db: PathBuf,
@@ -32,6 +34,7 @@ impl Config {
             keys: 1_000_000,
             working_set: 0,
             value_size: 128,
+            value_pattern: "constant".into(),
             operations: 1_000_000,
             read_percent: 50,
             threads: 1,
@@ -40,6 +43,7 @@ impl Config {
             sample_ms: 1000,
             sync_every: 0,
             preload_keys: 0,
+            preload_mode: "write".into(),
             cache: "as-is".into(),
             reuse: false,
             db: "scale-db".into(),
@@ -66,6 +70,7 @@ impl Config {
                 "--keys" => c.keys = n()?,
                 "--working-set" => c.working_set = n()?,
                 "--value-size" => c.value_size = size()?,
+                "--value-pattern" => c.value_pattern = v.clone(),
                 "--operations" => c.operations = n()?,
                 "--read-percent" => c.read_percent = n()?,
                 "--threads" => c.threads = size()?,
@@ -74,6 +79,7 @@ impl Config {
                 "--sample-ms" => c.sample_ms = n()?,
                 "--sync-every" => c.sync_every = n()?,
                 "--preload-keys" => c.preload_keys = n()?,
+                "--preload-mode" => c.preload_mode = v.clone(),
                 "--cache" => c.cache = v.clone(),
                 "--reuse" => c.reuse = v.parse().map_err(|_| "--reuse requires true or false")?,
                 "--db" => c.db = v.into(),
@@ -132,6 +138,14 @@ impl Config {
         if !["as-is", "warm", "reduced"].contains(&c.cache.as_str()) {
             return Err("invalid cache mode".into());
         }
+        if !["constant", "keyed"].contains(&c.value_pattern.as_str()) {
+            return Err("invalid value pattern".into());
+        }
+        if !["write", "verify"].contains(&c.preload_mode.as_str())
+            || (c.preload_mode == "verify" && !c.reuse)
+        {
+            return Err("preload mode must be write or explicit reuse+verify".into());
+        }
         Ok(c)
     }
 }
@@ -139,8 +153,10 @@ impl Config {
 pub const HELP: &str = "Kiban scale validation (release build only for measurements)
 --workload sequential-write|random-write|random-read|mixed|update-heavy|burst-read|sustained-write|burst-recovery|concurrency-jump
 --keys N --working-set N --value-size BYTES --operations N --read-percent 0..100
+--value-pattern constant|keyed (default constant; keyed avoids repeated-value filesystem compression)
 --threads N --seed N --duration SECONDS --sample-ms N --sync-every N
 --preload-keys N --cache as-is|warm|reduced --reuse true|false --db DIR --output DIR
+--preload-mode write|verify (default write; verify checks an explicitly reused prepared dataset)
 --write-buffer BYTES --block-cache BYTES --target-file-size BYTES --base-level-bytes BYTES
 --level-multiplier N --l0-trigger N --l0-stall N --max-open-files N
 Every flag takes a value. Operations=0 requires a duration; both limits stop at the first reached.

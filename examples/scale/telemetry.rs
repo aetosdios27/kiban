@@ -23,6 +23,20 @@ pub fn disk_bytes(dir: &Path) -> io::Result<u64> {
     }
     Ok(total)
 }
+/// File-allocated sectors, distinct from logical lengths on compressed filesystems.
+pub fn allocated_bytes(dir: &Path) -> io::Result<u64> {
+    use std::os::unix::fs::MetadataExt;
+    let mut total = 0;
+    for e in std::fs::read_dir(dir)? {
+        match e?.metadata() {
+            Ok(m) if m.is_file() => total += m.blocks() * 512,
+            Ok(_) => (),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => (),
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(total)
+}
 pub fn proc_number(path: &str, field: &str, multiplier: u64) -> Option<u64> {
     std::fs::read_to_string(path)
         .ok()?
@@ -73,7 +87,7 @@ impl Reporter {
         let mut samples = create(&c.output.join("samples.csv"))?;
         writeln!(
             samples,
-            "elapsed_s,stage,interval_s,reads,writes,read_ops_s,write_ops_s,all_p50_ns,all_p95_ns,all_p99_ns,all_p999_ns,read_p50_ns,read_p95_ns,read_p99_ns,read_p999_ns,write_p50_ns,write_p95_ns,write_p99_ns,write_p999_ns,read_misses,app_bytes_total,sst_bytes_written,sst_write_amp,db_bytes,l0_files,debt_bytes,max_debt_ratio,overbudget_levels,pending_flush,memtable_bytes,immutable_bytes,compactions,compaction_input_bytes,compaction_output_bytes,compaction_elapsed_ns,flushes,flush_elapsed_ns,stalls,stall_ns,waiting_writers,maintenance_running,rss_bytes,fds,process_read_bytes,process_write_bytes,cache_hits,cache_misses,file_waits,governor_mode,governor_pressure,pressure_l0,pressure_debt,pressure_read,mode_switches,avg_batch_size,trivial_moves,obsolete_files,immutable_stalls,l0_stalls,both_stalls,immutable_wait_ns,l0_wait_ns,both_wait_ns,flush_queue_ns,flush_queue_max_ns,flush_build_ns,flush_commit_wait_ns,flush_commit_ns,compaction_build_ns,compaction_commit_wait_ns,compaction_commit_ns,sample_cost_ns"
+            "elapsed_s,stage,interval_s,reads,writes,read_ops_s,write_ops_s,all_p50_ns,all_p95_ns,all_p99_ns,all_p999_ns,read_p50_ns,read_p95_ns,read_p99_ns,read_p999_ns,write_p50_ns,write_p95_ns,write_p99_ns,write_p999_ns,read_misses,app_bytes_total,sst_bytes_written,sst_write_amp,db_bytes,l0_files,debt_bytes,max_debt_ratio,overbudget_levels,pending_flush,memtable_bytes,immutable_bytes,compactions,compaction_input_bytes,compaction_output_bytes,compaction_elapsed_ns,flushes,flush_elapsed_ns,stalls,stall_ns,waiting_writers,maintenance_running,rss_bytes,fds,process_read_bytes,process_write_bytes,cache_hits,cache_misses,file_waits,governor_mode,governor_pressure,pressure_l0,pressure_debt,pressure_read,mode_switches,avg_batch_size,trivial_moves,obsolete_files,immutable_stalls,l0_stalls,both_stalls,immutable_wait_ns,l0_wait_ns,both_wait_ns,flush_queue_ns,flush_queue_max_ns,flush_build_ns,flush_commit_wait_ns,flush_commit_ns,compaction_build_ns,compaction_commit_wait_ns,compaction_commit_ns,gets_total,memtable_gets,immutable_gets,l0_probes,leveled_probes,not_found_gets,sample_cost_ns"
         )?;
         let mut levels = create(&c.output.join("levels.csv"))?;
         writeln!(levels, "elapsed_s,stage,level,tables,bytes")?;
@@ -224,6 +238,15 @@ impl Reporter {
             (m.timings.compaction_build_ns - b.timings.compaction_build_ns).to_string(),
             (m.timings.compaction_commit_wait_ns - b.timings.compaction_commit_wait_ns).to_string(),
             (m.timings.compaction_commit_ns - b.timings.compaction_commit_ns).to_string(),
+            (s.read_amp.gets_total - self.baseline.read_amp.gets_total).to_string(),
+            (s.read_amp.resolved_in_memtable - self.baseline.read_amp.resolved_in_memtable)
+                .to_string(),
+            (s.read_amp.resolved_in_immutable - self.baseline.read_amp.resolved_in_immutable)
+                .to_string(),
+            (s.read_amp.l0_tables_probed - self.baseline.read_amp.l0_tables_probed).to_string(),
+            (s.read_amp.leveled_tables_probed - self.baseline.read_amp.leveled_tables_probed)
+                .to_string(),
+            (s.read_amp.resolved_not_found - self.baseline.read_amp.resolved_not_found).to_string(),
         ];
         for l in &s.levels {
             writeln!(
@@ -314,6 +337,7 @@ pub fn write_config(c: &Config) -> io::Result<()> {
         ("working_set", c.working_set.to_string()),
         ("key_bytes", "8".into()),
         ("value_size", c.value_size.to_string()),
+        ("value_pattern", c.value_pattern.clone()),
         ("operations", c.operations.to_string()),
         ("read_percent", c.read_percent.to_string()),
         ("threads", c.threads.to_string()),
@@ -322,6 +346,7 @@ pub fn write_config(c: &Config) -> io::Result<()> {
         ("sample_ms", c.sample_ms.to_string()),
         ("sync_every_per_thread", c.sync_every.to_string()),
         ("preload_keys", c.preload_keys.to_string()),
+        ("preload_mode", c.preload_mode.clone()),
         ("cache", c.cache.clone()),
         ("reuse", c.reuse.to_string()),
         ("db", c.db.display().to_string()),
