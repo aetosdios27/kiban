@@ -197,12 +197,16 @@ impl VerifiedBlock {
         let mut hi = self.meta.num_restarts;
         while lo < hi {
             let mid = lo + (hi - lo) / 2;
-            if self.full_key_at_restart(mid)?.as_slice() <= target {
+            if self.full_key_at_restart(mid)?.as_slice() < target {
                 lo = mid + 1;
             } else {
                 hi = mid;
             }
         }
+        // Start before the FIRST restart equal to target. Equal-key
+        // versions can begin in the preceding interval and extend across
+        // many restarts; starting at the last equal restart skips newer
+        // visible versions (including tombstones).
         let start = lo.saturating_sub(1);
         let mut key: Vec<u8> = Vec::new();
         let mut pos = self.restart_offset(start);
@@ -420,6 +424,42 @@ mod tests {
                 b"v",
                 "missed {key}"
             );
+        }
+    }
+
+    #[test]
+    fn restart_lookup_matches_iteration_at_every_sequence_and_tombstone() {
+        for prefix in [0, 1, 15, 16, 17, 31] {
+            let mut builder = BlockBuilder::default();
+            for i in 0..prefix {
+                builder.add(Kind::Put, format!("a-{i:03}").as_bytes(), b"prefix", 1);
+            }
+            for seq in (1..=80u64).rev() {
+                let kind = if seq == 47 || seq == 80 {
+                    Kind::Tombstone
+                } else {
+                    Kind::Put
+                };
+                builder.add(
+                    kind,
+                    b"key",
+                    if kind == Kind::Put { b"value" } else { b"" },
+                    seq,
+                );
+            }
+            builder.add(Kind::Put, b"z", b"suffix", 1);
+            let block = VerifiedBlock::from_raw(builder.finish()).unwrap();
+            for limit in (0..=81).map(Some).chain([None]) {
+                let expected = block.iter().map(Result::unwrap).find(|(_, seq, key, _)| {
+                    key == b"key" && limit.is_none_or(|limit| *seq <= limit)
+                });
+                let got = block.get(b"key", limit).unwrap();
+                assert_eq!(
+                    got.map(|m| (m.kind, m.seq, m.value.to_vec())),
+                    expected.map(|(kind, seq, _, value)| (kind, seq, value)),
+                    "prefix={prefix}, limit={limit:?}"
+                );
+            }
         }
     }
 

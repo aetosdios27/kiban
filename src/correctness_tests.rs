@@ -93,3 +93,183 @@ fn snapshot_before_first_flush_preserves_old_value_and_visible_delete() {
     assert_snapshot(&db, &deleted, None);
     assert_eq!(db.get(b"key").unwrap(), Some(b"after".to_vec()));
 }
+
+fn assert_current(db: &Kiban, expected: Option<&[u8]>) {
+    assert_eq!(db.get(b"key").unwrap().as_deref(), expected);
+    let scanned: Vec<_> = db.iter().map(Result::unwrap).collect();
+    assert_eq!(
+        scanned
+            .iter()
+            .find(|(k, _)| k == b"key")
+            .map(|(_, v)| v.as_slice()),
+        expected
+    );
+}
+
+#[test]
+fn point_and_scan_agree_on_many_versions_after_flush_and_reopen() {
+    let dir = TempDir::new("point-many-versions");
+    let mut db = Kiban::open(dir.path()).unwrap();
+    for seq in 1..=40u64 {
+        db.put(b"key", seq.to_be_bytes()).unwrap();
+    }
+    assert_current(&db, Some(&40u64.to_be_bytes()));
+    db.sync().unwrap();
+    db.flush().unwrap();
+    assert_current(&db, Some(&40u64.to_be_bytes()));
+    drop(db);
+    let mut db = Kiban::open(dir.path()).unwrap();
+    assert_current(&db, Some(&40u64.to_be_bytes()));
+    let snap = db.snapshot(); // table-backed, not a captured memtable
+    assert_snapshot(&db, &snap, Some(&40u64.to_be_bytes()));
+    for _ in 0..40 {
+        db.delete(b"key").unwrap();
+    }
+    db.flush().unwrap();
+    assert_current(&db, None);
+    assert_snapshot(&db, &snap, Some(&40u64.to_be_bytes()));
+}
+
+/// A valid MANIFEST carries file numbers and levels, not a guarantee
+/// that their order sorts every version. Deliberately decouple both
+/// from sequence order and compare point selection with the merge oracle.
+#[test]
+fn point_selection_uses_sequence_not_file_or_level_order() {
+    let dir = TempDir::new("point-sequence-order");
+    let mut db = Kiban::open(dir.path()).unwrap();
+    let mut tables = Vec::new();
+    for (number, level, seq, kind) in [
+        (10, 0, 30u64, Kind::Put),
+        (20, 0, 10, Kind::Put),
+        (30, 1, 40, Kind::Tombstone),
+        (40, 2, 20, Kind::Put),
+    ] {
+        let mut builder = TableBuilder::new();
+        let value = seq.to_be_bytes();
+        builder
+            .add(
+                kind,
+                b"key",
+                if kind == Kind::Put { &value } else { b"" },
+                seq,
+            )
+            .unwrap();
+        let path = dir.path().join(file_name(number, SST_EXTENSION));
+        atomic::commit_file(&path, &builder.finish().unwrap()).unwrap();
+        let table = SstTable::open(
+            number,
+            &path,
+            db.cache.clone(),
+            db.file_cache.clone(),
+            false,
+        )
+        .unwrap();
+        tables.push(StdArc::new(TableEntry {
+            number,
+            level,
+            size: table.size_on_disk(),
+            first_key: table.smallest_key().to_vec(),
+            last_key: table.largest_key().to_vec(),
+            table,
+        }));
+    }
+    Manifest {
+        next_file_number: 41,
+        wal_numbers: vec![db.wal_number],
+        last_sequence: 40,
+        tables: tables
+            .iter()
+            .map(|t| TableRef {
+                number: t.number,
+                level: t.level,
+            })
+            .collect(),
+    }
+    .install(dir.path())
+    .unwrap();
+    db.version = StdArc::new(Version { id: 1, tables });
+    db.last_sequence = 40;
+    assert_current(&db, None); // newest visible version is a deeper tombstone
+    for seq in 0..=40 {
+        let snap = Snapshot {
+            seq,
+            memtable: Memtable::new(),
+            immutable: None,
+            version: db.version.clone(),
+        };
+        let expected = match seq {
+            10..20 => Some(10u64.to_be_bytes()),
+            20..30 => Some(20u64.to_be_bytes()),
+            30..40 => Some(30u64.to_be_bytes()),
+            _ => None,
+        };
+        assert_snapshot(&db, &snap, expected.as_ref().map(|v| v.as_slice()));
+    }
+    drop(db);
+    let db = Kiban::open(dir.path()).unwrap();
+    assert_current(&db, None);
+    // Shared point/snapshot paths must use the same table resolver.
+    drop(db);
+    let shared = SharedKiban::open(dir.path()).unwrap();
+    assert_eq!(shared.get(b"key").unwrap(), None);
+    let snap = shared.snapshot().unwrap();
+    assert_eq!(snap.get(b"key").unwrap(), None);
+    assert!(snap.scan().unwrap().is_empty());
+}
+
+#[test]
+fn point_scan_and_snapshots_agree_through_overlapping_generations_and_compaction() {
+    let dir = TempDir::new("point-scan-transitions");
+    let mut options = super::compaction_tests::tiny_options();
+    options.l0_compaction_trigger = 4;
+    options.l0_write_stall_trigger = 8;
+    let mut db = Kiban::open_with_options(dir.path(), options).unwrap();
+    let mut snapshots = Vec::new();
+    let mut expected = None;
+    for round in 0..8 {
+        for i in 0..40 {
+            if i % 11 == 0 {
+                db.delete(b"key").unwrap();
+                expected = None;
+            } else {
+                let value = format!("{round}-{i}").into_bytes();
+                db.put(b"key", &value).unwrap();
+                expected = Some(value);
+            }
+            assert_current(&db, expected.as_deref());
+        }
+        snapshots.push((db.snapshot(), expected.clone()));
+        db.freeze().unwrap();
+        assert_current(&db, expected.as_deref());
+        // New active tombstone must hide an immutable value; old
+        // snapshots must ignore this future tombstone.
+        db.delete(b"key").unwrap();
+        expected = None;
+        assert_current(&db, None);
+        db.sync().unwrap();
+        let plan = db.plan_flush().unwrap();
+        let output = plan.build().unwrap();
+        db.commit_flush(plan, output).unwrap();
+        assert_current(&db, None);
+        // Flush the new tombstone as a separate, overlapping L0 file.
+        db.flush_without_compaction().unwrap();
+        assert_current(&db, None);
+        for (snap, want) in &snapshots {
+            assert_snapshot(&db, snap, want.as_deref());
+        }
+        db.maybe_compact().unwrap();
+        assert_current(&db, None);
+        for (snap, want) in &snapshots {
+            assert_snapshot(&db, snap, want.as_deref());
+        }
+        snapshots.push((db.snapshot(), None));
+    }
+    assert!(db.version.tables.iter().any(|t| t.level >= 1));
+    for (snap, _) in &snapshots {
+        db.release_snapshot(snap);
+    }
+    drop(snapshots);
+    drop(db);
+    let db = Kiban::open(dir.path()).unwrap();
+    assert_current(&db, expected.as_deref());
+}

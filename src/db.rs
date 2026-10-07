@@ -204,35 +204,41 @@ fn get_from_version_at(
     read_amp: &ReadAmpCounters,
 ) -> Result<Option<Vec<u8>>, DbError> {
     use std::sync::atomic::Ordering::Relaxed;
-    for entry in version.tables.iter().rev().filter(|t| t.level == 0) {
-        read_amp.l0_tables_probed.fetch_add(1, Relaxed);
-        match entry.table.get(key, Some(sequence))? {
-            Some(found) => {
-                return Ok(match found.kind {
-                    Kind::Put => Some(found.value),
-                    Kind::Tombstone => None,
-                });
+    let mut newest: Option<crate::sstable::Found> = None;
+    for entry in version
+        .tables
+        .iter()
+        .rev()
+        .filter(|t| t.level == 0)
+        .chain(version.tables.iter().filter(|t| t.level >= 1))
+    {
+        if entry.level == 0 {
+            read_amp.l0_tables_probed.fetch_add(1, Relaxed);
+        } else {
+            if key < entry.first_key.as_slice() || key > entry.last_key.as_slice() {
+                continue;
             }
-            None => continue,
+            read_amp.leveled_tables_probed.fetch_add(1, Relaxed);
+        }
+        if let Some(found) = entry.table.get(key, Some(sequence))?
+            && newest.as_ref().is_none_or(|best| found.seq > best.seq)
+        {
+            newest = Some(found);
         }
     }
-    for entry in version.tables.iter().filter(|t| t.level >= 1) {
-        if key < entry.first_key.as_slice() || key > entry.last_key.as_slice() {
-            continue;
-        }
-        read_amp.leveled_tables_probed.fetch_add(1, Relaxed);
-        match entry.table.get(key, Some(sequence))? {
-            Some(found) => {
-                return Ok(match found.kind {
-                    Kind::Put => Some(found.value),
-                    Kind::Tombstone => None,
-                });
-            }
-            None => continue,
+    // Exactly the merge iterator's decision: newest visible sequence wins,
+    // and a winning tombstone hides every older value. Physical file/level
+    // ordering cannot establish which candidate is newest.
+    match newest {
+        Some(found) => Ok(match found.kind {
+            Kind::Put => Some(found.value),
+            Kind::Tombstone => None,
+        }),
+        None => {
+            read_amp.resolved_not_found.fetch_add(1, Relaxed);
+            Ok(None)
         }
     }
-    read_amp.resolved_not_found.fetch_add(1, Relaxed);
-    Ok(None)
 }
 
 /// Tunables for flush/compaction behavior (compaction.md configuration).
@@ -1092,49 +1098,24 @@ impl Kiban {
     }
 
     pub fn get(&self, key: impl AsRef<[u8]>) -> Result<Option<Vec<u8>>, DbError> {
+        use std::sync::atomic::Ordering::Relaxed;
         let key = key.as_ref();
-        match self.memtable.entry(key) {
-            Some(MemEntry::Value { value, .. }) => return Ok(Some(value.clone())),
-            Some(MemEntry::Tombstone { .. }) => return Ok(None),
-            None => {}
+        self.read_amp.gets_total.fetch_add(1, Relaxed);
+        if let Some(entry) = self.memtable.entry(key) {
+            self.read_amp.resolved_in_memtable.fetch_add(1, Relaxed);
+            return Ok(entry.as_value().map(ToOwned::to_owned));
         }
         // 11.8: the frozen memtable, if any, is older than active but
         // may not have reached an SST yet — check it before tables.
         if let Some(im) = &self.immutable {
-            match im.memtable.entry(key) {
-                Some(MemEntry::Value { value, .. }) => return Ok(Some(value.clone())),
-                Some(MemEntry::Tombstone { .. }) => return Ok(None),
-                None => {}
+            if let Some(entry) = im.memtable.entry(key) {
+                self.read_amp.resolved_in_immutable.fetch_add(1, Relaxed);
+                return Ok(entry.as_value().map(ToOwned::to_owned));
             }
         }
-        // L0 first, newest file number wins
-        for entry in self.version.tables.iter().rev().filter(|t| t.level == 0) {
-            match entry.table.get(key, None)? {
-                Some(found) => {
-                    return Ok(match found.kind {
-                        Kind::Put => Some(found.value.to_vec()),
-                        Kind::Tombstone => None,
-                    });
-                }
-                None => continue,
-            }
-        }
-        // then L>=1 by ascending level; disjoint ranges -> one candidate
-        for entry in self.version.tables.iter().filter(|t| t.level >= 1) {
-            if key < entry.first_key.as_slice() || key > entry.last_key.as_slice() {
-                continue;
-            }
-            match entry.table.get(key, None)? {
-                Some(found) => {
-                    return Ok(match found.kind {
-                        Kind::Put => Some(found.value.to_vec()),
-                        Kind::Tombstone => None,
-                    });
-                }
-                None => continue,
-            }
-        }
-        Ok(None)
+        // Live iteration is unbounded too; explicit snapshot reads pass
+        // their sequence boundary through this same resolver.
+        get_from_version_at(&self.version, key, u64::MAX, &self.read_amp)
     }
 
     pub fn dir(&self) -> &Path {

@@ -89,7 +89,7 @@ fn snapshots_survive_repeated_recovery_and_faults() {
 }
 
 #[test]
-fn point_scan_recovery_failure_is_detected_by_torture() {
+fn point_reads_match_scans_through_repeated_recovery_and_faults() {
     let root =
         std::env::temp_dir().join(format!("kiban-point-scan-detection-{}", std::process::id()));
     let db = root.join("db");
@@ -111,11 +111,5 @@ fn point_scan_recovery_failure_is_detected_by_torture() {
     };
     let result = simulated::run(&c);
     std::fs::remove_dir_all(root).unwrap();
-    assert!(result.is_err(), "point/scan mismatch must fail validation");
-    assert!(
-        result
-            .unwrap_err()
-            .to_string()
-            .contains("get/scan mismatch")
-    );
+    result.expect("point reads and scans must agree after every recovery");
 }
