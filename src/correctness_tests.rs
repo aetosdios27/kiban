@@ -165,6 +165,7 @@ fn point_selection_uses_sequence_not_file_or_level_order() {
         )
         .unwrap();
         tables.push(StdArc::new(TableEntry {
+            file_lifetime: StdArc::new(()),
             number,
             level,
             size: table.size_on_disk(),
@@ -272,4 +273,61 @@ fn point_scan_and_snapshots_agree_through_overlapping_generations_and_compaction
     drop(db);
     let db = Kiban::open(dir.path()).unwrap();
     assert_current(&db, expected.as_deref());
+}
+
+#[test]
+fn snapshots_pin_the_same_sst_across_repeated_metadata_moves_and_rewrite() {
+    let dir = TempDir::new("snapshot-moved-file-lifetime");
+    let options = KibanOptions {
+        block_cache_bytes: 0,
+        max_open_table_files: 1,
+        l0_compaction_trigger: 1000,
+        l0_write_stall_trigger: 2000,
+        ..KibanOptions::default()
+    };
+    let mut db = Kiban::open_with_options(dir.path(), options).unwrap();
+    db.put(b"key", b"before").unwrap();
+    db.flush_without_compaction().unwrap();
+    let plan = db.plan_compaction_at_level(0).unwrap();
+    let output = plan.build().unwrap();
+    db.commit_compaction(plan, output).unwrap();
+    let number = db.version.tables[0].number;
+    let path = dir.path().join(file_name(number, SST_EXTENSION));
+    let first = db.snapshot();
+    let plan = db.plan_trivial_move(&[number], 1).unwrap();
+    let output = plan.build().unwrap();
+    db.commit_compaction(plan, output).unwrap();
+    let second = db.snapshot();
+    let plan = db.plan_trivial_move(&[number], 2).unwrap();
+    let output = plan.build().unwrap();
+    db.commit_compaction(plan, output).unwrap();
+    let plan = db.plan_compaction_at_level(3).unwrap(); // actual rewrite retires old file
+    let output = plan.build().unwrap();
+    db.commit_compaction(plan, output).unwrap();
+    assert!(
+        path.exists(),
+        "old metadata views still pin the physical SST"
+    );
+    assert_snapshot(&db, &first, Some(b"before"));
+    assert_snapshot(&db, &second, Some(b"before"));
+    db.delete(b"key").unwrap();
+    db.flush_without_compaction().unwrap();
+    assert_current(&db, None);
+    assert_snapshot(&db, &first, Some(b"before"));
+    assert_snapshot(&db, &second, Some(b"before"));
+    db.release_snapshot(&first);
+    drop(first);
+    db.reclaim_obsolete();
+    assert!(
+        path.exists(),
+        "second snapshot must independently pin the same file"
+    );
+    db.release_snapshot(&second);
+    drop(second);
+    db.reclaim_obsolete();
+    assert!(
+        !path.exists(),
+        "reclamation proceeds once all metadata aliases are unpinned"
+    );
+    assert_current(&db, None);
 }

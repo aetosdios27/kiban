@@ -150,6 +150,9 @@ fn file_name(number: u64, extension: &str) -> String {
 
 #[derive(Debug)]
 pub(crate) struct TableEntry {
+    /// Metadata-only moves create new TableEntries for the same SST.
+    /// Their file lifetime must remain shared across every pinned Version.
+    file_lifetime: StdArc<()>,
     pub(crate) level: u32,
     pub(crate) number: u64,
     pub(crate) size: u64,
@@ -792,6 +795,7 @@ impl Kiban {
             let first_key = table.smallest_key().to_vec();
             let last_key = table.largest_key().to_vec();
             tables.push(StdArc::new(TableEntry {
+                file_lifetime: StdArc::new(()),
                 level: tref.level,
                 number: tref.number,
                 size,
@@ -1333,6 +1337,7 @@ impl Kiban {
             use_mmap,
         )?;
         let entry = StdArc::new(TableEntry {
+            file_lifetime: StdArc::new(()),
             level: 0,
             number: sst_number,
             size: table.size_on_disk(),
@@ -2572,6 +2577,7 @@ impl CompactionPlan {
                     use_mmap,
                 )?;
                 outputs.push(TableEntry {
+                    file_lifetime: entry.file_lifetime.clone(),
                     level: self.output_level,
                     number: entry.number,
                     size: table.size_on_disk(),
@@ -2695,6 +2701,7 @@ impl CompactionPlan {
             use_mmap,
         )?;
         outputs.push(TableEntry {
+            file_lifetime: StdArc::new(()),
             level: self.output_level,
             number,
             size: table.size_on_disk(),
@@ -2751,6 +2758,7 @@ impl FlushPlan {
             use_mmap,
         )?;
         Ok(TableEntry {
+            file_lifetime: StdArc::new(()),
             level: 0,
             number: self.output_number,
             size: table.size_on_disk(),
@@ -3417,8 +3425,8 @@ impl Kiban {
         // A trivial move is the one exception: its single input and
         // single output share the SAME file number (see
         // `Kiban::plan_trivial_move` / `CompactionPlan::build`) — the
-        // "output" TableEntry just inserted above already keeps that
-        // file alive under the new level. Pushing the old TableEntry to
+        // "output" TableEntry just inserted above shares the physical
+        // file's lifetime token with every older metadata view. Pushing the old TableEntry to
         // `self.obsolete` here would eventually `reclaim_obsolete` ->
         // unlink the file the new entry still points at. Just let the
         // old `Arc<TableEntry>` drop normally instead (an ordinary
@@ -3464,8 +3472,10 @@ impl Kiban {
     /// Deletes obsolete files that nothing still references. An entry
     /// in `self.obsolete` is an `Arc<TableEntry>` no longer reachable
     /// from `self.version`; `Arc::strong_count == 1` means this is the
-    /// only reference left (no snapshot pins it), so it's provably
-    /// safe to reclaim (11.3 file-lifetime rules). Safe to check this
+    /// only reference left to that metadata entry. The shared file
+    /// lifetime token must ALSO be unique: an older metadata entry from
+    /// a trivial move may still be pinned by a snapshot/read view.
+    /// Only both conditions make unlink safe. Safe to check this
     /// way without racing a concurrent snapshot capture: the only
     /// paths that could add a new reference to a table already absent
     /// from `self.version` are `Kiban::snapshot`/`SharedKiban::snapshot`,
@@ -3480,7 +3490,8 @@ impl Kiban {
     fn reclaim_obsolete(&mut self) {
         let mut kept = Vec::new();
         for entry in std::mem::take(&mut self.obsolete) {
-            if StdArc::strong_count(&entry) == 1 {
+            if StdArc::strong_count(&entry) == 1 && StdArc::strong_count(&entry.file_lifetime) == 1
+            {
                 self.file_cache.invalidate(entry.number);
                 let _ = sys::remove_file(&self.dir.join(file_name(entry.number, SST_EXTENSION)));
             } else {
