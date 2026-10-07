@@ -1,0 +1,2391 @@
+{
+  "analyzer_sha256": "afc1b8e3dccc51f476ac6d7aab69d1b5195f98f1c40407517246c83fdd362be3",
+  "trials": [
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "burst-read-1m",
+      "repeat": 0,
+      "engine": "rocksdb",
+      "profile": "matched",
+      "total_ops_s": 1357905.4600499982,
+      "durable_completion_ops_s": 1353872.7289098054,
+      "reads_s": 645123.2312987735,
+      "writes_s": 712782.2287512248,
+      "read_p99_us": 4.992,
+      "write_p99_us": 8.96,
+      "read_p999_us": 8.96,
+      "write_p999_us": 104.448,
+      "read_max_us": 561.748,
+      "write_max_us": 1370.276,
+      "max_l0": 2,
+      "rss_bytes": 59338752,
+      "fds": 19,
+      "db_bytes": 18637821,
+      "sst_wa": null,
+      "process_wa": 4.487469912380998,
+      "final_sync_flush_drain_s": 0.007147702,
+      "close_s": 0.002508022,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 475087,
+      "writes": 524913,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "burst-read-1m",
+      "repeat": 0,
+      "engine": "kiban",
+      "profile": "matched",
+      "total_ops_s": 516162.94129943603,
+      "durable_completion_ops_s": 515952.36830307153,
+      "reads_s": 245222.30329312518,
+      "writes_s": 270940.63800631085,
+      "read_p99_us": 13.056,
+      "write_p99_us": 52.224,
+      "read_p999_us": 31.232,
+      "write_p999_us": 208.896,
+      "read_max_us": 694.344,
+      "write_max_us": 45721.914,
+      "max_l0": 4,
+      "rss_bytes": 111984640,
+      "fds": 21,
+      "db_bytes": 23081800,
+      "sst_wa": 3.0951980165676756,
+      "process_wa": 4.564182232551478,
+      "final_sync_flush_drain_s": 1.009122693,
+      "close_s": 0.004775759,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 475087,
+      "writes": 524913,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "sequential-1m",
+      "repeat": 2,
+      "engine": "rocksdb",
+      "profile": "matched",
+      "total_ops_s": 899909.0713876089,
+      "durable_completion_ops_s": 898530.9833390008,
+      "reads_s": 0.0,
+      "writes_s": 899909.0713876089,
+      "read_p99_us": null,
+      "write_p99_us": 8.704,
+      "read_p999_us": null,
+      "write_p999_us": 143.36,
+      "read_max_us": null,
+      "write_max_us": 6772.93,
+      "max_l0": 2,
+      "rss_bytes": 31535104,
+      "fds": 46,
+      "db_bytes": 144647652,
+      "sst_wa": null,
+      "process_wa": 4.606765176470589,
+      "final_sync_flush_drain_s": 1.01630213,
+      "close_s": 0.00088411,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 0,
+      "writes": 1000000,
+      "misses": 0,
+      "verified_keys": 1000000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "sequential-1m",
+      "repeat": 2,
+      "engine": "kiban",
+      "profile": "matched",
+      "total_ops_s": 343672.86292662984,
+      "durable_completion_ops_s": 343245.06560272863,
+      "reads_s": 0.0,
+      "writes_s": 343672.86292662984,
+      "read_p99_us": null,
+      "write_p99_us": 45.056,
+      "read_p999_us": null,
+      "write_p999_us": 129.024,
+      "read_max_us": null,
+      "write_max_us": 63651.201,
+      "max_l0": 4,
+      "rss_bytes": 82513920,
+      "fds": 47,
+      "db_bytes": 153365246,
+      "sst_wa": 2.716664617647059,
+      "process_wa": 4.148103529411765,
+      "final_sync_flush_drain_s": 1.111802231,
+      "close_s": 0.001459539,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 0,
+      "writes": 1000000,
+      "misses": 0,
+      "verified_keys": 1000000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "burst-read-1m",
+      "repeat": 2,
+      "engine": "kiban",
+      "profile": "matched",
+      "total_ops_s": 525005.3002566344,
+      "durable_completion_ops_s": 524260.465225413,
+      "reads_s": 249423.19308302365,
+      "writes_s": 275582.1071736107,
+      "read_p99_us": 13.568,
+      "write_p99_us": 48.128,
+      "read_p999_us": 32.768,
+      "write_p999_us": 147.456,
+      "read_max_us": 807.013,
+      "write_max_us": 41016.404,
+      "max_l0": 4,
+      "rss_bytes": 120332288,
+      "fds": 20,
+      "db_bytes": 23082037,
+      "sst_wa": 3.0953349019966447,
+      "process_wa": 4.5858705324949645,
+      "final_sync_flush_drain_s": 1.016642187,
+      "close_s": 0.003280521,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 475087,
+      "writes": 524913,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "burst-read-1m",
+      "repeat": 2,
+      "engine": "rocksdb",
+      "profile": "matched",
+      "total_ops_s": 926325.5522039441,
+      "durable_completion_ops_s": 924849.0103297561,
+      "reads_s": 440085.22761991515,
+      "writes_s": 486240.3245840289,
+      "read_p99_us": 6.016,
+      "write_p99_us": 10.496,
+      "read_p999_us": 10.24,
+      "write_p999_us": 212.992,
+      "read_max_us": 1198.696,
+      "write_max_us": 74906.638,
+      "max_l0": 4,
+      "rss_bytes": 61870080,
+      "fds": 23,
+      "db_bytes": 18508698,
+      "sst_wa": null,
+      "process_wa": 3.891672804938768,
+      "final_sync_flush_drain_s": 0.00730151,
+      "close_s": 0.005446321,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 475087,
+      "writes": 524913,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "sequential-1m",
+      "repeat": 0,
+      "engine": "kiban",
+      "profile": "matched",
+      "total_ops_s": 354014.21416985895,
+      "durable_completion_ops_s": 353588.82448745397,
+      "reads_s": 0.0,
+      "writes_s": 354014.21416985895,
+      "read_p99_us": null,
+      "write_p99_us": 46.08,
+      "read_p999_us": null,
+      "write_p999_us": 147.456,
+      "read_max_us": null,
+      "write_max_us": 50506.262,
+      "max_l0": 4,
+      "rss_bytes": 81092608,
+      "fds": 47,
+      "db_bytes": 153365166,
+      "sst_wa": 2.65405175,
+      "process_wa": 4.098891294117647,
+      "final_sync_flush_drain_s": 1.118096289,
+      "close_s": 0.002113879,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 0,
+      "writes": 1000000,
+      "misses": 0,
+      "verified_keys": 1000000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "sequential-1m",
+      "repeat": 0,
+      "engine": "rocksdb",
+      "profile": "matched",
+      "total_ops_s": 619656.8673024616,
+      "durable_completion_ops_s": 619292.2749433318,
+      "reads_s": 0.0,
+      "writes_s": 619656.8673024616,
+      "read_p99_us": null,
+      "write_p99_us": 8.704,
+      "read_p999_us": null,
+      "write_p999_us": 176.128,
+      "read_max_us": null,
+      "write_max_us": 99884.549,
+      "max_l0": 3,
+      "rss_bytes": 35033088,
+      "fds": 43,
+      "db_bytes": 144612561,
+      "sst_wa": null,
+      "process_wa": 4.163885176470588,
+      "final_sync_flush_drain_s": 1.006172144,
+      "close_s": 0.000840563,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 0,
+      "writes": 1000000,
+      "misses": 0,
+      "verified_keys": 1000000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "burst-recovery-1m",
+      "repeat": 2,
+      "engine": "rocksdb",
+      "profile": "matched",
+      "total_ops_s": 1317458.5428436603,
+      "durable_completion_ops_s": 1299758.5577601416,
+      "reads_s": 637908.156610729,
+      "writes_s": 679550.3862329314,
+      "read_p99_us": 7.04,
+      "write_p99_us": 8.192,
+      "read_p999_us": 13.824,
+      "write_p999_us": 131.072,
+      "read_max_us": 668.501,
+      "write_max_us": 11820.129,
+      "max_l0": 2,
+      "rss_bytes": 69615616,
+      "fds": 19,
+      "db_bytes": 20133422,
+      "sst_wa": null,
+      "process_wa": 4.3794035764611,
+      "final_sync_flush_drain_s": 0.021833892,
+      "close_s": 0.005441684,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 484196,
+      "writes": 515804,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "burst-recovery-1m",
+      "repeat": 2,
+      "engine": "kiban",
+      "profile": "matched",
+      "total_ops_s": 537829.0179841327,
+      "durable_completion_ops_s": 537092.1067020135,
+      "reads_s": 260414.65919184513,
+      "writes_s": 277414.3587922876,
+      "read_p99_us": 17.92,
+      "write_p99_us": 50.176,
+      "read_p999_us": 37.888,
+      "write_p999_us": 225.28,
+      "read_max_us": 1221.701,
+      "write_max_us": 16681.428,
+      "max_l0": 4,
+      "rss_bytes": 145494016,
+      "fds": 21,
+      "db_bytes": 21686645,
+      "sst_wa": 3.131679235660422,
+      "process_wa": 4.5795635095318925,
+      "final_sync_flush_drain_s": 1.027115432,
+      "close_s": 0.001187995,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 484196,
+      "writes": 515804,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "random-write-1m",
+      "repeat": 2,
+      "engine": "rocksdb",
+      "profile": "matched",
+      "total_ops_s": 638851.6566853208,
+      "durable_completion_ops_s": 622346.8087511318,
+      "reads_s": 0.0,
+      "writes_s": 638851.6566853208,
+      "read_p99_us": null,
+      "write_p99_us": 9.472,
+      "read_p999_us": null,
+      "write_p999_us": 163.84,
+      "read_max_us": null,
+      "write_max_us": 59956.584,
+      "max_l0": 4,
+      "rss_bytes": 35520512,
+      "fds": 33,
+      "db_bytes": 20992725,
+      "sst_wa": null,
+      "process_wa": 3.3258014117647057,
+      "final_sync_flush_drain_s": 1.07338297,
+      "close_s": 0.000499608,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 0,
+      "writes": 1000000,
+      "misses": 0,
+      "verified_keys": 99998
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "random-write-1m",
+      "repeat": 2,
+      "engine": "kiban",
+      "profile": "matched",
+      "total_ops_s": 221601.04529018054,
+      "durable_completion_ops_s": 221030.88207500524,
+      "reads_s": 0.0,
+      "writes_s": 221601.04529018054,
+      "read_p99_us": null,
+      "write_p99_us": 55.296,
+      "read_p999_us": null,
+      "write_p999_us": 221.184,
+      "read_max_us": null,
+      "write_max_us": 290237.712,
+      "max_l0": 3,
+      "rss_bytes": 90394624,
+      "fds": 27,
+      "db_bytes": 15536772,
+      "sst_wa": 2.891568411764706,
+      "process_wa": 4.411482352941176,
+      "final_sync_flush_drain_s": 1.246413676,
+      "close_s": 0.000639014,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 0,
+      "writes": 1000000,
+      "misses": 0,
+      "verified_keys": 99998
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "updates-1m",
+      "repeat": 1,
+      "engine": "rocksdb",
+      "profile": "matched",
+      "total_ops_s": 1051691.9906806292,
+      "durable_completion_ops_s": 1036619.5797357218,
+      "reads_s": 52723.4228768013,
+      "writes_s": 998968.5678038279,
+      "read_p99_us": 11.776,
+      "write_p99_us": 7.552,
+      "read_p999_us": 69.632,
+      "write_p999_us": 124.928,
+      "read_max_us": 892.335,
+      "write_max_us": 1343.82,
+      "max_l0": 2,
+      "rss_bytes": 53989376,
+      "fds": 19,
+      "db_bytes": 18731568,
+      "sst_wa": null,
+      "process_wa": 1.659427600962016,
+      "final_sync_flush_drain_s": 0.020235914,
+      "close_s": 0.002097866,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 50132,
+      "writes": 949868,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "updates-1m",
+      "repeat": 1,
+      "engine": "kiban",
+      "profile": "matched",
+      "total_ops_s": 361122.84463432943,
+      "durable_completion_ops_s": 360602.7567537686,
+      "reads_s": 18103.810447208205,
+      "writes_s": 343019.03418712126,
+      "read_p99_us": 61.44,
+      "write_p99_us": 45.056,
+      "read_p999_us": 129.024,
+      "write_p999_us": 176.128,
+      "read_max_us": 515.621,
+      "write_max_us": 39511.044,
+      "max_l0": 4,
+      "rss_bytes": 124809216,
+      "fds": 21,
+      "db_bytes": 16870217,
+      "sst_wa": 1.2428583962378426,
+      "process_wa": 2.6300481627292362,
+      "final_sync_flush_drain_s": 1.021406796,
+      "close_s": 0.005122971,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 50132,
+      "writes": 949868,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "burst-recovery-1m",
+      "repeat": 0,
+      "engine": "kiban",
+      "profile": "matched",
+      "total_ops_s": 460881.5552875044,
+      "durable_completion_ops_s": 460470.7445744297,
+      "reads_s": 223157.0055439885,
+      "writes_s": 237724.5497435159,
+      "read_p99_us": 18.432,
+      "write_p99_us": 47.104,
+      "read_p999_us": 40.96,
+      "write_p999_us": 172.032,
+      "read_max_us": 485.251,
+      "write_max_us": 143761.445,
+      "max_l0": 4,
+      "rss_bytes": 139370496,
+      "fds": 21,
+      "db_bytes": 21685749,
+      "sst_wa": 2.9417630477057632,
+      "process_wa": 4.414670962568089,
+      "final_sync_flush_drain_s": 1.026599336,
+      "close_s": 0.002022356,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 484196,
+      "writes": 515804,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "burst-recovery-1m",
+      "repeat": 0,
+      "engine": "rocksdb",
+      "profile": "matched",
+      "total_ops_s": 1104377.9835958434,
+      "durable_completion_ops_s": 1102207.3806912233,
+      "reads_s": 534735.4021451729,
+      "writes_s": 569642.5814506704,
+      "read_p99_us": 6.912,
+      "write_p99_us": 8.704,
+      "read_p999_us": 12.288,
+      "write_p999_us": 208.896,
+      "read_max_us": 763.54,
+      "write_max_us": 21026.106,
+      "max_l0": 4,
+      "rss_bytes": 72781824,
+      "fds": 24,
+      "db_bytes": 15213623,
+      "sst_wa": null,
+      "process_wa": 3.8788869643599235,
+      "final_sync_flush_drain_s": 1.011084617,
+      "close_s": 0.005716204,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 484196,
+      "writes": 515804,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "read-1m",
+      "repeat": 0,
+      "engine": "kiban",
+      "profile": "matched",
+      "total_ops_s": 3530790.3721913816,
+      "durable_completion_ops_s": 3435155.133048573,
+      "reads_s": 3530790.3721913816,
+      "writes_s": 0.0,
+      "read_p99_us": 2.016,
+      "write_p99_us": null,
+      "read_p999_us": 4.352,
+      "write_p999_us": null,
+      "read_max_us": 640.882,
+      "write_max_us": null,
+      "max_l0": 1,
+      "rss_bytes": 44548096,
+      "fds": 11,
+      "db_bytes": 15336624,
+      "sst_wa": null,
+      "process_wa": null,
+      "final_sync_flush_drain_s": 0.008265612,
+      "close_s": 0.000363558,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 1000000,
+      "writes": 0,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "read-1m",
+      "repeat": 0,
+      "engine": "rocksdb",
+      "profile": "matched",
+      "total_ops_s": 3094752.163148204,
+      "durable_completion_ops_s": 3017846.6578878313,
+      "reads_s": 3094752.163148204,
+      "writes_s": 0.0,
+      "read_p99_us": 2.496,
+      "write_p99_us": null,
+      "read_p999_us": 5.248,
+      "write_p999_us": null,
+      "read_max_us": 698.375,
+      "write_max_us": null,
+      "max_l0": 2,
+      "rss_bytes": 33132544,
+      "fds": 16,
+      "db_bytes": 14522414,
+      "sst_wa": null,
+      "process_wa": null,
+      "final_sync_flush_drain_s": 0.009268533,
+      "close_s": 0.001089053,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 1000000,
+      "writes": 0,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "updates-1m",
+      "repeat": 0,
+      "engine": "kiban",
+      "profile": "matched",
+      "total_ops_s": 408026.12722513825,
+      "durable_completion_ops_s": 407373.5414340181,
+      "reads_s": 20455.165810050632,
+      "writes_s": 387570.96141508763,
+      "read_p99_us": 63.488,
+      "write_p99_us": 43.008,
+      "read_p999_us": 139.264,
+      "write_p999_us": 151.552,
+      "read_max_us": 1303.325,
+      "write_max_us": 7647.745,
+      "max_l0": 4,
+      "rss_bytes": 110587904,
+      "fds": 20,
+      "db_bytes": 16870218,
+      "sst_wa": 1.2428719971988678,
+      "process_wa": 2.6076628851711656,
+      "final_sync_flush_drain_s": 1.023083907,
+      "close_s": 0.003179179,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 50132,
+      "writes": 949868,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "updates-1m",
+      "repeat": 0,
+      "engine": "rocksdb",
+      "profile": "matched",
+      "total_ops_s": 1064207.1516936272,
+      "durable_completion_ops_s": 1062221.866963299,
+      "reads_s": 53350.83292870493,
+      "writes_s": 1010856.3187649223,
+      "read_p99_us": 9.728,
+      "write_p99_us": 7.424,
+      "read_p999_us": 39.936,
+      "write_p999_us": 126.976,
+      "read_max_us": 904.337,
+      "write_max_us": 1182.151,
+      "max_l0": 2,
+      "rss_bytes": 63762432,
+      "fds": 19,
+      "db_bytes": 18752983,
+      "sst_wa": null,
+      "process_wa": 1.6578105341695775,
+      "final_sync_flush_drain_s": 0.008220928,
+      "close_s": 0.002608588,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 50132,
+      "writes": 949868,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "mixed-1m",
+      "repeat": 1,
+      "engine": "kiban",
+      "profile": "matched",
+      "total_ops_s": 579758.1310879318,
+      "durable_completion_ops_s": 578616.5174454014,
+      "reads_s": 290152.13162370835,
+      "writes_s": 289605.9994642235,
+      "read_p99_us": 23.04,
+      "write_p99_us": 34.816,
+      "read_p999_us": 50.176,
+      "write_p999_us": 86.016,
+      "read_max_us": 644.577,
+      "write_max_us": 38234.871,
+      "max_l0": 4,
+      "rss_bytes": 141766656,
+      "fds": 20,
+      "db_bytes": 19191811,
+      "sst_wa": 3.195694962301547,
+      "process_wa": 4.656358053992744,
+      "final_sync_flush_drain_s": 1.051008783,
+      "close_s": 0.002366895,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 500471,
+      "writes": 499529,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "mixed-1m",
+      "repeat": 1,
+      "engine": "rocksdb",
+      "profile": "matched",
+      "total_ops_s": 1227890.3726508776,
+      "durable_completion_ops_s": 1225907.7919527972,
+      "reads_s": 614523.5226909573,
+      "writes_s": 613366.8499599202,
+      "read_p99_us": 7.808,
+      "write_p99_us": 7.552,
+      "read_p999_us": 16.384,
+      "write_p999_us": 83.968,
+      "read_max_us": 1408.013,
+      "write_max_us": 93755.881,
+      "max_l0": 2,
+      "rss_bytes": 71766016,
+      "fds": 19,
+      "db_bytes": 14780688,
+      "sst_wa": null,
+      "process_wa": 4.37973794844155,
+      "final_sync_flush_drain_s": 1.008861424,
+      "close_s": 0.004590412,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 500471,
+      "writes": 499529,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "burst-read-1m",
+      "repeat": 1,
+      "engine": "kiban",
+      "profile": "matched",
+      "total_ops_s": 491402.49854425946,
+      "durable_completion_ops_s": 490780.8635577677,
+      "reads_s": 233458.9388258966,
+      "writes_s": 257943.55971836287,
+      "read_p99_us": 14.08,
+      "write_p99_us": 52.224,
+      "read_p999_us": 34.816,
+      "write_p999_us": 176.128,
+      "read_max_us": 642.237,
+      "write_max_us": 26912.157,
+      "max_l0": 4,
+      "rss_bytes": 121102336,
+      "fds": 19,
+      "db_bytes": 23081869,
+      "sst_wa": 3.0952613463900627,
+      "process_wa": 4.580419769281654,
+      "final_sync_flush_drain_s": 1.016495024,
+      "close_s": 0.00433303,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 475087,
+      "writes": 524913,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "burst-read-1m",
+      "repeat": 1,
+      "engine": "rocksdb",
+      "profile": "matched",
+      "total_ops_s": 1326676.1308823156,
+      "durable_completion_ops_s": 1314822.5652799113,
+      "reads_s": 630286.5829924867,
+      "writes_s": 696389.5478898289,
+      "read_p99_us": 5.76,
+      "write_p99_us": 8.064,
+      "read_p999_us": 11.264,
+      "write_p999_us": 90.112,
+      "read_max_us": 510.086,
+      "write_max_us": 3061.489,
+      "max_l0": 2,
+      "rss_bytes": 62734336,
+      "fds": 20,
+      "db_bytes": 20180862,
+      "sst_wa": null,
+      "process_wa": 4.409380557293472,
+      "final_sync_flush_drain_s": 0.013152284,
+      "close_s": 0.002635097,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 475087,
+      "writes": 524913,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "random-write-1m",
+      "repeat": 0,
+      "engine": "rocksdb",
+      "profile": "matched",
+      "total_ops_s": 947078.6908392225,
+      "durable_completion_ops_s": 944959.5434139941,
+      "reads_s": 0.0,
+      "writes_s": 947078.6908392225,
+      "read_p99_us": null,
+      "write_p99_us": 9.216,
+      "read_p999_us": null,
+      "write_p999_us": 129.024,
+      "read_max_us": null,
+      "write_max_us": 1699.38,
+      "max_l0": 1,
+      "rss_bytes": 36888576,
+      "fds": 23,
+      "db_bytes": 15069222,
+      "sst_wa": null,
+      "process_wa": 4.414825411764705,
+      "final_sync_flush_drain_s": 1.012732154,
+      "close_s": 0.000987539,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 0,
+      "writes": 1000000,
+      "misses": 0,
+      "verified_keys": 99998
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "random-write-1m",
+      "repeat": 0,
+      "engine": "kiban",
+      "profile": "matched",
+      "total_ops_s": 269162.8109421481,
+      "durable_completion_ops_s": 268894.2962958233,
+      "reads_s": 0.0,
+      "writes_s": 269162.8109421481,
+      "read_p99_us": null,
+      "write_p99_us": 55.296,
+      "read_p999_us": null,
+      "write_p999_us": 229.376,
+      "read_max_us": null,
+      "write_max_us": 105690.156,
+      "max_l0": 4,
+      "rss_bytes": 79933440,
+      "fds": 22,
+      "db_bytes": 15537228,
+      "sst_wa": 2.894537360294118,
+      "process_wa": 4.353415529411765,
+      "final_sync_flush_drain_s": 1.09153377,
+      "close_s": 0.000213829,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 0,
+      "writes": 1000000,
+      "misses": 0,
+      "verified_keys": 99998
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "mixed-1m",
+      "repeat": 2,
+      "engine": "rocksdb",
+      "profile": "matched",
+      "total_ops_s": 1360821.3438622442,
+      "durable_completion_ops_s": 1356530.2557340742,
+      "reads_s": 681051.6187840812,
+      "writes_s": 679769.7250781629,
+      "read_p99_us": 7.424,
+      "write_p99_us": 7.424,
+      "read_p999_us": 15.872,
+      "write_p999_us": 155.648,
+      "read_max_us": 967.733,
+      "write_max_us": 1975.791,
+      "max_l0": 2,
+      "rss_bytes": 72364032,
+      "fds": 19,
+      "db_bytes": 18964093,
+      "sst_wa": null,
+      "process_wa": 4.456610362255362,
+      "final_sync_flush_drain_s": 1.012511349,
+      "close_s": 0.0050634,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 500471,
+      "writes": 499529,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "mixed-1m",
+      "repeat": 2,
+      "engine": "kiban",
+      "profile": "matched",
+      "total_ops_s": 582098.3713766538,
+      "durable_completion_ops_s": 581055.3615213822,
+      "reads_s": 291323.35402124526,
+      "writes_s": 290775.01735540846,
+      "read_p99_us": 22.528,
+      "write_p99_us": 34.816,
+      "read_p999_us": 49.152,
+      "write_p999_us": 90.112,
+      "read_max_us": 880.978,
+      "write_max_us": 29283.229,
+      "max_l0": 4,
+      "rss_bytes": 143962112,
+      "fds": 21,
+      "db_bytes": 19191825,
+      "sst_wa": 3.1956069823656237,
+      "process_wa": 4.655875717278618,
+      "final_sync_flush_drain_s": 1.047259452,
+      "close_s": 0.002905087,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 500471,
+      "writes": 499529,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "burst-recovery-1m",
+      "repeat": 1,
+      "engine": "kiban",
+      "profile": "matched",
+      "total_ops_s": 448230.85547152365,
+      "durable_completion_ops_s": 447869.3529411241,
+      "reads_s": 217031.58729588988,
+      "writes_s": 231199.2681756338,
+      "read_p99_us": 18.432,
+      "write_p99_us": 51.2,
+      "read_p999_us": 40.96,
+      "write_p999_us": 208.896,
+      "read_max_us": 772.455,
+      "write_max_us": 107302.586,
+      "max_l0": 4,
+      "rss_bytes": 145694720,
+      "fds": 24,
+      "db_bytes": 21685720,
+      "sst_wa": 2.941553223933213,
+      "process_wa": 4.407489027980076,
+      "final_sync_flush_drain_s": 1.02402153,
+      "close_s": 0.005611957,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 484196,
+      "writes": 515804,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "burst-recovery-1m",
+      "repeat": 1,
+      "engine": "rocksdb",
+      "profile": "matched",
+      "total_ops_s": 1012124.4032022373,
+      "durable_completion_ops_s": 1010746.4176316869,
+      "reads_s": 490066.5875329105,
+      "writes_s": 522057.8156693268,
+      "read_p99_us": 7.168,
+      "write_p99_us": 9.728,
+      "read_p999_us": 12.8,
+      "write_p999_us": 442.368,
+      "read_max_us": 698.439,
+      "write_max_us": 31579.149,
+      "max_l0": 5,
+      "rss_bytes": 74059776,
+      "fds": 24,
+      "db_bytes": 21016937,
+      "sst_wa": null,
+      "process_wa": 3.5676697988793737,
+      "final_sync_flush_drain_s": 0.005219752,
+      "close_s": 0.00245108,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 484196,
+      "writes": 515804,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "read-1m",
+      "repeat": 2,
+      "engine": "rocksdb",
+      "profile": "matched",
+      "total_ops_s": 3495030.0602642437,
+      "durable_completion_ops_s": 3335464.9511561017,
+      "reads_s": 3495030.0602642437,
+      "writes_s": 0.0,
+      "read_p99_us": 2.304,
+      "write_p99_us": null,
+      "read_p999_us": 5.248,
+      "write_p999_us": null,
+      "read_max_us": 457.334,
+      "write_max_us": null,
+      "max_l0": 2,
+      "rss_bytes": 33325056,
+      "fds": 16,
+      "db_bytes": 14522025,
+      "sst_wa": null,
+      "process_wa": null,
+      "final_sync_flush_drain_s": 0.014645793,
+      "close_s": 0.001031296,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 1000000,
+      "writes": 0,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "read-1m",
+      "repeat": 2,
+      "engine": "kiban",
+      "profile": "matched",
+      "total_ops_s": 3501695.9115994903,
+      "durable_completion_ops_s": 3413531.0829210943,
+      "reads_s": 3501695.9115994903,
+      "writes_s": 0.0,
+      "read_p99_us": 2.112,
+      "write_p99_us": null,
+      "read_p999_us": 4.352,
+      "write_p999_us": null,
+      "read_max_us": 697.132,
+      "write_max_us": null,
+      "max_l0": 1,
+      "rss_bytes": 50896896,
+      "fds": 11,
+      "db_bytes": 15336625,
+      "sst_wa": null,
+      "process_wa": null,
+      "final_sync_flush_drain_s": 0.008003979,
+      "close_s": 0.00031225,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 1000000,
+      "writes": 0,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "random-write-1m",
+      "repeat": 1,
+      "engine": "kiban",
+      "profile": "matched",
+      "total_ops_s": 312952.86372252926,
+      "durable_completion_ops_s": 312564.2152435823,
+      "reads_s": 0.0,
+      "writes_s": 312952.86372252926,
+      "read_p99_us": null,
+      "write_p99_us": 55.296,
+      "read_p999_us": null,
+      "write_p999_us": 294.912,
+      "read_max_us": null,
+      "write_max_us": 42953.863,
+      "max_l0": 3,
+      "rss_bytes": 83709952,
+      "fds": 19,
+      "db_bytes": 15538438,
+      "sst_wa": 3.0860410955882354,
+      "process_wa": 4.543578352941177,
+      "final_sync_flush_drain_s": 1.09409172,
+      "close_s": 0.000382471,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 0,
+      "writes": 1000000,
+      "misses": 0,
+      "verified_keys": 99998
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "random-write-1m",
+      "repeat": 1,
+      "engine": "rocksdb",
+      "profile": "matched",
+      "total_ops_s": 962298.8812178485,
+      "durable_completion_ops_s": 960219.9908553257,
+      "reads_s": 0.0,
+      "writes_s": 962298.8812178485,
+      "read_p99_us": null,
+      "write_p99_us": 8.704,
+      "read_p999_us": null,
+      "write_p999_us": 122.88,
+      "read_max_us": null,
+      "write_max_us": 2151.226,
+      "max_l0": 2,
+      "rss_bytes": 32849920,
+      "fds": 21,
+      "db_bytes": 18137145,
+      "sst_wa": null,
+      "process_wa": 4.438046117647059,
+      "final_sync_flush_drain_s": 1.011741696,
+      "close_s": 0.000411249,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 0,
+      "writes": 1000000,
+      "misses": 0,
+      "verified_keys": 99998
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "read-1m",
+      "repeat": 1,
+      "engine": "rocksdb",
+      "profile": "matched",
+      "total_ops_s": 3532321.071609569,
+      "durable_completion_ops_s": 3312242.891699866,
+      "reads_s": 3532321.071609569,
+      "writes_s": 0.0,
+      "read_p99_us": 2.368,
+      "write_p99_us": null,
+      "read_p999_us": 6.016,
+      "write_p999_us": null,
+      "read_max_us": 611.801,
+      "write_max_us": null,
+      "max_l0": 2,
+      "rss_bytes": 33353728,
+      "fds": 16,
+      "db_bytes": 14521903,
+      "sst_wa": null,
+      "process_wa": null,
+      "final_sync_flush_drain_s": 0.019227671,
+      "close_s": 0.000687517,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 1000000,
+      "writes": 0,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "read-1m",
+      "repeat": 1,
+      "engine": "kiban",
+      "profile": "matched",
+      "total_ops_s": 3499989.00828452,
+      "durable_completion_ops_s": 3394935.640066262,
+      "reads_s": 3499989.00828452,
+      "writes_s": 0.0,
+      "read_p99_us": 1.984,
+      "write_p99_us": null,
+      "read_p999_us": 4.352,
+      "write_p999_us": null,
+      "read_max_us": 671.987,
+      "write_max_us": null,
+      "max_l0": 1,
+      "rss_bytes": 57204736,
+      "fds": 11,
+      "db_bytes": 15336624,
+      "sst_wa": null,
+      "process_wa": null,
+      "final_sync_flush_drain_s": 0.009232834,
+      "close_s": 0.00045977,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 1000000,
+      "writes": 0,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "updates-1m",
+      "repeat": 2,
+      "engine": "kiban",
+      "profile": "matched",
+      "total_ops_s": 385463.8592117276,
+      "durable_completion_ops_s": 385096.62802229705,
+      "reads_s": 19324.074190002328,
+      "writes_s": 366139.7850217253,
+      "read_p99_us": 61.44,
+      "write_p99_us": 46.08,
+      "read_p999_us": 155.648,
+      "write_p999_us": 184.32,
+      "read_max_us": 774.167,
+      "write_max_us": 23354.976,
+      "max_l0": 3,
+      "rss_bytes": 106393600,
+      "fds": 14,
+      "db_bytes": 16870217,
+      "sst_wa": 1.2428563371282053,
+      "process_wa": 2.6056019176906067,
+      "final_sync_flush_drain_s": 1.022072924,
+      "close_s": 0.00216083,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 50132,
+      "writes": 949868,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "updates-1m",
+      "repeat": 2,
+      "engine": "rocksdb",
+      "profile": "matched",
+      "total_ops_s": 1018401.6833283632,
+      "durable_completion_ops_s": 1007549.2877217464,
+      "reads_s": 51054.51318861751,
+      "writes_s": 967347.1701397457,
+      "read_p99_us": 11.264,
+      "write_p99_us": 7.936,
+      "read_p999_us": 49.152,
+      "write_p999_us": 147.456,
+      "read_max_us": 599.048,
+      "write_max_us": 1426.615,
+      "max_l0": 2,
+      "rss_bytes": 55382016,
+      "fds": 19,
+      "db_bytes": 18772316,
+      "sst_wa": null,
+      "process_wa": 1.660854424602403,
+      "final_sync_flush_drain_s": 0.019443925,
+      "close_s": 0.001624008,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 50132,
+      "writes": 949868,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "sequential-1m",
+      "repeat": 1,
+      "engine": "rocksdb",
+      "profile": "matched",
+      "total_ops_s": 812315.5465442216,
+      "durable_completion_ops_s": 811362.9037951346,
+      "reads_s": 0.0,
+      "writes_s": 812315.5465442216,
+      "read_p99_us": null,
+      "write_p99_us": 8.448,
+      "read_p999_us": null,
+      "write_p999_us": 155.648,
+      "read_max_us": null,
+      "write_max_us": 34089.106,
+      "max_l0": 2,
+      "rss_bytes": 36790272,
+      "fds": 44,
+      "db_bytes": 144620383,
+      "sst_wa": null,
+      "process_wa": 4.2985411764705885,
+      "final_sync_flush_drain_s": 1.006705036,
+      "close_s": 0.000825204,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 0,
+      "writes": 1000000,
+      "misses": 0,
+      "verified_keys": 1000000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "sequential-1m",
+      "repeat": 1,
+      "engine": "kiban",
+      "profile": "matched",
+      "total_ops_s": 276672.77683369524,
+      "durable_completion_ops_s": 276415.33893407986,
+      "reads_s": 0.0,
+      "writes_s": 276672.77683369524,
+      "read_p99_us": null,
+      "write_p99_us": 49.152,
+      "read_p999_us": null,
+      "write_p999_us": 147.456,
+      "read_max_us": null,
+      "write_max_us": 166919.016,
+      "max_l0": 4,
+      "rss_bytes": 84144128,
+      "fds": 47,
+      "db_bytes": 153365093,
+      "sst_wa": 2.704069411764706,
+      "process_wa": 4.141296941176471,
+      "final_sync_flush_drain_s": 1.109178379,
+      "close_s": 0.002488657,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 0,
+      "writes": 1000000,
+      "misses": 0,
+      "verified_keys": 1000000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "mixed-1m",
+      "repeat": 0,
+      "engine": "kiban",
+      "profile": "matched",
+      "total_ops_s": 569676.1999103755,
+      "durable_completion_ops_s": 568765.4293583693,
+      "reads_s": 285106.41744534555,
+      "writes_s": 284569.78246503,
+      "read_p99_us": 22.528,
+      "write_p99_us": 35.84,
+      "read_p999_us": 52.224,
+      "write_p999_us": 92.16,
+      "read_max_us": 1230.805,
+      "write_max_us": 22770.7,
+      "max_l0": 4,
+      "rss_bytes": 141639680,
+      "fds": 21,
+      "db_bytes": 19191963,
+      "sst_wa": 3.1958276755527235,
+      "process_wa": 4.6880716929465205,
+      "final_sync_flush_drain_s": 1.038294209,
+      "close_s": 0.003131178,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 500471,
+      "writes": 499529,
+      "misses": 0,
+      "verified_keys": 100000
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "mixed-1m",
+      "repeat": 0,
+      "engine": "rocksdb",
+      "profile": "matched",
+      "total_ops_s": 1132147.3831365374,
+      "durable_completion_ops_s": 1069531.553243947,
+      "reads_s": 566606.932985726,
+      "writes_s": 565540.4501508115,
+      "read_p99_us": 7.552,
+      "write_p99_us": 7.168,
+      "read_p999_us": 15.36,
+      "write_p999_us": 104.448,
+      "read_max_us": 1261.599,
+      "write_max_us": 116433.783,
+      "max_l0": 5,
+      "rss_bytes": 72462336,
+      "fds": 25,
+      "db_bytes": 14746684,
+      "sst_wa": null,
+      "process_wa": 3.96818414711364,
+      "final_sync_flush_drain_s": 1.08384949,
+      "close_s": 0.004121755,
+      "settled": true,
+      "operations": 1000000,
+      "reads": 500471,
+      "writes": 499529,
+      "misses": 0,
+      "verified_keys": 100000
+    }
+  ],
+  "aggregates": [
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "burst-read-1m",
+      "engine": "kiban",
+      "trials": 3,
+      "total_ops_s": {
+        "median": 516162.94129943603,
+        "min": 491402.49854425946,
+        "max": 525005.3002566344
+      },
+      "durable_completion_ops_s": {
+        "median": 515952.36830307153,
+        "min": 490780.8635577677,
+        "max": 524260.465225413
+      },
+      "read_p99_us": {
+        "median": 13.568,
+        "min": 13.056,
+        "max": 14.08
+      },
+      "write_p99_us": {
+        "median": 52.224,
+        "min": 48.128,
+        "max": 52.224
+      },
+      "read_p999_us": {
+        "median": 32.768,
+        "min": 31.232,
+        "max": 34.816
+      },
+      "write_p999_us": {
+        "median": 176.128,
+        "min": 147.456,
+        "max": 208.896
+      },
+      "read_max_us": {
+        "median": 694.344,
+        "min": 642.237,
+        "max": 807.013
+      },
+      "write_max_us": {
+        "median": 41016.404,
+        "min": 26912.157,
+        "max": 45721.914
+      },
+      "rss_bytes": {
+        "median": 120332288,
+        "min": 111984640,
+        "max": 121102336
+      },
+      "db_bytes": {
+        "median": 23081869,
+        "min": 23081800,
+        "max": 23082037
+      },
+      "sst_wa": {
+        "median": 3.0952613463900627,
+        "min": 3.0951980165676756,
+        "max": 3.0953349019966447
+      },
+      "process_wa": {
+        "median": 4.580419769281654,
+        "min": 4.564182232551478,
+        "max": 4.5858705324949645
+      },
+      "final_sync_flush_drain_s": {
+        "median": 1.016495024,
+        "min": 1.009122693,
+        "max": 1.016642187
+      },
+      "close_s": {
+        "median": 0.00433303,
+        "min": 0.003280521,
+        "max": 0.004775759
+      }
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "burst-read-1m",
+      "engine": "rocksdb",
+      "trials": 3,
+      "total_ops_s": {
+        "median": 1326676.1308823156,
+        "min": 926325.5522039441,
+        "max": 1357905.4600499982
+      },
+      "durable_completion_ops_s": {
+        "median": 1314822.5652799113,
+        "min": 924849.0103297561,
+        "max": 1353872.7289098054
+      },
+      "read_p99_us": {
+        "median": 5.76,
+        "min": 4.992,
+        "max": 6.016
+      },
+      "write_p99_us": {
+        "median": 8.96,
+        "min": 8.064,
+        "max": 10.496
+      },
+      "read_p999_us": {
+        "median": 10.24,
+        "min": 8.96,
+        "max": 11.264
+      },
+      "write_p999_us": {
+        "median": 104.448,
+        "min": 90.112,
+        "max": 212.992
+      },
+      "read_max_us": {
+        "median": 561.748,
+        "min": 510.086,
+        "max": 1198.696
+      },
+      "write_max_us": {
+        "median": 3061.489,
+        "min": 1370.276,
+        "max": 74906.638
+      },
+      "rss_bytes": {
+        "median": 61870080,
+        "min": 59338752,
+        "max": 62734336
+      },
+      "db_bytes": {
+        "median": 18637821,
+        "min": 18508698,
+        "max": 20180862
+      },
+      "sst_wa": null,
+      "process_wa": {
+        "median": 4.409380557293472,
+        "min": 3.891672804938768,
+        "max": 4.487469912380998
+      },
+      "final_sync_flush_drain_s": {
+        "median": 0.00730151,
+        "min": 0.007147702,
+        "max": 0.013152284
+      },
+      "close_s": {
+        "median": 0.002635097,
+        "min": 0.002508022,
+        "max": 0.005446321
+      }
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "burst-recovery-1m",
+      "engine": "kiban",
+      "trials": 3,
+      "total_ops_s": {
+        "median": 460881.5552875044,
+        "min": 448230.85547152365,
+        "max": 537829.0179841327
+      },
+      "durable_completion_ops_s": {
+        "median": 460470.7445744297,
+        "min": 447869.3529411241,
+        "max": 537092.1067020135
+      },
+      "read_p99_us": {
+        "median": 18.432,
+        "min": 17.92,
+        "max": 18.432
+      },
+      "write_p99_us": {
+        "median": 50.176,
+        "min": 47.104,
+        "max": 51.2
+      },
+      "read_p999_us": {
+        "median": 40.96,
+        "min": 37.888,
+        "max": 40.96
+      },
+      "write_p999_us": {
+        "median": 208.896,
+        "min": 172.032,
+        "max": 225.28
+      },
+      "read_max_us": {
+        "median": 772.455,
+        "min": 485.251,
+        "max": 1221.701
+      },
+      "write_max_us": {
+        "median": 107302.586,
+        "min": 16681.428,
+        "max": 143761.445
+      },
+      "rss_bytes": {
+        "median": 145494016,
+        "min": 139370496,
+        "max": 145694720
+      },
+      "db_bytes": {
+        "median": 21685749,
+        "min": 21685720,
+        "max": 21686645
+      },
+      "sst_wa": {
+        "median": 2.9417630477057632,
+        "min": 2.941553223933213,
+        "max": 3.131679235660422
+      },
+      "process_wa": {
+        "median": 4.414670962568089,
+        "min": 4.407489027980076,
+        "max": 4.5795635095318925
+      },
+      "final_sync_flush_drain_s": {
+        "median": 1.026599336,
+        "min": 1.02402153,
+        "max": 1.027115432
+      },
+      "close_s": {
+        "median": 0.002022356,
+        "min": 0.001187995,
+        "max": 0.005611957
+      }
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "burst-recovery-1m",
+      "engine": "rocksdb",
+      "trials": 3,
+      "total_ops_s": {
+        "median": 1104377.9835958434,
+        "min": 1012124.4032022373,
+        "max": 1317458.5428436603
+      },
+      "durable_completion_ops_s": {
+        "median": 1102207.3806912233,
+        "min": 1010746.4176316869,
+        "max": 1299758.5577601416
+      },
+      "read_p99_us": {
+        "median": 7.04,
+        "min": 6.912,
+        "max": 7.168
+      },
+      "write_p99_us": {
+        "median": 8.704,
+        "min": 8.192,
+        "max": 9.728
+      },
+      "read_p999_us": {
+        "median": 12.8,
+        "min": 12.288,
+        "max": 13.824
+      },
+      "write_p999_us": {
+        "median": 208.896,
+        "min": 131.072,
+        "max": 442.368
+      },
+      "read_max_us": {
+        "median": 698.439,
+        "min": 668.501,
+        "max": 763.54
+      },
+      "write_max_us": {
+        "median": 21026.106,
+        "min": 11820.129,
+        "max": 31579.149
+      },
+      "rss_bytes": {
+        "median": 72781824,
+        "min": 69615616,
+        "max": 74059776
+      },
+      "db_bytes": {
+        "median": 20133422,
+        "min": 15213623,
+        "max": 21016937
+      },
+      "sst_wa": null,
+      "process_wa": {
+        "median": 3.8788869643599235,
+        "min": 3.5676697988793737,
+        "max": 4.3794035764611
+      },
+      "final_sync_flush_drain_s": {
+        "median": 0.021833892,
+        "min": 0.005219752,
+        "max": 1.011084617
+      },
+      "close_s": {
+        "median": 0.005441684,
+        "min": 0.00245108,
+        "max": 0.005716204
+      }
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "mixed-1m",
+      "engine": "kiban",
+      "trials": 3,
+      "total_ops_s": {
+        "median": 579758.1310879318,
+        "min": 569676.1999103755,
+        "max": 582098.3713766538
+      },
+      "durable_completion_ops_s": {
+        "median": 578616.5174454014,
+        "min": 568765.4293583693,
+        "max": 581055.3615213822
+      },
+      "read_p99_us": {
+        "median": 22.528,
+        "min": 22.528,
+        "max": 23.04
+      },
+      "write_p99_us": {
+        "median": 34.816,
+        "min": 34.816,
+        "max": 35.84
+      },
+      "read_p999_us": {
+        "median": 50.176,
+        "min": 49.152,
+        "max": 52.224
+      },
+      "write_p999_us": {
+        "median": 90.112,
+        "min": 86.016,
+        "max": 92.16
+      },
+      "read_max_us": {
+        "median": 880.978,
+        "min": 644.577,
+        "max": 1230.805
+      },
+      "write_max_us": {
+        "median": 29283.229,
+        "min": 22770.7,
+        "max": 38234.871
+      },
+      "rss_bytes": {
+        "median": 141766656,
+        "min": 141639680,
+        "max": 143962112
+      },
+      "db_bytes": {
+        "median": 19191825,
+        "min": 19191811,
+        "max": 19191963
+      },
+      "sst_wa": {
+        "median": 3.195694962301547,
+        "min": 3.1956069823656237,
+        "max": 3.1958276755527235
+      },
+      "process_wa": {
+        "median": 4.656358053992744,
+        "min": 4.655875717278618,
+        "max": 4.6880716929465205
+      },
+      "final_sync_flush_drain_s": {
+        "median": 1.047259452,
+        "min": 1.038294209,
+        "max": 1.051008783
+      },
+      "close_s": {
+        "median": 0.002905087,
+        "min": 0.002366895,
+        "max": 0.003131178
+      }
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "mixed-1m",
+      "engine": "rocksdb",
+      "trials": 3,
+      "total_ops_s": {
+        "median": 1227890.3726508776,
+        "min": 1132147.3831365374,
+        "max": 1360821.3438622442
+      },
+      "durable_completion_ops_s": {
+        "median": 1225907.7919527972,
+        "min": 1069531.553243947,
+        "max": 1356530.2557340742
+      },
+      "read_p99_us": {
+        "median": 7.552,
+        "min": 7.424,
+        "max": 7.808
+      },
+      "write_p99_us": {
+        "median": 7.424,
+        "min": 7.168,
+        "max": 7.552
+      },
+      "read_p999_us": {
+        "median": 15.872,
+        "min": 15.36,
+        "max": 16.384
+      },
+      "write_p999_us": {
+        "median": 104.448,
+        "min": 83.968,
+        "max": 155.648
+      },
+      "read_max_us": {
+        "median": 1261.599,
+        "min": 967.733,
+        "max": 1408.013
+      },
+      "write_max_us": {
+        "median": 93755.881,
+        "min": 1975.791,
+        "max": 116433.783
+      },
+      "rss_bytes": {
+        "median": 72364032,
+        "min": 71766016,
+        "max": 72462336
+      },
+      "db_bytes": {
+        "median": 14780688,
+        "min": 14746684,
+        "max": 18964093
+      },
+      "sst_wa": null,
+      "process_wa": {
+        "median": 4.37973794844155,
+        "min": 3.96818414711364,
+        "max": 4.456610362255362
+      },
+      "final_sync_flush_drain_s": {
+        "median": 1.012511349,
+        "min": 1.008861424,
+        "max": 1.08384949
+      },
+      "close_s": {
+        "median": 0.004590412,
+        "min": 0.004121755,
+        "max": 0.0050634
+      }
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "random-write-1m",
+      "engine": "kiban",
+      "trials": 3,
+      "total_ops_s": {
+        "median": 269162.8109421481,
+        "min": 221601.04529018054,
+        "max": 312952.86372252926
+      },
+      "durable_completion_ops_s": {
+        "median": 268894.2962958233,
+        "min": 221030.88207500524,
+        "max": 312564.2152435823
+      },
+      "read_p99_us": null,
+      "write_p99_us": {
+        "median": 55.296,
+        "min": 55.296,
+        "max": 55.296
+      },
+      "read_p999_us": null,
+      "write_p999_us": {
+        "median": 229.376,
+        "min": 221.184,
+        "max": 294.912
+      },
+      "read_max_us": null,
+      "write_max_us": {
+        "median": 105690.156,
+        "min": 42953.863,
+        "max": 290237.712
+      },
+      "rss_bytes": {
+        "median": 83709952,
+        "min": 79933440,
+        "max": 90394624
+      },
+      "db_bytes": {
+        "median": 15537228,
+        "min": 15536772,
+        "max": 15538438
+      },
+      "sst_wa": {
+        "median": 2.894537360294118,
+        "min": 2.891568411764706,
+        "max": 3.0860410955882354
+      },
+      "process_wa": {
+        "median": 4.411482352941176,
+        "min": 4.353415529411765,
+        "max": 4.543578352941177
+      },
+      "final_sync_flush_drain_s": {
+        "median": 1.09409172,
+        "min": 1.09153377,
+        "max": 1.246413676
+      },
+      "close_s": {
+        "median": 0.000382471,
+        "min": 0.000213829,
+        "max": 0.000639014
+      }
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "random-write-1m",
+      "engine": "rocksdb",
+      "trials": 3,
+      "total_ops_s": {
+        "median": 947078.6908392225,
+        "min": 638851.6566853208,
+        "max": 962298.8812178485
+      },
+      "durable_completion_ops_s": {
+        "median": 944959.5434139941,
+        "min": 622346.8087511318,
+        "max": 960219.9908553257
+      },
+      "read_p99_us": null,
+      "write_p99_us": {
+        "median": 9.216,
+        "min": 8.704,
+        "max": 9.472
+      },
+      "read_p999_us": null,
+      "write_p999_us": {
+        "median": 129.024,
+        "min": 122.88,
+        "max": 163.84
+      },
+      "read_max_us": null,
+      "write_max_us": {
+        "median": 2151.226,
+        "min": 1699.38,
+        "max": 59956.584
+      },
+      "rss_bytes": {
+        "median": 35520512,
+        "min": 32849920,
+        "max": 36888576
+      },
+      "db_bytes": {
+        "median": 18137145,
+        "min": 15069222,
+        "max": 20992725
+      },
+      "sst_wa": null,
+      "process_wa": {
+        "median": 4.414825411764705,
+        "min": 3.3258014117647057,
+        "max": 4.438046117647059
+      },
+      "final_sync_flush_drain_s": {
+        "median": 1.012732154,
+        "min": 1.011741696,
+        "max": 1.07338297
+      },
+      "close_s": {
+        "median": 0.000499608,
+        "min": 0.000411249,
+        "max": 0.000987539
+      }
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "read-1m",
+      "engine": "kiban",
+      "trials": 3,
+      "total_ops_s": {
+        "median": 3501695.9115994903,
+        "min": 3499989.00828452,
+        "max": 3530790.3721913816
+      },
+      "durable_completion_ops_s": {
+        "median": 3413531.0829210943,
+        "min": 3394935.640066262,
+        "max": 3435155.133048573
+      },
+      "read_p99_us": {
+        "median": 2.016,
+        "min": 1.984,
+        "max": 2.112
+      },
+      "write_p99_us": null,
+      "read_p999_us": {
+        "median": 4.352,
+        "min": 4.352,
+        "max": 4.352
+      },
+      "write_p999_us": null,
+      "read_max_us": {
+        "median": 671.987,
+        "min": 640.882,
+        "max": 697.132
+      },
+      "write_max_us": null,
+      "rss_bytes": {
+        "median": 50896896,
+        "min": 44548096,
+        "max": 57204736
+      },
+      "db_bytes": {
+        "median": 15336624,
+        "min": 15336624,
+        "max": 15336625
+      },
+      "sst_wa": null,
+      "process_wa": null,
+      "final_sync_flush_drain_s": {
+        "median": 0.008265612,
+        "min": 0.008003979,
+        "max": 0.009232834
+      },
+      "close_s": {
+        "median": 0.000363558,
+        "min": 0.00031225,
+        "max": 0.00045977
+      }
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "read-1m",
+      "engine": "rocksdb",
+      "trials": 3,
+      "total_ops_s": {
+        "median": 3495030.0602642437,
+        "min": 3094752.163148204,
+        "max": 3532321.071609569
+      },
+      "durable_completion_ops_s": {
+        "median": 3312242.891699866,
+        "min": 3017846.6578878313,
+        "max": 3335464.9511561017
+      },
+      "read_p99_us": {
+        "median": 2.368,
+        "min": 2.304,
+        "max": 2.496
+      },
+      "write_p99_us": null,
+      "read_p999_us": {
+        "median": 5.248,
+        "min": 5.248,
+        "max": 6.016
+      },
+      "write_p999_us": null,
+      "read_max_us": {
+        "median": 611.801,
+        "min": 457.334,
+        "max": 698.375
+      },
+      "write_max_us": null,
+      "rss_bytes": {
+        "median": 33325056,
+        "min": 33132544,
+        "max": 33353728
+      },
+      "db_bytes": {
+        "median": 14522025,
+        "min": 14521903,
+        "max": 14522414
+      },
+      "sst_wa": null,
+      "process_wa": null,
+      "final_sync_flush_drain_s": {
+        "median": 0.014645793,
+        "min": 0.009268533,
+        "max": 0.019227671
+      },
+      "close_s": {
+        "median": 0.001031296,
+        "min": 0.000687517,
+        "max": 0.001089053
+      }
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "sequential-1m",
+      "engine": "kiban",
+      "trials": 3,
+      "total_ops_s": {
+        "median": 343672.86292662984,
+        "min": 276672.77683369524,
+        "max": 354014.21416985895
+      },
+      "durable_completion_ops_s": {
+        "median": 343245.06560272863,
+        "min": 276415.33893407986,
+        "max": 353588.82448745397
+      },
+      "read_p99_us": null,
+      "write_p99_us": {
+        "median": 46.08,
+        "min": 45.056,
+        "max": 49.152
+      },
+      "read_p999_us": null,
+      "write_p999_us": {
+        "median": 147.456,
+        "min": 129.024,
+        "max": 147.456
+      },
+      "read_max_us": null,
+      "write_max_us": {
+        "median": 63651.201,
+        "min": 50506.262,
+        "max": 166919.016
+      },
+      "rss_bytes": {
+        "median": 82513920,
+        "min": 81092608,
+        "max": 84144128
+      },
+      "db_bytes": {
+        "median": 153365166,
+        "min": 153365093,
+        "max": 153365246
+      },
+      "sst_wa": {
+        "median": 2.704069411764706,
+        "min": 2.65405175,
+        "max": 2.716664617647059
+      },
+      "process_wa": {
+        "median": 4.141296941176471,
+        "min": 4.098891294117647,
+        "max": 4.148103529411765
+      },
+      "final_sync_flush_drain_s": {
+        "median": 1.111802231,
+        "min": 1.109178379,
+        "max": 1.118096289
+      },
+      "close_s": {
+        "median": 0.002113879,
+        "min": 0.001459539,
+        "max": 0.002488657
+      }
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "sequential-1m",
+      "engine": "rocksdb",
+      "trials": 3,
+      "total_ops_s": {
+        "median": 812315.5465442216,
+        "min": 619656.8673024616,
+        "max": 899909.0713876089
+      },
+      "durable_completion_ops_s": {
+        "median": 811362.9037951346,
+        "min": 619292.2749433318,
+        "max": 898530.9833390008
+      },
+      "read_p99_us": null,
+      "write_p99_us": {
+        "median": 8.704,
+        "min": 8.448,
+        "max": 8.704
+      },
+      "read_p999_us": null,
+      "write_p999_us": {
+        "median": 155.648,
+        "min": 143.36,
+        "max": 176.128
+      },
+      "read_max_us": null,
+      "write_max_us": {
+        "median": 34089.106,
+        "min": 6772.93,
+        "max": 99884.549
+      },
+      "rss_bytes": {
+        "median": 35033088,
+        "min": 31535104,
+        "max": 36790272
+      },
+      "db_bytes": {
+        "median": 144620383,
+        "min": 144612561,
+        "max": 144647652
+      },
+      "sst_wa": null,
+      "process_wa": {
+        "median": 4.2985411764705885,
+        "min": 4.163885176470588,
+        "max": 4.606765176470589
+      },
+      "final_sync_flush_drain_s": {
+        "median": 1.006705036,
+        "min": 1.006172144,
+        "max": 1.01630213
+      },
+      "close_s": {
+        "median": 0.000840563,
+        "min": 0.000825204,
+        "max": 0.00088411
+      }
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "updates-1m",
+      "engine": "kiban",
+      "trials": 3,
+      "total_ops_s": {
+        "median": 385463.8592117276,
+        "min": 361122.84463432943,
+        "max": 408026.12722513825
+      },
+      "durable_completion_ops_s": {
+        "median": 385096.62802229705,
+        "min": 360602.7567537686,
+        "max": 407373.5414340181
+      },
+      "read_p99_us": {
+        "median": 61.44,
+        "min": 61.44,
+        "max": 63.488
+      },
+      "write_p99_us": {
+        "median": 45.056,
+        "min": 43.008,
+        "max": 46.08
+      },
+      "read_p999_us": {
+        "median": 139.264,
+        "min": 129.024,
+        "max": 155.648
+      },
+      "write_p999_us": {
+        "median": 176.128,
+        "min": 151.552,
+        "max": 184.32
+      },
+      "read_max_us": {
+        "median": 774.167,
+        "min": 515.621,
+        "max": 1303.325
+      },
+      "write_max_us": {
+        "median": 23354.976,
+        "min": 7647.745,
+        "max": 39511.044
+      },
+      "rss_bytes": {
+        "median": 110587904,
+        "min": 106393600,
+        "max": 124809216
+      },
+      "db_bytes": {
+        "median": 16870217,
+        "min": 16870217,
+        "max": 16870218
+      },
+      "sst_wa": {
+        "median": 1.2428583962378426,
+        "min": 1.2428563371282053,
+        "max": 1.2428719971988678
+      },
+      "process_wa": {
+        "median": 2.6076628851711656,
+        "min": 2.6056019176906067,
+        "max": 2.6300481627292362
+      },
+      "final_sync_flush_drain_s": {
+        "median": 1.022072924,
+        "min": 1.021406796,
+        "max": 1.023083907
+      },
+      "close_s": {
+        "median": 0.003179179,
+        "min": 0.00216083,
+        "max": 0.005122971
+      }
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "updates-1m",
+      "engine": "rocksdb",
+      "trials": 3,
+      "total_ops_s": {
+        "median": 1051691.9906806292,
+        "min": 1018401.6833283632,
+        "max": 1064207.1516936272
+      },
+      "durable_completion_ops_s": {
+        "median": 1036619.5797357218,
+        "min": 1007549.2877217464,
+        "max": 1062221.866963299
+      },
+      "read_p99_us": {
+        "median": 11.264,
+        "min": 9.728,
+        "max": 11.776
+      },
+      "write_p99_us": {
+        "median": 7.552,
+        "min": 7.424,
+        "max": 7.936
+      },
+      "read_p999_us": {
+        "median": 49.152,
+        "min": 39.936,
+        "max": 69.632
+      },
+      "write_p999_us": {
+        "median": 126.976,
+        "min": 124.928,
+        "max": 147.456
+      },
+      "read_max_us": {
+        "median": 892.335,
+        "min": 599.048,
+        "max": 904.337
+      },
+      "write_max_us": {
+        "median": 1343.82,
+        "min": 1182.151,
+        "max": 1426.615
+      },
+      "rss_bytes": {
+        "median": 55382016,
+        "min": 53989376,
+        "max": 63762432
+      },
+      "db_bytes": {
+        "median": 18752983,
+        "min": 18731568,
+        "max": 18772316
+      },
+      "sst_wa": null,
+      "process_wa": {
+        "median": 1.659427600962016,
+        "min": 1.6578105341695775,
+        "max": 1.660854424602403
+      },
+      "final_sync_flush_drain_s": {
+        "median": 0.019443925,
+        "min": 0.008220928,
+        "max": 0.020235914
+      },
+      "close_s": {
+        "median": 0.002097866,
+        "min": 0.001624008,
+        "max": 0.002608588
+      }
+    }
+  ],
+  "paired_ratios": [
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "burst-read-1m",
+      "repeat": 0,
+      "kiban_over_rocksdb_throughput": 0.38011699377100294
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "sequential-1m",
+      "repeat": 2,
+      "kiban_over_rocksdb_throughput": 0.3818973203556063
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "burst-read-1m",
+      "repeat": 2,
+      "kiban_over_rocksdb_throughput": 0.5667611122326536
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "sequential-1m",
+      "repeat": 0,
+      "kiban_over_rocksdb_throughput": 0.5713068519856499
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "burst-recovery-1m",
+      "repeat": 2,
+      "kiban_over_rocksdb_throughput": 0.40823221414106814
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "random-write-1m",
+      "repeat": 2,
+      "kiban_over_rocksdb_throughput": 0.34687402462092165
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "updates-1m",
+      "repeat": 1,
+      "kiban_over_rocksdb_throughput": 0.3433732003612765
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "burst-recovery-1m",
+      "repeat": 0,
+      "kiban_over_rocksdb_throughput": 0.4173222955666671
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "read-1m",
+      "repeat": 0,
+      "kiban_over_rocksdb_throughput": 1.1408960026704071
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "updates-1m",
+      "repeat": 0,
+      "kiban_over_rocksdb_throughput": 0.38340855591487716
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "mixed-1m",
+      "repeat": 1,
+      "kiban_over_rocksdb_throughput": 0.47215789292027677
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "burst-read-1m",
+      "repeat": 1,
+      "kiban_over_rocksdb_throughput": 0.3704012509951835
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "random-write-1m",
+      "repeat": 0,
+      "kiban_over_rocksdb_throughput": 0.2842032172676574
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "mixed-1m",
+      "repeat": 2,
+      "kiban_over_rocksdb_throughput": 0.4277551744776128
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "burst-recovery-1m",
+      "repeat": 1,
+      "kiban_over_rocksdb_throughput": 0.4428614249922008
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "read-1m",
+      "repeat": 2,
+      "kiban_over_rocksdb_throughput": 1.0019072371969078
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "random-write-1m",
+      "repeat": 1,
+      "kiban_over_rocksdb_throughput": 0.325213787348966
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "read-1m",
+      "repeat": 1,
+      "kiban_over_rocksdb_throughput": 0.9908467937456443
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "updates-1m",
+      "repeat": 2,
+      "kiban_over_rocksdb_throughput": 0.37849884335613626
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "sequential-1m",
+      "repeat": 1,
+      "kiban_over_rocksdb_throughput": 0.34059766307652894
+    },
+    {
+      "campaign": "validation/comparison-results/smoke",
+      "case": "mixed-1m",
+      "repeat": 0,
+      "kiban_over_rocksdb_throughput": 0.503182013575058
+    }
+  ],
+  "invalid": [],
+  "policy": "only complete verified trials; median per-trial percentiles, not pooled percentile; unknown metrics remain null"
+}

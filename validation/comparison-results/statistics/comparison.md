@@ -1,0 +1,6 @@
+| Case | Engine | Trials | Median ops/s (min–max) | GET p99 µs | PUT p99 µs |
+| --- | --- | ---: | ---: | ---: | ---: |
+| writes-statistics-off | kiban | 3 | 277,118 (264,736–311,600) |  | 54.27 |
+| writes-statistics-off | rocksdb | 3 | 823,491 (667,079–865,612) |  | 8.45 |
+| writes-statistics-on | kiban | 3 | 271,166 (256,892–309,364) |  | 54.27 |
+| writes-statistics-on | rocksdb | 3 | 748,283 (739,908–753,189) |  | 8.45 |

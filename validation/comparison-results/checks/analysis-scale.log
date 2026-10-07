@@ -1,0 +1,9 @@
+| Case | Engine | Trials | Median ops/s (min–max) | GET p99 µs | PUT p99 µs |
+| --- | --- | ---: | ---: | ---: | ---: |
+| read-100m | kiban | 3 | 2,895,634 (2,617,808–3,193,501) | 2.30 |  |
+| read-100m | rocksdb | 3 | 340,456 (267,666–340,871) | 106.50 |  |
+| updates-10m | kiban | 3 | 307,899 (293,808–312,206) | 71.68 | 46.08 |
+| updates-10m | rocksdb | 3 | 858,160 (841,159–869,748) | 14.85 | 8.96 |
+| write-10m | kiban | 3 | 87,577 (87,286–91,826) |  | 59.39 |
+| write-10m | rocksdb | 3 | 317,130 (309,648–335,048) |  | 10.24 |
+Valid trials: 18; complete pairs: 9; invalid trials excluded: 0

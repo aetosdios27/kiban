@@ -1,0 +1,7 @@
+| Case | Engine | Trials | Median ops/s (min–max) | GET p99 µs | PUT p99 µs |
+| --- | --- | ---: | ---: | ---: | ---: |
+| reads-cache-reduced | kiban | 3 | 393,693 (390,783–403,438) | 39.94 |  |
+| reads-cache-reduced | rocksdb | 3 | 593,588 (551,734–611,989) | 71.68 |  |
+| reads-cache-warm | kiban | 3 | 425,958 (423,861–442,573) | 16.90 |  |
+| reads-cache-warm | rocksdb | 3 | 769,243 (738,500–827,668) | 33.79 |  |
+Valid trials: 12; complete pairs: 6; invalid trials excluded: 0

@@ -1,0 +1,23 @@
+[
+  {
+    "duration_cap_s": null,
+    "operations_cap": 333334,
+    "reads_percent": 50,
+    "stage": "steady",
+    "threads": 4
+  },
+  {
+    "duration_cap_s": null,
+    "operations_cap": 333333,
+    "reads_percent": 0,
+    "stage": "write-burst",
+    "threads": 4
+  },
+  {
+    "duration_cap_s": null,
+    "operations_cap": 333333,
+    "reads_percent": 95,
+    "stage": "read-recovery",
+    "threads": 4
+  }
+]

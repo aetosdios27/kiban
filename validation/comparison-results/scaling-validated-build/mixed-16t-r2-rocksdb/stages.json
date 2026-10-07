@@ -1,0 +1,9 @@
+[
+  {
+    "duration_cap_s": null,
+    "operations_cap": 1000000,
+    "reads_percent": 50,
+    "stage": "mixed",
+    "threads": 16
+  }
+]

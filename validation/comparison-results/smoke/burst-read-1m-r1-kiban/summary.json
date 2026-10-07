@@ -1,0 +1,158 @@
+{
+  "amplification": {
+    "app_bytes": 71388168,
+    "definitions": "SST bytes exclude WAL/MANIFEST; process write_bytes is Linux task I/O accounting, not device bytes; null means unobserved, not zero.",
+    "process_write_amp": 4.580419769281654,
+    "process_write_bytes": 326987776,
+    "sst_bytes_written": 220965037,
+    "sst_write_amp": 3.0952613463900627
+  },
+  "close_s": 0.00433303,
+  "db_bytes": 23081869,
+  "durable_completion_ops_s": 490780.8635577677,
+  "elapsed_s": 2.034991688,
+  "engine": "kiban",
+  "final_flush_s": 0.012110113,
+  "final_sync_flush_drain_s": 1.016495024,
+  "final_sync_s": 0.00257757,
+  "maintenance_settled": true,
+  "max_l0": 4,
+  "metrics": {
+    "all_latency": {
+      "max_ns": 26912157,
+      "p50_ns": 2112,
+      "p95_ns": 24576,
+      "p999_ns": 114688,
+      "p99_ns": 41984,
+      "samples": 1000000
+    },
+    "app_bytes": 71388168,
+    "misses": 0,
+    "operations": 1000000,
+    "read_latency": {
+      "max_ns": 642237,
+      "p50_ns": 1728,
+      "p95_ns": 3840,
+      "p999_ns": 34816,
+      "p99_ns": 14080,
+      "samples": 475087
+    },
+    "read_ops_s": 233458.9388258966,
+    "reads": 475087,
+    "sync_calls": 0,
+    "total_ops_s": 491402.49854425946,
+    "write_latency": {
+      "max_ns": 26912157,
+      "p50_ns": 3008,
+      "p95_ns": 29696,
+      "p999_ns": 176128,
+      "p99_ns": 52224,
+      "samples": 524913
+    },
+    "write_ops_s": 257943.55971836287,
+    "writes": 524913
+  },
+  "peak_sampled_fds": 19,
+  "peak_sampled_rss": 121102336,
+  "profile": "matched",
+  "stages": [
+    {
+      "elapsed_s": 1.729980415,
+      "metrics": {
+        "all_latency": {
+          "max_ns": 26912157,
+          "p50_ns": 3200,
+          "p95_ns": 30208,
+          "p999_ns": 180224,
+          "p99_ns": 52224,
+          "samples": 500000
+        },
+        "app_bytes": 68000000,
+        "misses": 0,
+        "operations": 500000,
+        "read_latency": {
+          "max_ns": 0,
+          "p50_ns": null,
+          "p95_ns": null,
+          "p999_ns": null,
+          "p99_ns": null,
+          "samples": 0
+        },
+        "read_ops_s": 0.0,
+        "reads": 0,
+        "sync_calls": 0,
+        "total_ops_s": 289020.61298769095,
+        "write_latency": {
+          "max_ns": 26912157,
+          "p50_ns": 3200,
+          "p95_ns": 30208,
+          "p999_ns": 180224,
+          "p99_ns": 52224,
+          "samples": 500000
+        },
+        "write_ops_s": 289020.61298769095,
+        "writes": 500000
+      },
+      "partition_counts": [
+        125000,
+        125000,
+        125000,
+        125000
+      ],
+      "stage": "write-pressure",
+      "threads": 4
+    },
+    {
+      "elapsed_s": 0.305011273,
+      "metrics": {
+        "all_latency": {
+          "max_ns": 7666625,
+          "p50_ns": 1760,
+          "p95_ns": 3840,
+          "p999_ns": 34816,
+          "p99_ns": 14080,
+          "samples": 500000
+        },
+        "app_bytes": 3388168,
+        "misses": 0,
+        "operations": 500000,
+        "read_latency": {
+          "max_ns": 642237,
+          "p50_ns": 1728,
+          "p95_ns": 3840,
+          "p999_ns": 34816,
+          "p99_ns": 14080,
+          "samples": 475087
+        },
+        "read_ops_s": 1557604.7249899514,
+        "reads": 475087,
+        "sync_calls": 0,
+        "total_ops_s": 1639283.6732955766,
+        "write_latency": {
+          "max_ns": 7666625,
+          "p50_ns": 1984,
+          "p95_ns": 5248,
+          "p999_ns": 39936,
+          "p99_ns": 16384,
+          "samples": 24913
+        },
+        "write_ops_s": 81678.94830562541,
+        "writes": 24913
+      },
+      "partition_counts": [
+        125000,
+        125000,
+        125000,
+        125000
+      ],
+      "stage": "read-heavy",
+      "threads": 4
+    }
+  ],
+  "verification": {
+    "elapsed_s": 0.067104674,
+    "enabled": true,
+    "kind": "close/reopen/full ordered scan, exact key set, values and selected point reads",
+    "verified_keys": 100000
+  }
+}

@@ -121,6 +121,10 @@ includes any required write-associated sync. End sync, flush, bounded maintenanc
 observation and close are timed separately. Durable-completion throughput includes
 end sync. Foreground throughput must not conceal deferred flush/compaction costs.
 
+Kiban uses the public `SharedKiban` thread-safe API even at one thread; RocksDB
+uses its native thread-safe `DB` API. Single-thread direct-`Kiban` throughput is
+not substituted into this concurrency comparison.
+
 The adapter reuses immutable RocksDB read/write options instead of allocating
 configuration objects per operation. Both get APIs return owned byte vectors;
 zero-copy APIs are not substituted for only one engine. Shared timing/value checks
@@ -136,7 +140,7 @@ environment, OS, CPU, initial RAM/swap, filesystem, source hashes, locked packag
 plan and exact commands. `runs.json` marks valid/incomplete/failed trials. Each run
 has config.json, preparation.json, stages.json, samples.jsonl, summary.json and
 status.json. Summary includes foreground and durable-completion throughput,
-read/write/all p50/p95/p99/p99.9, misses, application bytes, sampled peak RSS/FDs,
+read/write/all p50/p95/p99/p99.9 and maxima, misses, application bytes, sampled peak RSS/FDs,
 L0 maximum, size, close/drain costs, native state and full verification outcome.
 
 Engine-native cumulative statistics are sampled once per second. Linux process

@@ -1,0 +1,16 @@
+[
+  {
+    "duration_cap_s": null,
+    "operations_cap": 500000,
+    "reads_percent": 0,
+    "stage": "write-pressure",
+    "threads": 4
+  },
+  {
+    "duration_cap_s": null,
+    "operations_cap": 500000,
+    "reads_percent": 95,
+    "stage": "read-heavy",
+    "threads": 4
+  }
+]

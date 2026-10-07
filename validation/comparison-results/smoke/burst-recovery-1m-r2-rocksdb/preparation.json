@@ -1,0 +1,57 @@
+{
+  "db_bytes": 14522696,
+  "elapsed_s": 0.169878739,
+  "engine": {
+    "background_errors": 0,
+    "compaction_count": null,
+    "compaction_ns": null,
+    "compaction_read_bytes": null,
+    "compaction_write_bytes": null,
+    "flush_count": null,
+    "levels": [
+      {
+        "bytes": 3718089,
+        "files": 2,
+        "level": 0
+      },
+      {
+        "bytes": 0,
+        "files": 0,
+        "level": 1
+      },
+      {
+        "bytes": 10694298,
+        "files": 3,
+        "level": 2
+      },
+      {
+        "bytes": 0,
+        "files": 0,
+        "level": 3
+      },
+      {
+        "bytes": 0,
+        "files": 0,
+        "level": 4
+      },
+      {
+        "bytes": 0,
+        "files": 0,
+        "level": 5
+      },
+      {
+        "bytes": 0,
+        "files": 0,
+        "level": 6
+      }
+    ],
+    "maintenance_running": 0,
+    "memtable_bytes": 2048,
+    "native_debt_bytes": 0,
+    "pending_compaction": 0,
+    "pending_flush": 0,
+    "sst_bytes_written": null,
+    "stall_count": null,
+    "stall_ns": null
+  }
+}

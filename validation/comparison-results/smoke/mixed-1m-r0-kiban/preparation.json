@@ -1,0 +1,32 @@
+{
+  "db_bytes": 15336625,
+  "elapsed_s": 0.289882703,
+  "engine": {
+    "compaction_count": 0,
+    "compaction_ns": 0,
+    "compaction_read_bytes": 0,
+    "compaction_write_bytes": 0,
+    "flush_count": 0,
+    "governor": "GovernorStats { mode: Balanced, pressure: 0.0, pressure_vector: PressureVector { l0: 0.0, deep_debt: 0.0, read: 0.0 }, mode_switches: 0, time_balanced_ms: 0, time_read_protect_ms: 0, time_write_emergency_ms: 0, avg_batch_size: 0.0, trivial_moves_performed: 0, trivial_move_bytes_avoided: 0, predicted_actual_samples: 0, predicted_actual_mean_abs_pct_error: 0.0 }",
+    "levels": [
+      {
+        "bytes": 20328,
+        "files": 1,
+        "level": 0
+      },
+      {
+        "bytes": 15316205,
+        "files": 4,
+        "level": 2
+      }
+    ],
+    "maintenance_running": false,
+    "memtable_bytes": 0,
+    "native_debt_bytes": 0,
+    "pending_flush": false,
+    "read_amp": "ReadAmpStats { gets_total: 0, resolved_in_memtable: 0, resolved_in_immutable: 0, l0_tables_probed: 0, leveled_tables_probed: 0, resolved_not_found: 0 }",
+    "sst_bytes_written": 0,
+    "stall_count": 0,
+    "stall_ns": 0
+  }
+}

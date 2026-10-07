@@ -1,0 +1,24 @@
+warning: skipping duplicate package `kiban v0.1.0 (https://github.com/aetosdios27/kiban?rev=76d9d857c61bed3127fa3f7a2136701cd9b49380#76d9d857)`:
+  /home/aetos/.cargo/git/checkouts/kiban-499e66eabe6c5506/76d9d85/validation/release-results/candidate/sources/Cargo.toml
+in favor of /home/aetos/.cargo/git/checkouts/kiban-499e66eabe6c5506/76d9d85/Cargo.toml
+
+   Compiling kiban-compare v0.1.0 (/home/aetos/dev/personal/kiban/tools/compare)
+    Finished `release` profile [optimized + debuginfo] target(s) in 6.51s
+     Running unittests src/main.rs (tools/compare/target/release/deps/kiban_compare-281d33fd8e93618a)
+
+running 5 tests
+test config::tests::rejects_ambiguous_or_invalid_config ... ok
+test settings::tests::rejects_ignored_overrides_and_ambiguous_runs ... ok
+test workload::tests::deterministic_partition_covers_exact_budget ... ok
+test metrics::tests::bounds_and_merge ... ok
+test settings::tests::adapters_receive_same_logical_trace ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/durability.rs (tools/compare/target/release/deps/durability-2dcdfd708be4b8bf)
+
+running 1 test
+test acknowledged_versions_and_deletes_survive_sigkill ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+

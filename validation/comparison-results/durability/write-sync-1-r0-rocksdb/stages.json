@@ -1,0 +1,9 @@
+[
+  {
+    "duration_cap_s": null,
+    "operations_cap": 10000,
+    "reads_percent": 0,
+    "stage": "random-write",
+    "threads": 4
+  }
+]

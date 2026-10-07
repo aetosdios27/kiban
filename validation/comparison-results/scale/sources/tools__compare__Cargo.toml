@@ -1,0 +1,15 @@
+[package]
+name = "kiban-compare"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+kiban = { git = "https://github.com/aetosdios27/kiban", rev = "76d9d857c61bed3127fa3f7a2136701cd9b49380" }
+rocksdb = { version = "=0.25.0", default-features = false, features = ["snappy", "bindgen-runtime"] }
+serde_json = "1"
+
+[profile.release]
+debug = 1
