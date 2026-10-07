@@ -1,8 +1,9 @@
 //! CRC-32/IEEE checksum.
 //!
 //! Implements the decision in `docs/design/record-framing.md` (D2):
-//! table-driven CRC-32/IEEE, no external dependencies, verified against
-//! published check values.
+//! slicing-by-eight CRC-32/IEEE, no external dependencies, verified against
+//! published check values and an independent bitwise reference. The polynomial,
+//! streaming state and stored checksum bytes are unchanged.
 
 const POLY: u32 = 0xEDB8_8320;
 
@@ -22,14 +23,45 @@ const fn make_table() -> [u32; 256] {
     table
 }
 
-static TABLE: [u32; 256] = make_table();
+const fn make_slices() -> [[u32; 256]; 8] {
+    let mut slices = [[0; 256]; 8];
+    slices[0] = make_table();
+    let mut slice = 1;
+    while slice < 8 {
+        let mut byte = 0;
+        while byte < 256 {
+            let previous = slices[slice - 1][byte];
+            slices[slice][byte] = slices[0][(previous & 255) as usize] ^ (previous >> 8);
+            byte += 1;
+        }
+        slice += 1;
+    }
+    slices
+}
+
+static SLICES: [[u32; 256]; 8] = make_slices();
 
 pub const INITIAL: u32 = 0xFFFF_FFFF;
 
 pub fn update(state: u32, data: &[u8]) -> u32 {
     let mut c = state;
-    for &b in data {
-        c = TABLE[((c ^ b as u32) & 0xFF) as usize] ^ (c >> 8);
+    let (chunks, remainder) = data.as_chunks::<8>();
+    for bytes in chunks {
+        // Explicit little-endian loads work on every host and require no
+        // alignment or unsafe pointer reads. Each slice accounts for the
+        // remaining zero-byte advances after its input byte.
+        let word = u64::from_le_bytes(*bytes) ^ u64::from(c);
+        c = SLICES[7][(word & 255) as usize]
+            ^ SLICES[6][((word >> 8) & 255) as usize]
+            ^ SLICES[5][((word >> 16) & 255) as usize]
+            ^ SLICES[4][((word >> 24) & 255) as usize]
+            ^ SLICES[3][((word >> 32) & 255) as usize]
+            ^ SLICES[2][((word >> 40) & 255) as usize]
+            ^ SLICES[1][((word >> 48) & 255) as usize]
+            ^ SLICES[0][(word >> 56) as usize];
+    }
+    for &b in remainder {
+        c = SLICES[0][((c ^ b as u32) & 255) as usize] ^ (c >> 8);
     }
     c
 }
@@ -45,6 +77,43 @@ pub fn crc32(data: &[u8]) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn bitwise(mut state: u32, data: &[u8]) -> u32 {
+        for &byte in data {
+            state ^= u32::from(byte);
+            for _ in 0..8 {
+                state = if state & 1 == 0 {
+                    state >> 1
+                } else {
+                    (state >> 1) ^ POLY
+                };
+            }
+        }
+        state
+    }
+
+    #[test]
+    fn sliced_matches_bitwise_for_lengths_alignments_and_streaming_states() {
+        let data: Vec<u8> = (0..65560usize)
+            .map(|i| ((i.wrapping_mul(7919) ^ (i >> 3)) & 255) as u8)
+            .collect();
+        for offset in 0..16 {
+            for len in (0..=256).chain([511, 512, 513, 4095, 4096, 4097, 65535]) {
+                let bytes = &data[offset..offset + len];
+                for state in [INITIAL, 0, 0x1234_5678] {
+                    assert_eq!(
+                        update(state, bytes),
+                        bitwise(state, bytes),
+                        "offset={offset} len={len} state={state}"
+                    );
+                }
+            }
+        }
+        for size in [1, 3, 7, 8, 9, 31, 255, 4096] {
+            let state = data.chunks(size).fold(INITIAL, update);
+            assert_eq!(state, bitwise(INITIAL, &data), "stream chunk={size}");
+        }
+    }
 
     #[test]
     fn published_check_values() {
