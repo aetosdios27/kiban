@@ -1,0 +1,87 @@
+{
+  "repetitions": 1,
+  "order_seed": 20261008,
+  "cases": [
+    {
+      "name": "write-100m",
+      "timeout_s": 3600,
+      "args": {
+        "operations": 100000000,
+        "keys": 1000000,
+        "working-set": 1000000,
+        "value-size": 128,
+        "threads": 4,
+        "seed": 20261008,
+        "read-percent": 50,
+        "preload-keys": 1000000,
+        "sync-every": 0,
+        "cache": "as-is",
+        "duration": 0,
+        "sample-ms": 1000,
+        "write-buffer": 4194304,
+        "block-cache": 33554432,
+        "target-file-size": 4194304,
+        "base-level-bytes": 4194304,
+        "level-multiplier": 10,
+        "l0-trigger": 4,
+        "l0-stall": 8,
+        "max-open-files": 128,
+        "workload": "random-write"
+      }
+    },
+    {
+      "name": "hour-transitions",
+      "timeout_s": 4200,
+      "args": {
+        "operations": 0,
+        "keys": 1000000,
+        "working-set": 1000000,
+        "value-size": 128,
+        "threads": 4,
+        "seed": 20261008,
+        "read-percent": 10,
+        "preload-keys": 1000000,
+        "sync-every": 0,
+        "cache": "as-is",
+        "duration": 3600,
+        "sample-ms": 1000,
+        "write-buffer": 4194304,
+        "block-cache": 33554432,
+        "target-file-size": 4194304,
+        "base-level-bytes": 4194304,
+        "level-multiplier": 10,
+        "l0-trigger": 4,
+        "l0-stall": 8,
+        "max-open-files": 128,
+        "workload": "burst-recovery"
+      }
+    },
+    {
+      "name": "concurrency-transition-10min",
+      "timeout_s": 900,
+      "args": {
+        "operations": 0,
+        "keys": 1000000,
+        "working-set": 1000000,
+        "value-size": 128,
+        "threads": 16,
+        "seed": 20261008,
+        "read-percent": 50,
+        "preload-keys": 1000000,
+        "sync-every": 0,
+        "cache": "as-is",
+        "duration": 600,
+        "sample-ms": 1000,
+        "write-buffer": 4194304,
+        "block-cache": 33554432,
+        "target-file-size": 4194304,
+        "base-level-bytes": 4194304,
+        "level-multiplier": 10,
+        "l0-trigger": 4,
+        "l0-stall": 8,
+        "max-open-files": 128,
+        "workload": "concurrency-jump"
+      }
+    }
+  ]
+}

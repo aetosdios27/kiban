@@ -57,6 +57,7 @@ fn run_stage(
             let mut local = Metrics::default();
             let mut id = thread as u64;
             let mut writes = 0u64;
+            let mut keyed = vec![0; c.value_size];
             barrier.wait();
             let start = Instant::now();
             let result = (|| {
@@ -65,6 +66,12 @@ fn run_stage(
                     && !stop.load(Ordering::Relaxed)
                 {
                     let (read, key) = workload::operation(&c, &stage, index as u64, id);
+                    let expected = if c.value_pattern == "keyed" {
+                        random::keyed_value(c.seed, u64::from_be_bytes(key), &mut keyed);
+                        keyed.as_slice()
+                    } else {
+                        value.as_slice()
+                    };
                     let started = Instant::now();
                     if read {
                         let got = db.get(key).map_err(io::Error::other)?;
@@ -72,16 +79,19 @@ fn run_stage(
                             .reads
                             .record(started.elapsed().as_nanos().min(u64::MAX as u128) as u64);
                         if let Some(got) = got {
-                            if got != *value {
+                            if got != expected {
                                 return Err(io::Error::other(format!(
                                     "read content mismatch at stage={index} op={id}"
                                 )));
                             }
                         } else {
+                            if u64::from_be_bytes(key) < c.preload_keys {
+                                return Err(io::Error::other("missing preloaded key"));
+                            }
                             local.misses += 1;
                         }
                     } else {
-                        db.put(key, value.as_slice())?;
+                        db.put(key, expected)?;
                         writes += 1;
                         if c.sync_every > 0 && writes.is_multiple_of(c.sync_every) {
                             db.sync()?;
@@ -181,11 +191,25 @@ fn run(c: Config) -> io::Result<()> {
 fn measure(c: &Config) -> io::Result<()> {
     let prep_start = Instant::now();
     let db = SharedKiban::open_with_options(&c.db, c.options.clone()).map_err(io::Error::other)?;
-    let val = random::value(c.seed, c.value_size);
+    let mut val = random::value(c.seed, c.value_size);
     for i in 0..c.preload_keys {
-        db.put(i.to_be_bytes(), &val)?;
+        if c.value_pattern == "keyed" {
+            random::keyed_value(c.seed, i, &mut val);
+        }
+        if c.preload_mode == "verify" {
+            if db
+                .get(i.to_be_bytes())
+                .map_err(io::Error::other)?
+                .as_deref()
+                != Some(val.as_slice())
+            {
+                return Err(io::Error::other("existing preload key/value mismatch"));
+            }
+        } else {
+            db.put(i.to_be_bytes(), &val)?;
+        }
     }
-    if c.preload_keys > 0 {
+    if c.preload_keys > 0 && c.preload_mode == "write" {
         db.sync()?;
         db.flush().map_err(io::Error::other)?;
     }
@@ -197,16 +221,23 @@ fn measure(c: &Config) -> io::Result<()> {
     let db = SharedKiban::open_with_options(&c.db, c.options.clone()).map_err(io::Error::other)?;
     if c.cache == "warm" {
         for i in 0..c.working_set {
-            let _ = db.get(i.to_be_bytes()).map_err(io::Error::other)?;
+            if c.value_pattern == "keyed" {
+                random::keyed_value(c.seed, i, &mut val);
+            }
+            let got = db.get(i.to_be_bytes()).map_err(io::Error::other)?;
+            if got.as_deref().is_some_and(|v| v != val) || (got.is_none() && i < c.preload_keys) {
+                return Err(io::Error::other("warmup key/value mismatch"));
+            }
         }
     }
     let mut prep = telemetry::create(&c.output.join("preparation.csv"))?;
     writeln!(
         prep,
-        "elapsed_s,preload_keys,db_bytes\n{},{},{}",
+        "elapsed_s,preload_keys,db_bytes,allocated_db_bytes\n{},{},{},{}",
         prep_start.elapsed().as_secs_f64(),
         c.preload_keys,
-        telemetry::disk_bytes(&c.db)?
+        telemetry::disk_bytes(&c.db)?,
+        telemetry::allocated_bytes(&c.db)?
     )?;
     let mut reporter = Reporter::new(c, &db)?;
     let stages = workload::stages(c);

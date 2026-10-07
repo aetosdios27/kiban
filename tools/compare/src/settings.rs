@@ -66,6 +66,9 @@ impl Settings {
             return Err("drain duration must be in 0..3600 seconds".into());
         }
         let workload = Config::from_args(rest)?;
+        if workload.value_pattern != "constant" || workload.preload_mode != "write" {
+            return Err("comparison adapter supports only the historical constant value pattern".into());
+        }
         if workload.reuse {
             return Err("comparison runs require fresh DBs; preload/cache modes recreate the same logical dataset".into());
         }

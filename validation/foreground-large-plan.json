@@ -1,0 +1,71 @@
+{
+  "repetitions": 1,
+  "order_seed": 20261008,
+  "ordered": true,
+  "cases": [
+    {
+      "name": "large-36gb-warm",
+      "timeout_s": 7200,
+      "args": {
+        "operations": 1000000,
+        "keys": 9000000,
+        "working-set": 9000000,
+        "value-size": 4096,
+        "threads": 4,
+        "seed": 20261008,
+        "read-percent": 50,
+        "preload-keys": 9000000,
+        "sync-every": 0,
+        "cache": "warm",
+        "duration": 0,
+        "sample-ms": 1000,
+        "write-buffer": 33554432,
+        "block-cache": 33554432,
+        "target-file-size": 33554432,
+        "base-level-bytes": 268435456,
+        "level-multiplier": 10,
+        "l0-trigger": 4,
+        "l0-stall": 8,
+        "max-open-files": 128,
+        "workload": "random-read",
+        "value-pattern": "keyed"
+      },
+      "database": "large-36gb",
+      "verify_timeout_s": 1200,
+      "minimum_free_bytes": 107374182400
+    },
+    {
+      "name": "large-36gb-reduced",
+      "timeout_s": 7200,
+      "args": {
+        "operations": 1000000,
+        "keys": 9000000,
+        "working-set": 9000000,
+        "value-size": 4096,
+        "threads": 4,
+        "seed": 20261008,
+        "read-percent": 50,
+        "preload-keys": 9000000,
+        "sync-every": 0,
+        "cache": "reduced",
+        "duration": 0,
+        "sample-ms": 1000,
+        "write-buffer": 33554432,
+        "block-cache": 33554432,
+        "target-file-size": 33554432,
+        "base-level-bytes": 268435456,
+        "level-multiplier": 10,
+        "l0-trigger": 4,
+        "l0-stall": 8,
+        "max-open-files": 128,
+        "workload": "random-read",
+        "value-pattern": "keyed",
+        "reuse": true,
+        "preload-mode": "verify"
+      },
+      "database": "large-36gb",
+      "verify_timeout_s": 1200,
+      "minimum_free_bytes": 34359738368
+    }
+  ]
+}

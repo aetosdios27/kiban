@@ -1,7 +1,9 @@
 # Foreground latency and endurance pass
 
-- [ ] Reproduce baseline/current mixed workloads at 4, 8 and 16 threads with identical parameters and alternating trial order.
-- [ ] Profile foreground gate waits, read amplification and maintenance BUILD work; separate measurements from hypotheses.
+- [x] Study pinned RocksDB write coordination, maintenance scheduling, checksums, read selection and durable version/recovery paths.
+
+- [x] Reproduce baseline/current mixed workloads at 4, 8 and 16 threads with identical parameters and alternating trial order.
+- [x] Profile foreground gate waits, read amplification and maintenance BUILD work; separate measurements from hypotheses.
 - [ ] Identify and fix supported causes of mixed regression and L0 write stalls, preserving durability and visibility.
 - [ ] Add relevant deterministic regressions; run focused checks after each change.
 - [ ] Repeat fixed workloads, including read/write/update/burst/concurrency cases; retain failures and regressions.

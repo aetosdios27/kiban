@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import random
 import subprocess
+import os
 
 repo = Path(__file__).resolve().parent.parent
 spec = importlib.util.spec_from_file_location('supervisor', repo/'tools/compare/run.py')
@@ -51,14 +52,20 @@ metadata = {'plan':plan,'builds':builds,'profiling':a.perf is not None or a.diag
             'runner_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
 (a.output/'metadata.json').write_text(json.dumps(metadata,indent=2)+'\n')
 jobs = [(c,r) for c in plan['cases'] for r in range(plan['repetitions'])]
-random.Random(plan['order_seed']).shuffle(jobs)
+if not plan.get('ordered', False):
+    random.Random(plan['order_seed']).shuffle(jobs)
 results = []
 labels = list(builds)
 for index,(case,repeat) in enumerate(jobs):
     order = labels if index % 2 == 0 else labels[::-1]
     for label in order:
         name = f"{label}-{case['name']}-r{repeat}"
-        args = ['--db',str(a.data.resolve()/name),'--output',str(a.output.resolve()/name)]
+        if case.get('minimum_free_bytes', 0):
+            space = os.statvfs(a.data)
+            if space.f_bavail * space.f_frsize < case['minimum_free_bytes']:
+                raise SystemExit(f'STOP: insufficient disk space for {name}')
+        database = f"{label}-{case['database']}" if 'database' in case else name
+        args = ['--db',str(a.data.resolve()/database),'--output',str(a.output.resolve()/name)]
         for key,value in case['args'].items():
             args += ['--'+key,str(value).lower() if isinstance(value,bool) else str(value)]
         command = [str(Path(builds[label]['directory'])/'scale'),*args]
