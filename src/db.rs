@@ -1141,7 +1141,8 @@ impl Kiban {
         &self.dir
     }
 
-    /// Captures a snapshot: a sequence boundary for consistent reads.
+    /// Captures a snapshot: a sequence boundary and every source needed
+    /// to read that boundary, independent of later flushes or compactions.
     /// The engine retains history needed by this snapshot until
     /// [`Kiban::release_snapshot`] is called (or the process ends).
     pub fn snapshot(&mut self) -> Snapshot {
@@ -1150,6 +1151,8 @@ impl Kiban {
         self.active_snapshots.insert(pos, seq);
         Snapshot {
             seq,
+            memtable: self.memtable.clone(),
+            immutable: self.immutable.as_ref().map(|im| im.memtable.clone()),
             version: StdArc::clone(&self.version),
         }
     }
@@ -1173,10 +1176,9 @@ impl Kiban {
         use std::sync::atomic::Ordering::Relaxed;
         let key = key.as_ref();
         self.read_amp.gets_total.fetch_add(1, Relaxed);
-        // The memtable retains superseded versions while a snapshot needs
-        // them, so the newest version at-or-below snap may live here even
-        // when newer invisible versions exist.
-        if let Some(entry) = self.memtable.entry_at(key, snap.seq) {
+        // Use captured sources: current memtables may have rotated or
+        // flushed into an SST that is absent from the pinned Version.
+        if let Some(entry) = snap.memtable.entry_at(key, snap.seq) {
             self.read_amp.resolved_in_memtable.fetch_add(1, Relaxed);
             return Ok(match entry {
                 MemEntry::Value { value, .. } => Some(value.clone()),
@@ -1186,8 +1188,8 @@ impl Kiban {
         // 11.8: same fallthrough-on-None chaining as memtable -> tables
         // already used below, with the frozen memtable (if any) as one
         // more, older source in between.
-        if let Some(im) = &self.immutable
-            && let Some(entry) = im.memtable.entry_at(key, snap.seq)
+        if let Some(immutable) = &snap.immutable
+            && let Some(entry) = immutable.entry_at(key, snap.seq)
         {
             self.read_amp.resolved_in_immutable.fetch_add(1, Relaxed);
             return Ok(match entry {
@@ -1203,13 +1205,13 @@ impl Kiban {
     pub fn scan_at(&self, snap: &Snapshot) -> Result<ScanResult, DbError> {
         let mut sources: Vec<SourceHead<'_>> = Vec::new();
         sources.push(SourceHead {
-            feed: SourceFeed::Mem(Box::new(self.memtable.iter_from(b""))),
+            feed: SourceFeed::Mem(Box::new(snap.memtable.iter_from(b""))),
             head: None,
             exhausted: false,
         });
-        if let Some(im) = &self.immutable {
+        if let Some(immutable) = &snap.immutable {
             sources.push(SourceHead {
-                feed: SourceFeed::Mem(Box::new(im.memtable.iter_from(b""))),
+                feed: SourceFeed::Mem(Box::new(immutable.iter_from(b""))),
                 head: None,
                 exhausted: false,
             });
@@ -2106,11 +2108,14 @@ mod flush_tests {
 }
 
 /// A consistent read boundary captured from the engine's sequence
-/// counter (snapshots.md D3). Pins the [`Version`] that was current at
-/// capture time so compaction cannot reclaim files it may read.
+/// counter (snapshots.md D3). Copies the active memtable and pins the
+/// frozen memtable and [`Version`] current at capture time. Physical
+/// movement or reclamation cannot change this captured logical view.
 #[derive(Debug, Clone)]
 pub struct Snapshot {
     pub(crate) seq: u64,
+    pub(crate) memtable: Memtable,
+    pub(crate) immutable: Option<StdArc<Memtable>>,
     pub(crate) version: StdArc<Version>,
 }
 
@@ -8545,3 +8550,7 @@ mod flush_pipeline_tests {
 #[cfg(test)]
 #[path = "scale_validation_tests.rs"]
 mod scale_validation_tests;
+
+#[cfg(test)]
+#[path = "correctness_tests.rs"]
+mod correctness_tests;

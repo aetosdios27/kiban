@@ -63,7 +63,7 @@ fn repeated_wal_power_loss_preserves_durable_state() {
 }
 
 #[test]
-fn snapshot_failure_is_detected_and_reported_by_torture() {
+fn snapshots_survive_repeated_recovery_and_faults() {
     let root =
         std::env::temp_dir().join(format!("kiban-snapshot-detection-{}", std::process::id()));
     let db = root.join("db");
@@ -85,16 +85,7 @@ fn snapshot_failure_is_detected_and_reported_by_torture() {
     };
     let result = simulated::run(&c);
     std::fs::remove_dir_all(root).unwrap();
-    assert!(
-        result.is_err(),
-        "existing snapshot defect must be reported as failure"
-    );
-    assert!(
-        result
-            .unwrap_err()
-            .to_string()
-            .contains("pinned snapshot changed")
-    );
+    result.expect("every pinned snapshot must retain its captured logical view");
 }
 
 #[test]
