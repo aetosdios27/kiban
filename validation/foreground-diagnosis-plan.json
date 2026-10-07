@@ -1,0 +1,87 @@
+{
+  "repetitions": 5,
+  "order_seed": 20261008,
+  "cases": [
+    {
+      "name": "mixed-4t",
+      "timeout_s": 180,
+      "args": {
+        "operations": 1000000,
+        "keys": 100000,
+        "working-set": 100000,
+        "value-size": 128,
+        "threads": 4,
+        "seed": 20261008,
+        "read-percent": 50,
+        "preload-keys": 100000,
+        "sync-every": 0,
+        "cache": "as-is",
+        "duration": 0,
+        "sample-ms": 1000,
+        "write-buffer": 4194304,
+        "block-cache": 33554432,
+        "target-file-size": 4194304,
+        "base-level-bytes": 4194304,
+        "level-multiplier": 10,
+        "l0-trigger": 4,
+        "l0-stall": 8,
+        "max-open-files": 128,
+        "workload": "mixed"
+      }
+    },
+    {
+      "name": "mixed-8t",
+      "timeout_s": 180,
+      "args": {
+        "operations": 1000000,
+        "keys": 100000,
+        "working-set": 100000,
+        "value-size": 128,
+        "threads": 8,
+        "seed": 20261008,
+        "read-percent": 50,
+        "preload-keys": 100000,
+        "sync-every": 0,
+        "cache": "as-is",
+        "duration": 0,
+        "sample-ms": 1000,
+        "write-buffer": 4194304,
+        "block-cache": 33554432,
+        "target-file-size": 4194304,
+        "base-level-bytes": 4194304,
+        "level-multiplier": 10,
+        "l0-trigger": 4,
+        "l0-stall": 8,
+        "max-open-files": 128,
+        "workload": "mixed"
+      }
+    },
+    {
+      "name": "mixed-16t",
+      "timeout_s": 180,
+      "args": {
+        "operations": 1000000,
+        "keys": 100000,
+        "working-set": 100000,
+        "value-size": 128,
+        "threads": 16,
+        "seed": 20261008,
+        "read-percent": 50,
+        "preload-keys": 100000,
+        "sync-every": 0,
+        "cache": "as-is",
+        "duration": 0,
+        "sample-ms": 1000,
+        "write-buffer": 4194304,
+        "block-cache": 33554432,
+        "target-file-size": 4194304,
+        "base-level-bytes": 4194304,
+        "level-multiplier": 10,
+        "l0-trigger": 4,
+        "l0-stall": 8,
+        "max-open-files": 128,
+        "workload": "mixed"
+      }
+    }
+  ]
+}
