@@ -1,0 +1,76 @@
+{
+  "repetitions": 3,
+  "order_seed": 20261008,
+  "cases": [
+    {
+      "name": "writes-statistics-on",
+      "engines": [
+        "kiban",
+        "rocksdb"
+      ],
+      "timeout_s": 180,
+      "args": {
+        "operations": 1000000,
+        "keys": 100000,
+        "working-set": 100000,
+        "value-size": 128,
+        "threads": 4,
+        "seed": 20261008,
+        "read-percent": 50,
+        "preload-keys": 0,
+        "sync-every": 0,
+        "cache": "as-is",
+        "profile": "matched",
+        "duration": 0,
+        "sample-ms": 1000,
+        "drain-seconds": 5,
+        "verify": true,
+        "rocks-statistics": true,
+        "write-buffer": 4194304,
+        "block-cache": 33554432,
+        "target-file-size": 4194304,
+        "base-level-bytes": 4194304,
+        "level-multiplier": 10,
+        "l0-trigger": 4,
+        "l0-stall": 8,
+        "max-open-files": 128,
+        "workload": "random-write"
+      }
+    },
+    {
+      "name": "writes-statistics-off",
+      "engines": [
+        "kiban",
+        "rocksdb"
+      ],
+      "timeout_s": 180,
+      "args": {
+        "operations": 1000000,
+        "keys": 100000,
+        "working-set": 100000,
+        "value-size": 128,
+        "threads": 4,
+        "seed": 20261008,
+        "read-percent": 50,
+        "preload-keys": 0,
+        "sync-every": 0,
+        "cache": "as-is",
+        "profile": "matched",
+        "duration": 0,
+        "sample-ms": 1000,
+        "drain-seconds": 5,
+        "verify": true,
+        "rocks-statistics": false,
+        "write-buffer": 4194304,
+        "block-cache": 33554432,
+        "target-file-size": 4194304,
+        "base-level-bytes": 4194304,
+        "level-multiplier": 10,
+        "l0-trigger": 4,
+        "l0-stall": 8,
+        "max-open-files": 128,
+        "workload": "random-write"
+      }
+    }
+  ]
+}

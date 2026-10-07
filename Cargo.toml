@@ -8,7 +8,7 @@ readme = "README.md"
 license = "MIT"
 keywords = ["database", "key-value", "storage", "lsm", "embedded"]
 categories = ["database-implementations"]
-exclude = ["validation/results/**", "validation/correctness-results/**", "validation/release-results/**"]
+exclude = ["validation/results/**", "validation/correctness-results/**", "validation/release-results/**", "validation/comparison-results/**", "tools/**"]
 
 [features]
 # Test-only: enables the exhaustive loom interleaving models for the

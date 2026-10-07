@@ -1,0 +1,87 @@
+{
+  "repetitions": 3,
+  "order_seed": 20261008,
+  "cases": [
+    {
+      "name": "defaults-random-read",
+      "engines": [
+        "kiban",
+        "rocksdb"
+      ],
+      "timeout_s": 180,
+      "args": {
+        "operations": 1000000,
+        "keys": 100000,
+        "working-set": 100000,
+        "value-size": 128,
+        "threads": 4,
+        "seed": 20261008,
+        "read-percent": 50,
+        "preload-keys": 100000,
+        "sync-every": 0,
+        "cache": "warm",
+        "profile": "defaults",
+        "duration": 0,
+        "sample-ms": 1000,
+        "drain-seconds": 5,
+        "verify": true,
+        "rocks-statistics": false,
+        "workload": "random-read"
+      }
+    },
+    {
+      "name": "defaults-random-write",
+      "engines": [
+        "kiban",
+        "rocksdb"
+      ],
+      "timeout_s": 180,
+      "args": {
+        "operations": 1000000,
+        "keys": 100000,
+        "working-set": 100000,
+        "value-size": 128,
+        "threads": 4,
+        "seed": 20261008,
+        "read-percent": 50,
+        "preload-keys": 100000,
+        "sync-every": 0,
+        "cache": "as-is",
+        "profile": "defaults",
+        "duration": 0,
+        "sample-ms": 1000,
+        "drain-seconds": 5,
+        "verify": true,
+        "rocks-statistics": false,
+        "workload": "random-write"
+      }
+    },
+    {
+      "name": "defaults-mixed",
+      "engines": [
+        "kiban",
+        "rocksdb"
+      ],
+      "timeout_s": 180,
+      "args": {
+        "operations": 1000000,
+        "keys": 100000,
+        "working-set": 100000,
+        "value-size": 128,
+        "threads": 4,
+        "seed": 20261008,
+        "read-percent": 50,
+        "preload-keys": 100000,
+        "sync-every": 0,
+        "cache": "as-is",
+        "profile": "defaults",
+        "duration": 0,
+        "sample-ms": 1000,
+        "drain-seconds": 5,
+        "verify": true,
+        "rocks-statistics": false,
+        "workload": "mixed"
+      }
+    }
+  ]
+}
