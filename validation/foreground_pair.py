@@ -50,6 +50,13 @@ metadata = {'plan':plan,'builds':builds,'profiling':a.perf is not None or a.diag
             'uname':subprocess.check_output(['uname','-a'],text=True),
             'cpu':Path('/proc/cpuinfo').read_text(),'memory':Path('/proc/meminfo').read_text(),
             'runner_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
+metadata['source_archives'] = {}
+for label, build in builds.items():
+    raw = subprocess.check_output(['git','archive','--format=tar.gz',build['receipt']['revision'],
+                                  'Cargo.toml','Cargo.lock','src','examples','benches','tests','README.md','LICENSE'],cwd=repo)
+    name = f'sources-{label}.tar.gz'
+    (a.output/name).write_bytes(raw)
+    metadata['source_archives'][name] = {'sha256':hashlib.sha256(raw).hexdigest(),'bytes':len(raw)}
 (a.output/'metadata.json').write_text(json.dumps(metadata,indent=2)+'\n')
 jobs = [(c,r) for c in plan['cases'] for r in range(plan['repetitions'])]
 if not plan.get('ordered', False):
