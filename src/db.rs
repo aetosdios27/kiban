@@ -260,11 +260,12 @@ pub struct KibanOptions {
     pub level_multiplier: u64,
     pub target_file_size: u64,
     pub block_cache_bytes: usize,
-    /// Hard bound on simultaneously open SST file descriptors (11.6),
-    /// enforced by a shared `TableFileCache` — not a target or a soft
-    /// threshold. `SstTable` does not keep a descriptor of its own; a
-    /// read leases one from this cache for just its own duration, so
-    /// this number really is the ceiling.
+    /// Hard bound on SST descriptors owned by the shared foreground
+    /// `TableFileCache` (11.6), not a target or a soft threshold.
+    /// Streaming compaction uses separate input handles to avoid
+    /// starvation behind foreground leases; those handles are outside
+    /// this budget and their count depends on compaction fan-in.
+    /// This is not a bound on all engine or process descriptors.
     pub max_open_table_files: usize,
     /// Flush trigger (11.8): once the active memtable's
     /// [`Memtable::logical_bytes`] reaches this, `SharedKiban` freezes

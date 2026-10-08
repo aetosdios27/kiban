@@ -1,6 +1,6 @@
-//! Bounds the number of simultaneously open SST file descriptors
+//! Bounds SST descriptors owned by the foreground file cache
 //! (phase 11.6). `SstTable` does not own a permanent file handle;
-//! every read leases one from here, keyed by the sstable's file
+//! uncached foreground reads lease one here, keyed by the sstable's file
 //! number — stable and never reused for the life of one database, so
 //! it works as a cache key.
 //!
@@ -14,7 +14,9 @@
 //! alive outside the cache's accounting, callers here only ever get a
 //! [`FileLease`] — a private handle that cannot be cloned out from
 //! under the cache. `capacity` is therefore a hard ceiling on
-//! concurrently open descriptors, not a target.
+//! concurrently open descriptors owned by this cache, not a target.
+//! Streaming compaction opens independent input handles outside this
+//! budget, so total engine descriptors also depend on compaction fan-in.
 
 use std::collections::{HashMap, VecDeque};
 use std::io;
