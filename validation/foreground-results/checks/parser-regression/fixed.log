@@ -1,0 +1,10 @@
+
+running 2 tests
+test sstable::block::tests::checksum_valid_oversized_restart_arrays_return_corruption ... ok
+test sstable::reader::compaction_iter_tests::overflowed_footer_ranges_return_corruption_before_reading_blocks ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 265 filtered out; finished in 0.00s
+
+   Compiling kiban v0.1.0 (/home/aetos/dev/personal/kiban)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.73s
+     Running unittests src/lib.rs (target/debug/deps/kiban-60f9814aeb7cdf24)

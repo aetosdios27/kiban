@@ -1,0 +1,277 @@
+[
+  {
+    "command": [
+      "cargo",
+      "fmt",
+      "--check"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 0.21536485700198682
+  },
+  {
+    "command": [
+      "cargo",
+      "clippy",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 1.1164624790035305
+  },
+  {
+    "command": [
+      "cargo",
+      "clippy",
+      "--all-targets",
+      "--features",
+      "loom",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 1.1661791869992157
+  },
+  {
+    "command": [
+      "cargo",
+      "clippy",
+      "--all-targets",
+      "--features",
+      "diagnostics",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 0.06437593000009656
+  },
+  {
+    "command": [
+      "cargo",
+      "test"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 38.35022883499914
+  },
+  {
+    "command": [
+      "cargo",
+      "test",
+      "--examples"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 0.4153219820000231
+  },
+  {
+    "command": [
+      "cargo",
+      "test",
+      "--features",
+      "diagnostics"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 47.7190516030023
+  },
+  {
+    "command": [
+      "cargo",
+      "test",
+      "--features",
+      "loom",
+      "--lib",
+      "--",
+      "--test-threads=1",
+      "loom_"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 16.19261968199862
+  },
+  {
+    "command": [
+      "cargo",
+      "test",
+      "--release",
+      "--lib",
+      "--",
+      "--ignored",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 10.633253235995653
+  },
+  {
+    "command": [
+      "cargo",
+      "package",
+      "--locked"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 2.8195786159994896
+  },
+  {
+    "command": [
+      "cargo",
+      "package",
+      "--list"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 0.0644887349990313
+  },
+  {
+    "command": [
+      "cargo",
+      "fmt",
+      "--manifest-path",
+      "tools/compare/Cargo.toml",
+      "--check"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 0.06436894299986307
+  },
+  {
+    "command": [
+      "cargo",
+      "clippy",
+      "--release",
+      "--manifest-path",
+      "tools/compare/Cargo.toml",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 255,
+    "elapsed_s": 172.32701342099608,
+    "interrupted_reason": "Canceled redundant native rebuild; rerun links the existing pinned 11.8.1 static archives."
+  },
+  {
+    "command": [
+      "cargo",
+      "clippy",
+      "--release",
+      "--manifest-path",
+      "tools/compare/Cargo.toml",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "native_reuse": true,
+    "exit_code": 0,
+    "elapsed_s": 1.4165792310013785
+  },
+  {
+    "command": [
+      "cargo",
+      "test",
+      "--release",
+      "--manifest-path",
+      "tools/compare/Cargo.toml"
+    ],
+    "native_reuse": true,
+    "exit_code": 0,
+    "elapsed_s": 5.87640370799636
+  },
+  {
+    "command": [
+      "python3",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tools/compare/tests",
+      "-p",
+      "test_*.py"
+    ],
+    "native_reuse": true,
+    "exit_code": 0,
+    "elapsed_s": 0.7150716670003021
+  },
+  {
+    "command": [
+      "target/release/examples/torture",
+      "--mode",
+      "probes",
+      "--seed",
+      "20261008",
+      "--cycles",
+      "1000",
+      "--operations",
+      "1000",
+      "--keys",
+      "1000",
+      "--threads",
+      "4",
+      "--snapshots",
+      "true",
+      "--sync-every",
+      "17",
+      "--fault-percent",
+      "70",
+      "--db",
+      "target/foreground-torture/probes",
+      "--output",
+      "validation/foreground-results/torture-probes"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "target/release/examples/torture",
+      "--mode",
+      "simulated",
+      "--seed",
+      "20261008",
+      "--cycles",
+      "1000",
+      "--operations",
+      "1000",
+      "--keys",
+      "1000",
+      "--threads",
+      "4",
+      "--snapshots",
+      "true",
+      "--sync-every",
+      "17",
+      "--fault-percent",
+      "70",
+      "--db",
+      "target/foreground-torture/simulated",
+      "--output",
+      "validation/foreground-results/torture-simulated"
+    ],
+    "exit_code": 0
+  },
+  {
+    "command": [
+      "target/release/examples/torture",
+      "--mode",
+      "process",
+      "--seed",
+      "20261008",
+      "--cycles",
+      "1000",
+      "--operations",
+      "1000",
+      "--keys",
+      "1000",
+      "--threads",
+      "4",
+      "--snapshots",
+      "true",
+      "--sync-every",
+      "17",
+      "--fault-percent",
+      "70",
+      "--db",
+      "target/foreground-torture/process",
+      "--output",
+      "validation/foreground-results/torture-process"
+    ],
+    "exit_code": 0
+  }
+]

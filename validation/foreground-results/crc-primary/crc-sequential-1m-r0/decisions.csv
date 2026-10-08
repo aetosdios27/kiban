@@ -1,0 +1,49 @@
+observed_elapsed_s,stage,sequence,gap_before,pressure_l0,pressure_debt,pressure_read,dominant,tier,chosen,candidates,predicted_rewrite_bytes,l0_relief,debt_relief,read_relief
+1.006783487,"sequential-write",1,0,0.16666666666666666,0,0,L0,None,"None",0,0,0,0,0
+1.006783487,"sequential-write",2,0,0.3333333333333333,0,0,L0,None,"None",0,0,0,0,0
+1.006783487,"sequential-write",3,0,0.5,0,0,L0,None,"None",0,0,0,0,0
+1.006783487,"sequential-write",4,0,0.6666666666666666,0,0,L0,L0,"Some(L0)",1,15316288,1,0,1
+1.006783487,"sequential-write",5,0,0.16666666666666666,0.3,0,DeepDebt,FocusReselected,"Some(TrivialMove { level: 1 })",5,0,0,1,0
+1.006783487,"sequential-write",6,0,0.16666666666666666,0.21,0,DeepDebt,None,"None",0,0,0,0,0
+1.006783487,"sequential-write",7,0,0.16666666666666666,0.147,0,L0,None,"None",0,0,0,0,0
+1.006783487,"sequential-write",8,0,0.3333333333333333,0.10289999999999999,0,L0,None,"None",0,0,0,0,0
+1.006783487,"sequential-write",9,0,0.5,0.07202999999999998,0,L0,None,"None",0,0,0,0,0
+1.006783487,"sequential-write",10,0,0.6666666666666666,0.05042099999999999,0,L0,L0,"Some(L0)",1,15316390,1,0,1
+1.006783487,"sequential-write",11,0,0.16666666666666666,0.3352947,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 4 })",4,30037078,0,1,0
+1.006783487,"sequential-write",12,0,0.5,0.23470628999999998,0,L0,None,"None",0,0,0,0,0
+1.006783487,"sequential-write",13,0,0.5,0.16429440299999998,0,L0,None,"None",0,0,0,0,0
+1.006783487,"sequential-write",14,0,0.6666666666666666,0.11500608209999998,0,L0,L0,"Some(L0)",1,15316543,1,0,1
+1.006783487,"sequential-write",15,0,0.16666666666666666,0.38050425746999994,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 4 })",4,30393483,0,1,0
+1.006783487,"sequential-write",16,0,0.5,0.26635298022899995,0,L0,None,"None",0,0,0,0,0
+1.006783487,"sequential-write",17,0,0.5,0.18644708616029995,0,L0,None,"None",0,0,0,0,0
+1.006783487,"sequential-write",18,0,0.6666666666666666,0.13051296031220996,0,L0,L0,"Some(L0)",1,15316528,1,0,1
+1.006783487,"sequential-write",19,0,0.16666666666666666,0.39135907221854693,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 4 })",4,30252707,0,1,0
+2.01499197,"sequential-write",20,0,0.5,0.2739513505529828,0,L0,None,"None",0,0,0,0,0
+2.01499197,"sequential-write",21,0,0.5,0.19176594538708797,0,L0,None,"None",0,0,0,0,0
+2.01499197,"sequential-write",22,0,0.6666666666666666,0.13423616177096157,0,L0,L0,"Some(L0)",1,15316456,1,0,1
+2.01499197,"sequential-write",23,0,0.16666666666666666,0.3939653132396731,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 4 })",4,30292278,0,1,0
+2.01499197,"sequential-write",24,0,0.5,0.27577571926777117,0,L0,None,"None",0,0,0,0,0
+2.01499197,"sequential-write",25,0,0.5,0.1930430034874398,0,L0,None,"None",0,0,0,0,0
+2.01499197,"sequential-write",26,0,0.6666666666666666,0.13513010244120785,0,L0,L0,"Some(L0)",1,15316504,1,0,1
+2.01499197,"sequential-write",27,0,0.16666666666666666,0.3945910717088455,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 4 })",4,30417757,0,1,0
+2.01499197,"sequential-write",28,0,0.3333333333333333,0.2762137501961918,0,L0,None,"None",0,0,0,0,0
+2.01499197,"sequential-write",29,0,0.3333333333333333,0.19334962513733425,0,L0,None,"None",0,0,0,0,0
+2.01499197,"sequential-write",30,0,0.5,0.13534473759613397,0,L0,None,"None",0,0,0,0,0
+2.01499197,"sequential-write",31,0,0.6666666666666666,0.09474131631729377,0,L0,L0,"Some(L0)",1,15316535,1,0,1
+2.01499197,"sequential-write",32,0,0.16666666666666666,0.36631892142210565,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 2 })",4,17027696,0,0.7924385455914863,0
+2.01499197,"sequential-write",33,0,0.3333333333333333,0.40959085039555937,0,DeepDebt,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 2 })",2,13246921,0,1,0
+2.01499197,"sequential-write",34,0,0.3333333333333333,0.28671359527689155,0,L0,None,"None",0,0,0,0,0
+2.01499197,"sequential-write",35,0,0.3333333333333333,0.20069951669382408,0,L0,None,"None",0,0,0,0,0
+2.01499197,"sequential-write",36,0,0.5,0.14048966168567684,0,L0,None,"None",0,0,0,0,0
+2.01499197,"sequential-write",37,0,0.6666666666666666,0.09834276317997379,0,L0,L0,"Some(L0)",1,15316580,1,0,1
+2.01499197,"sequential-write",38,0,0.16666666666666666,0.3688399342259816,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 4 })",4,30251483,0,1,0
+2.01499197,"sequential-write",39,0,0.5,0.2581879539581871,0,L0,None,"None",0,0,0,0,0
+2.01499197,"sequential-write",40,0,0.5,0.18073156777073096,0,L0,None,"None",0,0,0,0,0
+2.01499197,"sequential-write",41,0,0.6666666666666666,0.12651209743951167,0,L0,L0,"Some(L0)",1,15316546,1,0,1
+2.1682217169999998,"sequential-write",42,0,0.16666666666666666,0.38855846820765816,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 4 })",4,30429982,0,1,0
+2.1682217169999998,"sequential-write",43,0,0.5,0.2719909277453607,0,L0,None,"None",0,0,0,0,0
+2.1682217169999998,"sequential-write",44,0,0.5,0.1903936494217525,0,L0,None,"None",0,0,0,0,0
+2.1682217169999998,"sequential-write",45,0,0.6666666666666666,0.13327555459522675,0,L0,L0,"Some(L0)",1,15316463,1,0,1
+3.193320643,"drain",46,0,0.16666666666666666,0.3932928882166587,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 4 })",4,30067449,0,1,0
+3.193320643,"drain",47,0,0.16666666666666666,0.27530502175166105,0,DeepDebt,None,"None",0,0,0,0,0
+3.193320643,"drain",48,0,0.16666666666666666,0.19271351522616273,0,DeepDebt,None,"None",0,0,0,0,0

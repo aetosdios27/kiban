@@ -1,0 +1,148 @@
+ Percent |	Source code & Disassembly of scale for cpu-clock:u (2169 samples, percent: local period)
+--------------------------------------------------------------------------------------------------------
+         : 0     0x85360 <<kiban::cache::BlockCache>::get>:
+    0.14 :   85360:        pushq   %r15
+    0.00 :   85362:        pushq   %r14
+    0.00 :   85364:        pushq   %rbx
+    0.00 :   85365:        subq    $0x30, %rsp
+    0.00 :   85369:        movq    %rdx, %r15
+    0.00 :   8536c:        movq    %rsi, %rbx
+    0.00 :   8536f:        movq    %rdi, %r14
+    0.00 :   85372:        movl    (%rsi), %eax
+    5.76 :   85374:        cmpl    $0x3ffffffd, %eax
+    0.00 :   85379:        ja      0x854c3 <<kiban::cache::BlockCache>::get+0x163>
+    0.05 :   8537f:        leal    0x1(%rax), %ecx
+    0.00 :   85382:        lock
+    0.00 :   85383:        cmpxchgl        %ecx, (%rbx)
+   10.24 :   85386:        jne     0x854c3 <<kiban::cache::BlockCache>::get+0x163>
+    0.00 :   8538c:        movzbl  0x8(%rbx), %eax
+    0.09 :   85390:        testb   %al, %al
+    0.00 :   85392:        jne     0x854d8 <<kiban::cache::BlockCache>::get+0x178>
+    0.00 :   85398:        cmpq    $0x0, 0x48(%rbx)
+    0.05 :   8539d:        je      0x8544b <<kiban::cache::BlockCache>::get+0xeb>
+    0.00 :   853a3:        leaq    0x50(%rbx), %rdi
+    0.00 :   853a7:        movq    %r15, %rsi
+    0.00 :   853aa:        callq   0x8a8f0 <<std::hash::random::RandomState as core::hash::BuildHasher>::hash_one::<&(u64, u64)>>
+    0.00 :   853af:        movq    %rax, %rsi
+    0.00 :   853b2:        shrq    $0x39, %rsi
+    0.00 :   853b6:        movq    0x30(%rbx), %rcx
+    0.05 :   853ba:        movq    0x38(%rbx), %rdx
+    0.00 :   853be:        movd    %esi, %xmm0
+    0.09 :   853c2:        punpcklbw       %xmm0, %xmm0
+    0.00 :   853c6:        pshuflw $0x0, %xmm0, %xmm0
+    0.00 :   853cb:        pshufd  $0x44, %xmm0, %xmm0
+    0.00 :   853d0:        movq    (%r15), %rsi
+    0.05 :   853d3:        movq    0x8(%r15), %rdi
+    0.00 :   853d7:        xorl    %r8d, %r8d
+    0.09 :   853da:        pcmpeqd %xmm1, %xmm1
+    0.00 :   853de:        andq    %rdx, %rax
+    0.00 :   853e1:        movdqu  (%rcx,%rax), %xmm2
+    0.41 :   853e6:        movdqa  %xmm2, %xmm3
+    0.00 :   853ea:        pcmpeqb %xmm0, %xmm3
+    0.23 :   853ee:        pmovmskb        %xmm3, %r9d
+    0.00 :   853f3:        testl   %r9d, %r9d
+    0.00 :   853f6:        je      0x85430 <<kiban::cache::BlockCache>::get+0xd0>
+    0.05 :   853f8:        tzcntl  %r9d, %r11d
+    0.23 :   853fd:        addq    %rax, %r11
+    0.05 :   85400:        andq    %rdx, %r11
+    0.00 :   85403:        shlq    $0x6, %r11
+    0.14 :   85407:        movq    %rcx, %r10
+    0.00 :   8540a:        subq    %r11, %r10
+    0.09 :   8540d:        cmpq    -0x40(%r10), %rsi
+    0.09 :   85411:        jne     0x85419 <<kiban::cache::BlockCache>::get+0xb9>
+    6.36 :   85413:        cmpq    -0x38(%r10), %rdi
+    0.00 :   85417:        je      0x85459 <<kiban::cache::BlockCache>::get+0xf9>
+    0.09 :   85419:        leal    -0x1(%r9), %r10d
+    0.00 :   8541d:        andw    %r9w, %r10w
+    0.00 :   85421:        movl    %r10d, %r9d
+    0.00 :   85424:        jne     0x853f8 <<kiban::cache::BlockCache>::get+0x98>
+    0.00 :   85426:        nopw    %cs:(%rax,%rax)
+    0.00 :   85430:        pcmpeqb %xmm1, %xmm2
+    0.14 :   85434:        pmovmskb        %xmm2, %r9d
+    0.00 :   85439:        testl   %r9d, %r9d
+    0.00 :   8543c:        jne     0x8544b <<kiban::cache::BlockCache>::get+0xeb>
+    0.00 :   8543e:        addq    %r8, %rax
+    0.00 :   85441:        addq    $0x10, %rax
+    0.00 :   85445:        addq    $0x10, %r8
+    0.00 :   85449:        jmp     0x853de <<kiban::cache::BlockCache>::get+0x7e>
+    0.00 :   8544b:        lock
+    0.00 :   8544c:        incq    0x78(%rbx)
+    0.00 :   85450:        movq    $0x0, (%r14)
+    0.00 :   85457:        jmp     0x854a0 <<kiban::cache::BlockCache>::get+0x140>
+    0.05 :   85459:        movq    -0x30(%r10), %rax
+    0.00 :   8545d:        lock
+    0.00 :   8545e:        incq    (%rax)
+   14.29 :   85461:        jle     0x85508 <<kiban::cache::BlockCache>::get+0x1a8>
+    0.14 :   85467:        movups  -0x30(%r10), %xmm0
+    0.00 :   8546c:        movups  -0x20(%r10), %xmm1
+    0.18 :   85471:        movaps  %xmm1, 0x10(%rsp)
+    0.00 :   85476:        movq    -0x10(%r10), %rax
+    0.05 :   8547a:        movq    %rax, 0x20(%rsp)
+    0.00 :   8547f:        movb    $0x1, -0x8(%r10)
+    0.00 :   85484:        lock
+    0.00 :   85485:        incq    0x70(%rbx)
+   35.73 :   85489:        movups  %xmm0, (%r14)
+    0.00 :   8548d:        movaps  0x10(%rsp), %xmm0
+    0.05 :   85492:        movups  %xmm0, 0x10(%r14)
+    0.00 :   85497:        movq    0x20(%rsp), %rax
+    0.00 :   8549c:        movq    %rax, 0x20(%r14)
+    0.00 :   854a0:        movl    $0xffffffff, %esi
+    0.00 :   854a5:        lock
+    0.00 :   854a6:        xaddl   %esi, (%rbx)
+   24.62 :   854a9:        decl    %esi
+    0.00 :   854ab:        movl    %esi, %eax
+    0.05 :   854ad:        andl    $0xbfffffff, %eax
+    0.00 :   854b2:        negl    %eax
+    0.14 :   854b4:        jo      0x8550a <<kiban::cache::BlockCache>::get+0x1aa>
+    0.00 :   854b6:        movq    %r14, %rax
+    0.00 :   854b9:        addq    $0x30, %rsp
+    0.00 :   854bd:        popq    %rbx
+    0.00 :   854be:        popq    %r14
+    0.00 :   854c0:        popq    %r15
+    0.00 :   854c2:        retq
+    0.09 :   854c3:        movq    %rbx, %rdi
+    0.00 :   854c6:        callq   *0x7b024(%rip)  # 0x1004f0 <_DYNAMIC+0x750>
+    0.05 :   854cc:        movzbl  0x8(%rbx), %eax
+    0.09 :   854d0:        testb   %al, %al
+    0.00 :   854d2:        je      0x85398 <<kiban::cache::BlockCache>::get+0x38>
+    0.00 :   854d8:        leaq    0x10(%rbx), %rax
+    0.00 :   854dc:        movq    %rax, (%rsp)
+    0.00 :   854e0:        movq    %rbx, 0x8(%rsp)
+    0.00 :   854e5:        leaq    -0x6ca08(%rip), %rdi  # 0x18ae4 <anon.cfe09a7137ba1277e5f621bbfca32dfd.10.llvm.8172828295273081665>
+    0.00 :   854ec:        leaq    0x77335(%rip), %rcx  # 0xfc828 <anon.cfe09a7137ba1277e5f621bbfca32dfd.25.llvm.8172828295273081665>
+    0.00 :   854f3:        leaq    0x7727e(%rip), %r8  # 0xfc778
+    0.00 :   854fa:        movq    %rsp, %rdx
+    0.00 :   854fd:        movl    $0x19, %esi
+    0.00 :   85502:        callq   *0x7ab78(%rip)  # 0x100080 <_DYNAMIC+0x2e0>
+    0.00 :   85508:        ud2
+    0.00 :   8550a:        movq    %rbx, %rdi
+    0.00 :   8550d:        callq   *0x7ad9d(%rip)  # 0x1002b0 <_DYNAMIC+0x510>
+    0.00 :   85513:        jmp     0x854b6 <<kiban::cache::BlockCache>::get+0x156>
+    0.00 :   85515:        movq    %rax, %r14
+    0.00 :   85518:        movl    $0xffffffff, %esi
+    0.00 :   8551d:        lock
+    0.00 :   8551e:        xaddl   %esi, (%rbx)
+    0.00 :   85521:        decl    %esi
+    0.00 :   85523:        movl    %esi, %eax
+    0.00 :   85525:        andl    $0xbfffffff, %eax
+    0.00 :   8552a:        negl    %eax
+    0.00 :   8552c:        jno     0x8555d <<kiban::cache::BlockCache>::get+0x1fd>
+    0.00 :   8552e:        movq    %rbx, %rdi
+    0.00 :   85531:        callq   *0x7ad79(%rip)  # 0x1002b0 <_DYNAMIC+0x510>
+    0.00 :   85537:        jmp     0x8555d <<kiban::cache::BlockCache>::get+0x1fd>
+    0.00 :   85539:        callq   *0x7aac1(%rip)  # 0x100000 <_DYNAMIC+0x260>
+    0.00 :   8553f:        movq    %rax, %r14
+    0.00 :   85542:        movq    0x8(%rsp), %rdi
+    0.00 :   85547:        movl    $0xffffffff, %esi
+    0.00 :   8554c:        lock
+    0.00 :   8554d:        xaddl   %esi, (%rdi)
+    0.00 :   85550:        decl    %esi
+    0.00 :   85552:        movl    %esi, %eax
+    0.00 :   85554:        andl    $0xbfffffff, %eax
+    0.00 :   85559:        negl    %eax
+    0.00 :   8555b:        jo      0x85565 <<kiban::cache::BlockCache>::get+0x205>
+    0.00 :   8555d:        movq    %r14, %rdi
+    0.00 :   85560:        callq   0xfa340 <_fini+0x34>
+    0.00 :   85565:        callq   *0x7ad45(%rip)  # 0x1002b0 <_DYNAMIC+0x510>
+    0.00 :   8556b:        jmp     0x8555d <<kiban::cache::BlockCache>::get+0x1fd>
+    0.00 :   8556d:        callq   *0x7aa8d(%rip)  # 0x100000 <_DYNAMIC+0x260>

@@ -1,0 +1,118 @@
+{
+  "revision": "7c0abfc358382c7bccc7f7e587862ad7dfd2e9d6",
+  "checks": [
+    {
+      "command": [
+        "cargo",
+        "fmt",
+        "--check"
+      ],
+      "exit_code": 0,
+      "elapsed_s": 0.4663925549975829
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "elapsed_s": 1.5687082879958325
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "--all-targets",
+        "--features",
+        "loom",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "elapsed_s": 1.4197210199999972
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "--all-targets",
+        "--features",
+        "diagnostics",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "elapsed_s": 1.368221076001646
+    },
+    {
+      "command": [
+        "cargo",
+        "test"
+      ],
+      "exit_code": 0,
+      "elapsed_s": 54.26138808000542
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--examples"
+      ],
+      "exit_code": 0,
+      "elapsed_s": 0.5158019149967004
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--features",
+        "diagnostics"
+      ],
+      "exit_code": 0,
+      "elapsed_s": 55.51364379000006
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--features",
+        "loom",
+        "--lib",
+        "--",
+        "--test-threads=1",
+        "loom_"
+      ],
+      "exit_code": 0,
+      "elapsed_s": 18.609588553998037
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--release",
+        "--lib",
+        "--",
+        "--ignored",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_s": 8.035288224004034
+    },
+    {
+      "command": [
+        "cargo",
+        "doc",
+        "--all-features",
+        "--no-deps"
+      ],
+      "exit_code": 101,
+      "elapsed_s": 0.6660111000019242
+    }
+  ]
+}

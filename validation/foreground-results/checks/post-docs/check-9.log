@@ -1,0 +1,60 @@
+ Documenting kiban v0.1.0 (/home/aetos/dev/personal/kiban)
+error: public documentation for `flush` links to private item `Kiban::flush_without_compaction`
+    --> src/db.rs:1241:11
+     |
+1241 |     /// [`Kiban::flush_without_compaction`].
+     |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this item is private
+     |
+     = note: this link will resolve properly if you pass `--document-private-items`
+     = note: `-D rustdoc::private-intra-doc-links` implied by `-D warnings`
+     = help: to override `-D warnings` add `#[allow(rustdoc::private_intra_doc_links)]`
+
+error: public documentation for `Snapshot` links to private item `Version`
+    --> src/db.rs:2069:27
+     |
+2069 | /// frozen memtable and [`Version`] current at capture time. Physical
+     |                           ^^^^^^^ this item is private
+     |
+     = note: this link will resolve properly if you pass `--document-private-items`
+
+error: public documentation for `SharedSnapshot` links to private item `Version`
+    --> src/db.rs:4463:40
+     |
+4463 | /// and pins the immutable published [`Version`]. Reads afterwards never
+     |                                        ^^^^^^^ this item is private
+     |
+     = note: this link will resolve properly if you pass `--document-private-items`
+
+error: public documentation for `LevelStats` links to private item `Version`
+    --> src/db.rs:4567:27
+     |
+4567 | /// currently published [`Version`] — never from the filesystem.
+     |                           ^^^^^^^ this item is private
+     |
+     = note: this link will resolve properly if you pass `--document-private-items`
+
+error: public documentation for `file_cache` links to private item `FileLease`
+  --> src/file_cache.rs:15:7
+   |
+15 | //! [`FileLease`] — a private handle that cannot be cloned out from
+   |       ^^^^^^^^^ this item is private
+   |
+   = note: this link will resolve properly if you pass `--document-private-items`
+
+error: public documentation for `TableFileCacheStats` links to private item `TableFileCache`
+  --> src/file_cache.rs:70:26
+   |
+70 | /// Raw counters for a [`TableFileCache`] (phase 11.7) — facts only, no
+   |                          ^^^^^^^^^^^^^^ this item is private
+   |
+   = note: this link will resolve properly if you pass `--document-private-items`
+
+error: public documentation for `logical_bytes` links to private item `entry_size`
+   --> src/memtable.rs:107:52
+    |
+107 |     /// (live + retained history versions) — see [`entry_size`]. Not
+    |                                                    ^^^^^^^^^^ this item is private
+    |
+    = note: this link will resolve properly if you pass `--document-private-items`
+
+error: could not document `kiban`

@@ -1,0 +1,2 @@
+stage=mixed threads=16 operations=1000000
+verified_keys=100000

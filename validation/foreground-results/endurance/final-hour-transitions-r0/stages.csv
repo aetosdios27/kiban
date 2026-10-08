@@ -1,0 +1,4 @@
+index,name,threads,read_percent,operations_cap,duration_cap_s
+0,steady,4,10,0,1200
+1,write-burst,4,0,0,1200
+2,read-recovery,4,95,0,1200

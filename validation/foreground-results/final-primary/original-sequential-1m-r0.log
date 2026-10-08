@@ -1,0 +1,2 @@
+sequential-write: 1000000 operations in 2.633s (379747 ops/s), read/write p99= / 45056 ns
+total: 1000000 operations in 2.633s (379747 ops/s), read/write p99= / 45056 ns

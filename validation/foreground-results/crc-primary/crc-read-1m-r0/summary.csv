@@ -1,0 +1,3 @@
+stage,threads,elapsed_s,operations,reads,writes,total_ops_s,read_ops_s,write_ops_s,all_p50_ns,all_p95_ns,all_p99_ns,all_p999_ns,read_p50_ns,read_p95_ns,read_p99_ns,read_p999_ns,write_p50_ns,write_p95_ns,write_p99_ns,write_p999_ns,read_misses,app_bytes,sync_calls,all_max_ns,read_max_ns,write_max_ns
+"random-read",4,0.282567549,1000000,1000000,0,3538976.7987830765,3538976.7987830765,0,976,1504,1984,4480,976,1504,1984,4480,,,,,0,0,0,196843,196843,
+"total",4,0.282567549,1000000,1000000,0,3538976.7987830765,3538976.7987830765,0,976,1504,1984,4480,976,1504,1984,4480,,,,,0,0,0,196843,196843,

@@ -1,0 +1,24 @@
+[
+  {
+    "command": [
+      "python3",
+      "validation/foreground_windows.py",
+      "validation/foreground-results/endurance"
+    ],
+    "expected_exit": 1,
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "incomplete or invalid campaign; cannot summarize as success\n"
+  },
+  {
+    "command": [
+      "python3",
+      "validation/foreground_windows.py",
+      "validation/foreground-results/final-primary"
+    ],
+    "expected_exit": 0,
+    "exit_code": 0,
+    "stdout": "82 stage-specific windows; 0 trends\n[]\n",
+    "stderr": ""
+  }
+]

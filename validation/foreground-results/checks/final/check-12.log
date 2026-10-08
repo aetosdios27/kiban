@@ -1,0 +1,6 @@
+warning: skipping duplicate package `kiban v0.1.0 (https://github.com/aetosdios27/kiban?rev=76d9d857c61bed3127fa3f7a2136701cd9b49380#76d9d857)`:
+  /home/aetos/.cargo/git/checkouts/kiban-499e66eabe6c5506/76d9d85/validation/release-results/candidate/sources/Cargo.toml
+in favor of /home/aetos/.cargo/git/checkouts/kiban-499e66eabe6c5506/76d9d85/Cargo.toml
+
+   Compiling bindgen v0.72.1
+   Compiling librocksdb-sys v0.19.0+11.8.1

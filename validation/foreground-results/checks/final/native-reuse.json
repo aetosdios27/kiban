@@ -1,0 +1,19 @@
+{
+  "libraries": {
+    "librocksdb.a": {
+      "path": "/home/aetos/dev/personal/kiban/tools/compare/target/release/build/librocksdb-sys-7bc099fd4fff09fe/out/librocksdb.a",
+      "sha256": "1487ca80888a1b036d7560b108fd38c7ed0e562b8b2921f4ecd26cfb28577f49"
+    },
+    "libsnappy.a": {
+      "path": "/home/aetos/dev/personal/kiban/tools/compare/target/release/build/librocksdb-sys-7bc099fd4fff09fe/out/libsnappy.a",
+      "sha256": "0aa3b462a22564d968d8906fb35f19e22c91c94ba256b9359a75679a2663b7c2"
+    }
+  },
+  "environment": {
+    "ROCKSDB_LIB_DIR": "/home/aetos/dev/personal/kiban/tools/compare/target/release/build/librocksdb-sys-7bc099fd4fff09fe/out",
+    "ROCKSDB_STATIC": "1",
+    "SNAPPY_LIB_DIR": "/home/aetos/dev/personal/kiban/tools/compare/target/release/build/librocksdb-sys-7bc099fd4fff09fe/out",
+    "SNAPPY_STATIC": "1",
+    "BINDGEN_EXTRA_CLANG_ARGS": "-isystem /usr/lib/gcc/x86_64-redhat-linux/16/include"
+  }
+}

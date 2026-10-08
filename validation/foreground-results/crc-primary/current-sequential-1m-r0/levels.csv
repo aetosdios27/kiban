@@ -1,0 +1,12 @@
+elapsed_s,stage,level,tables,bytes
+1.007540252,"sequential-write",0,7,26803833
+1.007540252,"sequential-write",2,4,15336454
+2.016024203,"sequential-write",0,5,19145983
+2.016024203,"sequential-write",2,4,15336454
+2.771175203,"sequential-write",0,4,15316741
+2.771175203,"sequential-write",1,4,15336454
+2.771175203,"sequential-write",2,4,15336454
+2.823125203,"final-flush",0,6,19348430
+2.823125203,"final-flush",2,4,15336454
+3.823499966,"drain",2,4,15336454
+3.8244550090000002,"final",2,4,15336454

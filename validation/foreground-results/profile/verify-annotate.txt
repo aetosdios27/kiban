@@ -1,0 +1,295 @@
+ Percent |	Source code & Disassembly of scale for cpu-clock:u (1637 samples, percent: local period)
+--------------------------------------------------------------------------------------------------------
+         : 0     0x9ae00 <<kiban::sstable::block::VerifiedBlock>::verify>:
+    0.06 :   9ae00:        pushq   %r15
+    0.00 :   9ae02:        pushq   %r14
+    0.00 :   9ae04:        pushq   %rbx
+    0.00 :   9ae05:        subq    $0x70, %rsp
+    0.00 :   9ae09:        movq    %rdi, %rbx
+    0.00 :   9ae0c:        cmpq    $0x22, %rdx
+    0.00 :   9ae10:        jae     0x9ae9e <<kiban::sstable::block::VerifiedBlock>::verify+0x9e>
+    0.00 :   9ae16:        callq   *0x65234(%rip)  # 0x100050 <_DYNAMIC+0x2b0>
+    0.00 :   9ae1c:        movl    $0x2c, %edi
+    0.00 :   9ae21:        movl    $0x1, %esi
+    0.00 :   9ae26:        callq   *0x6522c(%rip)  # 0x100058 <_DYNAMIC+0x2b8>
+    0.00 :   9ae2c:        testq   %rax, %rax
+    0.00 :   9ae2f:        je      0x9b304 <<kiban::sstable::block::VerifiedBlock>::verify+0x504>
+    0.00 :   9ae35:        movups  -0x813eb(%rip), %xmm0  # 0x19a51
+    0.00 :   9ae3c:        movups  %xmm0, 0x1c(%rax)
+    0.00 :   9ae40:        movups  -0x81402(%rip), %xmm0  # 0x19a45
+    0.00 :   9ae47:        movups  %xmm0, 0x10(%rax)
+    0.00 :   9ae4b:        movups  -0x8141d(%rip), %xmm0  # 0x19a35
+    0.00 :   9ae52:        movups  %xmm0, (%rax)
+    0.00 :   9ae55:        movq    $0x2c, 0x30(%rsp)
+    0.00 :   9ae5e:        movq    %rax, 0x38(%rsp)
+    0.00 :   9ae63:        movq    $0x2c, 0x40(%rsp)
+    0.00 :   9ae6c:        leaq    0x30(%rsp), %rax
+    0.00 :   9ae71:        movq    %rax, 0x10(%rsp)
+    0.00 :   9ae76:        leaq    0x1203(%rip), %rax  # 0x9c080 <<alloc::string::String as core::fmt::Display>::fmt>
+    0.00 :   9ae7d:        movq    %rax, 0x18(%rsp)
+    0.00 :   9ae82:        leaq    -0x86462(%rip), %rsi  # 0x14a27
+    0.00 :   9ae89:        leaq    0x48(%rsp), %rdi
+    0.00 :   9ae8e:        leaq    0x10(%rsp), %rdx
+    0.00 :   9ae93:        callq   *0x651ff(%rip)  # 0x100098 <_DYNAMIC+0x2f8>
+    0.00 :   9ae99:        jmp     0x9b117 <<kiban::sstable::block::VerifiedBlock>::verify+0x317>
+    0.00 :   9ae9e:        movzbl  -0x5(%rsi,%rdx), %eax
+    0.06 :   9aea3:        movb    %al, 0xf(%rsp)
+    0.00 :   9aea7:        testb   %al, %al
+    0.00 :   9aea9:        je      0x9af09 <<kiban::sstable::block::VerifiedBlock>::verify+0x109>
+    0.00 :   9aeab:        leaq    0xf(%rsp), %rax
+    0.00 :   9aeb0:        movq    %rax, 0x48(%rsp)
+    0.00 :   9aeb5:        movq    0x65aec(%rip), %rax  # 0x1009a8 <_DYNAMIC+0xc08>
+    0.00 :   9aebc:        movq    %rax, 0x50(%rsp)
+    0.00 :   9aec1:        leaq    -0x814af(%rip), %rsi  # 0x19a19
+    0.00 :   9aec8:        movq    0x651c9(%rip), %r15  # 0x100098 <_DYNAMIC+0x2f8>
+    0.00 :   9aecf:        leaq    0x30(%rsp), %r14
+    0.00 :   9aed4:        leaq    0x48(%rsp), %rdx
+    0.00 :   9aed9:        movq    %r14, %rdi
+    0.00 :   9aedc:        callq   *%r15
+    0.00 :   9aedf:        movq    %r14, 0x10(%rsp)
+    0.00 :   9aee4:        leaq    0x1195(%rip), %rax  # 0x9c080 <<alloc::string::String as core::fmt::Display>::fmt>
+    0.00 :   9aeeb:        movq    %rax, 0x18(%rsp)
+    0.00 :   9aef0:        leaq    -0x864d0(%rip), %rsi  # 0x14a27
+    0.00 :   9aef7:        leaq    0x48(%rsp), %rdi
+    0.00 :   9aefc:        leaq    0x10(%rsp), %rdx
+    0.00 :   9af01:        callq   *%r15
+    0.00 :   9af04:        jmp     0x9b117 <<kiban::sstable::block::VerifiedBlock>::verify+0x317>
+    0.00 :   9af09:        movl    -0x4(%rsi,%rdx), %eax
+    0.00 :   9af0d:        movl    %eax, 0x68(%rsp)
+    0.00 :   9af11:        movabsq $0x7ffffffffffffffe, %r9
+    0.00 :   9af1b:        andq    %rdx, %r9
+    0.00 :   9af1e:        addq    $-0x4, %r9
+    0.00 :   9af22:        movl    $0xffffffff, %ecx
+    0.00 :   9af27:        xorl    %r8d, %r8d
+    0.00 :   9af2a:        movq    0x659c7(%rip), %rdi  # 0x1008f8 <_DYNAMIC+0xb58>
+    0.00 :   9af31:        nopw    %cs:(%rax,%rax)
+    0.06 :   9af40:        movzbl  (%rsi,%r8), %r10d
+    0.18 :   9af45:        xorb    %cl, %r10b
+    7.64 :   9af48:        movzbl  %r10b, %r10d
+    5.07 :   9af4c:        shrl    $0x8, %ecx
+    0.12 :   9af4f:        xorl    (%rdi,%r10,4), %ecx
+   35.19 :   9af53:        movzbl  0x1(%rsi,%r8), %r10d
+    0.00 :   9af59:        xorb    %cl, %r10b
+    7.27 :   9af5c:        movzbl  %r10b, %r10d
+    6.54 :   9af60:        shrl    $0x8, %ecx
+    0.06 :   9af63:        xorl    (%rdi,%r10,4), %ecx
+   37.45 :   9af67:        addq    $0x2, %r8
+    0.12 :   9af6b:        cmpq    %r8, %r9
+    0.12 :   9af6e:        jne     0x9af40 <<kiban::sstable::block::VerifiedBlock>::verify+0x140>
+    0.00 :   9af70:        testb   $0x1, %dl
+    0.00 :   9af73:        je      0x9af88 <<kiban::sstable::block::VerifiedBlock>::verify+0x188>
+    0.00 :   9af75:        movzbl  (%rsi,%r8), %r8d
+    0.00 :   9af7a:        xorb    %cl, %r8b
+    0.00 :   9af7d:        movzbl  %r8b, %r8d
+    0.00 :   9af81:        shrl    $0x8, %ecx
+    0.00 :   9af84:        xorl    (%rdi,%r8,4), %ecx
+    0.00 :   9af88:        notl    %ecx
+    0.00 :   9af8a:        movl    %ecx, 0x6c(%rsp)
+    0.00 :   9af8e:        cmpl    %ecx, %eax
+    0.00 :   9af90:        jne     0x9b039 <<kiban::sstable::block::VerifiedBlock>::verify+0x239>
+    0.06 :   9af96:        movl    -0x9(%rsi,%rdx), %ecx
+    0.00 :   9af9a:        testq   %rcx, %rcx
+    0.00 :   9af9d:        je      0x9b0a3 <<kiban::sstable::block::VerifiedBlock>::verify+0x2a3>
+    0.00 :   9afa3:        leaq    -0x9(%rdx), %rdi
+    0.00 :   9afa7:        leaq    (,%rcx,4), %r8
+    0.00 :   9afaf:        subq    %r8, %rdi
+    0.00 :   9afb2:        cmpq    $0x15, %rdi
+    0.00 :   9afb6:        jae     0x9b16b <<kiban::sstable::block::VerifiedBlock>::verify+0x36b>
+    0.00 :   9afbc:        callq   *0x6508e(%rip)  # 0x100050 <_DYNAMIC+0x2b0>
+    0.00 :   9afc2:        movl    $0x1a, %edi
+    0.00 :   9afc7:        movl    $0x1, %esi
+    0.00 :   9afcc:        callq   *0x65086(%rip)  # 0x100058 <_DYNAMIC+0x2b8>
+    0.00 :   9afd2:        testq   %rax, %rax
+    0.00 :   9afd5:        je      0x9b324 <<kiban::sstable::block::VerifiedBlock>::verify+0x524>
+    0.00 :   9afdb:        movups  -0x81611(%rip), %xmm0  # 0x199d1
+    0.00 :   9afe2:        movups  %xmm0, 0xa(%rax)
+    0.00 :   9afe6:        movups  -0x81626(%rip), %xmm0  # 0x199c7
+    0.00 :   9afed:        movups  %xmm0, (%rax)
+    0.00 :   9aff0:        movq    $0x1a, 0x30(%rsp)
+    0.00 :   9aff9:        movq    %rax, 0x38(%rsp)
+    0.00 :   9affe:        movq    $0x1a, 0x40(%rsp)
+    0.00 :   9b007:        leaq    0x30(%rsp), %rax
+    0.00 :   9b00c:        movq    %rax, 0x10(%rsp)
+    0.00 :   9b011:        leaq    0x1068(%rip), %rax  # 0x9c080 <<alloc::string::String as core::fmt::Display>::fmt>
+    0.00 :   9b018:        movq    %rax, 0x18(%rsp)
+    0.00 :   9b01d:        leaq    -0x865fd(%rip), %rsi  # 0x14a27
+    0.00 :   9b024:        leaq    0x48(%rsp), %rdi
+    0.00 :   9b029:        leaq    0x10(%rsp), %rdx
+    0.00 :   9b02e:        callq   *0x65064(%rip)  # 0x100098 <_DYNAMIC+0x2f8>
+    0.00 :   9b034:        jmp     0x9b117 <<kiban::sstable::block::VerifiedBlock>::verify+0x317>
+    0.00 :   9b039:        leaq    0x68(%rsp), %rax
+    0.00 :   9b03e:        movq    %rax, 0x48(%rsp)
+    0.00 :   9b043:        movq    0x6555e(%rip), %rax  # 0x1005a8 <_DYNAMIC+0x808>
+    0.00 :   9b04a:        movq    %rax, 0x50(%rsp)
+    0.00 :   9b04f:        leaq    0x6c(%rsp), %rcx
+    0.00 :   9b054:        movq    %rcx, 0x58(%rsp)
+    0.00 :   9b059:        movq    %rax, 0x60(%rsp)
+    0.00 :   9b05e:        leaq    -0x81684(%rip), %rsi  # 0x199e1
+    0.00 :   9b065:        movq    0x6502c(%rip), %r15  # 0x100098 <_DYNAMIC+0x2f8>
+    0.00 :   9b06c:        leaq    0x30(%rsp), %r14
+    0.00 :   9b071:        leaq    0x48(%rsp), %rdx
+    0.00 :   9b076:        movq    %r14, %rdi
+    0.00 :   9b079:        callq   *%r15
+    0.00 :   9b07c:        movq    %r14, 0x10(%rsp)
+    0.00 :   9b081:        leaq    0xff8(%rip), %rax  # 0x9c080 <<alloc::string::String as core::fmt::Display>::fmt>
+    0.00 :   9b088:        movq    %rax, 0x18(%rsp)
+    0.00 :   9b08d:        leaq    -0x8666d(%rip), %rsi  # 0x14a27
+    0.00 :   9b094:        leaq    0x48(%rsp), %rdi
+    0.00 :   9b099:        leaq    0x10(%rsp), %rdx
+    0.00 :   9b09e:        callq   *%r15
+    0.00 :   9b0a1:        jmp     0x9b117 <<kiban::sstable::block::VerifiedBlock>::verify+0x317>
+    0.00 :   9b0a3:        callq   *0x64fa7(%rip)  # 0x100050 <_DYNAMIC+0x2b0>
+    0.00 :   9b0a9:        movl    $0x13, %edi
+    0.00 :   9b0ae:        movl    $0x1, %esi
+    0.00 :   9b0b3:        callq   *0x64f9f(%rip)  # 0x100058 <_DYNAMIC+0x2b8>
+    0.00 :   9b0b9:        testq   %rax, %rax
+    0.00 :   9b0bc:        je      0x9b314 <<kiban::sstable::block::VerifiedBlock>::verify+0x514>
+    0.00 :   9b0c2:        movups  -0x8176a(%rip), %xmm0  # 0x1995f
+    0.00 :   9b0c9:        movups  %xmm0, (%rax)
+    0.00 :   9b0cc:        movl    $0x73746e69, 0xf(%rax)
+    0.00 :   9b0d3:        movq    $0x13, 0x30(%rsp)
+    0.00 :   9b0dc:        movq    %rax, 0x38(%rsp)
+    0.00 :   9b0e1:        movq    $0x13, 0x40(%rsp)
+    0.00 :   9b0ea:        leaq    0x30(%rsp), %rax
+    0.00 :   9b0ef:        movq    %rax, 0x10(%rsp)
+    0.00 :   9b0f4:        leaq    0xf85(%rip), %rax  # 0x9c080 <<alloc::string::String as core::fmt::Display>::fmt>
+    0.00 :   9b0fb:        movq    %rax, 0x18(%rsp)
+    0.00 :   9b100:        leaq    -0x866e0(%rip), %rsi  # 0x14a27
+    0.00 :   9b107:        leaq    0x48(%rsp), %rdi
+    0.00 :   9b10c:        leaq    0x10(%rsp), %rdx
+    0.00 :   9b111:        callq   *0x64f81(%rip)  # 0x100098 <_DYNAMIC+0x2f8>
+    0.00 :   9b117:        movups  0x48(%rsp), %xmm0
+    0.00 :   9b11c:        movaps  %xmm0, 0x10(%rsp)
+    0.00 :   9b121:        movq    0x58(%rsp), %rax
+    0.00 :   9b126:        movq    %rax, 0x20(%rsp)
+    0.00 :   9b12b:        movq    0x30(%rsp), %rsi
+    0.00 :   9b130:        testq   %rsi, %rsi
+    0.00 :   9b133:        je      0x9b145 <<kiban::sstable::block::VerifiedBlock>::verify+0x345>
+    0.00 :   9b135:        movq    0x38(%rsp), %rdi
+    0.00 :   9b13a:        movl    $0x1, %edx
+    0.00 :   9b13f:        callq   *0x64e9b(%rip)  # 0xfffe0 <_DYNAMIC+0x240>
+    0.00 :   9b145:        movq    $0x0, (%rbx)
+    0.00 :   9b14c:        movaps  0x10(%rsp), %xmm0
+    0.00 :   9b151:        movups  %xmm0, 0x8(%rbx)
+    0.00 :   9b155:        movq    0x20(%rsp), %rax
+    0.00 :   9b15a:        movq    %rax, 0x18(%rbx)
+    0.00 :   9b15e:        movq    %rbx, %rax
+    0.00 :   9b161:        addq    $0x70, %rsp
+    0.00 :   9b165:        popq    %rbx
+    0.00 :   9b166:        popq    %r14
+    0.00 :   9b168:        popq    %r15
+    0.00 :   9b16a:        retq
+    0.00 :   9b16b:        leaq    0x4(%rdi), %rax
+    0.00 :   9b16f:        cmpq    $-0x5, %rdi
+    0.00 :   9b173:        ja      0x9b2de <<kiban::sstable::block::VerifiedBlock>::verify+0x4de>
+    0.00 :   9b179:        cmpq    %rdx, %rax
+    0.00 :   9b17c:        ja      0x9b2de <<kiban::sstable::block::VerifiedBlock>::verify+0x4de>
+    0.00 :   9b182:        movl    (%rsi,%rdi), %r9d
+    0.00 :   9b186:        cmpq    %r9, %rdi
+    0.00 :   9b189:        jbe     0x9b258 <<kiban::sstable::block::VerifiedBlock>::verify+0x458>
+    0.00 :   9b18f:        cmpl    $0x1, %ecx
+    0.00 :   9b192:        je      0x9b1f4 <<kiban::sstable::block::VerifiedBlock>::verify+0x3f4>
+    0.00 :   9b194:        movq    $-0x9, %r10
+    0.00 :   9b19b:        subq    %r8, %r10
+    0.00 :   9b19e:        subq    %r8, %rsi
+    0.00 :   9b1a1:        addq    $-0x5, %rsi
+    0.00 :   9b1a5:        leaq    0x5(%r8), %r11
+    0.00 :   9b1a9:        negq    %r8
+    0.00 :   9b1ac:        leaq    (%rdx,%r8), %rax
+    0.00 :   9b1b0:        decq    %rax
+    0.00 :   9b1b3:        cmpq    %rdx, %rax
+    0.00 :   9b1b6:        ja      0x9b2d8 <<kiban::sstable::block::VerifiedBlock>::verify+0x4d8>
+    0.00 :   9b1bc:        movl    (%rsi,%rdx), %r14d
+    0.00 :   9b1c0:        cmpq    %r14, %rdi
+    0.00 :   9b1c3:        jbe     0x9b258 <<kiban::sstable::block::VerifiedBlock>::verify+0x458>
+    0.00 :   9b1c9:        leaq    (%rdx,%r10), %rax
+    0.00 :   9b1cd:        cmpq    $-0x4, %rax
+    0.00 :   9b1d1:        jae     0x9b2ee <<kiban::sstable::block::VerifiedBlock>::verify+0x4ee>
+    0.00 :   9b1d7:        cmpl    -0x4(%rsi,%rdx), %r14d
+    0.00 :   9b1dc:        jbe     0x9b258 <<kiban::sstable::block::VerifiedBlock>::verify+0x458>
+    0.00 :   9b1de:        addq    $0x4, %r10
+    0.00 :   9b1e2:        addq    $0x4, %rsi
+    0.00 :   9b1e6:        addq    $-0x4, %r11
+    0.00 :   9b1ea:        addq    $0x4, %r8
+    0.00 :   9b1ee:        cmpq    $-0x4, %r8
+    0.00 :   9b1f2:        jne     0x9b1ac <<kiban::sstable::block::VerifiedBlock>::verify+0x3ac>
+    0.00 :   9b1f4:        testl   %r9d, %r9d
+    0.00 :   9b1f7:        je      0x9b2c0 <<kiban::sstable::block::VerifiedBlock>::verify+0x4c0>
+    0.00 :   9b1fd:        callq   *0x64e4d(%rip)  # 0x100050 <_DYNAMIC+0x2b0>
+    0.00 :   9b203:        movl    $0x26, %edi
+    0.00 :   9b208:        movl    $0x1, %esi
+    0.00 :   9b20d:        callq   *0x64e45(%rip)  # 0x100058 <_DYNAMIC+0x2b8>
+    0.00 :   9b213:        testq   %rax, %rax
+    0.00 :   9b216:        je      0x9b344 <<kiban::sstable::block::VerifiedBlock>::verify+0x544>
+    0.00 :   9b21c:        movups  -0x818a1(%rip), %xmm0  # 0x19982
+    0.00 :   9b223:        movups  %xmm0, 0x10(%rax)
+    0.00 :   9b227:        movups  -0x818bc(%rip), %xmm0  # 0x19972
+    0.00 :   9b22e:        movups  %xmm0, (%rax)
+    0.00 :   9b231:        movabsq $0x302074657366666f, %rcx
+    0.00 :   9b23b:        movq    %rcx, 0x1e(%rax)
+    0.00 :   9b23f:        movq    $0x26, 0x48(%rsp)
+    0.00 :   9b248:        movq    %rax, 0x50(%rsp)
+    0.00 :   9b24d:        movq    $0x26, 0x58(%rsp)
+    0.00 :   9b256:        jmp     0x9b2ae <<kiban::sstable::block::VerifiedBlock>::verify+0x4ae>
+    0.00 :   9b258:        callq   *0x64df2(%rip)  # 0x100050 <_DYNAMIC+0x2b0>
+    0.00 :   9b25e:        movl    $0x2f, %edi
+    0.00 :   9b263:        movl    $0x1, %esi
+    0.00 :   9b268:        callq   *0x64dea(%rip)  # 0x100058 <_DYNAMIC+0x2b8>
+    0.00 :   9b26e:        testq   %rax, %rax
+    0.00 :   9b271:        je      0x9b334 <<kiban::sstable::block::VerifiedBlock>::verify+0x534>
+    0.00 :   9b277:        movups  -0x818c7(%rip), %xmm0  # 0x199b7
+    0.00 :   9b27e:        movups  %xmm0, 0x1f(%rax)
+    0.00 :   9b282:        movups  -0x818e1(%rip), %xmm0  # 0x199a8
+    0.00 :   9b289:        movups  %xmm0, 0x10(%rax)
+    0.00 :   9b28d:        movups  -0x818fc(%rip), %xmm0  # 0x19998
+    0.00 :   9b294:        movups  %xmm0, (%rax)
+    0.00 :   9b297:        movq    $0x2f, 0x48(%rsp)
+    0.00 :   9b2a0:        movq    %rax, 0x50(%rsp)
+    0.00 :   9b2a5:        movq    $0x2f, 0x58(%rsp)
+    0.00 :   9b2ae:        leaq    0x48(%rsp), %rsi
+    0.00 :   9b2b3:        movq    %rbx, %rdi
+    0.00 :   9b2b6:        callq   0x97b20 <<kiban::sstable::block::VerifiedBlock>::verify::{closure#0}>
+    0.00 :   9b2bb:        jmp     0x9b15e <<kiban::sstable::block::VerifiedBlock>::verify+0x35e>
+    0.00 :   9b2c0:        movq    %rdi, 0x8(%rbx)
+    0.00 :   9b2c4:        movq    %rdi, 0x10(%rbx)
+    0.00 :   9b2c8:        movq    %rcx, 0x18(%rbx)
+    0.00 :   9b2cc:        movq    $0x2, (%rbx)
+    0.00 :   9b2d3:        jmp     0x9b15e <<kiban::sstable::block::VerifiedBlock>::verify+0x35e>
+    0.00 :   9b2d8:        movq    %rdx, %rdi
+    0.00 :   9b2db:        subq    %r11, %rdi
+    0.00 :   9b2de:        leaq    0x61beb(%rip), %rcx  # 0xfced0
+    0.00 :   9b2e5:        movq    %rax, %rsi
+    0.00 :   9b2e8:        callq   *0x64e9a(%rip)  # 0x100188 <_DYNAMIC+0x3e8>
+    0.00 :   9b2ee:        movq    %rdx, %rsi
+    0.00 :   9b2f1:        subq    %r11, %rsi
+    0.00 :   9b2f4:        leaq    0x61bd5(%rip), %rcx  # 0xfced0
+    0.00 :   9b2fb:        movq    %rax, %rdi
+    0.00 :   9b2fe:        callq   *0x64e84(%rip)  # 0x100188 <_DYNAMIC+0x3e8>
+    0.00 :   9b304:        movl    $0x1, %edi
+    0.00 :   9b309:        movl    $0x2c, %esi
+    0.00 :   9b30e:        callq   *0x64d54(%rip)  # 0x100068 <_DYNAMIC+0x2c8>
+    0.00 :   9b314:        movl    $0x1, %edi
+    0.00 :   9b319:        movl    $0x13, %esi
+    0.00 :   9b31e:        callq   *0x64d44(%rip)  # 0x100068 <_DYNAMIC+0x2c8>
+    0.00 :   9b324:        movl    $0x1, %edi
+    0.00 :   9b329:        movl    $0x1a, %esi
+    0.00 :   9b32e:        callq   *0x64d34(%rip)  # 0x100068 <_DYNAMIC+0x2c8>
+    0.00 :   9b334:        movl    $0x1, %edi
+    0.00 :   9b339:        movl    $0x2f, %esi
+    0.00 :   9b33e:        callq   *0x64d24(%rip)  # 0x100068 <_DYNAMIC+0x2c8>
+    0.00 :   9b344:        movl    $0x1, %edi
+    0.00 :   9b349:        movl    $0x26, %esi
+    0.00 :   9b34e:        callq   *0x64d14(%rip)  # 0x100068 <_DYNAMIC+0x2c8>
+    0.00 :   9b354:        jmp     0x9b35c <<kiban::sstable::block::VerifiedBlock>::verify+0x55c>
+    0.00 :   9b356:        jmp     0x9b35c <<kiban::sstable::block::VerifiedBlock>::verify+0x55c>
+    0.00 :   9b358:        jmp     0x9b35c <<kiban::sstable::block::VerifiedBlock>::verify+0x55c>
+    0.00 :   9b35a:        jmp     0x9b35c <<kiban::sstable::block::VerifiedBlock>::verify+0x55c>
+    0.00 :   9b35c:        movq    %rax, %rbx
+    0.00 :   9b35f:        movq    0x30(%rsp), %rsi
+    0.00 :   9b364:        testq   %rsi, %rsi
+    0.00 :   9b367:        je      0x9b379 <<kiban::sstable::block::VerifiedBlock>::verify+0x579>
+    0.00 :   9b369:        movq    0x38(%rsp), %rdi
+    0.00 :   9b36e:        movl    $0x1, %edx
+    0.00 :   9b373:        callq   *0x64c67(%rip)  # 0xfffe0 <_DYNAMIC+0x240>
+    0.00 :   9b379:        movq    %rbx, %rdi
+    0.00 :   9b37c:        callq   0xfa340 <_fini+0x34>

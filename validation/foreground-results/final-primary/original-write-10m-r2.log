@@ -1,0 +1,2 @@
+random-write: 10000000 operations in 88.242s (113325 ops/s), read/write p99= / 56320 ns
+total: 10000000 operations in 88.242s (113325 ops/s), read/write p99= / 56320 ns

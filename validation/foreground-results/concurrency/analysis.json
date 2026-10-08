@@ -1,0 +1,3970 @@
+{
+  "policy": "every complete verified trial; median trial percentiles, not pooled",
+  "profiling": false,
+  "trials": [
+    {
+      "label": "original",
+      "case": "mixed-32t",
+      "repeat": 0,
+      "revision": "47454e53c95bbc8ac8bad3a1a64a3971e40bc9da",
+      "operations": 1000000,
+      "ops_s": 213001.93227194983,
+      "read_ops_s": 106601.290046075,
+      "write_ops_s": 106400.64222587482,
+      "settled": true,
+      "peak_rss_bytes": 143110144,
+      "peak_fds": 26,
+      "max_l0": 2,
+      "db_bytes": 19192091,
+      "read_p50_ns": 6016.0,
+      "read_p95_ns": 32256.0,
+      "read_p99_ns": 52224.0,
+      "read_p999_ns": 139264.0,
+      "read_max_ns": 2852290.0,
+      "write_p50_ns": 26112.0,
+      "write_p95_ns": 802816.0,
+      "write_p99_ns": 1310720.0,
+      "write_p999_ns": 17825792.0,
+      "write_max_ns": 41386938.0,
+      "sst_write_amp": 3.1958036970826518,
+      "stall_ns": 41261067.0,
+      "immutable_wait_ns": 41261067.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 41123740.0,
+      "compaction_build_ns": 2144233363.0,
+      "compaction_commit_wait_ns": 2516104.0,
+      "compaction_commit_ns": 38920081.0,
+      "flush_build_ns": 710230326.0,
+      "flush_commit_wait_ns": 5695573.0,
+      "flush_commit_ns": 307785255.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 315678720.0
+    },
+    {
+      "label": "final",
+      "case": "mixed-32t",
+      "repeat": 0,
+      "revision": "5efc19b1b8b4e046712a560e5edc06c18ddb53cd",
+      "operations": 1000000,
+      "ops_s": 224438.45803037105,
+      "read_ops_s": 112324.93952891784,
+      "write_ops_s": 112113.51850145322,
+      "settled": true,
+      "peak_rss_bytes": 145879040,
+      "peak_fds": 27,
+      "max_l0": 3,
+      "db_bytes": 19192104,
+      "read_p50_ns": 5888.0,
+      "read_p95_ns": 19968.0,
+      "read_p99_ns": 32768.0,
+      "read_p999_ns": 135168.0,
+      "read_max_ns": 1698047.0,
+      "write_p50_ns": 14336.0,
+      "write_p95_ns": 786432.0,
+      "write_p99_ns": 1277952.0,
+      "write_p999_ns": 17301504.0,
+      "write_max_ns": 28780924.0,
+      "sst_write_amp": 3.195473032655585,
+      "stall_ns": 12451592.0,
+      "immutable_wait_ns": 12451592.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 19885886.0,
+      "compaction_build_ns": 1186203210.0,
+      "compaction_commit_wait_ns": 13588219.0,
+      "compaction_commit_ns": 28491709.0,
+      "flush_build_ns": 555663408.0,
+      "flush_commit_wait_ns": 3389909.0,
+      "flush_commit_ns": 306588536.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 316010496.0
+    },
+    {
+      "label": "final",
+      "case": "mixed-1t",
+      "repeat": 2,
+      "revision": "5efc19b1b8b4e046712a560e5edc06c18ddb53cd",
+      "operations": 1000000,
+      "ops_s": 268726.6747631255,
+      "read_ops_s": 134489.90764537617,
+      "write_ops_s": 134236.76711774932,
+      "settled": true,
+      "peak_rss_bytes": 121102336,
+      "peak_fds": 30,
+      "max_l0": 3,
+      "db_bytes": 19192104,
+      "read_p50_ns": 2752.0,
+      "read_p95_ns": 9984.0,
+      "read_p99_ns": 15872.0,
+      "read_p999_ns": 26624.0,
+      "read_max_ns": 1237444.0,
+      "write_p50_ns": 1888.0,
+      "write_p95_ns": 3584.0,
+      "write_p99_ns": 10240.0,
+      "write_p999_ns": 23040.0,
+      "write_max_ns": 36402875.0,
+      "sst_write_amp": 3.1958228916345077,
+      "stall_ns": 23636037.0,
+      "immutable_wait_ns": 23636037.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 20253855.0,
+      "compaction_build_ns": 1122837946.0,
+      "compaction_commit_wait_ns": 3503008.0,
+      "compaction_commit_ns": 38516072.0,
+      "flush_build_ns": 531615278.0,
+      "flush_commit_wait_ns": 39906.0,
+      "flush_commit_ns": 272372801.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 316522496.0
+    },
+    {
+      "label": "original",
+      "case": "mixed-1t",
+      "repeat": 2,
+      "revision": "47454e53c95bbc8ac8bad3a1a64a3971e40bc9da",
+      "operations": 1000000,
+      "ops_s": 211866.10305509204,
+      "read_ops_s": 106032.84046208496,
+      "write_ops_s": 105833.26259300706,
+      "settled": true,
+      "peak_rss_bytes": 123760640,
+      "peak_fds": 27,
+      "max_l0": 2,
+      "db_bytes": 19192104,
+      "read_p50_ns": 3200.0,
+      "read_p95_ns": 19456.0,
+      "read_p99_ns": 32256.0,
+      "read_p999_ns": 51200.0,
+      "read_max_ns": 1013340.0,
+      "write_p50_ns": 2432.0,
+      "write_p95_ns": 4864.0,
+      "write_p99_ns": 11776.0,
+      "write_p999_ns": 27648.0,
+      "write_max_ns": 37434061.0,
+      "sst_write_amp": 3.1958228916345077,
+      "stall_ns": 36653785.0,
+      "immutable_wait_ns": 36653785.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 34532190.0,
+      "compaction_build_ns": 2055842386.0,
+      "compaction_commit_wait_ns": 22969327.0,
+      "compaction_commit_ns": 41821477.0,
+      "flush_build_ns": 769853185.0,
+      "flush_commit_wait_ns": 33039.0,
+      "flush_commit_ns": 296382997.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 316735488.0
+    },
+    {
+      "label": "original",
+      "case": "mixed-32t",
+      "repeat": 2,
+      "revision": "47454e53c95bbc8ac8bad3a1a64a3971e40bc9da",
+      "operations": 1000000,
+      "ops_s": 252168.48722404218,
+      "read_ops_s": 126203.01496950362,
+      "write_ops_s": 125965.47225453857,
+      "settled": true,
+      "peak_rss_bytes": 152440832,
+      "peak_fds": 29,
+      "max_l0": 4,
+      "db_bytes": 19192180,
+      "read_p50_ns": 5376.0,
+      "read_p95_ns": 26112.0,
+      "read_p99_ns": 41984.0,
+      "read_p999_ns": 135168.0,
+      "read_max_ns": 2834538.0,
+      "write_p50_ns": 14080.0,
+      "write_p95_ns": 704512.0,
+      "write_p99_ns": 1343488.0,
+      "write_p999_ns": 14155776.0,
+      "write_max_ns": 32688808.0,
+      "sst_write_amp": 3.1957279786971093,
+      "stall_ns": 16998772.0,
+      "immutable_wait_ns": 16998772.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 38105977.0,
+      "compaction_build_ns": 1625544738.0,
+      "compaction_commit_wait_ns": 2243247.0,
+      "compaction_commit_ns": 25399861.0,
+      "flush_build_ns": 564239095.0,
+      "flush_commit_wait_ns": 4773768.0,
+      "flush_commit_ns": 259533515.0,
+      "process_read_bytes": 4096.0,
+      "process_write_bytes": 318906368.0
+    },
+    {
+      "label": "final",
+      "case": "mixed-32t",
+      "repeat": 2,
+      "revision": "5efc19b1b8b4e046712a560e5edc06c18ddb53cd",
+      "operations": 1000000,
+      "ops_s": 248080.51527944475,
+      "read_ops_s": 124157.103562419,
+      "write_ops_s": 123923.41171702577,
+      "settled": true,
+      "peak_rss_bytes": 147230720,
+      "peak_fds": 26,
+      "max_l0": 4,
+      "db_bytes": 19192127,
+      "read_p50_ns": 5248.0,
+      "read_p95_ns": 17920.0,
+      "read_p99_ns": 32256.0,
+      "read_p999_ns": 184320.0,
+      "read_max_ns": 3655687.0,
+      "write_p50_ns": 11008.0,
+      "write_p95_ns": 704512.0,
+      "write_p99_ns": 1540096.0,
+      "write_p999_ns": 17301504.0,
+      "write_max_ns": 31315011.0,
+      "sst_write_amp": 3.195480760523472,
+      "stall_ns": 16179941.0,
+      "immutable_wait_ns": 16179941.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 23579884.0,
+      "compaction_build_ns": 897463788.0,
+      "compaction_commit_wait_ns": 5200674.0,
+      "compaction_commit_ns": 25810036.0,
+      "flush_build_ns": 401591543.0,
+      "flush_commit_wait_ns": 4026163.0,
+      "flush_commit_ns": 285259566.0,
+      "process_read_bytes": 102400.0,
+      "process_write_bytes": 316743680.0
+    },
+    {
+      "label": "final",
+      "case": "mixed-1t",
+      "repeat": 0,
+      "revision": "5efc19b1b8b4e046712a560e5edc06c18ddb53cd",
+      "operations": 1000000,
+      "ops_s": 238944.00931598726,
+      "read_ops_s": 119584.54728638145,
+      "write_ops_s": 119359.4620296058,
+      "settled": true,
+      "peak_rss_bytes": 116494336,
+      "peak_fds": 22,
+      "max_l0": 3,
+      "db_bytes": 19192104,
+      "read_p50_ns": 3200.0,
+      "read_p95_ns": 11264.0,
+      "read_p99_ns": 16896.0,
+      "read_p999_ns": 30208.0,
+      "read_max_ns": 1600579.0,
+      "write_p50_ns": 2176.0,
+      "write_p95_ns": 4352.0,
+      "write_p99_ns": 12032.0,
+      "write_p999_ns": 29184.0,
+      "write_max_ns": 27326926.0,
+      "sst_write_amp": 3.1958228916345077,
+      "stall_ns": 21780762.0,
+      "immutable_wait_ns": 21780762.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 16507209.0,
+      "compaction_build_ns": 1148944072.0,
+      "compaction_commit_wait_ns": 17020870.0,
+      "compaction_commit_ns": 31489815.0,
+      "flush_build_ns": 450175004.0,
+      "flush_commit_wait_ns": 24617.0,
+      "flush_commit_ns": 287110166.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 316379136.0
+    },
+    {
+      "label": "original",
+      "case": "mixed-1t",
+      "repeat": 0,
+      "revision": "47454e53c95bbc8ac8bad3a1a64a3971e40bc9da",
+      "operations": 1000000,
+      "ops_s": 194565.95260591735,
+      "read_ops_s": 97374.61686663606,
+      "write_ops_s": 97191.33573928129,
+      "settled": true,
+      "peak_rss_bytes": 115732480,
+      "peak_fds": 27,
+      "max_l0": 4,
+      "db_bytes": 19192104,
+      "read_p50_ns": 3520.0,
+      "read_p95_ns": 20992.0,
+      "read_p99_ns": 28672.0,
+      "read_p999_ns": 50176.0,
+      "read_max_ns": 2244851.0,
+      "write_p50_ns": 2752.0,
+      "write_p95_ns": 5504.0,
+      "write_p99_ns": 13824.0,
+      "write_p999_ns": 33792.0,
+      "write_max_ns": 28691298.0,
+      "sst_write_amp": 3.1958228916345077,
+      "stall_ns": 46883015.0,
+      "immutable_wait_ns": 46883015.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 36003845.0,
+      "compaction_build_ns": 1856831884.0,
+      "compaction_commit_wait_ns": 20385.0,
+      "compaction_commit_ns": 26376448.0,
+      "flush_build_ns": 609420915.0,
+      "flush_commit_wait_ns": 29867.0,
+      "flush_commit_ns": 312551504.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 318996480.0
+    },
+    {
+      "label": "original",
+      "case": "mixed-64t",
+      "repeat": 2,
+      "revision": "47454e53c95bbc8ac8bad3a1a64a3971e40bc9da",
+      "operations": 1000000,
+      "ops_s": 224703.1006974784,
+      "read_ops_s": 112457.38550916771,
+      "write_ops_s": 112245.71518831069,
+      "settled": true,
+      "peak_rss_bytes": 148926464,
+      "peak_fds": 27,
+      "max_l0": 3,
+      "db_bytes": 19192107,
+      "read_p50_ns": 5888.0,
+      "read_p95_ns": 27648.0,
+      "read_p99_ns": 45056.0,
+      "read_p999_ns": 294912.0,
+      "read_max_ns": 3391084.0,
+      "write_p50_ns": 20992.0,
+      "write_p95_ns": 1671168.0,
+      "write_p99_ns": 3342336.0,
+      "write_p999_ns": 20971520.0,
+      "write_max_ns": 31776374.0,
+      "sst_write_amp": 3.1953566141658385,
+      "stall_ns": 41094826.0,
+      "immutable_wait_ns": 41094826.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 35872047.0,
+      "compaction_build_ns": 1910991883.0,
+      "compaction_commit_wait_ns": 7366776.0,
+      "compaction_commit_ns": 28586580.0,
+      "flush_build_ns": 625571583.0,
+      "flush_commit_wait_ns": 11227526.0,
+      "flush_commit_ns": 323644803.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 316325888.0
+    },
+    {
+      "label": "final",
+      "case": "mixed-64t",
+      "repeat": 2,
+      "revision": "5efc19b1b8b4e046712a560e5edc06c18ddb53cd",
+      "operations": 1000000,
+      "ops_s": 210962.76559632568,
+      "read_ops_s": 105580.74626075871,
+      "write_ops_s": 105382.01933556698,
+      "settled": true,
+      "peak_rss_bytes": 151515136,
+      "peak_fds": 27,
+      "max_l0": 2,
+      "db_bytes": 19192077,
+      "read_p50_ns": 6016.0,
+      "read_p95_ns": 20992.0,
+      "read_p99_ns": 34816.0,
+      "read_p999_ns": 176128.0,
+      "read_max_ns": 3232699.0,
+      "write_p50_ns": 14592.0,
+      "write_p95_ns": 1671168.0,
+      "write_p99_ns": 3145728.0,
+      "write_p999_ns": 26738688.0,
+      "write_max_ns": 40113147.0,
+      "sst_write_amp": 3.1955264064631237,
+      "stall_ns": 34796784.0,
+      "immutable_wait_ns": 34796784.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 36438014.0,
+      "compaction_build_ns": 1441452955.0,
+      "compaction_commit_wait_ns": 29642332.0,
+      "compaction_commit_ns": 38665710.0,
+      "flush_build_ns": 576431482.0,
+      "flush_commit_wait_ns": 15591154.0,
+      "flush_commit_ns": 343291616.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 316645376.0
+    },
+    {
+      "label": "final",
+      "case": "mixed-2t",
+      "repeat": 2,
+      "revision": "5efc19b1b8b4e046712a560e5edc06c18ddb53cd",
+      "operations": 1000000,
+      "ops_s": 309047.476789092,
+      "read_ops_s": 154669.29975611367,
+      "write_ops_s": 154378.17703297836,
+      "settled": true,
+      "peak_rss_bytes": 131321856,
+      "peak_fds": 25,
+      "max_l0": 3,
+      "db_bytes": 19192190,
+      "read_p50_ns": 3968.0,
+      "read_p95_ns": 13824.0,
+      "read_p99_ns": 22016.0,
+      "read_p999_ns": 45056.0,
+      "read_max_ns": 897025.0,
+      "write_p50_ns": 3328.0,
+      "write_p95_ns": 10752.0,
+      "write_p99_ns": 25600.0,
+      "write_p999_ns": 62464.0,
+      "write_max_ns": 123125027.0,
+      "sst_write_amp": 3.1954111802729934,
+      "stall_ns": 15543134.0,
+      "immutable_wait_ns": 15543134.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 35293543.0,
+      "compaction_build_ns": 1653024293.0,
+      "compaction_commit_wait_ns": 29017700.0,
+      "compaction_commit_ns": 31851891.0,
+      "flush_build_ns": 680222622.0,
+      "flush_commit_wait_ns": 61359.0,
+      "flush_commit_ns": 267124490.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 318316544.0
+    },
+    {
+      "label": "original",
+      "case": "mixed-2t",
+      "repeat": 2,
+      "revision": "47454e53c95bbc8ac8bad3a1a64a3971e40bc9da",
+      "operations": 1000000,
+      "ops_s": 294336.2134262306,
+      "read_ops_s": 147306.73906963906,
+      "write_ops_s": 147029.47435659156,
+      "settled": true,
+      "peak_rss_bytes": 143253504,
+      "peak_fds": 26,
+      "max_l0": 5,
+      "db_bytes": 19192104,
+      "read_p50_ns": 3776.0,
+      "read_p95_ns": 22528.0,
+      "read_p99_ns": 37888.0,
+      "read_p999_ns": 69632.0,
+      "read_max_ns": 1835830.0,
+      "write_p50_ns": 3392.0,
+      "write_p95_ns": 10496.0,
+      "write_p99_ns": 23040.0,
+      "write_p999_ns": 58368.0,
+      "write_max_ns": 40046848.0,
+      "sst_write_amp": 3.1957349558578296,
+      "stall_ns": 29376883.0,
+      "immutable_wait_ns": 29376883.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 48520382.0,
+      "compaction_build_ns": 2178783682.0,
+      "compaction_commit_wait_ns": 15237733.0,
+      "compaction_commit_ns": 57695416.0,
+      "flush_build_ns": 767392241.0,
+      "flush_commit_wait_ns": 74386.0,
+      "flush_commit_ns": 251647249.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 316121088.0
+    },
+    {
+      "label": "original",
+      "case": "mixed-16t",
+      "repeat": 1,
+      "revision": "47454e53c95bbc8ac8bad3a1a64a3971e40bc9da",
+      "operations": 1000000,
+      "ops_s": 221618.9301854982,
+      "read_ops_s": 110913.84760886648,
+      "write_ops_s": 110705.08257663174,
+      "settled": true,
+      "peak_rss_bytes": 131493888,
+      "peak_fds": 27,
+      "max_l0": 5,
+      "db_bytes": 19192099,
+      "read_p50_ns": 6016.0,
+      "read_p95_ns": 33792.0,
+      "read_p99_ns": 53248.0,
+      "read_p999_ns": 147456.0,
+      "read_max_ns": 2310197.0,
+      "write_p50_ns": 22528.0,
+      "write_p95_ns": 360448.0,
+      "write_p99_ns": 557056.0,
+      "write_p999_ns": 15204352.0,
+      "write_max_ns": 30446523.0,
+      "sst_write_amp": 3.195557818406115,
+      "stall_ns": 30743669.0,
+      "immutable_wait_ns": 30743669.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 51289568.0,
+      "compaction_build_ns": 2490799575.0,
+      "compaction_commit_wait_ns": 6232428.0,
+      "compaction_commit_ns": 43285564.0,
+      "flush_build_ns": 918509530.0,
+      "flush_commit_wait_ns": 2753319.0,
+      "flush_commit_ns": 343937890.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 316452864.0
+    },
+    {
+      "label": "final",
+      "case": "mixed-16t",
+      "repeat": 1,
+      "revision": "5efc19b1b8b4e046712a560e5edc06c18ddb53cd",
+      "operations": 1000000,
+      "ops_s": 235618.0577713405,
+      "read_ops_s": 117920.00499088055,
+      "write_ops_s": 117698.05278045996,
+      "settled": true,
+      "peak_rss_bytes": 146112512,
+      "peak_fds": 29,
+      "max_l0": 3,
+      "db_bytes": 19192131,
+      "read_p50_ns": 5632.0,
+      "read_p95_ns": 19968.0,
+      "read_p99_ns": 33792.0,
+      "read_p999_ns": 110592.0,
+      "read_max_ns": 1811870.0,
+      "write_p50_ns": 12800.0,
+      "write_p95_ns": 335872.0,
+      "write_p99_ns": 540672.0,
+      "write_p999_ns": 15204352.0,
+      "write_max_ns": 31234009.0,
+      "sst_write_amp": 3.1958523311312197,
+      "stall_ns": 30814419.0,
+      "immutable_wait_ns": 30814419.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 20998206.0,
+      "compaction_build_ns": 1292732515.0,
+      "compaction_commit_wait_ns": 9358222.0,
+      "compaction_commit_ns": 28338630.0,
+      "flush_build_ns": 568253884.0,
+      "flush_commit_wait_ns": 2440340.0,
+      "flush_commit_ns": 340410246.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 316489728.0
+    },
+    {
+      "label": "final",
+      "case": "mixed-64t",
+      "repeat": 0,
+      "revision": "5efc19b1b8b4e046712a560e5edc06c18ddb53cd",
+      "operations": 1000000,
+      "ops_s": 212871.90211669193,
+      "read_ops_s": 106536.21372424292,
+      "write_ops_s": 106335.688392449,
+      "settled": true,
+      "peak_rss_bytes": 166637568,
+      "peak_fds": 26,
+      "max_l0": 2,
+      "db_bytes": 19192122,
+      "read_p50_ns": 6016.0,
+      "read_p95_ns": 20480.0,
+      "read_p99_ns": 34816.0,
+      "read_p999_ns": 258048.0,
+      "read_max_ns": 2473844.0,
+      "write_p50_ns": 14592.0,
+      "write_p95_ns": 1703936.0,
+      "write_p99_ns": 2949120.0,
+      "write_p999_ns": 23592960.0,
+      "write_max_ns": 30828241.0,
+      "sst_write_amp": 3.196015911694699,
+      "stall_ns": 21161693.0,
+      "immutable_wait_ns": 21161693.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 19220758.0,
+      "compaction_build_ns": 1321466592.0,
+      "compaction_commit_wait_ns": 4183623.0,
+      "compaction_commit_ns": 38320680.0,
+      "flush_build_ns": 653510481.0,
+      "flush_commit_wait_ns": 11562223.0,
+      "flush_commit_ns": 334393548.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 316780544.0
+    },
+    {
+      "label": "original",
+      "case": "mixed-64t",
+      "repeat": 0,
+      "revision": "47454e53c95bbc8ac8bad3a1a64a3971e40bc9da",
+      "operations": 1000000,
+      "ops_s": 210714.7029850865,
+      "read_ops_s": 105456.59811764924,
+      "write_ops_s": 105258.10486743729,
+      "settled": true,
+      "peak_rss_bytes": 168652800,
+      "peak_fds": 25,
+      "max_l0": 2,
+      "db_bytes": 19192083,
+      "read_p50_ns": 5760.0,
+      "read_p95_ns": 33792.0,
+      "read_p99_ns": 54272.0,
+      "read_p999_ns": 278528.0,
+      "read_max_ns": 3435273.0,
+      "write_p50_ns": 17920.0,
+      "write_p95_ns": 1703936.0,
+      "write_p99_ns": 2949120.0,
+      "write_p999_ns": 24117248.0,
+      "write_max_ns": 35170906.0,
+      "sst_write_amp": 3.195680286712436,
+      "stall_ns": 35435761.0,
+      "immutable_wait_ns": 35435761.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 23766996.0,
+      "compaction_build_ns": 1962070358.0,
+      "compaction_commit_wait_ns": 35954806.0,
+      "compaction_commit_ns": 28905377.0,
+      "flush_build_ns": 763508668.0,
+      "flush_commit_wait_ns": 13487599.0,
+      "flush_commit_ns": 307092652.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 317001728.0
+    },
+    {
+      "label": "original",
+      "case": "mixed-4t",
+      "repeat": 0,
+      "revision": "47454e53c95bbc8ac8bad3a1a64a3971e40bc9da",
+      "operations": 1000000,
+      "ops_s": 264601.4183044566,
+      "read_ops_s": 132425.3364202497,
+      "write_ops_s": 132176.08188420688,
+      "settled": true,
+      "peak_rss_bytes": 136110080,
+      "peak_fds": 29,
+      "max_l0": 4,
+      "db_bytes": 19192117,
+      "read_p50_ns": 4864.0,
+      "read_p95_ns": 29184.0,
+      "read_p99_ns": 46080.0,
+      "read_p999_ns": 98304.0,
+      "read_max_ns": 1696103.0,
+      "write_p50_ns": 7936.0,
+      "write_p95_ns": 52224.0,
+      "write_p99_ns": 90112.0,
+      "write_p999_ns": 319488.0,
+      "write_max_ns": 20349072.0,
+      "sst_write_amp": 3.195804197554096,
+      "stall_ns": 40559870.0,
+      "immutable_wait_ns": 40559870.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 58139756.0,
+      "compaction_build_ns": 1883075721.0,
+      "compaction_commit_wait_ns": 367580.0,
+      "compaction_commit_ns": 28315282.0,
+      "flush_build_ns": 625604406.0,
+      "flush_commit_wait_ns": 455273.0,
+      "flush_commit_ns": 273251160.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 316633088.0
+    },
+    {
+      "label": "final",
+      "case": "mixed-4t",
+      "repeat": 0,
+      "revision": "5efc19b1b8b4e046712a560e5edc06c18ddb53cd",
+      "operations": 1000000,
+      "ops_s": 273319.7384824265,
+      "read_ops_s": 136788.60283803847,
+      "write_ops_s": 136531.135644388,
+      "settled": true,
+      "peak_rss_bytes": 128946176,
+      "peak_fds": 25,
+      "max_l0": 3,
+      "db_bytes": 19192109,
+      "read_p50_ns": 4992.0,
+      "read_p95_ns": 17408.0,
+      "read_p99_ns": 28160.0,
+      "read_p999_ns": 77824.0,
+      "read_max_ns": 1650077.0,
+      "write_p50_ns": 8064.0,
+      "write_p95_ns": 51200.0,
+      "write_p99_ns": 88064.0,
+      "write_p999_ns": 294912.0,
+      "write_max_ns": 22995837.0,
+      "sst_write_amp": 3.195748188911602,
+      "stall_ns": 22049276.0,
+      "immutable_wait_ns": 22049276.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 21915580.0,
+      "compaction_build_ns": 1105852478.0,
+      "compaction_commit_wait_ns": 13628984.0,
+      "compaction_commit_ns": 29164812.0,
+      "flush_build_ns": 471546497.0,
+      "flush_commit_wait_ns": 423910.0,
+      "flush_commit_ns": 285480771.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 316715008.0
+    },
+    {
+      "label": "final",
+      "case": "mixed-16t",
+      "repeat": 0,
+      "revision": "5efc19b1b8b4e046712a560e5edc06c18ddb53cd",
+      "operations": 1000000,
+      "ops_s": 236620.06461232193,
+      "read_ops_s": 118421.48035659337,
+      "write_ops_s": 118198.58425572857,
+      "settled": true,
+      "peak_rss_bytes": 140021760,
+      "peak_fds": 27,
+      "max_l0": 4,
+      "db_bytes": 19192193,
+      "read_p50_ns": 5504.0,
+      "read_p95_ns": 19456.0,
+      "read_p99_ns": 31744.0,
+      "read_p999_ns": 83968.0,
+      "read_max_ns": 1827409.0,
+      "write_p50_ns": 14848.0,
+      "write_p95_ns": 344064.0,
+      "write_p99_ns": 540672.0,
+      "write_p999_ns": 14417920.0,
+      "write_max_ns": 30057482.0,
+      "sst_write_amp": 3.195832533069681,
+      "stall_ns": 23664212.0,
+      "immutable_wait_ns": 23664212.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 23462809.0,
+      "compaction_build_ns": 1160657384.0,
+      "compaction_commit_wait_ns": 1663094.0,
+      "compaction_commit_ns": 27214127.0,
+      "flush_build_ns": 481871895.0,
+      "flush_commit_wait_ns": 2017899.0,
+      "flush_commit_ns": 315907565.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 316915712.0
+    },
+    {
+      "label": "original",
+      "case": "mixed-16t",
+      "repeat": 0,
+      "revision": "47454e53c95bbc8ac8bad3a1a64a3971e40bc9da",
+      "operations": 1000000,
+      "ops_s": 220953.06496919962,
+      "read_ops_s": 110580.6013782003,
+      "write_ops_s": 110372.46359099932,
+      "settled": true,
+      "peak_rss_bytes": 142540800,
+      "peak_fds": 26,
+      "max_l0": 2,
+      "db_bytes": 19192129,
+      "read_p50_ns": 5760.0,
+      "read_p95_ns": 32768.0,
+      "read_p99_ns": 52224.0,
+      "read_p999_ns": 106496.0,
+      "read_max_ns": 14876218.0,
+      "write_p50_ns": 19456.0,
+      "write_p95_ns": 368640.0,
+      "write_p99_ns": 573440.0,
+      "write_p999_ns": 12845056.0,
+      "write_max_ns": 30966270.0,
+      "sst_write_amp": 3.195653526209925,
+      "stall_ns": 58795757.0,
+      "immutable_wait_ns": 58795757.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 44798033.0,
+      "compaction_build_ns": 2044899613.0,
+      "compaction_commit_wait_ns": 5852175.0,
+      "compaction_commit_ns": 27769190.0,
+      "flush_build_ns": 722810944.0,
+      "flush_commit_wait_ns": 1805972.0,
+      "flush_commit_ns": 314543052.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 316362752.0
+    },
+    {
+      "label": "original",
+      "case": "mixed-8t",
+      "repeat": 1,
+      "revision": "47454e53c95bbc8ac8bad3a1a64a3971e40bc9da",
+      "operations": 1000000,
+      "ops_s": 227091.5337765711,
+      "read_ops_s": 113652.72700069431,
+      "write_ops_s": 113438.80677587679,
+      "settled": true,
+      "peak_rss_bytes": 133079040,
+      "peak_fds": 27,
+      "max_l0": 3,
+      "db_bytes": 19192124,
+      "read_p50_ns": 5760.0,
+      "read_p95_ns": 32256.0,
+      "read_p99_ns": 50176.0,
+      "read_p999_ns": 100352.0,
+      "read_max_ns": 9327537.0,
+      "write_p50_ns": 24576.0,
+      "write_p95_ns": 155648.0,
+      "write_p99_ns": 245760.0,
+      "write_p999_ns": 622592.0,
+      "write_max_ns": 32821046.0,
+      "sst_write_amp": 3.195847061461308,
+      "stall_ns": 31740770.0,
+      "immutable_wait_ns": 31740770.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 28179430.0,
+      "compaction_build_ns": 2045748732.0,
+      "compaction_commit_wait_ns": 1006749.0,
+      "compaction_commit_ns": 34594334.0,
+      "flush_build_ns": 668033720.0,
+      "flush_commit_wait_ns": 1097086.0,
+      "flush_commit_ns": 322984163.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 317521920.0
+    },
+    {
+      "label": "final",
+      "case": "mixed-8t",
+      "repeat": 1,
+      "revision": "5efc19b1b8b4e046712a560e5edc06c18ddb53cd",
+      "operations": 1000000,
+      "ops_s": 242031.39654123696,
+      "read_ops_s": 121129.6950583894,
+      "write_ops_s": 120901.70148284757,
+      "settled": true,
+      "peak_rss_bytes": 130494464,
+      "peak_fds": 25,
+      "max_l0": 4,
+      "db_bytes": 19192085,
+      "read_p50_ns": 5632.0,
+      "read_p95_ns": 19456.0,
+      "read_p99_ns": 31744.0,
+      "read_p999_ns": 81920.0,
+      "read_max_ns": 2341279.0,
+      "write_p50_ns": 22016.0,
+      "write_p95_ns": 147456.0,
+      "write_p99_ns": 233472.0,
+      "write_p999_ns": 606208.0,
+      "write_max_ns": 26350980.0,
+      "sst_write_amp": 3.195676474297612,
+      "stall_ns": 34564618.0,
+      "immutable_wait_ns": 34564618.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 19914106.0,
+      "compaction_build_ns": 1108336382.0,
+      "compaction_commit_wait_ns": 7456670.0,
+      "compaction_commit_ns": 29017200.0,
+      "flush_build_ns": 472791250.0,
+      "flush_commit_wait_ns": 962677.0,
+      "flush_commit_ns": 302494596.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 317640704.0
+    },
+    {
+      "label": "final",
+      "case": "mixed-32t",
+      "repeat": 1,
+      "revision": "5efc19b1b8b4e046712a560e5edc06c18ddb53cd",
+      "operations": 1000000,
+      "ops_s": 218592.2028655256,
+      "read_ops_s": 109399.05836031247,
+      "write_ops_s": 109193.14450521315,
+      "settled": true,
+      "peak_rss_bytes": 136581120,
+      "peak_fds": 28,
+      "max_l0": 2,
+      "db_bytes": 19192117,
+      "read_p50_ns": 5888.0,
+      "read_p95_ns": 20480.0,
+      "read_p99_ns": 33792.0,
+      "read_p999_ns": 139264.0,
+      "read_max_ns": 2695898.0,
+      "write_p50_ns": 14336.0,
+      "write_p95_ns": 786432.0,
+      "write_p99_ns": 1277952.0,
+      "write_p999_ns": 19922944.0,
+      "write_max_ns": 35475839.0,
+      "sst_write_amp": 3.1955233594752137,
+      "stall_ns": 20169747.0,
+      "immutable_wait_ns": 20169747.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 25559997.0,
+      "compaction_build_ns": 1359766984.0,
+      "compaction_commit_wait_ns": 17980473.0,
+      "compaction_commit_ns": 30777622.0,
+      "flush_build_ns": 500384446.0,
+      "flush_commit_wait_ns": 2377116.0,
+      "flush_commit_ns": 327591394.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 316338176.0
+    },
+    {
+      "label": "original",
+      "case": "mixed-32t",
+      "repeat": 1,
+      "revision": "47454e53c95bbc8ac8bad3a1a64a3971e40bc9da",
+      "operations": 1000000,
+      "ops_s": 214773.3402182679,
+      "read_ops_s": 107487.82835237675,
+      "write_ops_s": 107285.51186589114,
+      "settled": true,
+      "peak_rss_bytes": 156487680,
+      "peak_fds": 28,
+      "max_l0": 4,
+      "db_bytes": 19192121,
+      "read_p50_ns": 6016.0,
+      "read_p95_ns": 33792.0,
+      "read_p99_ns": 53248.0,
+      "read_p999_ns": 159744.0,
+      "read_max_ns": 2381299.0,
+      "write_p50_ns": 24576.0,
+      "write_p95_ns": 819200.0,
+      "write_p99_ns": 1343488.0,
+      "write_p999_ns": 16252928.0,
+      "write_max_ns": 28494210.0,
+      "sst_write_amp": 3.1956354650786922,
+      "stall_ns": 47992357.0,
+      "immutable_wait_ns": 47992357.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 33097383.0,
+      "compaction_build_ns": 2005966731.0,
+      "compaction_commit_wait_ns": 6198872.0,
+      "compaction_commit_ns": 28487062.0,
+      "flush_build_ns": 693779898.0,
+      "flush_commit_wait_ns": 5437604.0,
+      "flush_commit_ns": 279820253.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 318918656.0
+    },
+    {
+      "label": "original",
+      "case": "mixed-2t",
+      "repeat": 0,
+      "revision": "47454e53c95bbc8ac8bad3a1a64a3971e40bc9da",
+      "operations": 1000000,
+      "ops_s": 344713.2331785213,
+      "read_ops_s": 172518.97652208773,
+      "write_ops_s": 172194.25665643357,
+      "settled": true,
+      "peak_rss_bytes": 129699840,
+      "peak_fds": 26,
+      "max_l0": 4,
+      "db_bytes": 19192089,
+      "read_p50_ns": 3264.0,
+      "read_p95_ns": 20992.0,
+      "read_p99_ns": 34816.0,
+      "read_p999_ns": 64512.0,
+      "read_max_ns": 1239767.0,
+      "write_p50_ns": 3072.0,
+      "write_p95_ns": 8960.0,
+      "write_p99_ns": 19968.0,
+      "write_p999_ns": 53248.0,
+      "write_max_ns": 16897469.0,
+      "sst_write_amp": 3.1955331481078706,
+      "stall_ns": 53711226.0,
+      "immutable_wait_ns": 53711226.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 31916570.0,
+      "compaction_build_ns": 1824592790.0,
+      "compaction_commit_wait_ns": 11247994.0,
+      "compaction_commit_ns": 29100313.0,
+      "flush_build_ns": 549333259.0,
+      "flush_commit_wait_ns": 181331.0,
+      "flush_commit_ns": 215342283.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 319250432.0
+    },
+    {
+      "label": "final",
+      "case": "mixed-2t",
+      "repeat": 0,
+      "revision": "5efc19b1b8b4e046712a560e5edc06c18ddb53cd",
+      "operations": 1000000,
+      "ops_s": 370061.0303244979,
+      "read_ops_s": 185204.8139075318,
+      "write_ops_s": 184856.2164169661,
+      "settled": true,
+      "peak_rss_bytes": 126017536,
+      "peak_fds": 25,
+      "max_l0": 4,
+      "db_bytes": 19192141,
+      "read_p50_ns": 3456.0,
+      "read_p95_ns": 12032.0,
+      "read_p99_ns": 18944.0,
+      "read_p999_ns": 36864.0,
+      "read_max_ns": 1046993.0,
+      "write_p50_ns": 2944.0,
+      "write_p95_ns": 8960.0,
+      "write_p99_ns": 21504.0,
+      "write_p999_ns": 55296.0,
+      "write_max_ns": 26124218.0,
+      "sst_write_amp": 3.195795483463069,
+      "stall_ns": 18928372.0,
+      "immutable_wait_ns": 18928372.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 15890510.0,
+      "compaction_build_ns": 979853903.0,
+      "compaction_commit_wait_ns": 10996883.0,
+      "compaction_commit_ns": 26631276.0,
+      "flush_build_ns": 375886480.0,
+      "flush_commit_wait_ns": 80428.0,
+      "flush_commit_ns": 248309970.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 318533632.0
+    },
+    {
+      "label": "final",
+      "case": "mixed-8t",
+      "repeat": 2,
+      "revision": "5efc19b1b8b4e046712a560e5edc06c18ddb53cd",
+      "operations": 1000000,
+      "ops_s": 251113.3430232448,
+      "read_ops_s": 125674.94589618634,
+      "write_ops_s": 125438.39712705844,
+      "settled": true,
+      "peak_rss_bytes": 123863040,
+      "peak_fds": 25,
+      "max_l0": 4,
+      "db_bytes": 19192101,
+      "read_p50_ns": 5376.0,
+      "read_p95_ns": 18944.0,
+      "read_p99_ns": 30208.0,
+      "read_p999_ns": 69632.0,
+      "read_max_ns": 2093307.0,
+      "write_p50_ns": 14336.0,
+      "write_p95_ns": 139264.0,
+      "write_p99_ns": 217088.0,
+      "write_p999_ns": 491520.0,
+      "write_max_ns": 32233913.0,
+      "sst_write_amp": 3.1956808755023705,
+      "stall_ns": 26196387.0,
+      "immutable_wait_ns": 26196387.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 17512349.0,
+      "compaction_build_ns": 1131713625.0,
+      "compaction_commit_wait_ns": 10301503.0,
+      "compaction_commit_ns": 25223865.0,
+      "flush_build_ns": 478362410.0,
+      "flush_commit_wait_ns": 1329400.0,
+      "flush_commit_ns": 333225465.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 316215296.0
+    },
+    {
+      "label": "original",
+      "case": "mixed-8t",
+      "repeat": 2,
+      "revision": "47454e53c95bbc8ac8bad3a1a64a3971e40bc9da",
+      "operations": 1000000,
+      "ops_s": 233521.0548611409,
+      "read_ops_s": 116870.51584741005,
+      "write_ops_s": 116650.53901373086,
+      "settled": true,
+      "peak_rss_bytes": 129286144,
+      "peak_fds": 27,
+      "max_l0": 3,
+      "db_bytes": 19192131,
+      "read_p50_ns": 5632.0,
+      "read_p95_ns": 31744.0,
+      "read_p99_ns": 51200.0,
+      "read_p999_ns": 102400.0,
+      "read_max_ns": 1711628.0,
+      "write_p50_ns": 23040.0,
+      "write_p95_ns": 151552.0,
+      "write_p99_ns": 245760.0,
+      "write_p999_ns": 688128.0,
+      "write_max_ns": 23482790.0,
+      "sst_write_amp": 3.1957525165176186,
+      "stall_ns": 56850043.0,
+      "immutable_wait_ns": 56850043.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 43683314.0,
+      "compaction_build_ns": 2082138680.0,
+      "compaction_commit_wait_ns": 8505870.0,
+      "compaction_commit_ns": 34383227.0,
+      "flush_build_ns": 658963750.0,
+      "flush_commit_wait_ns": 1475642.0,
+      "flush_commit_ns": 288230949.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 316223488.0
+    },
+    {
+      "label": "original",
+      "case": "mixed-64t",
+      "repeat": 1,
+      "revision": "47454e53c95bbc8ac8bad3a1a64a3971e40bc9da",
+      "operations": 1000000,
+      "ops_s": 210285.5602499793,
+      "read_ops_s": 105241.82462386739,
+      "write_ops_s": 105043.73562611191,
+      "settled": true,
+      "peak_rss_bytes": 153149440,
+      "peak_fds": 25,
+      "max_l0": 2,
+      "db_bytes": 19192108,
+      "read_p50_ns": 5888.0,
+      "read_p95_ns": 33792.0,
+      "read_p99_ns": 55296.0,
+      "read_p999_ns": 466944.0,
+      "read_max_ns": 2015778.0,
+      "write_p50_ns": 20992.0,
+      "write_p95_ns": 1736704.0,
+      "write_p99_ns": 3080192.0,
+      "write_p999_ns": 20971520.0,
+      "write_max_ns": 34552477.0,
+      "sst_write_amp": 3.195720103631739,
+      "stall_ns": 22004625.0,
+      "immutable_wait_ns": 22004625.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 33738817.0,
+      "compaction_build_ns": 2066700682.0,
+      "compaction_commit_wait_ns": 14048732.0,
+      "compaction_commit_ns": 30136085.0,
+      "flush_build_ns": 718654656.0,
+      "flush_commit_wait_ns": 12809166.0,
+      "flush_commit_ns": 291578115.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 316583936.0
+    },
+    {
+      "label": "final",
+      "case": "mixed-64t",
+      "repeat": 1,
+      "revision": "5efc19b1b8b4e046712a560e5edc06c18ddb53cd",
+      "operations": 1000000,
+      "ops_s": 216217.6774269677,
+      "read_ops_s": 108210.67723955195,
+      "write_ops_s": 108007.00018741575,
+      "settled": true,
+      "peak_rss_bytes": 158449664,
+      "peak_fds": 28,
+      "max_l0": 2,
+      "db_bytes": 19192162,
+      "read_p50_ns": 6016.0,
+      "read_p95_ns": 20480.0,
+      "read_p99_ns": 33792.0,
+      "read_p999_ns": 352256.0,
+      "read_max_ns": 2267041.0,
+      "write_p50_ns": 14592.0,
+      "write_p95_ns": 1671168.0,
+      "write_p99_ns": 2883584.0,
+      "write_p999_ns": 25165824.0,
+      "write_max_ns": 33241089.0,
+      "sst_write_amp": 3.195520209449066,
+      "stall_ns": 29022356.0,
+      "immutable_wait_ns": 29022356.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 28319588.0,
+      "compaction_build_ns": 1259826560.0,
+      "compaction_commit_wait_ns": 14851628.0,
+      "compaction_commit_ns": 32152358.0,
+      "flush_build_ns": 516061539.0,
+      "flush_commit_wait_ns": 10750283.0,
+      "flush_commit_ns": 318709431.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 316686336.0
+    },
+    {
+      "label": "final",
+      "case": "mixed-4t",
+      "repeat": 2,
+      "revision": "5efc19b1b8b4e046712a560e5edc06c18ddb53cd",
+      "operations": 1000000,
+      "ops_s": 288982.7368611017,
+      "read_ops_s": 144627.47929961243,
+      "write_ops_s": 144355.25756148927,
+      "settled": true,
+      "peak_rss_bytes": 123895808,
+      "peak_fds": 25,
+      "max_l0": 4,
+      "db_bytes": 19192064,
+      "read_p50_ns": 4736.0,
+      "read_p95_ns": 16896.0,
+      "read_p99_ns": 27136.0,
+      "read_p999_ns": 62464.0,
+      "read_max_ns": 1720177.0,
+      "write_p50_ns": 7552.0,
+      "write_p95_ns": 49152.0,
+      "write_p99_ns": 79872.0,
+      "write_p999_ns": 233472.0,
+      "write_max_ns": 24797786.0,
+      "sst_write_amp": 3.195789433646495,
+      "stall_ns": 15065854.0,
+      "immutable_wait_ns": 15065854.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 18473758.0,
+      "compaction_build_ns": 1035710938.0,
+      "compaction_commit_wait_ns": 324867.0,
+      "compaction_commit_ns": 29312852.0,
+      "flush_build_ns": 428587858.0,
+      "flush_commit_wait_ns": 863056.0,
+      "flush_commit_ns": 284119958.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 318275584.0
+    },
+    {
+      "label": "original",
+      "case": "mixed-4t",
+      "repeat": 2,
+      "revision": "47454e53c95bbc8ac8bad3a1a64a3971e40bc9da",
+      "operations": 1000000,
+      "ops_s": 273040.9933038679,
+      "read_ops_s": 136649.09895978007,
+      "write_ops_s": 136391.8943440878,
+      "settled": true,
+      "peak_rss_bytes": 135168000,
+      "peak_fds": 28,
+      "max_l0": 3,
+      "db_bytes": 19192189,
+      "read_p50_ns": 4736.0,
+      "read_p95_ns": 29184.0,
+      "read_p99_ns": 45056.0,
+      "read_p999_ns": 92160.0,
+      "read_max_ns": 1195118.0,
+      "write_p50_ns": 7424.0,
+      "write_p95_ns": 50176.0,
+      "write_p99_ns": 83968.0,
+      "write_p999_ns": 241664.0,
+      "write_max_ns": 27128876.0,
+      "sst_write_amp": 3.1954844257408124,
+      "stall_ns": 29192053.0,
+      "immutable_wait_ns": 29192053.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 42052436.0,
+      "compaction_build_ns": 1885845980.0,
+      "compaction_commit_wait_ns": 13727482.0,
+      "compaction_commit_ns": 27366549.0,
+      "flush_build_ns": 619080676.0,
+      "flush_commit_wait_ns": 431968.0,
+      "flush_commit_ns": 268866271.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 316579840.0
+    },
+    {
+      "label": "original",
+      "case": "mixed-2t",
+      "repeat": 1,
+      "revision": "47454e53c95bbc8ac8bad3a1a64a3971e40bc9da",
+      "operations": 1000000,
+      "ops_s": 321060.9234757855,
+      "read_ops_s": 160681.68143284984,
+      "write_ops_s": 160379.24204293566,
+      "settled": true,
+      "peak_rss_bytes": 120700928,
+      "peak_fds": 24,
+      "max_l0": 4,
+      "db_bytes": 19192218,
+      "read_p50_ns": 3456.0,
+      "read_p95_ns": 20992.0,
+      "read_p99_ns": 34816.0,
+      "read_p999_ns": 64512.0,
+      "read_max_ns": 1236835.0,
+      "write_p50_ns": 3264.0,
+      "write_p95_ns": 9984.0,
+      "write_p99_ns": 22528.0,
+      "write_p999_ns": 61440.0,
+      "write_max_ns": 32465415.0,
+      "sst_write_amp": 3.1955281286736814,
+      "stall_ns": 28157096.0,
+      "immutable_wait_ns": 28157096.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 23393538.0,
+      "compaction_build_ns": 1786226044.0,
+      "compaction_commit_wait_ns": 23867273.0,
+      "compaction_commit_ns": 28468136.0,
+      "flush_build_ns": 565867093.0,
+      "flush_commit_wait_ns": 204146.0,
+      "flush_commit_ns": 227134557.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 316829696.0
+    },
+    {
+      "label": "final",
+      "case": "mixed-2t",
+      "repeat": 1,
+      "revision": "5efc19b1b8b4e046712a560e5edc06c18ddb53cd",
+      "operations": 1000000,
+      "ops_s": 352145.06943489425,
+      "read_ops_s": 176238.39504515097,
+      "write_ops_s": 175906.6743897433,
+      "settled": true,
+      "peak_rss_bytes": 132096000,
+      "peak_fds": 26,
+      "max_l0": 4,
+      "db_bytes": 19192060,
+      "read_p50_ns": 3520.0,
+      "read_p95_ns": 12544.0,
+      "read_p99_ns": 19968.0,
+      "read_p999_ns": 44032.0,
+      "read_max_ns": 1055194.0,
+      "write_p50_ns": 3072.0,
+      "write_p95_ns": 9472.0,
+      "write_p99_ns": 23040.0,
+      "write_p999_ns": 67584.0,
+      "write_max_ns": 30337242.0,
+      "sst_write_amp": 3.1955466166776163,
+      "stall_ns": 14354168.0,
+      "immutable_wait_ns": 14354168.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 18862500.0,
+      "compaction_build_ns": 1060132945.0,
+      "compaction_commit_wait_ns": 8779139.0,
+      "compaction_commit_ns": 28452679.0,
+      "flush_build_ns": 396229098.0,
+      "flush_commit_wait_ns": 100132.0,
+      "flush_commit_ns": 222934317.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 316825600.0
+    },
+    {
+      "label": "final",
+      "case": "mixed-4t",
+      "repeat": 1,
+      "revision": "5efc19b1b8b4e046712a560e5edc06c18ddb53cd",
+      "operations": 1000000,
+      "ops_s": 278962.55476226384,
+      "read_ops_s": 139612.66874442497,
+      "write_ops_s": 139349.8860178389,
+      "settled": true,
+      "peak_rss_bytes": 128217088,
+      "peak_fds": 25,
+      "max_l0": 4,
+      "db_bytes": 19192086,
+      "read_p50_ns": 4736.0,
+      "read_p95_ns": 17408.0,
+      "read_p99_ns": 30720.0,
+      "read_p999_ns": 83968.0,
+      "read_max_ns": 1929072.0,
+      "write_p50_ns": 7936.0,
+      "write_p95_ns": 54272.0,
+      "write_p99_ns": 96256.0,
+      "write_p999_ns": 278528.0,
+      "write_max_ns": 19457750.0,
+      "sst_write_amp": 3.19550996450421,
+      "stall_ns": 25419170.0,
+      "immutable_wait_ns": 25419170.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 12668231.0,
+      "compaction_build_ns": 1065256203.0,
+      "compaction_commit_wait_ns": 12009732.0,
+      "compaction_commit_ns": 29327889.0,
+      "flush_build_ns": 432295522.0,
+      "flush_commit_wait_ns": 668337.0,
+      "flush_commit_ns": 253005845.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 319004672.0
+    },
+    {
+      "label": "original",
+      "case": "mixed-4t",
+      "repeat": 1,
+      "revision": "47454e53c95bbc8ac8bad3a1a64a3971e40bc9da",
+      "operations": 1000000,
+      "ops_s": 270297.390449361,
+      "read_ops_s": 135276.00529558214,
+      "write_ops_s": 135021.38515377883,
+      "settled": true,
+      "peak_rss_bytes": 127954944,
+      "peak_fds": 29,
+      "max_l0": 3,
+      "db_bytes": 19192094,
+      "read_p50_ns": 4608.0,
+      "read_p95_ns": 29184.0,
+      "read_p99_ns": 48128.0,
+      "read_p999_ns": 100352.0,
+      "read_max_ns": 1838774.0,
+      "write_p50_ns": 7808.0,
+      "write_p95_ns": 51200.0,
+      "write_p99_ns": 90112.0,
+      "write_p999_ns": 278528.0,
+      "write_max_ns": 25565788.0,
+      "sst_write_amp": 3.195527834278714,
+      "stall_ns": 36932464.0,
+      "immutable_wait_ns": 36932464.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 36866835.0,
+      "compaction_build_ns": 1799156774.0,
+      "compaction_commit_wait_ns": 8193651.0,
+      "compaction_commit_ns": 32626415.0,
+      "flush_build_ns": 584077091.0,
+      "flush_commit_wait_ns": 372826.0,
+      "flush_commit_ns": 257748509.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 318644224.0
+    },
+    {
+      "label": "original",
+      "case": "mixed-16t",
+      "repeat": 2,
+      "revision": "47454e53c95bbc8ac8bad3a1a64a3971e40bc9da",
+      "operations": 1000000,
+      "ops_s": 230837.7069105274,
+      "read_ops_s": 115527.57801521855,
+      "write_ops_s": 115310.12889530884,
+      "settled": true,
+      "peak_rss_bytes": 141516800,
+      "peak_fds": 26,
+      "max_l0": 3,
+      "db_bytes": 19192177,
+      "read_p50_ns": 5504.0,
+      "read_p95_ns": 32768.0,
+      "read_p99_ns": 52224.0,
+      "read_p999_ns": 106496.0,
+      "read_max_ns": 1910226.0,
+      "write_p50_ns": 21504.0,
+      "write_p95_ns": 344064.0,
+      "write_p99_ns": 524288.0,
+      "write_p999_ns": 13893632.0,
+      "write_max_ns": 31490896.0,
+      "sst_write_amp": 3.1957723587384024,
+      "stall_ns": 26588477.0,
+      "immutable_wait_ns": 26588477.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 60132184.0,
+      "compaction_build_ns": 2020442332.0,
+      "compaction_commit_wait_ns": 21545815.0,
+      "compaction_commit_ns": 28536056.0,
+      "flush_build_ns": 691288144.0,
+      "flush_commit_wait_ns": 3176289.0,
+      "flush_commit_ns": 315621703.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 317317120.0
+    },
+    {
+      "label": "final",
+      "case": "mixed-16t",
+      "repeat": 2,
+      "revision": "5efc19b1b8b4e046712a560e5edc06c18ddb53cd",
+      "operations": 1000000,
+      "ops_s": 236098.3960549456,
+      "read_ops_s": 118160.40037201467,
+      "write_ops_s": 117937.99568293091,
+      "settled": true,
+      "peak_rss_bytes": 137834496,
+      "peak_fds": 26,
+      "max_l0": 4,
+      "db_bytes": 19192165,
+      "read_p50_ns": 5632.0,
+      "read_p95_ns": 19456.0,
+      "read_p99_ns": 31744.0,
+      "read_p999_ns": 71680.0,
+      "read_max_ns": 1969810.0,
+      "write_p50_ns": 13312.0,
+      "write_p95_ns": 335872.0,
+      "write_p99_ns": 516096.0,
+      "write_p999_ns": 14417920.0,
+      "write_max_ns": 34586178.0,
+      "sst_write_amp": 3.195515131135883,
+      "stall_ns": 22284859.0,
+      "immutable_wait_ns": 22284859.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 21325899.0,
+      "compaction_build_ns": 1293447685.0,
+      "compaction_commit_wait_ns": 1836851.0,
+      "compaction_commit_ns": 31556811.0,
+      "flush_build_ns": 502418751.0,
+      "flush_commit_wait_ns": 2264388.0,
+      "flush_commit_ns": 317271941.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 316760064.0
+    },
+    {
+      "label": "final",
+      "case": "mixed-1t",
+      "repeat": 1,
+      "revision": "5efc19b1b8b4e046712a560e5edc06c18ddb53cd",
+      "operations": 1000000,
+      "ops_s": 265161.53301449644,
+      "read_ops_s": 132705.65758929803,
+      "write_ops_s": 132455.87542519838,
+      "settled": true,
+      "peak_rss_bytes": 117719040,
+      "peak_fds": 27,
+      "max_l0": 3,
+      "db_bytes": 19192104,
+      "read_p50_ns": 2880.0,
+      "read_p95_ns": 10496.0,
+      "read_p99_ns": 16896.0,
+      "read_p999_ns": 35840.0,
+      "read_max_ns": 964315.0,
+      "write_p50_ns": 1888.0,
+      "write_p95_ns": 4224.0,
+      "write_p99_ns": 10752.0,
+      "write_p999_ns": 32256.0,
+      "write_max_ns": 27136824.0,
+      "sst_write_amp": 3.1958228916345077,
+      "stall_ns": 9783862.0,
+      "immutable_wait_ns": 9783862.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 14812040.0,
+      "compaction_build_ns": 1108926338.0,
+      "compaction_commit_wait_ns": 22455.0,
+      "compaction_commit_ns": 30553933.0,
+      "flush_build_ns": 416153020.0,
+      "flush_commit_wait_ns": 1022478.0,
+      "flush_commit_ns": 270987930.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 316522496.0
+    },
+    {
+      "label": "original",
+      "case": "mixed-1t",
+      "repeat": 1,
+      "revision": "47454e53c95bbc8ac8bad3a1a64a3971e40bc9da",
+      "operations": 1000000,
+      "ops_s": 213433.91860365754,
+      "read_ops_s": 106817.48667749109,
+      "write_ops_s": 106616.43192616645,
+      "settled": true,
+      "peak_rss_bytes": 106049536,
+      "peak_fds": 25,
+      "max_l0": 2,
+      "db_bytes": 19192104,
+      "read_p50_ns": 3008.0,
+      "read_p95_ns": 19456.0,
+      "read_p99_ns": 32768.0,
+      "read_p999_ns": 64512.0,
+      "read_max_ns": 2457463.0,
+      "write_p50_ns": 2432.0,
+      "write_p95_ns": 4864.0,
+      "write_p99_ns": 12544.0,
+      "write_p999_ns": 39936.0,
+      "write_max_ns": 27584409.0,
+      "sst_write_amp": 3.1958228916345077,
+      "stall_ns": 34901348.0,
+      "immutable_wait_ns": 34901348.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 31462398.0,
+      "compaction_build_ns": 1890941028.0,
+      "compaction_commit_wait_ns": 18003.0,
+      "compaction_commit_ns": 27908759.0,
+      "flush_build_ns": 608037247.0,
+      "flush_commit_wait_ns": 37991.0,
+      "flush_commit_ns": 245055581.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 316833792.0
+    },
+    {
+      "label": "original",
+      "case": "mixed-8t",
+      "repeat": 0,
+      "revision": "47454e53c95bbc8ac8bad3a1a64a3971e40bc9da",
+      "operations": 1000000,
+      "ops_s": 218585.97993878907,
+      "read_ops_s": 109395.9439659457,
+      "write_ops_s": 109190.03597284335,
+      "settled": true,
+      "peak_rss_bytes": 127938560,
+      "peak_fds": 26,
+      "max_l0": 2,
+      "db_bytes": 19192167,
+      "read_p50_ns": 5888.0,
+      "read_p95_ns": 33792.0,
+      "read_p99_ns": 51200.0,
+      "read_p999_ns": 104448.0,
+      "read_max_ns": 3464233.0,
+      "write_p50_ns": 27136.0,
+      "write_p95_ns": 159744.0,
+      "write_p99_ns": 253952.0,
+      "write_p999_ns": 638976.0,
+      "write_max_ns": 82074336.0,
+      "sst_write_amp": 3.195681449572556,
+      "stall_ns": 42042033.0,
+      "immutable_wait_ns": 42042033.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 46731781.0,
+      "compaction_build_ns": 2157227384.0,
+      "compaction_commit_wait_ns": 41534794.0,
+      "compaction_commit_ns": 29100009.0,
+      "flush_build_ns": 708363318.0,
+      "flush_commit_wait_ns": 1469343.0,
+      "flush_commit_ns": 295397701.0,
+      "process_read_bytes": 16384.0,
+      "process_write_bytes": 320425984.0
+    },
+    {
+      "label": "final",
+      "case": "mixed-8t",
+      "repeat": 0,
+      "revision": "5efc19b1b8b4e046712a560e5edc06c18ddb53cd",
+      "operations": 1000000,
+      "ops_s": 242460.42045788895,
+      "read_ops_s": 121344.40908698014,
+      "write_ops_s": 121116.0113709088,
+      "settled": true,
+      "peak_rss_bytes": 127385600,
+      "peak_fds": 26,
+      "max_l0": 4,
+      "db_bytes": 19192103,
+      "read_p50_ns": 5376.0,
+      "read_p95_ns": 19456.0,
+      "read_p99_ns": 31232.0,
+      "read_p999_ns": 71680.0,
+      "read_max_ns": 1531933.0,
+      "write_p50_ns": 13312.0,
+      "write_p95_ns": 143360.0,
+      "write_p99_ns": 229376.0,
+      "write_p999_ns": 671744.0,
+      "write_max_ns": 28569428.0,
+      "sst_write_amp": 3.195968072512542,
+      "stall_ns": 31252302.0,
+      "immutable_wait_ns": 31252302.0,
+      "l0_wait_ns": 0.0,
+      "both_wait_ns": 0.0,
+      "flush_queue_max_ns": 18923921.0,
+      "compaction_build_ns": 1152323284.0,
+      "compaction_commit_wait_ns": 14760263.0,
+      "compaction_commit_ns": 27697187.0,
+      "flush_build_ns": 492794109.0,
+      "flush_commit_wait_ns": 623101.0,
+      "flush_commit_ns": 330603751.0,
+      "process_read_bytes": 0.0,
+      "process_write_bytes": 316628992.0
+    }
+  ],
+  "aggregates": [
+    {
+      "case": "mixed-16t",
+      "label": "final",
+      "trials": 3,
+      "all_settled": true,
+      "operations": {
+        "median": 1000000,
+        "min": 1000000,
+        "max": 1000000
+      },
+      "ops_s": {
+        "median": 236098.3960549456,
+        "min": 235618.0577713405,
+        "max": 236620.06461232193
+      },
+      "read_ops_s": {
+        "median": 118160.40037201467,
+        "min": 117920.00499088055,
+        "max": 118421.48035659337
+      },
+      "write_ops_s": {
+        "median": 117937.99568293091,
+        "min": 117698.05278045996,
+        "max": 118198.58425572857
+      },
+      "peak_rss_bytes": {
+        "median": 140021760,
+        "min": 137834496,
+        "max": 146112512
+      },
+      "peak_fds": {
+        "median": 27,
+        "min": 26,
+        "max": 29
+      },
+      "max_l0": {
+        "median": 4,
+        "min": 3,
+        "max": 4
+      },
+      "db_bytes": {
+        "median": 19192165,
+        "min": 19192131,
+        "max": 19192193
+      },
+      "read_p50_ns": {
+        "median": 5632.0,
+        "min": 5504.0,
+        "max": 5632.0
+      },
+      "read_p95_ns": {
+        "median": 19456.0,
+        "min": 19456.0,
+        "max": 19968.0
+      },
+      "read_p99_ns": {
+        "median": 31744.0,
+        "min": 31744.0,
+        "max": 33792.0
+      },
+      "read_p999_ns": {
+        "median": 83968.0,
+        "min": 71680.0,
+        "max": 110592.0
+      },
+      "read_max_ns": {
+        "median": 1827409.0,
+        "min": 1811870.0,
+        "max": 1969810.0
+      },
+      "write_p50_ns": {
+        "median": 13312.0,
+        "min": 12800.0,
+        "max": 14848.0
+      },
+      "write_p95_ns": {
+        "median": 335872.0,
+        "min": 335872.0,
+        "max": 344064.0
+      },
+      "write_p99_ns": {
+        "median": 540672.0,
+        "min": 516096.0,
+        "max": 540672.0
+      },
+      "write_p999_ns": {
+        "median": 14417920.0,
+        "min": 14417920.0,
+        "max": 15204352.0
+      },
+      "write_max_ns": {
+        "median": 31234009.0,
+        "min": 30057482.0,
+        "max": 34586178.0
+      },
+      "sst_write_amp": {
+        "median": 3.195832533069681,
+        "min": 3.195515131135883,
+        "max": 3.1958523311312197
+      },
+      "stall_ns": {
+        "median": 23664212.0,
+        "min": 22284859.0,
+        "max": 30814419.0
+      },
+      "immutable_wait_ns": {
+        "median": 23664212.0,
+        "min": 22284859.0,
+        "max": 30814419.0
+      },
+      "l0_wait_ns": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "both_wait_ns": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "flush_queue_max_ns": {
+        "median": 21325899.0,
+        "min": 20998206.0,
+        "max": 23462809.0
+      },
+      "compaction_build_ns": {
+        "median": 1292732515.0,
+        "min": 1160657384.0,
+        "max": 1293447685.0
+      },
+      "compaction_commit_wait_ns": {
+        "median": 1836851.0,
+        "min": 1663094.0,
+        "max": 9358222.0
+      },
+      "compaction_commit_ns": {
+        "median": 28338630.0,
+        "min": 27214127.0,
+        "max": 31556811.0
+      },
+      "flush_build_ns": {
+        "median": 502418751.0,
+        "min": 481871895.0,
+        "max": 568253884.0
+      },
+      "flush_commit_wait_ns": {
+        "median": 2264388.0,
+        "min": 2017899.0,
+        "max": 2440340.0
+      },
+      "flush_commit_ns": {
+        "median": 317271941.0,
+        "min": 315907565.0,
+        "max": 340410246.0
+      },
+      "process_read_bytes": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "process_write_bytes": {
+        "median": 316760064.0,
+        "min": 316489728.0,
+        "max": 316915712.0
+      }
+    },
+    {
+      "case": "mixed-16t",
+      "label": "original",
+      "trials": 3,
+      "all_settled": true,
+      "operations": {
+        "median": 1000000,
+        "min": 1000000,
+        "max": 1000000
+      },
+      "ops_s": {
+        "median": 221618.9301854982,
+        "min": 220953.06496919962,
+        "max": 230837.7069105274
+      },
+      "read_ops_s": {
+        "median": 110913.84760886648,
+        "min": 110580.6013782003,
+        "max": 115527.57801521855
+      },
+      "write_ops_s": {
+        "median": 110705.08257663174,
+        "min": 110372.46359099932,
+        "max": 115310.12889530884
+      },
+      "peak_rss_bytes": {
+        "median": 141516800,
+        "min": 131493888,
+        "max": 142540800
+      },
+      "peak_fds": {
+        "median": 26,
+        "min": 26,
+        "max": 27
+      },
+      "max_l0": {
+        "median": 3,
+        "min": 2,
+        "max": 5
+      },
+      "db_bytes": {
+        "median": 19192129,
+        "min": 19192099,
+        "max": 19192177
+      },
+      "read_p50_ns": {
+        "median": 5760.0,
+        "min": 5504.0,
+        "max": 6016.0
+      },
+      "read_p95_ns": {
+        "median": 32768.0,
+        "min": 32768.0,
+        "max": 33792.0
+      },
+      "read_p99_ns": {
+        "median": 52224.0,
+        "min": 52224.0,
+        "max": 53248.0
+      },
+      "read_p999_ns": {
+        "median": 106496.0,
+        "min": 106496.0,
+        "max": 147456.0
+      },
+      "read_max_ns": {
+        "median": 2310197.0,
+        "min": 1910226.0,
+        "max": 14876218.0
+      },
+      "write_p50_ns": {
+        "median": 21504.0,
+        "min": 19456.0,
+        "max": 22528.0
+      },
+      "write_p95_ns": {
+        "median": 360448.0,
+        "min": 344064.0,
+        "max": 368640.0
+      },
+      "write_p99_ns": {
+        "median": 557056.0,
+        "min": 524288.0,
+        "max": 573440.0
+      },
+      "write_p999_ns": {
+        "median": 13893632.0,
+        "min": 12845056.0,
+        "max": 15204352.0
+      },
+      "write_max_ns": {
+        "median": 30966270.0,
+        "min": 30446523.0,
+        "max": 31490896.0
+      },
+      "sst_write_amp": {
+        "median": 3.195653526209925,
+        "min": 3.195557818406115,
+        "max": 3.1957723587384024
+      },
+      "stall_ns": {
+        "median": 30743669.0,
+        "min": 26588477.0,
+        "max": 58795757.0
+      },
+      "immutable_wait_ns": {
+        "median": 30743669.0,
+        "min": 26588477.0,
+        "max": 58795757.0
+      },
+      "l0_wait_ns": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "both_wait_ns": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "flush_queue_max_ns": {
+        "median": 51289568.0,
+        "min": 44798033.0,
+        "max": 60132184.0
+      },
+      "compaction_build_ns": {
+        "median": 2044899613.0,
+        "min": 2020442332.0,
+        "max": 2490799575.0
+      },
+      "compaction_commit_wait_ns": {
+        "median": 6232428.0,
+        "min": 5852175.0,
+        "max": 21545815.0
+      },
+      "compaction_commit_ns": {
+        "median": 28536056.0,
+        "min": 27769190.0,
+        "max": 43285564.0
+      },
+      "flush_build_ns": {
+        "median": 722810944.0,
+        "min": 691288144.0,
+        "max": 918509530.0
+      },
+      "flush_commit_wait_ns": {
+        "median": 2753319.0,
+        "min": 1805972.0,
+        "max": 3176289.0
+      },
+      "flush_commit_ns": {
+        "median": 315621703.0,
+        "min": 314543052.0,
+        "max": 343937890.0
+      },
+      "process_read_bytes": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "process_write_bytes": {
+        "median": 316452864.0,
+        "min": 316362752.0,
+        "max": 317317120.0
+      }
+    },
+    {
+      "case": "mixed-1t",
+      "label": "final",
+      "trials": 3,
+      "all_settled": true,
+      "operations": {
+        "median": 1000000,
+        "min": 1000000,
+        "max": 1000000
+      },
+      "ops_s": {
+        "median": 265161.53301449644,
+        "min": 238944.00931598726,
+        "max": 268726.6747631255
+      },
+      "read_ops_s": {
+        "median": 132705.65758929803,
+        "min": 119584.54728638145,
+        "max": 134489.90764537617
+      },
+      "write_ops_s": {
+        "median": 132455.87542519838,
+        "min": 119359.4620296058,
+        "max": 134236.76711774932
+      },
+      "peak_rss_bytes": {
+        "median": 117719040,
+        "min": 116494336,
+        "max": 121102336
+      },
+      "peak_fds": {
+        "median": 27,
+        "min": 22,
+        "max": 30
+      },
+      "max_l0": {
+        "median": 3,
+        "min": 3,
+        "max": 3
+      },
+      "db_bytes": {
+        "median": 19192104,
+        "min": 19192104,
+        "max": 19192104
+      },
+      "read_p50_ns": {
+        "median": 2880.0,
+        "min": 2752.0,
+        "max": 3200.0
+      },
+      "read_p95_ns": {
+        "median": 10496.0,
+        "min": 9984.0,
+        "max": 11264.0
+      },
+      "read_p99_ns": {
+        "median": 16896.0,
+        "min": 15872.0,
+        "max": 16896.0
+      },
+      "read_p999_ns": {
+        "median": 30208.0,
+        "min": 26624.0,
+        "max": 35840.0
+      },
+      "read_max_ns": {
+        "median": 1237444.0,
+        "min": 964315.0,
+        "max": 1600579.0
+      },
+      "write_p50_ns": {
+        "median": 1888.0,
+        "min": 1888.0,
+        "max": 2176.0
+      },
+      "write_p95_ns": {
+        "median": 4224.0,
+        "min": 3584.0,
+        "max": 4352.0
+      },
+      "write_p99_ns": {
+        "median": 10752.0,
+        "min": 10240.0,
+        "max": 12032.0
+      },
+      "write_p999_ns": {
+        "median": 29184.0,
+        "min": 23040.0,
+        "max": 32256.0
+      },
+      "write_max_ns": {
+        "median": 27326926.0,
+        "min": 27136824.0,
+        "max": 36402875.0
+      },
+      "sst_write_amp": {
+        "median": 3.1958228916345077,
+        "min": 3.1958228916345077,
+        "max": 3.1958228916345077
+      },
+      "stall_ns": {
+        "median": 21780762.0,
+        "min": 9783862.0,
+        "max": 23636037.0
+      },
+      "immutable_wait_ns": {
+        "median": 21780762.0,
+        "min": 9783862.0,
+        "max": 23636037.0
+      },
+      "l0_wait_ns": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "both_wait_ns": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "flush_queue_max_ns": {
+        "median": 16507209.0,
+        "min": 14812040.0,
+        "max": 20253855.0
+      },
+      "compaction_build_ns": {
+        "median": 1122837946.0,
+        "min": 1108926338.0,
+        "max": 1148944072.0
+      },
+      "compaction_commit_wait_ns": {
+        "median": 3503008.0,
+        "min": 22455.0,
+        "max": 17020870.0
+      },
+      "compaction_commit_ns": {
+        "median": 31489815.0,
+        "min": 30553933.0,
+        "max": 38516072.0
+      },
+      "flush_build_ns": {
+        "median": 450175004.0,
+        "min": 416153020.0,
+        "max": 531615278.0
+      },
+      "flush_commit_wait_ns": {
+        "median": 39906.0,
+        "min": 24617.0,
+        "max": 1022478.0
+      },
+      "flush_commit_ns": {
+        "median": 272372801.0,
+        "min": 270987930.0,
+        "max": 287110166.0
+      },
+      "process_read_bytes": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "process_write_bytes": {
+        "median": 316522496.0,
+        "min": 316379136.0,
+        "max": 316522496.0
+      }
+    },
+    {
+      "case": "mixed-1t",
+      "label": "original",
+      "trials": 3,
+      "all_settled": true,
+      "operations": {
+        "median": 1000000,
+        "min": 1000000,
+        "max": 1000000
+      },
+      "ops_s": {
+        "median": 211866.10305509204,
+        "min": 194565.95260591735,
+        "max": 213433.91860365754
+      },
+      "read_ops_s": {
+        "median": 106032.84046208496,
+        "min": 97374.61686663606,
+        "max": 106817.48667749109
+      },
+      "write_ops_s": {
+        "median": 105833.26259300706,
+        "min": 97191.33573928129,
+        "max": 106616.43192616645
+      },
+      "peak_rss_bytes": {
+        "median": 115732480,
+        "min": 106049536,
+        "max": 123760640
+      },
+      "peak_fds": {
+        "median": 27,
+        "min": 25,
+        "max": 27
+      },
+      "max_l0": {
+        "median": 2,
+        "min": 2,
+        "max": 4
+      },
+      "db_bytes": {
+        "median": 19192104,
+        "min": 19192104,
+        "max": 19192104
+      },
+      "read_p50_ns": {
+        "median": 3200.0,
+        "min": 3008.0,
+        "max": 3520.0
+      },
+      "read_p95_ns": {
+        "median": 19456.0,
+        "min": 19456.0,
+        "max": 20992.0
+      },
+      "read_p99_ns": {
+        "median": 32256.0,
+        "min": 28672.0,
+        "max": 32768.0
+      },
+      "read_p999_ns": {
+        "median": 51200.0,
+        "min": 50176.0,
+        "max": 64512.0
+      },
+      "read_max_ns": {
+        "median": 2244851.0,
+        "min": 1013340.0,
+        "max": 2457463.0
+      },
+      "write_p50_ns": {
+        "median": 2432.0,
+        "min": 2432.0,
+        "max": 2752.0
+      },
+      "write_p95_ns": {
+        "median": 4864.0,
+        "min": 4864.0,
+        "max": 5504.0
+      },
+      "write_p99_ns": {
+        "median": 12544.0,
+        "min": 11776.0,
+        "max": 13824.0
+      },
+      "write_p999_ns": {
+        "median": 33792.0,
+        "min": 27648.0,
+        "max": 39936.0
+      },
+      "write_max_ns": {
+        "median": 28691298.0,
+        "min": 27584409.0,
+        "max": 37434061.0
+      },
+      "sst_write_amp": {
+        "median": 3.1958228916345077,
+        "min": 3.1958228916345077,
+        "max": 3.1958228916345077
+      },
+      "stall_ns": {
+        "median": 36653785.0,
+        "min": 34901348.0,
+        "max": 46883015.0
+      },
+      "immutable_wait_ns": {
+        "median": 36653785.0,
+        "min": 34901348.0,
+        "max": 46883015.0
+      },
+      "l0_wait_ns": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "both_wait_ns": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "flush_queue_max_ns": {
+        "median": 34532190.0,
+        "min": 31462398.0,
+        "max": 36003845.0
+      },
+      "compaction_build_ns": {
+        "median": 1890941028.0,
+        "min": 1856831884.0,
+        "max": 2055842386.0
+      },
+      "compaction_commit_wait_ns": {
+        "median": 20385.0,
+        "min": 18003.0,
+        "max": 22969327.0
+      },
+      "compaction_commit_ns": {
+        "median": 27908759.0,
+        "min": 26376448.0,
+        "max": 41821477.0
+      },
+      "flush_build_ns": {
+        "median": 609420915.0,
+        "min": 608037247.0,
+        "max": 769853185.0
+      },
+      "flush_commit_wait_ns": {
+        "median": 33039.0,
+        "min": 29867.0,
+        "max": 37991.0
+      },
+      "flush_commit_ns": {
+        "median": 296382997.0,
+        "min": 245055581.0,
+        "max": 312551504.0
+      },
+      "process_read_bytes": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "process_write_bytes": {
+        "median": 316833792.0,
+        "min": 316735488.0,
+        "max": 318996480.0
+      }
+    },
+    {
+      "case": "mixed-2t",
+      "label": "final",
+      "trials": 3,
+      "all_settled": true,
+      "operations": {
+        "median": 1000000,
+        "min": 1000000,
+        "max": 1000000
+      },
+      "ops_s": {
+        "median": 352145.06943489425,
+        "min": 309047.476789092,
+        "max": 370061.0303244979
+      },
+      "read_ops_s": {
+        "median": 176238.39504515097,
+        "min": 154669.29975611367,
+        "max": 185204.8139075318
+      },
+      "write_ops_s": {
+        "median": 175906.6743897433,
+        "min": 154378.17703297836,
+        "max": 184856.2164169661
+      },
+      "peak_rss_bytes": {
+        "median": 131321856,
+        "min": 126017536,
+        "max": 132096000
+      },
+      "peak_fds": {
+        "median": 25,
+        "min": 25,
+        "max": 26
+      },
+      "max_l0": {
+        "median": 4,
+        "min": 3,
+        "max": 4
+      },
+      "db_bytes": {
+        "median": 19192141,
+        "min": 19192060,
+        "max": 19192190
+      },
+      "read_p50_ns": {
+        "median": 3520.0,
+        "min": 3456.0,
+        "max": 3968.0
+      },
+      "read_p95_ns": {
+        "median": 12544.0,
+        "min": 12032.0,
+        "max": 13824.0
+      },
+      "read_p99_ns": {
+        "median": 19968.0,
+        "min": 18944.0,
+        "max": 22016.0
+      },
+      "read_p999_ns": {
+        "median": 44032.0,
+        "min": 36864.0,
+        "max": 45056.0
+      },
+      "read_max_ns": {
+        "median": 1046993.0,
+        "min": 897025.0,
+        "max": 1055194.0
+      },
+      "write_p50_ns": {
+        "median": 3072.0,
+        "min": 2944.0,
+        "max": 3328.0
+      },
+      "write_p95_ns": {
+        "median": 9472.0,
+        "min": 8960.0,
+        "max": 10752.0
+      },
+      "write_p99_ns": {
+        "median": 23040.0,
+        "min": 21504.0,
+        "max": 25600.0
+      },
+      "write_p999_ns": {
+        "median": 62464.0,
+        "min": 55296.0,
+        "max": 67584.0
+      },
+      "write_max_ns": {
+        "median": 30337242.0,
+        "min": 26124218.0,
+        "max": 123125027.0
+      },
+      "sst_write_amp": {
+        "median": 3.1955466166776163,
+        "min": 3.1954111802729934,
+        "max": 3.195795483463069
+      },
+      "stall_ns": {
+        "median": 15543134.0,
+        "min": 14354168.0,
+        "max": 18928372.0
+      },
+      "immutable_wait_ns": {
+        "median": 15543134.0,
+        "min": 14354168.0,
+        "max": 18928372.0
+      },
+      "l0_wait_ns": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "both_wait_ns": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "flush_queue_max_ns": {
+        "median": 18862500.0,
+        "min": 15890510.0,
+        "max": 35293543.0
+      },
+      "compaction_build_ns": {
+        "median": 1060132945.0,
+        "min": 979853903.0,
+        "max": 1653024293.0
+      },
+      "compaction_commit_wait_ns": {
+        "median": 10996883.0,
+        "min": 8779139.0,
+        "max": 29017700.0
+      },
+      "compaction_commit_ns": {
+        "median": 28452679.0,
+        "min": 26631276.0,
+        "max": 31851891.0
+      },
+      "flush_build_ns": {
+        "median": 396229098.0,
+        "min": 375886480.0,
+        "max": 680222622.0
+      },
+      "flush_commit_wait_ns": {
+        "median": 80428.0,
+        "min": 61359.0,
+        "max": 100132.0
+      },
+      "flush_commit_ns": {
+        "median": 248309970.0,
+        "min": 222934317.0,
+        "max": 267124490.0
+      },
+      "process_read_bytes": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "process_write_bytes": {
+        "median": 318316544.0,
+        "min": 316825600.0,
+        "max": 318533632.0
+      }
+    },
+    {
+      "case": "mixed-2t",
+      "label": "original",
+      "trials": 3,
+      "all_settled": true,
+      "operations": {
+        "median": 1000000,
+        "min": 1000000,
+        "max": 1000000
+      },
+      "ops_s": {
+        "median": 321060.9234757855,
+        "min": 294336.2134262306,
+        "max": 344713.2331785213
+      },
+      "read_ops_s": {
+        "median": 160681.68143284984,
+        "min": 147306.73906963906,
+        "max": 172518.97652208773
+      },
+      "write_ops_s": {
+        "median": 160379.24204293566,
+        "min": 147029.47435659156,
+        "max": 172194.25665643357
+      },
+      "peak_rss_bytes": {
+        "median": 129699840,
+        "min": 120700928,
+        "max": 143253504
+      },
+      "peak_fds": {
+        "median": 26,
+        "min": 24,
+        "max": 26
+      },
+      "max_l0": {
+        "median": 4,
+        "min": 4,
+        "max": 5
+      },
+      "db_bytes": {
+        "median": 19192104,
+        "min": 19192089,
+        "max": 19192218
+      },
+      "read_p50_ns": {
+        "median": 3456.0,
+        "min": 3264.0,
+        "max": 3776.0
+      },
+      "read_p95_ns": {
+        "median": 20992.0,
+        "min": 20992.0,
+        "max": 22528.0
+      },
+      "read_p99_ns": {
+        "median": 34816.0,
+        "min": 34816.0,
+        "max": 37888.0
+      },
+      "read_p999_ns": {
+        "median": 64512.0,
+        "min": 64512.0,
+        "max": 69632.0
+      },
+      "read_max_ns": {
+        "median": 1239767.0,
+        "min": 1236835.0,
+        "max": 1835830.0
+      },
+      "write_p50_ns": {
+        "median": 3264.0,
+        "min": 3072.0,
+        "max": 3392.0
+      },
+      "write_p95_ns": {
+        "median": 9984.0,
+        "min": 8960.0,
+        "max": 10496.0
+      },
+      "write_p99_ns": {
+        "median": 22528.0,
+        "min": 19968.0,
+        "max": 23040.0
+      },
+      "write_p999_ns": {
+        "median": 58368.0,
+        "min": 53248.0,
+        "max": 61440.0
+      },
+      "write_max_ns": {
+        "median": 32465415.0,
+        "min": 16897469.0,
+        "max": 40046848.0
+      },
+      "sst_write_amp": {
+        "median": 3.1955331481078706,
+        "min": 3.1955281286736814,
+        "max": 3.1957349558578296
+      },
+      "stall_ns": {
+        "median": 29376883.0,
+        "min": 28157096.0,
+        "max": 53711226.0
+      },
+      "immutable_wait_ns": {
+        "median": 29376883.0,
+        "min": 28157096.0,
+        "max": 53711226.0
+      },
+      "l0_wait_ns": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "both_wait_ns": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "flush_queue_max_ns": {
+        "median": 31916570.0,
+        "min": 23393538.0,
+        "max": 48520382.0
+      },
+      "compaction_build_ns": {
+        "median": 1824592790.0,
+        "min": 1786226044.0,
+        "max": 2178783682.0
+      },
+      "compaction_commit_wait_ns": {
+        "median": 15237733.0,
+        "min": 11247994.0,
+        "max": 23867273.0
+      },
+      "compaction_commit_ns": {
+        "median": 29100313.0,
+        "min": 28468136.0,
+        "max": 57695416.0
+      },
+      "flush_build_ns": {
+        "median": 565867093.0,
+        "min": 549333259.0,
+        "max": 767392241.0
+      },
+      "flush_commit_wait_ns": {
+        "median": 181331.0,
+        "min": 74386.0,
+        "max": 204146.0
+      },
+      "flush_commit_ns": {
+        "median": 227134557.0,
+        "min": 215342283.0,
+        "max": 251647249.0
+      },
+      "process_read_bytes": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "process_write_bytes": {
+        "median": 316829696.0,
+        "min": 316121088.0,
+        "max": 319250432.0
+      }
+    },
+    {
+      "case": "mixed-32t",
+      "label": "final",
+      "trials": 3,
+      "all_settled": true,
+      "operations": {
+        "median": 1000000,
+        "min": 1000000,
+        "max": 1000000
+      },
+      "ops_s": {
+        "median": 224438.45803037105,
+        "min": 218592.2028655256,
+        "max": 248080.51527944475
+      },
+      "read_ops_s": {
+        "median": 112324.93952891784,
+        "min": 109399.05836031247,
+        "max": 124157.103562419
+      },
+      "write_ops_s": {
+        "median": 112113.51850145322,
+        "min": 109193.14450521315,
+        "max": 123923.41171702577
+      },
+      "peak_rss_bytes": {
+        "median": 145879040,
+        "min": 136581120,
+        "max": 147230720
+      },
+      "peak_fds": {
+        "median": 27,
+        "min": 26,
+        "max": 28
+      },
+      "max_l0": {
+        "median": 3,
+        "min": 2,
+        "max": 4
+      },
+      "db_bytes": {
+        "median": 19192117,
+        "min": 19192104,
+        "max": 19192127
+      },
+      "read_p50_ns": {
+        "median": 5888.0,
+        "min": 5248.0,
+        "max": 5888.0
+      },
+      "read_p95_ns": {
+        "median": 19968.0,
+        "min": 17920.0,
+        "max": 20480.0
+      },
+      "read_p99_ns": {
+        "median": 32768.0,
+        "min": 32256.0,
+        "max": 33792.0
+      },
+      "read_p999_ns": {
+        "median": 139264.0,
+        "min": 135168.0,
+        "max": 184320.0
+      },
+      "read_max_ns": {
+        "median": 2695898.0,
+        "min": 1698047.0,
+        "max": 3655687.0
+      },
+      "write_p50_ns": {
+        "median": 14336.0,
+        "min": 11008.0,
+        "max": 14336.0
+      },
+      "write_p95_ns": {
+        "median": 786432.0,
+        "min": 704512.0,
+        "max": 786432.0
+      },
+      "write_p99_ns": {
+        "median": 1277952.0,
+        "min": 1277952.0,
+        "max": 1540096.0
+      },
+      "write_p999_ns": {
+        "median": 17301504.0,
+        "min": 17301504.0,
+        "max": 19922944.0
+      },
+      "write_max_ns": {
+        "median": 31315011.0,
+        "min": 28780924.0,
+        "max": 35475839.0
+      },
+      "sst_write_amp": {
+        "median": 3.195480760523472,
+        "min": 3.195473032655585,
+        "max": 3.1955233594752137
+      },
+      "stall_ns": {
+        "median": 16179941.0,
+        "min": 12451592.0,
+        "max": 20169747.0
+      },
+      "immutable_wait_ns": {
+        "median": 16179941.0,
+        "min": 12451592.0,
+        "max": 20169747.0
+      },
+      "l0_wait_ns": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "both_wait_ns": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "flush_queue_max_ns": {
+        "median": 23579884.0,
+        "min": 19885886.0,
+        "max": 25559997.0
+      },
+      "compaction_build_ns": {
+        "median": 1186203210.0,
+        "min": 897463788.0,
+        "max": 1359766984.0
+      },
+      "compaction_commit_wait_ns": {
+        "median": 13588219.0,
+        "min": 5200674.0,
+        "max": 17980473.0
+      },
+      "compaction_commit_ns": {
+        "median": 28491709.0,
+        "min": 25810036.0,
+        "max": 30777622.0
+      },
+      "flush_build_ns": {
+        "median": 500384446.0,
+        "min": 401591543.0,
+        "max": 555663408.0
+      },
+      "flush_commit_wait_ns": {
+        "median": 3389909.0,
+        "min": 2377116.0,
+        "max": 4026163.0
+      },
+      "flush_commit_ns": {
+        "median": 306588536.0,
+        "min": 285259566.0,
+        "max": 327591394.0
+      },
+      "process_read_bytes": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 102400.0
+      },
+      "process_write_bytes": {
+        "median": 316338176.0,
+        "min": 316010496.0,
+        "max": 316743680.0
+      }
+    },
+    {
+      "case": "mixed-32t",
+      "label": "original",
+      "trials": 3,
+      "all_settled": true,
+      "operations": {
+        "median": 1000000,
+        "min": 1000000,
+        "max": 1000000
+      },
+      "ops_s": {
+        "median": 214773.3402182679,
+        "min": 213001.93227194983,
+        "max": 252168.48722404218
+      },
+      "read_ops_s": {
+        "median": 107487.82835237675,
+        "min": 106601.290046075,
+        "max": 126203.01496950362
+      },
+      "write_ops_s": {
+        "median": 107285.51186589114,
+        "min": 106400.64222587482,
+        "max": 125965.47225453857
+      },
+      "peak_rss_bytes": {
+        "median": 152440832,
+        "min": 143110144,
+        "max": 156487680
+      },
+      "peak_fds": {
+        "median": 28,
+        "min": 26,
+        "max": 29
+      },
+      "max_l0": {
+        "median": 4,
+        "min": 2,
+        "max": 4
+      },
+      "db_bytes": {
+        "median": 19192121,
+        "min": 19192091,
+        "max": 19192180
+      },
+      "read_p50_ns": {
+        "median": 6016.0,
+        "min": 5376.0,
+        "max": 6016.0
+      },
+      "read_p95_ns": {
+        "median": 32256.0,
+        "min": 26112.0,
+        "max": 33792.0
+      },
+      "read_p99_ns": {
+        "median": 52224.0,
+        "min": 41984.0,
+        "max": 53248.0
+      },
+      "read_p999_ns": {
+        "median": 139264.0,
+        "min": 135168.0,
+        "max": 159744.0
+      },
+      "read_max_ns": {
+        "median": 2834538.0,
+        "min": 2381299.0,
+        "max": 2852290.0
+      },
+      "write_p50_ns": {
+        "median": 24576.0,
+        "min": 14080.0,
+        "max": 26112.0
+      },
+      "write_p95_ns": {
+        "median": 802816.0,
+        "min": 704512.0,
+        "max": 819200.0
+      },
+      "write_p99_ns": {
+        "median": 1343488.0,
+        "min": 1310720.0,
+        "max": 1343488.0
+      },
+      "write_p999_ns": {
+        "median": 16252928.0,
+        "min": 14155776.0,
+        "max": 17825792.0
+      },
+      "write_max_ns": {
+        "median": 32688808.0,
+        "min": 28494210.0,
+        "max": 41386938.0
+      },
+      "sst_write_amp": {
+        "median": 3.1957279786971093,
+        "min": 3.1956354650786922,
+        "max": 3.1958036970826518
+      },
+      "stall_ns": {
+        "median": 41261067.0,
+        "min": 16998772.0,
+        "max": 47992357.0
+      },
+      "immutable_wait_ns": {
+        "median": 41261067.0,
+        "min": 16998772.0,
+        "max": 47992357.0
+      },
+      "l0_wait_ns": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "both_wait_ns": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "flush_queue_max_ns": {
+        "median": 38105977.0,
+        "min": 33097383.0,
+        "max": 41123740.0
+      },
+      "compaction_build_ns": {
+        "median": 2005966731.0,
+        "min": 1625544738.0,
+        "max": 2144233363.0
+      },
+      "compaction_commit_wait_ns": {
+        "median": 2516104.0,
+        "min": 2243247.0,
+        "max": 6198872.0
+      },
+      "compaction_commit_ns": {
+        "median": 28487062.0,
+        "min": 25399861.0,
+        "max": 38920081.0
+      },
+      "flush_build_ns": {
+        "median": 693779898.0,
+        "min": 564239095.0,
+        "max": 710230326.0
+      },
+      "flush_commit_wait_ns": {
+        "median": 5437604.0,
+        "min": 4773768.0,
+        "max": 5695573.0
+      },
+      "flush_commit_ns": {
+        "median": 279820253.0,
+        "min": 259533515.0,
+        "max": 307785255.0
+      },
+      "process_read_bytes": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 4096.0
+      },
+      "process_write_bytes": {
+        "median": 318906368.0,
+        "min": 315678720.0,
+        "max": 318918656.0
+      }
+    },
+    {
+      "case": "mixed-4t",
+      "label": "final",
+      "trials": 3,
+      "all_settled": true,
+      "operations": {
+        "median": 1000000,
+        "min": 1000000,
+        "max": 1000000
+      },
+      "ops_s": {
+        "median": 278962.55476226384,
+        "min": 273319.7384824265,
+        "max": 288982.7368611017
+      },
+      "read_ops_s": {
+        "median": 139612.66874442497,
+        "min": 136788.60283803847,
+        "max": 144627.47929961243
+      },
+      "write_ops_s": {
+        "median": 139349.8860178389,
+        "min": 136531.135644388,
+        "max": 144355.25756148927
+      },
+      "peak_rss_bytes": {
+        "median": 128217088,
+        "min": 123895808,
+        "max": 128946176
+      },
+      "peak_fds": {
+        "median": 25,
+        "min": 25,
+        "max": 25
+      },
+      "max_l0": {
+        "median": 4,
+        "min": 3,
+        "max": 4
+      },
+      "db_bytes": {
+        "median": 19192086,
+        "min": 19192064,
+        "max": 19192109
+      },
+      "read_p50_ns": {
+        "median": 4736.0,
+        "min": 4736.0,
+        "max": 4992.0
+      },
+      "read_p95_ns": {
+        "median": 17408.0,
+        "min": 16896.0,
+        "max": 17408.0
+      },
+      "read_p99_ns": {
+        "median": 28160.0,
+        "min": 27136.0,
+        "max": 30720.0
+      },
+      "read_p999_ns": {
+        "median": 77824.0,
+        "min": 62464.0,
+        "max": 83968.0
+      },
+      "read_max_ns": {
+        "median": 1720177.0,
+        "min": 1650077.0,
+        "max": 1929072.0
+      },
+      "write_p50_ns": {
+        "median": 7936.0,
+        "min": 7552.0,
+        "max": 8064.0
+      },
+      "write_p95_ns": {
+        "median": 51200.0,
+        "min": 49152.0,
+        "max": 54272.0
+      },
+      "write_p99_ns": {
+        "median": 88064.0,
+        "min": 79872.0,
+        "max": 96256.0
+      },
+      "write_p999_ns": {
+        "median": 278528.0,
+        "min": 233472.0,
+        "max": 294912.0
+      },
+      "write_max_ns": {
+        "median": 22995837.0,
+        "min": 19457750.0,
+        "max": 24797786.0
+      },
+      "sst_write_amp": {
+        "median": 3.195748188911602,
+        "min": 3.19550996450421,
+        "max": 3.195789433646495
+      },
+      "stall_ns": {
+        "median": 22049276.0,
+        "min": 15065854.0,
+        "max": 25419170.0
+      },
+      "immutable_wait_ns": {
+        "median": 22049276.0,
+        "min": 15065854.0,
+        "max": 25419170.0
+      },
+      "l0_wait_ns": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "both_wait_ns": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "flush_queue_max_ns": {
+        "median": 18473758.0,
+        "min": 12668231.0,
+        "max": 21915580.0
+      },
+      "compaction_build_ns": {
+        "median": 1065256203.0,
+        "min": 1035710938.0,
+        "max": 1105852478.0
+      },
+      "compaction_commit_wait_ns": {
+        "median": 12009732.0,
+        "min": 324867.0,
+        "max": 13628984.0
+      },
+      "compaction_commit_ns": {
+        "median": 29312852.0,
+        "min": 29164812.0,
+        "max": 29327889.0
+      },
+      "flush_build_ns": {
+        "median": 432295522.0,
+        "min": 428587858.0,
+        "max": 471546497.0
+      },
+      "flush_commit_wait_ns": {
+        "median": 668337.0,
+        "min": 423910.0,
+        "max": 863056.0
+      },
+      "flush_commit_ns": {
+        "median": 284119958.0,
+        "min": 253005845.0,
+        "max": 285480771.0
+      },
+      "process_read_bytes": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "process_write_bytes": {
+        "median": 318275584.0,
+        "min": 316715008.0,
+        "max": 319004672.0
+      }
+    },
+    {
+      "case": "mixed-4t",
+      "label": "original",
+      "trials": 3,
+      "all_settled": true,
+      "operations": {
+        "median": 1000000,
+        "min": 1000000,
+        "max": 1000000
+      },
+      "ops_s": {
+        "median": 270297.390449361,
+        "min": 264601.4183044566,
+        "max": 273040.9933038679
+      },
+      "read_ops_s": {
+        "median": 135276.00529558214,
+        "min": 132425.3364202497,
+        "max": 136649.09895978007
+      },
+      "write_ops_s": {
+        "median": 135021.38515377883,
+        "min": 132176.08188420688,
+        "max": 136391.8943440878
+      },
+      "peak_rss_bytes": {
+        "median": 135168000,
+        "min": 127954944,
+        "max": 136110080
+      },
+      "peak_fds": {
+        "median": 29,
+        "min": 28,
+        "max": 29
+      },
+      "max_l0": {
+        "median": 3,
+        "min": 3,
+        "max": 4
+      },
+      "db_bytes": {
+        "median": 19192117,
+        "min": 19192094,
+        "max": 19192189
+      },
+      "read_p50_ns": {
+        "median": 4736.0,
+        "min": 4608.0,
+        "max": 4864.0
+      },
+      "read_p95_ns": {
+        "median": 29184.0,
+        "min": 29184.0,
+        "max": 29184.0
+      },
+      "read_p99_ns": {
+        "median": 46080.0,
+        "min": 45056.0,
+        "max": 48128.0
+      },
+      "read_p999_ns": {
+        "median": 98304.0,
+        "min": 92160.0,
+        "max": 100352.0
+      },
+      "read_max_ns": {
+        "median": 1696103.0,
+        "min": 1195118.0,
+        "max": 1838774.0
+      },
+      "write_p50_ns": {
+        "median": 7808.0,
+        "min": 7424.0,
+        "max": 7936.0
+      },
+      "write_p95_ns": {
+        "median": 51200.0,
+        "min": 50176.0,
+        "max": 52224.0
+      },
+      "write_p99_ns": {
+        "median": 90112.0,
+        "min": 83968.0,
+        "max": 90112.0
+      },
+      "write_p999_ns": {
+        "median": 278528.0,
+        "min": 241664.0,
+        "max": 319488.0
+      },
+      "write_max_ns": {
+        "median": 25565788.0,
+        "min": 20349072.0,
+        "max": 27128876.0
+      },
+      "sst_write_amp": {
+        "median": 3.195527834278714,
+        "min": 3.1954844257408124,
+        "max": 3.195804197554096
+      },
+      "stall_ns": {
+        "median": 36932464.0,
+        "min": 29192053.0,
+        "max": 40559870.0
+      },
+      "immutable_wait_ns": {
+        "median": 36932464.0,
+        "min": 29192053.0,
+        "max": 40559870.0
+      },
+      "l0_wait_ns": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "both_wait_ns": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "flush_queue_max_ns": {
+        "median": 42052436.0,
+        "min": 36866835.0,
+        "max": 58139756.0
+      },
+      "compaction_build_ns": {
+        "median": 1883075721.0,
+        "min": 1799156774.0,
+        "max": 1885845980.0
+      },
+      "compaction_commit_wait_ns": {
+        "median": 8193651.0,
+        "min": 367580.0,
+        "max": 13727482.0
+      },
+      "compaction_commit_ns": {
+        "median": 28315282.0,
+        "min": 27366549.0,
+        "max": 32626415.0
+      },
+      "flush_build_ns": {
+        "median": 619080676.0,
+        "min": 584077091.0,
+        "max": 625604406.0
+      },
+      "flush_commit_wait_ns": {
+        "median": 431968.0,
+        "min": 372826.0,
+        "max": 455273.0
+      },
+      "flush_commit_ns": {
+        "median": 268866271.0,
+        "min": 257748509.0,
+        "max": 273251160.0
+      },
+      "process_read_bytes": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "process_write_bytes": {
+        "median": 316633088.0,
+        "min": 316579840.0,
+        "max": 318644224.0
+      }
+    },
+    {
+      "case": "mixed-64t",
+      "label": "final",
+      "trials": 3,
+      "all_settled": true,
+      "operations": {
+        "median": 1000000,
+        "min": 1000000,
+        "max": 1000000
+      },
+      "ops_s": {
+        "median": 212871.90211669193,
+        "min": 210962.76559632568,
+        "max": 216217.6774269677
+      },
+      "read_ops_s": {
+        "median": 106536.21372424292,
+        "min": 105580.74626075871,
+        "max": 108210.67723955195
+      },
+      "write_ops_s": {
+        "median": 106335.688392449,
+        "min": 105382.01933556698,
+        "max": 108007.00018741575
+      },
+      "peak_rss_bytes": {
+        "median": 158449664,
+        "min": 151515136,
+        "max": 166637568
+      },
+      "peak_fds": {
+        "median": 27,
+        "min": 26,
+        "max": 28
+      },
+      "max_l0": {
+        "median": 2,
+        "min": 2,
+        "max": 2
+      },
+      "db_bytes": {
+        "median": 19192122,
+        "min": 19192077,
+        "max": 19192162
+      },
+      "read_p50_ns": {
+        "median": 6016.0,
+        "min": 6016.0,
+        "max": 6016.0
+      },
+      "read_p95_ns": {
+        "median": 20480.0,
+        "min": 20480.0,
+        "max": 20992.0
+      },
+      "read_p99_ns": {
+        "median": 34816.0,
+        "min": 33792.0,
+        "max": 34816.0
+      },
+      "read_p999_ns": {
+        "median": 258048.0,
+        "min": 176128.0,
+        "max": 352256.0
+      },
+      "read_max_ns": {
+        "median": 2473844.0,
+        "min": 2267041.0,
+        "max": 3232699.0
+      },
+      "write_p50_ns": {
+        "median": 14592.0,
+        "min": 14592.0,
+        "max": 14592.0
+      },
+      "write_p95_ns": {
+        "median": 1671168.0,
+        "min": 1671168.0,
+        "max": 1703936.0
+      },
+      "write_p99_ns": {
+        "median": 2949120.0,
+        "min": 2883584.0,
+        "max": 3145728.0
+      },
+      "write_p999_ns": {
+        "median": 25165824.0,
+        "min": 23592960.0,
+        "max": 26738688.0
+      },
+      "write_max_ns": {
+        "median": 33241089.0,
+        "min": 30828241.0,
+        "max": 40113147.0
+      },
+      "sst_write_amp": {
+        "median": 3.1955264064631237,
+        "min": 3.195520209449066,
+        "max": 3.196015911694699
+      },
+      "stall_ns": {
+        "median": 29022356.0,
+        "min": 21161693.0,
+        "max": 34796784.0
+      },
+      "immutable_wait_ns": {
+        "median": 29022356.0,
+        "min": 21161693.0,
+        "max": 34796784.0
+      },
+      "l0_wait_ns": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "both_wait_ns": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "flush_queue_max_ns": {
+        "median": 28319588.0,
+        "min": 19220758.0,
+        "max": 36438014.0
+      },
+      "compaction_build_ns": {
+        "median": 1321466592.0,
+        "min": 1259826560.0,
+        "max": 1441452955.0
+      },
+      "compaction_commit_wait_ns": {
+        "median": 14851628.0,
+        "min": 4183623.0,
+        "max": 29642332.0
+      },
+      "compaction_commit_ns": {
+        "median": 38320680.0,
+        "min": 32152358.0,
+        "max": 38665710.0
+      },
+      "flush_build_ns": {
+        "median": 576431482.0,
+        "min": 516061539.0,
+        "max": 653510481.0
+      },
+      "flush_commit_wait_ns": {
+        "median": 11562223.0,
+        "min": 10750283.0,
+        "max": 15591154.0
+      },
+      "flush_commit_ns": {
+        "median": 334393548.0,
+        "min": 318709431.0,
+        "max": 343291616.0
+      },
+      "process_read_bytes": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "process_write_bytes": {
+        "median": 316686336.0,
+        "min": 316645376.0,
+        "max": 316780544.0
+      }
+    },
+    {
+      "case": "mixed-64t",
+      "label": "original",
+      "trials": 3,
+      "all_settled": true,
+      "operations": {
+        "median": 1000000,
+        "min": 1000000,
+        "max": 1000000
+      },
+      "ops_s": {
+        "median": 210714.7029850865,
+        "min": 210285.5602499793,
+        "max": 224703.1006974784
+      },
+      "read_ops_s": {
+        "median": 105456.59811764924,
+        "min": 105241.82462386739,
+        "max": 112457.38550916771
+      },
+      "write_ops_s": {
+        "median": 105258.10486743729,
+        "min": 105043.73562611191,
+        "max": 112245.71518831069
+      },
+      "peak_rss_bytes": {
+        "median": 153149440,
+        "min": 148926464,
+        "max": 168652800
+      },
+      "peak_fds": {
+        "median": 25,
+        "min": 25,
+        "max": 27
+      },
+      "max_l0": {
+        "median": 2,
+        "min": 2,
+        "max": 3
+      },
+      "db_bytes": {
+        "median": 19192107,
+        "min": 19192083,
+        "max": 19192108
+      },
+      "read_p50_ns": {
+        "median": 5888.0,
+        "min": 5760.0,
+        "max": 5888.0
+      },
+      "read_p95_ns": {
+        "median": 33792.0,
+        "min": 27648.0,
+        "max": 33792.0
+      },
+      "read_p99_ns": {
+        "median": 54272.0,
+        "min": 45056.0,
+        "max": 55296.0
+      },
+      "read_p999_ns": {
+        "median": 294912.0,
+        "min": 278528.0,
+        "max": 466944.0
+      },
+      "read_max_ns": {
+        "median": 3391084.0,
+        "min": 2015778.0,
+        "max": 3435273.0
+      },
+      "write_p50_ns": {
+        "median": 20992.0,
+        "min": 17920.0,
+        "max": 20992.0
+      },
+      "write_p95_ns": {
+        "median": 1703936.0,
+        "min": 1671168.0,
+        "max": 1736704.0
+      },
+      "write_p99_ns": {
+        "median": 3080192.0,
+        "min": 2949120.0,
+        "max": 3342336.0
+      },
+      "write_p999_ns": {
+        "median": 20971520.0,
+        "min": 20971520.0,
+        "max": 24117248.0
+      },
+      "write_max_ns": {
+        "median": 34552477.0,
+        "min": 31776374.0,
+        "max": 35170906.0
+      },
+      "sst_write_amp": {
+        "median": 3.195680286712436,
+        "min": 3.1953566141658385,
+        "max": 3.195720103631739
+      },
+      "stall_ns": {
+        "median": 35435761.0,
+        "min": 22004625.0,
+        "max": 41094826.0
+      },
+      "immutable_wait_ns": {
+        "median": 35435761.0,
+        "min": 22004625.0,
+        "max": 41094826.0
+      },
+      "l0_wait_ns": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "both_wait_ns": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "flush_queue_max_ns": {
+        "median": 33738817.0,
+        "min": 23766996.0,
+        "max": 35872047.0
+      },
+      "compaction_build_ns": {
+        "median": 1962070358.0,
+        "min": 1910991883.0,
+        "max": 2066700682.0
+      },
+      "compaction_commit_wait_ns": {
+        "median": 14048732.0,
+        "min": 7366776.0,
+        "max": 35954806.0
+      },
+      "compaction_commit_ns": {
+        "median": 28905377.0,
+        "min": 28586580.0,
+        "max": 30136085.0
+      },
+      "flush_build_ns": {
+        "median": 718654656.0,
+        "min": 625571583.0,
+        "max": 763508668.0
+      },
+      "flush_commit_wait_ns": {
+        "median": 12809166.0,
+        "min": 11227526.0,
+        "max": 13487599.0
+      },
+      "flush_commit_ns": {
+        "median": 307092652.0,
+        "min": 291578115.0,
+        "max": 323644803.0
+      },
+      "process_read_bytes": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "process_write_bytes": {
+        "median": 316583936.0,
+        "min": 316325888.0,
+        "max": 317001728.0
+      }
+    },
+    {
+      "case": "mixed-8t",
+      "label": "final",
+      "trials": 3,
+      "all_settled": true,
+      "operations": {
+        "median": 1000000,
+        "min": 1000000,
+        "max": 1000000
+      },
+      "ops_s": {
+        "median": 242460.42045788895,
+        "min": 242031.39654123696,
+        "max": 251113.3430232448
+      },
+      "read_ops_s": {
+        "median": 121344.40908698014,
+        "min": 121129.6950583894,
+        "max": 125674.94589618634
+      },
+      "write_ops_s": {
+        "median": 121116.0113709088,
+        "min": 120901.70148284757,
+        "max": 125438.39712705844
+      },
+      "peak_rss_bytes": {
+        "median": 127385600,
+        "min": 123863040,
+        "max": 130494464
+      },
+      "peak_fds": {
+        "median": 25,
+        "min": 25,
+        "max": 26
+      },
+      "max_l0": {
+        "median": 4,
+        "min": 4,
+        "max": 4
+      },
+      "db_bytes": {
+        "median": 19192101,
+        "min": 19192085,
+        "max": 19192103
+      },
+      "read_p50_ns": {
+        "median": 5376.0,
+        "min": 5376.0,
+        "max": 5632.0
+      },
+      "read_p95_ns": {
+        "median": 19456.0,
+        "min": 18944.0,
+        "max": 19456.0
+      },
+      "read_p99_ns": {
+        "median": 31232.0,
+        "min": 30208.0,
+        "max": 31744.0
+      },
+      "read_p999_ns": {
+        "median": 71680.0,
+        "min": 69632.0,
+        "max": 81920.0
+      },
+      "read_max_ns": {
+        "median": 2093307.0,
+        "min": 1531933.0,
+        "max": 2341279.0
+      },
+      "write_p50_ns": {
+        "median": 14336.0,
+        "min": 13312.0,
+        "max": 22016.0
+      },
+      "write_p95_ns": {
+        "median": 143360.0,
+        "min": 139264.0,
+        "max": 147456.0
+      },
+      "write_p99_ns": {
+        "median": 229376.0,
+        "min": 217088.0,
+        "max": 233472.0
+      },
+      "write_p999_ns": {
+        "median": 606208.0,
+        "min": 491520.0,
+        "max": 671744.0
+      },
+      "write_max_ns": {
+        "median": 28569428.0,
+        "min": 26350980.0,
+        "max": 32233913.0
+      },
+      "sst_write_amp": {
+        "median": 3.1956808755023705,
+        "min": 3.195676474297612,
+        "max": 3.195968072512542
+      },
+      "stall_ns": {
+        "median": 31252302.0,
+        "min": 26196387.0,
+        "max": 34564618.0
+      },
+      "immutable_wait_ns": {
+        "median": 31252302.0,
+        "min": 26196387.0,
+        "max": 34564618.0
+      },
+      "l0_wait_ns": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "both_wait_ns": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "flush_queue_max_ns": {
+        "median": 18923921.0,
+        "min": 17512349.0,
+        "max": 19914106.0
+      },
+      "compaction_build_ns": {
+        "median": 1131713625.0,
+        "min": 1108336382.0,
+        "max": 1152323284.0
+      },
+      "compaction_commit_wait_ns": {
+        "median": 10301503.0,
+        "min": 7456670.0,
+        "max": 14760263.0
+      },
+      "compaction_commit_ns": {
+        "median": 27697187.0,
+        "min": 25223865.0,
+        "max": 29017200.0
+      },
+      "flush_build_ns": {
+        "median": 478362410.0,
+        "min": 472791250.0,
+        "max": 492794109.0
+      },
+      "flush_commit_wait_ns": {
+        "median": 962677.0,
+        "min": 623101.0,
+        "max": 1329400.0
+      },
+      "flush_commit_ns": {
+        "median": 330603751.0,
+        "min": 302494596.0,
+        "max": 333225465.0
+      },
+      "process_read_bytes": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "process_write_bytes": {
+        "median": 316628992.0,
+        "min": 316215296.0,
+        "max": 317640704.0
+      }
+    },
+    {
+      "case": "mixed-8t",
+      "label": "original",
+      "trials": 3,
+      "all_settled": true,
+      "operations": {
+        "median": 1000000,
+        "min": 1000000,
+        "max": 1000000
+      },
+      "ops_s": {
+        "median": 227091.5337765711,
+        "min": 218585.97993878907,
+        "max": 233521.0548611409
+      },
+      "read_ops_s": {
+        "median": 113652.72700069431,
+        "min": 109395.9439659457,
+        "max": 116870.51584741005
+      },
+      "write_ops_s": {
+        "median": 113438.80677587679,
+        "min": 109190.03597284335,
+        "max": 116650.53901373086
+      },
+      "peak_rss_bytes": {
+        "median": 129286144,
+        "min": 127938560,
+        "max": 133079040
+      },
+      "peak_fds": {
+        "median": 27,
+        "min": 26,
+        "max": 27
+      },
+      "max_l0": {
+        "median": 3,
+        "min": 2,
+        "max": 3
+      },
+      "db_bytes": {
+        "median": 19192131,
+        "min": 19192124,
+        "max": 19192167
+      },
+      "read_p50_ns": {
+        "median": 5760.0,
+        "min": 5632.0,
+        "max": 5888.0
+      },
+      "read_p95_ns": {
+        "median": 32256.0,
+        "min": 31744.0,
+        "max": 33792.0
+      },
+      "read_p99_ns": {
+        "median": 51200.0,
+        "min": 50176.0,
+        "max": 51200.0
+      },
+      "read_p999_ns": {
+        "median": 102400.0,
+        "min": 100352.0,
+        "max": 104448.0
+      },
+      "read_max_ns": {
+        "median": 3464233.0,
+        "min": 1711628.0,
+        "max": 9327537.0
+      },
+      "write_p50_ns": {
+        "median": 24576.0,
+        "min": 23040.0,
+        "max": 27136.0
+      },
+      "write_p95_ns": {
+        "median": 155648.0,
+        "min": 151552.0,
+        "max": 159744.0
+      },
+      "write_p99_ns": {
+        "median": 245760.0,
+        "min": 245760.0,
+        "max": 253952.0
+      },
+      "write_p999_ns": {
+        "median": 638976.0,
+        "min": 622592.0,
+        "max": 688128.0
+      },
+      "write_max_ns": {
+        "median": 32821046.0,
+        "min": 23482790.0,
+        "max": 82074336.0
+      },
+      "sst_write_amp": {
+        "median": 3.1957525165176186,
+        "min": 3.195681449572556,
+        "max": 3.195847061461308
+      },
+      "stall_ns": {
+        "median": 42042033.0,
+        "min": 31740770.0,
+        "max": 56850043.0
+      },
+      "immutable_wait_ns": {
+        "median": 42042033.0,
+        "min": 31740770.0,
+        "max": 56850043.0
+      },
+      "l0_wait_ns": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "both_wait_ns": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "flush_queue_max_ns": {
+        "median": 43683314.0,
+        "min": 28179430.0,
+        "max": 46731781.0
+      },
+      "compaction_build_ns": {
+        "median": 2082138680.0,
+        "min": 2045748732.0,
+        "max": 2157227384.0
+      },
+      "compaction_commit_wait_ns": {
+        "median": 8505870.0,
+        "min": 1006749.0,
+        "max": 41534794.0
+      },
+      "compaction_commit_ns": {
+        "median": 34383227.0,
+        "min": 29100009.0,
+        "max": 34594334.0
+      },
+      "flush_build_ns": {
+        "median": 668033720.0,
+        "min": 658963750.0,
+        "max": 708363318.0
+      },
+      "flush_commit_wait_ns": {
+        "median": 1469343.0,
+        "min": 1097086.0,
+        "max": 1475642.0
+      },
+      "flush_commit_ns": {
+        "median": 295397701.0,
+        "min": 288230949.0,
+        "max": 322984163.0
+      },
+      "process_read_bytes": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 16384.0
+      },
+      "process_write_bytes": {
+        "median": 317521920.0,
+        "min": 316223488.0,
+        "max": 320425984.0
+      }
+    }
+  ]
+}

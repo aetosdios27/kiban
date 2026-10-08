@@ -1,0 +1,40 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 506  of event 'cpu-clock:u'
+# Event count (approx.): 5111111060
+#
+# Overhead  Command  Shared Object     Symbol
+# ........  .......  ................  ....................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+#
+    17.00%  scale    scale             [.] <kiban::sstable::block::VerifiedBlock>::verify
+     7.31%  scale    libc.so.6         [.] __memcmp_avx2_movbe
+     7.31%  scale    scale             [.] <kiban::sstable::builder::TableBuilder>::flush_block
+     6.52%  scale    scale             [.] <std::sys::sync::mutex::futex::Mutex>::lock_contended
+     4.74%  scale    scale             [.] <kiban::frame::FrameWriter<&mut std::io::buffered::bufwriter::BufWriter<kiban::sys::File>>>::write_record
+     4.35%  scale    libc.so.6         [.] __memmove_avx_unaligned_erms
+     4.35%  scale    scale             [.] <kiban::cache::BlockCache>::get
+     4.35%  scale    scale             [.] <kiban::sstable::reader::SstTable>::get
+     3.95%  scale    scale             [.] <kiban::db::SharedKiban>::get::<[u8; 8]>
+     3.75%  scale    scale             [.] kiban::sstable::block::header_at
+     3.16%  scale    scale             [.] <kiban::memtable::Memtable>::insert_entry
+     2.17%  scale    libc.so.6         [.] __libc_malloc2
+     1.98%  scale    libc.so.6         [.] _int_malloc
+     1.78%  scale    libc.so.6         [.] unlink_chunk.isra.0
+     1.78%  scale    scale             [.] <kiban::engine_lock::ShardedRwLock<kiban::db::Kiban>>::write_with_hook::<<kiban::engine_lock::ShardedRwLock<kiban::db::Kiban>>::write::{closure#0}>
+     1.78%  scale    scale             [.] <kiban::sstable::block::VerifiedBlock>::get
+     1.38%  scale    libc.so.6         [.] _int_free_create_chunk
+     1.38%  scale    libc.so.6         [.] _int_free_merge_chunk
+     1.38%  scale    scale             [.] <kiban::engine_lock::ShardedRwLock<kiban::memtable::Memtable>>::write_with_hook::<<kiban::engine_lock::ShardedRwLock<kiban::memtable::Memtable>>::write::{closure#0}>
+     1.19%  scale    libc.so.6         [.] _int_free_chunk
+     1.19%  scale    libc.so.6         [.] cfree@GLIBC_2.2.5
+     1.19%  scale    scale             [.] <kiban::cache::BlockCache>::insert
+     1.19%  scale    scale             [.] core::ptr::drop_glue::<kiban::engine_lock::WriteGuard<kiban::db::Kiban>>
+     1.19%  scale    scale             [.] std::sys::backtrace::__rust_begin_short_backtrace::<scale::run_stage::{closure#0}, core::result::Result<(), core::io::error::Error>>
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

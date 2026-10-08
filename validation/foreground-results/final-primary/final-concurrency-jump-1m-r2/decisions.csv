@@ -1,0 +1,35 @@
+observed_elapsed_s,stage,sequence,gap_before,pressure_l0,pressure_debt,pressure_read,dominant,tier,chosen,candidates,predicted_rewrite_bytes,l0_relief,debt_relief,read_relief
+0.946058415,"low-concurrency",1,0,0.3333333333333333,0,0.3748146079759768,Read,None,"None",0,0,0,0,0
+0.946058415,"low-concurrency",2,0,0.5,0,0.8245608355971062,Read,None,"None",0,0,0,0,0
+0.946058415,"low-concurrency",3,0,0.6666666666666666,0,1,Read,L0,"Some(L0)",1,11499195,1,0,1
+0.946058415,"low-concurrency",4,0,0,0.1930224895477295,1,Read,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 2 })",2,23412155,0,1,0
+0.946058415,"low-concurrency",5,0,0.16666666666666666,0.13511574268341064,1,Read,None,"None",0,0,0,0,0
+0.946058415,"low-concurrency",6,0,0.16666666666666666,0.09458101987838745,1,Read,None,"None",0,0,0,0,0
+0.946058415,"low-concurrency",7,0,0.3333333333333333,0.0662067139148712,1,Read,None,"None",0,0,0,0,0
+0.946058415,"low-concurrency",8,0,0.5,0.04634469974040984,1,Read,None,"None",0,0,0,0,0
+0.946058415,"low-concurrency",9,0,0.6666666666666666,0.03244128981828689,1,Read,L0,"Some(L0)",1,15305298,1,0,1
+0.946058415,"low-concurrency",10,0,0,0.2538842063319683,1,Read,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 1 })",3,12770831,0,0.7737308863443496,0
+0.946058415,"low-concurrency",11,0,0,0.3073998640795946,1,Read,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 2 })",2,16518757,0,1,0
+0.946058415,"low-concurrency",12,0,0.16666666666666666,0.2151799048557162,1,Read,None,"None",0,0,0,0,0
+0.946058415,"low-concurrency",13,0,0.16666666666666666,0.15062593339900132,1,Read,None,"None",0,0,0,0,0
+0.946058415,"low-concurrency",14,0,0.3333333333333333,0.10543815337930092,1,Read,None,"None",0,0,0,0,0
+1.955465039,"high-concurrency",15,0,0.5,0.07380670736551063,1,Read,None,"None",0,0,0,0,0
+1.955465039,"high-concurrency",16,0,0.6666666666666666,0.05166469515585744,1,Read,L0,"Some(L0)",1,15305322,1,0,1
+1.955465039,"high-concurrency",17,0,0,0.2671140685762633,1,Read,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 1 })",3,12770832,0,0.7750695052609156,0
+1.955465039,"high-concurrency",18,0,0.16666666666666666,0.3164342223167388,1,Read,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 2 })",2,16509255,0,1,0
+1.955465039,"high-concurrency",19,0,0.16666666666666666,0.22150395562171712,1,Read,None,"None",0,0,0,0,0
+1.955465039,"high-concurrency",20,0,0.16666666666666666,0.15505276893520198,1,Read,None,"None",0,0,0,0,0
+1.955465039,"high-concurrency",21,0,0.3333333333333333,0.10853693825464138,1,Read,None,"None",0,0,0,0,0
+1.955465039,"high-concurrency",22,0,0.5,0.07597585677824896,1,Read,None,"None",0,0,0,0,0
+1.955465039,"high-concurrency",23,0,0.6666666666666666,0.05318309974477427,1,Read,L0,"Some(L0)",1,15305323,1,0,1
+1.955465039,"high-concurrency",24,0,0,0.2681292203889689,1,Read,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 1 })",3,12770838,0,0.7753532172953896,0
+1.955465039,"high-concurrency",25,0,0,0.3170969541349491,1,Read,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 2 })",2,16507247,0,1,0
+1.955465039,"high-concurrency",26,0,0.16666666666666666,0.22196786789446435,1,Read,None,"None",0,0,0,0,0
+1.955465039,"high-concurrency",27,0,0.16666666666666666,0.15537750752612503,1,Read,None,"None",0,0,0,0,0
+1.955465039,"high-concurrency",28,0,0.3333333333333333,0.10876425526828752,1,Read,None,"None",0,0,0,0,0
+1.955465039,"high-concurrency",29,0,0.5,0.07613497868780127,1,Read,None,"None",0,0,0,0,0
+1.955465039,"high-concurrency",30,0,0.6666666666666666,0.05329448508146088,1,Read,L0,"Some(L0)",1,15305059,1,0,1
+1.99692281,"high-concurrency",31,0,0,0.2682180620118566,1,Read,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 1 })",3,12770841,0,0.7752893726356094,0
+2.026420656,"final-flush",32,0,0.16666666666666666,0.3171699436326038,1,Read,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 2 })",2,16507700,0,1,0
+3.026840878,"drain",33,0,0.16666666666666666,0.22201896054282266,1,Read,None,"None",0,0,0,0,0
+3.026840878,"drain",34,0,0.16666666666666666,0.15541327237997585,1,Read,None,"None",0,0,0,0,0

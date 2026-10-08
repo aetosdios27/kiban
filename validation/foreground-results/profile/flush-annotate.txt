@@ -1,0 +1,276 @@
+ Percent |	Source code & Disassembly of scale for cpu-clock:u (1674 samples, percent: local period)
+--------------------------------------------------------------------------------------------------------
+         : 0     0x97bb0 <<kiban::sstable::builder::TableBuilder>::flush_block>:
+    0.06 :   97bb0:        pushq   %rbp
+    0.00 :   97bb1:        pushq   %r15
+    0.00 :   97bb3:        pushq   %r14
+    0.00 :   97bb5:        pushq   %r13
+    0.00 :   97bb7:        pushq   %r12
+    0.00 :   97bb9:        pushq   %rbx
+    0.00 :   97bba:        subq    $0x78, %rsp
+    0.00 :   97bbe:        cmpq    $0x0, 0x70(%rdi)
+    0.00 :   97bc3:        je      0x97f1a <<kiban::sstable::builder::TableBuilder>::flush_block+0x36a>
+    0.00 :   97bc9:        movq    %rdi, %r15
+    0.00 :   97bcc:        leaq    0x18(%rdi), %rbp
+    0.00 :   97bd0:        movq    0x58(%rdi), %rbx
+    0.00 :   97bd4:        leaq    0x58(%rdi), %r13
+    0.00 :   97bd8:        testq   %rbx, %rbx
+    0.00 :   97bdb:        jns     0x97bec <<kiban::sstable::builder::TableBuilder>::flush_block+0x3c>
+    0.00 :   97bdd:        xorl    %r12d, %r12d
+    0.00 :   97be0:        movq    %r12, %rdi
+    0.00 :   97be3:        movq    %rbx, %rsi
+    0.00 :   97be6:        callq   *0x6847c(%rip)  # 0x100068 <_DYNAMIC+0x2c8>
+    0.00 :   97bec:        je      0x97c27 <<kiban::sstable::builder::TableBuilder>::flush_block+0x77>
+    0.00 :   97bee:        movq    0x50(%r15), %r14
+    0.00 :   97bf2:        callq   *0x68458(%rip)  # 0x100050 <_DYNAMIC+0x2b0>
+    0.00 :   97bf8:        movl    $0x1, %r12d
+    0.00 :   97bfe:        movl    $0x1, %esi
+    0.00 :   97c03:        movq    %rbx, %rdi
+    0.00 :   97c06:        callq   *0x6844c(%rip)  # 0x100058 <_DYNAMIC+0x2b8>
+    0.00 :   97c0c:        testq   %rax, %rax
+    0.00 :   97c0f:        je      0x97be0 <<kiban::sstable::builder::TableBuilder>::flush_block+0x30>
+    0.00 :   97c11:        movq    %rax, 0x8(%rsp)
+    0.00 :   97c16:        movq    %rax, %rdi
+    0.00 :   97c19:        movq    %r14, %rsi
+    0.00 :   97c1c:        movq    %rbx, %rdx
+    0.00 :   97c1f:        callq   *0x6840b(%rip)  # 0x100030 <_DYNAMIC+0x290>
+    0.00 :   97c25:        jmp     0x97c31 <<kiban::sstable::builder::TableBuilder>::flush_block+0x81>
+    0.00 :   97c27:        movl    $0x1, %eax
+    0.00 :   97c2c:        movq    %rax, 0x8(%rsp)
+    0.00 :   97c31:        callq   *0x68419(%rip)  # 0x100050 <_DYNAMIC+0x2b0>
+    0.00 :   97c37:        movl    $0x4, %edi
+    0.00 :   97c3c:        movl    $0x4, %esi
+    0.00 :   97c41:        callq   *0x68411(%rip)  # 0x100058 <_DYNAMIC+0x2b8>
+    0.00 :   97c47:        testq   %rax, %rax
+    0.00 :   97c4a:        je      0x97f29 <<kiban::sstable::builder::TableBuilder>::flush_block+0x379>
+    0.00 :   97c50:        movl    $0x0, (%rax)
+    0.00 :   97c56:        movups  0x50(%rbp), %xmm0
+    0.00 :   97c5a:        movaps  %xmm0, 0x60(%rsp)
+    0.00 :   97c5f:        movups  0x40(%rbp), %xmm0
+    0.00 :   97c63:        movaps  %xmm0, 0x50(%rsp)
+    0.00 :   97c68:        movups  (%rbp), %xmm0
+    0.00 :   97c6c:        movups  0x10(%rbp), %xmm1
+    0.00 :   97c70:        movups  0x20(%rbp), %xmm2
+    0.00 :   97c74:        movups  0x30(%rbp), %xmm3
+    0.00 :   97c78:        movaps  %xmm3, 0x40(%rsp)
+    0.00 :   97c7d:        movaps  %xmm2, 0x30(%rsp)
+    0.00 :   97c82:        movaps  %xmm1, 0x20(%rsp)
+    0.00 :   97c87:        movaps  %xmm0, 0x10(%rsp)
+    0.00 :   97c8c:        movq    $0x0, 0x18(%r15)
+    0.00 :   97c94:        movq    $0x1, 0x20(%r15)
+    0.00 :   97c9c:        movq    $0x0, 0x28(%r15)
+    0.00 :   97ca4:        movq    $0x1, 0x30(%r15)
+    0.00 :   97cac:        movq    %rax, 0x38(%r15)
+    0.00 :   97cb0:        movq    $0x1, 0x40(%r15)
+    0.00 :   97cb8:        movq    $0x0, 0x48(%r15)
+    0.00 :   97cc0:        movq    $0x1, 0x50(%r15)
+    0.00 :   97cc8:        xorps   %xmm0, %xmm0
+    0.00 :   97ccb:        movups  %xmm0, 0x10(%r13)
+    0.00 :   97cd0:        movups  %xmm0, (%r13)
+    0.00 :   97cd5:        movq    0x38(%rsp), %r13
+    0.00 :   97cda:        testq   %r13, %r13
+    0.00 :   97cdd:        je      0x97d5f <<kiban::sstable::builder::TableBuilder>::flush_block+0x1af>
+    0.00 :   97ce3:        movq    %rbx, (%rsp)
+    0.00 :   97ce7:        movq    0x30(%rsp), %rbp
+    0.00 :   97cec:        shlq    $0x2, %r13
+    0.00 :   97cf0:        movq    0x20(%rsp), %r12
+    0.00 :   97cf5:        xorl    %r14d, %r14d
+    0.00 :   97cf8:        leaq    0x10(%rsp), %rdi
+    0.00 :   97cfd:        nopl    (%rax)
+    0.00 :   97d00:        movl    (%rbp,%r14), %ebx
+    0.00 :   97d05:        movq    0x10(%rsp), %rax
+    0.00 :   97d0a:        subq    %r12, %rax
+    0.00 :   97d0d:        cmpq    $0x3, %rax
+    0.00 :   97d11:        jbe     0x97d30 <<kiban::sstable::builder::TableBuilder>::flush_block+0x180>
+    0.00 :   97d13:        movq    0x18(%rsp), %rax
+    0.00 :   97d18:        movl    %ebx, (%rax,%r12)
+    0.06 :   97d1c:        addq    $0x4, %r12
+    0.00 :   97d20:        movq    %r12, 0x20(%rsp)
+    0.00 :   97d25:        addq    $0x4, %r14
+    0.00 :   97d29:        cmpq    %r14, %r13
+    0.00 :   97d2c:        jne     0x97d00 <<kiban::sstable::builder::TableBuilder>::flush_block+0x150>
+    0.00 :   97d2e:        jmp     0x97d54 <<kiban::sstable::builder::TableBuilder>::flush_block+0x1a4>
+    0.00 :   97d30:        movl    $0x4, %edx
+    0.00 :   97d35:        movl    $0x1, %ecx
+    0.00 :   97d3a:        movl    $0x1, %r8d
+    0.00 :   97d40:        movq    %r12, %rsi
+    0.00 :   97d43:        callq   0x8af70 <<alloc::raw_vec::RawVecInner<_>>::reserve::do_reserve_and_handle::<alloc::alloc::Global>>
+    0.00 :   97d48:        movq    0x20(%rsp), %r12
+    0.00 :   97d4d:        leaq    0x10(%rsp), %rdi
+    0.00 :   97d52:        jmp     0x97d13 <<kiban::sstable::builder::TableBuilder>::flush_block+0x163>
+    0.00 :   97d54:        movq    0x38(%rsp), %r14
+    0.00 :   97d59:        movq    (%rsp), %rbx
+    0.00 :   97d5d:        jmp     0x97d67 <<kiban::sstable::builder::TableBuilder>::flush_block+0x1b7>
+    0.00 :   97d5f:        movq    0x20(%rsp), %r12
+    0.00 :   97d64:        xorl    %r14d, %r14d
+    0.00 :   97d67:        movq    0x10(%rsp), %rax
+    0.00 :   97d6c:        movq    %rax, %rcx
+    0.00 :   97d6f:        subq    %r12, %rcx
+    0.00 :   97d72:        cmpq    $0x3, %rcx
+    0.00 :   97d76:        jbe     0x97f3b <<kiban::sstable::builder::TableBuilder>::flush_block+0x38b>
+    0.00 :   97d7c:        movq    0x18(%rsp), %rcx
+    0.00 :   97d81:        movl    %r14d, (%rcx,%r12)
+    0.00 :   97d85:        leaq    0x4(%r12), %rdx
+    0.00 :   97d8a:        movq    %rdx, 0x20(%rsp)
+    0.00 :   97d8f:        cmpq    %rax, %rdx
+    0.00 :   97d92:        jne     0x97da4 <<kiban::sstable::builder::TableBuilder>::flush_block+0x1f4>
+    0.00 :   97d94:        leaq    0x10(%rsp), %rdi
+    0.00 :   97d99:        callq   *0x68c01(%rip)  # 0x1009a0 <_DYNAMIC+0xc00>
+    0.00 :   97d9f:        movq    0x18(%rsp), %rcx
+    0.00 :   97da4:        movb    $0x0, 0x4(%rcx,%r12)
+    0.00 :   97daa:        addq    $0x5, %r12
+    0.00 :   97dae:        movq    %r12, 0x20(%rsp)
+    0.00 :   97db3:        movq    0x18(%rsp), %rax
+    0.00 :   97db8:        movq    %r12, %rsi
+    0.00 :   97dbb:        andq    $-0x2, %rsi
+    0.00 :   97dbf:        movl    $0xffffffff, %ebp
+    0.00 :   97dc4:        xorl    %edx, %edx
+    0.00 :   97dc6:        movq    0x68b2b(%rip), %rcx  # 0x1008f8 <_DYNAMIC+0xb58>
+    0.00 :   97dcd:        nopl    (%rax)
+    0.12 :   97dd0:        movzbl  (%rax,%rdx), %edi
+    0.00 :   97dd4:        xorb    %bpl, %dil
+    6.99 :   97dd7:        movzbl  %dil, %edi
+    5.68 :   97ddb:        shrl    $0x8, %ebp
+    0.06 :   97dde:        xorl    (%rcx,%rdi,4), %ebp
+   34.83 :   97de1:        movzbl  0x1(%rax,%rdx), %edi
+    0.06 :   97de6:        xorb    %bpl, %dil
+    7.65 :   97de9:        movzbl  %dil, %edi
+    7.41 :   97ded:        shrl    $0x8, %ebp
+    0.00 :   97df0:        xorl    (%rcx,%rdi,4), %ebp
+   36.86 :   97df3:        addq    $0x2, %rdx
+    0.12 :   97df7:        cmpq    %rdx, %rsi
+    0.12 :   97dfa:        jne     0x97dd0 <<kiban::sstable::builder::TableBuilder>::flush_block+0x220>
+    0.00 :   97dfc:        testb   $0x1, %r12b
+    0.00 :   97e00:        je      0x97e12 <<kiban::sstable::builder::TableBuilder>::flush_block+0x262>
+    0.00 :   97e02:        movzbl  (%rax,%rdx), %edx
+    0.00 :   97e06:        xorb    %bpl, %dl
+    0.00 :   97e09:        movzbl  %dl, %edx
+    0.00 :   97e0c:        shrl    $0x8, %ebp
+    0.00 :   97e0f:        xorl    (%rcx,%rdx,4), %ebp
+    0.00 :   97e12:        movq    0x10(%rsp), %rcx
+    0.00 :   97e17:        subq    %r12, %rcx
+    0.00 :   97e1a:        cmpq    $0x3, %rcx
+    0.00 :   97e1e:        jbe     0x97f67 <<kiban::sstable::builder::TableBuilder>::flush_block+0x3b7>
+    0.00 :   97e24:        notl    %ebp
+    0.00 :   97e26:        movl    %ebp, (%rax,%r12)
+    0.00 :   97e2a:        movq    0x20(%rsp), %rbp
+    0.00 :   97e2f:        addq    $0x4, %rbp
+    0.00 :   97e33:        movq    %rbp, 0x20(%rsp)
+    0.00 :   97e38:        movq    0x10(%rsp), %r12
+    0.00 :   97e3d:        movq    0x18(%rsp), %rax
+    0.00 :   97e42:        movq    %rax, (%rsp)
+    0.00 :   97e46:        movq    0x28(%rsp), %rsi
+    0.00 :   97e4b:        testq   %rsi, %rsi
+    0.00 :   97e4e:        je      0x97e64 <<kiban::sstable::builder::TableBuilder>::flush_block+0x2b4>
+    0.00 :   97e50:        movq    0x30(%rsp), %rdi
+    0.00 :   97e55:        shlq    $0x2, %rsi
+    0.00 :   97e59:        movl    $0x4, %edx
+    0.00 :   97e5e:        callq   *0x6817c(%rip)  # 0xfffe0 <_DYNAMIC+0x240>
+    0.00 :   97e64:        movq    0x40(%rsp), %rsi
+    0.00 :   97e69:        testq   %rsi, %rsi
+    0.00 :   97e6c:        je      0x97e7e <<kiban::sstable::builder::TableBuilder>::flush_block+0x2ce>
+    0.00 :   97e6e:        movq    0x48(%rsp), %rdi
+    0.00 :   97e73:        movl    $0x1, %edx
+    0.00 :   97e78:        callq   *0x68162(%rip)  # 0xfffe0 <_DYNAMIC+0x240>
+    0.00 :   97e7e:        movq    (%r15), %rax
+    0.00 :   97e81:        movq    0x10(%r15), %r14
+    0.00 :   97e85:        subq    %r14, %rax
+    0.00 :   97e88:        cmpq    %rax, %rbp
+    0.00 :   97e8b:        ja      0x97f93 <<kiban::sstable::builder::TableBuilder>::flush_block+0x3e3>
+    0.00 :   97e91:        movq    %rbx, %r13
+    0.00 :   97e94:        movq    %r14, %rbx
+    0.00 :   97e97:        testq   %rbp, %rbp
+    0.00 :   97e9a:        je      0x97eb0 <<kiban::sstable::builder::TableBuilder>::flush_block+0x300>
+    0.00 :   97e9c:        movq    0x8(%r15), %rdi
+    0.00 :   97ea0:        addq    %rbx, %rdi
+    0.00 :   97ea3:        movq    (%rsp), %rsi
+    0.00 :   97ea7:        movq    %rbp, %rdx
+    0.00 :   97eaa:        callq   *0x68180(%rip)  # 0x100030 <_DYNAMIC+0x290>
+    0.00 :   97eb0:        addq    %rbp, %rbx
+    0.00 :   97eb3:        movq    %rbx, 0x10(%r15)
+    0.00 :   97eb7:        movq    0xc0(%r15), %rsi
+    0.00 :   97ebe:        cmpq    $-0x1, %rsi
+    0.00 :   97ec2:        je      0x97edb <<kiban::sstable::builder::TableBuilder>::flush_block+0x32b>
+    0.00 :   97ec4:        testq   %rsi, %rsi
+    0.00 :   97ec7:        je      0x97edb <<kiban::sstable::builder::TableBuilder>::flush_block+0x32b>
+    0.00 :   97ec9:        movq    0xc8(%r15), %rdi
+    0.00 :   97ed0:        movl    $0x1, %edx
+    0.00 :   97ed5:        callq   *0x68105(%rip)  # 0xfffe0 <_DYNAMIC+0x240>
+    0.00 :   97edb:        movq    %r13, 0xc0(%r15)
+    0.00 :   97ee2:        movq    0x8(%rsp), %rax
+    0.00 :   97ee7:        movq    %rax, 0xc8(%r15)
+    0.00 :   97eee:        movq    %r13, 0xd0(%r15)
+    0.00 :   97ef5:        movq    %r14, 0xd8(%r15)
+    0.00 :   97efc:        movq    %rbp, 0xe0(%r15)
+    0.00 :   97f03:        testq   %r12, %r12
+    0.00 :   97f06:        je      0x97f1a <<kiban::sstable::builder::TableBuilder>::flush_block+0x36a>
+    0.00 :   97f08:        movl    $0x1, %edx
+    0.00 :   97f0d:        movq    (%rsp), %rdi
+    0.00 :   97f11:        movq    %r12, %rsi
+    0.00 :   97f14:        callq   *0x680c6(%rip)  # 0xfffe0 <_DYNAMIC+0x240>
+    0.00 :   97f1a:        addq    $0x78, %rsp
+    0.00 :   97f1e:        popq    %rbx
+    0.00 :   97f1f:        popq    %r12
+    0.00 :   97f21:        popq    %r13
+    0.00 :   97f23:        popq    %r14
+    0.00 :   97f25:        popq    %r15
+    0.00 :   97f27:        popq    %rbp
+    0.00 :   97f28:        retq
+    0.00 :   97f29:        movl    $0x4, %edi
+    0.00 :   97f2e:        movl    $0x4, %esi
+    0.00 :   97f33:        callq   *0x6813f(%rip)  # 0x100078 <_DYNAMIC+0x2d8>
+    0.00 :   97f39:        ud2
+    0.00 :   97f3b:        leaq    0x10(%rsp), %rdi
+    0.00 :   97f40:        movl    $0x4, %edx
+    0.00 :   97f45:        movl    $0x1, %ecx
+    0.00 :   97f4a:        movl    $0x1, %r8d
+    0.00 :   97f50:        movq    %r12, %rsi
+    0.00 :   97f53:        callq   0x8af70 <<alloc::raw_vec::RawVecInner<_>>::reserve::do_reserve_and_handle::<alloc::alloc::Global>>
+    0.00 :   97f58:        movq    0x10(%rsp), %rax
+    0.00 :   97f5d:        movq    0x20(%rsp), %r12
+    0.00 :   97f62:        jmp     0x97d7c <<kiban::sstable::builder::TableBuilder>::flush_block+0x1cc>
+    0.00 :   97f67:        leaq    0x10(%rsp), %rdi
+    0.00 :   97f6c:        movl    $0x4, %edx
+    0.00 :   97f71:        movl    $0x1, %ecx
+    0.00 :   97f76:        movl    $0x1, %r8d
+    0.00 :   97f7c:        movq    %r12, %rsi
+    0.00 :   97f7f:        callq   0x8af70 <<alloc::raw_vec::RawVecInner<_>>::reserve::do_reserve_and_handle::<alloc::alloc::Global>>
+    0.00 :   97f84:        movq    0x18(%rsp), %rax
+    0.00 :   97f89:        movq    0x20(%rsp), %r12
+    0.00 :   97f8e:        jmp     0x97e24 <<kiban::sstable::builder::TableBuilder>::flush_block+0x274>
+    0.00 :   97f93:        movq    %rbx, %r13
+    0.00 :   97f96:        movl    $0x1, %ecx
+    0.00 :   97f9b:        movl    $0x1, %r8d
+    0.00 :   97fa1:        movq    %r15, %rdi
+    0.00 :   97fa4:        movq    %r14, %rsi
+    0.00 :   97fa7:        movq    %rbp, %rdx
+    0.00 :   97faa:        callq   0x8af70 <<alloc::raw_vec::RawVecInner<_>>::reserve::do_reserve_and_handle::<alloc::alloc::Global>>
+    0.00 :   97faf:        movq    0x10(%r15), %rbx
+    0.00 :   97fb3:        jmp     0x97e9c <<kiban::sstable::builder::TableBuilder>::flush_block+0x2ec>
+    0.00 :   97fb8:        movq    %rax, %r14
+    0.00 :   97fbb:        testq   %r12, %r12
+    0.00 :   97fbe:        jne     0x97fc5 <<kiban::sstable::builder::TableBuilder>::flush_block+0x415>
+    0.00 :   97fc0:        movq    %r13, %rbx
+    0.00 :   97fc3:        jmp     0x97ff8 <<kiban::sstable::builder::TableBuilder>::flush_block+0x448>
+    0.00 :   97fc5:        movl    $0x1, %edx
+    0.00 :   97fca:        movq    (%rsp), %rdi
+    0.00 :   97fce:        movq    %r12, %rsi
+    0.00 :   97fd1:        callq   *0x68009(%rip)  # 0xfffe0 <_DYNAMIC+0x240>
+    0.00 :   97fd7:        movq    %r13, %rbx
+    0.00 :   97fda:        jmp     0x97ff8 <<kiban::sstable::builder::TableBuilder>::flush_block+0x448>
+    0.00 :   97fdc:        jmp     0x97fe2 <<kiban::sstable::builder::TableBuilder>::flush_block+0x432>
+    0.00 :   97fde:        movq    %rbx, (%rsp)
+    0.00 :   97fe2:        movq    %rax, %r14
+    0.00 :   97fe5:        leaq    0x10(%rsp), %rdi
+    0.00 :   97fea:        callq   0x979e0 <core::ptr::drop_glue::<kiban::sstable::block::BlockBuilder>>
+    0.00 :   97fef:        movq    (%rsp), %rbx
+    0.00 :   97ff3:        jmp     0x97ff8 <<kiban::sstable::builder::TableBuilder>::flush_block+0x448>
+    0.00 :   97ff5:        movq    %rax, %r14
+    0.00 :   97ff8:        testq   %rbx, %rbx
+    0.00 :   97ffb:        je      0x98010 <<kiban::sstable::builder::TableBuilder>::flush_block+0x460>
+    0.00 :   97ffd:        movl    $0x1, %edx
+    0.00 :   98002:        movq    0x8(%rsp), %rdi
+    0.00 :   98007:        movq    %rbx, %rsi
+    0.00 :   9800a:        callq   *0x67fd0(%rip)  # 0xfffe0 <_DYNAMIC+0x240>
+    0.00 :   98010:        movq    %r14, %rdi
+    0.00 :   98013:        callq   0xfa340 <_fini+0x34>

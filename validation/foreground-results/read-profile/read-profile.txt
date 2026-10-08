@@ -1,0 +1,28 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 10K of event 'cpu-clock:u'
+# Event count (approx.): 108292928210
+#
+# Overhead  Command  Shared Object     Symbol
+# ........  .......  ................  .........................................................................................................................................................................
+#
+    21.74%  scale    scale             [.] <kiban::db::SharedKiban>::get::<[u8; 8]>
+    20.23%  scale    scale             [.] <kiban::cache::BlockCache>::get
+    16.19%  scale    scale             [.] kiban::db::get_from_version_at
+    14.34%  scale    libc.so.6         [.] __memcmp_avx2_movbe
+     7.14%  scale    scale             [.] <kiban::sstable::reader::SstTable>::get
+     3.44%  scale    scale             [.] <kiban::sstable::block::VerifiedBlock>::get
+     3.19%  scale    scale             [.] <kiban::engine_lock::ShardedRwLock<kiban::memtable::Memtable>>::read
+     2.92%  scale    scale             [.] kiban::sstable::block::header_at
+     1.53%  scale    scale             [.] std::sys::backtrace::__rust_begin_short_backtrace::<scale::run_stage::{closure#0}, core::result::Result<(), core::io::error::Error>>
+     1.33%  scale    [vdso]            [.] 0x0000000000000a8c
+     1.21%  scale    scale             [.] <kiban::engine_lock::ShardedRwLock<alloc::sync::Arc<kiban::db::ReadView>>>::read
+     1.10%  scale    libc.so.6         [.] __memmove_avx_unaligned_erms
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

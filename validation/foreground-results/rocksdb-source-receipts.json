@@ -1,0 +1,23 @@
+{
+  "version": "11.8.1",
+  "package": "librocksdb-sys 0.19.0+11.8.1",
+  "files": {
+    "db/write_thread.cc": "b46f5eedad1f1b3310df22f0d4007c885265d9ca48e48d7ac18b1ccbaa1bf06b",
+    "db/db_impl/db_impl_write.cc": "fdf32c746f7e0d260a8e305587928a453e207ba9f40f64a3afa1a5f1dc6fe368",
+    "db/db_impl/db_impl_compaction_flush.cc": "3717f163841ca0b941823a7fae2e763d9493bdfe6a2f6e520a4436a64bd8b1ab",
+    "db/compaction/compaction_job.cc": "30b4a7ec6156dd6fa395bd509586f8dd443f7b0dc14a4cc5f26b3cfb11d4ed86",
+    "util/crc32c.cc": "c1f10602fd9fe9421c2783b556b48c39f217ceb67825d8d5906f15e8df45b352",
+    "db/version_set.cc": "a0c0023232cee9e72e2a35cfe199ad6a8276ad355684d9745ef8e67109adc64e",
+    "db/flush_job.cc": "20ae0ad3d9234efb7bb77c4f09b13139a9305907728c07919b0d098b27056dc5",
+    "db/memtable_list.cc": "2d651de4ca24ef9ca77a3457660c80191fa60e5ecbd286593a10dfa4a6fe9a66",
+    "db/db_impl/db_impl.cc": "6653b580debb76cf99dc04e0dc00c1a36bcecccb898f7896436e23398cd06b50",
+    "db/db_impl/db_impl_open.cc": "f78847335e997aa0decfe0908f9adaefcaba64005442a3f3867b0ceb0d4a7994",
+    "monitoring/statistics_impl.h": "3472943dc5417f5c3ebdc4cb8b9f8bf60043006645e2f379c04030d5da69a1d1",
+    "monitoring/statistics.cc": "1a626235c029c548d78b630c3d64e187bd38e3779417eaed60c3e61443ca5d95",
+    "util/core_local.h": "7936de6a2b25427c25564816e8c70e8c28ba2052565de06ab654022f369bc2e0",
+    "db/log_writer.cc": "84ef1ee8cd6efd0b42c58b0c09c4d9b148677e9f254fde8cb88c02db91013c9f",
+    "db/memtable.cc": "fb455781dbd2f3a6ea3136825b7b6d5b1764381fa4bccc6173ea6d07c712d382",
+    "cache/sharded_cache.h": "34aadd80c502500a1c3c430b39d31bd8bde2de3278761b6a5151ce55df697302",
+    "table/merging_iterator.cc": "4b9322c360f168ebef7f939a0db6a3de7f91b01b72c6f7c735de06e115965668"
+  }
+}

@@ -1,0 +1,3 @@
+low-concurrency: 500000 operations in 0.997s (501548 ops/s), read/write p99=7936 / 6144 ns
+high-concurrency: 500000 operations in 1.058s (472526 ops/s), read/write p99=20480 / 270336 ns
+total: 1000000 operations in 2.055s (486605 ops/s), read/write p99=16128 / 221184 ns

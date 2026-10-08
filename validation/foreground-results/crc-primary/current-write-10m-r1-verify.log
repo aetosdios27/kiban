@@ -1,0 +1,2 @@
+stage=random-write threads=4 operations=10000000
+verified_keys=999964

@@ -28,6 +28,15 @@ serialization remains limiting after the smaller fixes. Snapshot sequence
 publication, batch atomicity, failure poisoning and sync coverage must be modeled
 before attempting that design.
 
+`EnterAsBatchGroupLeader` makes compatibility concrete: a non-sync leader cannot
+admit a sync follower; WAL policy, slowdown policy and integrity settings must
+also agree, and callbacks can refuse grouping. Small leading batches have a
+smaller growth limit to constrain their latency. A Rust design should represent
+those admission rules explicitly in owned request/group types and preserve the
+same success/failure and durable-acknowledgement boundaries. Batching every
+queued operation indiscriminately would weaken behavior. This is design guidance
+from the source, not an implemented or measured Kiban pipeline.
+
 ## Flush progress and compaction pressure
 
 [`db/db_impl/db_impl_compaction_flush.cc`](https://github.com/facebook/rocksdb/blob/v11.8.1/db/db_impl/db_impl_compaction_flush.cc)
@@ -87,6 +96,45 @@ recovers live WAL generations and propagates recovery errors. Kiban's determinis
 fault tests and reopen verification remain mandatory for every adopted change.
 
 ## Adoption policy
+
+### Metrics, cache and merge work
+
+[`monitoring/statistics_impl.h`](https://github.com/facebook/rocksdb/blob/v11.8.1/monitoring/statistics_impl.h)
+and [`monitoring/statistics.cc`](https://github.com/facebook/rocksdb/blob/v11.8.1/monitoring/statistics.cc)
+keep cache-aligned per-core counters and sum them for observation.
+[`util/core_local.h`](https://github.com/facebook/rocksdb/blob/v11.8.1/util/core_local.h)
+selects a core-local slot, with a fallback when CPU identity is unavailable.
+Kiban's warm-read profile independently identified shared observational increments
+as hot instructions. Its adaptation uses eight fixed, aligned atomic slots and
+the existing stable per-thread reader slot. Thread migration and slot collisions
+cannot lose increments; totals are exact after callers finish. This avoids OS
+core-ID queries and dynamic allocation on the increment path, at the cost of
+collisions when many threads share eight slots. Concurrent snapshots remain
+observational rather than transactional, as before.
+
+[`cache/sharded_cache.h`](https://github.com/facebook/rocksdb/blob/v11.8.1/cache/sharded_cache.h)
+partitions cache membership/capacity by hash. Kiban only shards its counters in
+this pass, keeping the existing global cache capacity, CLOCK eviction and
+single-flight policy. Sharding membership would have different eviction and
+capacity tradeoffs and is not silently included in a metrics change.
+
+[`table/merging_iterator.cc`](https://github.com/facebook/rocksdb/blob/v11.8.1/table/merging_iterator.cc)
+maintains heaps of child iterators instead of rescanning every head for the next
+key. Kiban's linear head selection appears in the write profile, but was smaller
+than checksumming there. A heap is a later candidate when measured fan-in/CPU
+justifies it; tie ordering, sequence visibility and fail-sticky corruption
+handling must remain identical.
+
+[`db/memtable.cc`](https://github.com/facebook/rocksdb/blob/v11.8.1/db/memtable.cc)
+encodes internal entries into allocated representation storage and coordinates
+concurrent insertion. Kiban's owned BTreeMap versions and mirrored read memtable
+have different allocation/copy costs. Rust ownership alone does not make those
+copies free. Arena/shared-value work is deferred until allocator profiles justify
+the added lifetime machinery.
+[`db/log_writer.cc`](https://github.com/facebook/rocksdb/blob/v11.8.1/db/log_writer.cc)
+frames and checksums physical WAL fragments with explicit record types. Kiban's
+existing WAL framing is retained; checksum acceleration does not disable checks
+or alter which generations a sync covers.
 
 Use profiled mechanisms, not RocksDB's headline numbers or defaults as targets.
 Keep original Kiban workloads and durability settings fixed. Measure allocation,

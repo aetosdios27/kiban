@@ -1,0 +1,10 @@
+{
+  "current-write-10m-r0.perf": {
+    "sha256": "f446cba3ebbc6d2d78f41d00c0a92bd1508472d0dfb17985a43fa77aa571cc2a",
+    "bytes": 152138700
+  },
+  "current-mixed-16t-r0.perf": {
+    "sha256": "1a094f16d039fa0e0e71fc456515c72db7a2d4a42a6b878f46ced5ed7e0f59de",
+    "bytes": 9545996
+  }
+}

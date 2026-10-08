@@ -1,0 +1,16 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--lib",
+    "return_corruption",
+    "--",
+    "--nocapture"
+  ],
+  "old_expected_failure": true,
+  "fixed_exit_code": 0,
+  "fixed_sources": {
+    "src/sstable/block.rs": "c015c770528c65019d8bbeca6247ea9043060a6fbbb3f8a5f995c2fb7bfe5eba",
+    "src/sstable/reader.rs": "e63a24988f4537839d8cc9821e67fd6d7391d22a83076672899ab0046f0af750"
+  }
+}

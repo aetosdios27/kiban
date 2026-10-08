@@ -1,0 +1,2 @@
+stage=sequential-write threads=4 operations=1000000
+verified_keys=100000

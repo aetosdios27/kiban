@@ -1,0 +1,20 @@
+observed_elapsed_s,stage,sequence,gap_before,pressure_l0,pressure_debt,pressure_read,dominant,tier,chosen,candidates,predicted_rewrite_bytes,l0_relief,debt_relief,read_relief
+0.534210487,"steady",1,0,0.3333333333333333,0,0.37480644828298115,Read,None,"None",0,0,0,0,0
+0.534210487,"steady",2,0,0.5,0,0.8246151049893371,Read,None,"None",0,0,0,0,0
+0.534210487,"steady",3,0,0.6666666666666666,0,1,Read,L0,"Some(L0)",1,11499326,1,0,1
+0.534210487,"steady",4,0,0.16666666666666666,0.19321279525756835,1,Read,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 2 })",2,23420137,0,1,0
+1.541260443,"write-burst",5,0,0.5,0.13524895668029782,1,Read,None,"None",0,0,0,0,0
+1.541260443,"write-burst",6,0,0.5,0.09467426967620847,1,Read,None,"None",0,0,0,0,0
+1.541260443,"write-burst",7,0,0.6666666666666666,0.06627198877334592,1,Read,L0,"Some(L0)",1,15305449,1,0,1
+1.541260443,"write-burst",8,0,0.16666666666666666,0.277989389257431,1,Read,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 1 })",3,12770830,0,0.771239615759081,0
+1.541260443,"write-burst",9,0,0.3333333333333333,0.32469720962619775,1,Read,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 2 })",2,16536529,0,1,0
+1.541260443,"write-burst",10,0,0.6666666666666666,0.2272880467383384,1,Read,L0,"Some(L0)",1,15305340,1,0,1
+1.541260443,"write-burst",11,0,0.3333333333333333,0.3905804907109165,1,Read,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 1 })",3,12770839,0,0.771945969833296,0
+1.541260443,"write-burst",12,0,0.5,0.4033906269449071,1,Read,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 2 })",2,16531481,0,1,0
+1.541260443,"write-burst",13,0,0.8333333333333334,0.28237343886143496,1,Read,L0,"Some(L0)",1,19131603,1,0,1
+1.541260443,"write-burst",14,0,0.3333333333333333,0.45857694885186917,1,Read,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 3 })",3,26280045,0,1,0
+1.8950372089999998,"read-recovery",15,0,0.6666666666666666,0.3210038641963084,1,Read,L0,"Some(L0)",1,15305098,1,0,1
+1.8950372089999998,"read-recovery",16,0,0,0.4555410991024549,1,Read,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 1 })",3,12770837,0,0.7757243392568188,0
+1.8950372089999998,"read-recovery",17,0,0,0.4482226366736593,1,Read,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 2 })",2,16504620,0,1,0
+2.933821507,"drain",18,0,0.16666666666666666,0.3137558456715615,1,Read,None,"None",0,0,0,0,0
+2.933821507,"drain",19,0,0.16666666666666666,0.21962909197009303,1,Read,None,"None",0,0,0,0,0

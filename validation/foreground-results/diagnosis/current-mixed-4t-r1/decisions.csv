@@ -1,0 +1,18 @@
+observed_elapsed_s,stage,sequence,gap_before,pressure_l0,pressure_debt,pressure_read,dominant,tier,chosen,candidates,predicted_rewrite_bytes,l0_relief,debt_relief,read_relief
+1.006696762,"mixed",1,0,0.3333333333333333,0,0.37483159242872827,Read,None,"None",0,0,0,0,0
+1.006696762,"mixed",2,0,0.5,0,0.824606588534012,Read,None,"None",0,0,0,0,0
+1.006696762,"mixed",3,0,0.6666666666666666,0,1,Read,L0,"Some(L0)",1,11499223,1,0,1
+1.006696762,"mixed",4,0,0.16666666666666666,0.1931175708770752,1,Read,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 2 })",2,23416143,0,1,0
+1.006696762,"mixed",5,0,0.8333333333333334,0.13518229961395264,1,Read,L0,"Some(L0)",1,19131486,1,0,1
+1.977573649,"mixed",6,0,0.3333333333333333,0.3551479249000549,1,Read,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 3 })",3,26263468,0,1,0
+1.977573649,"mixed",7,0,0.6666666666666666,0.24860354743003843,1,Read,L0,"Some(L0)",1,15305295,1,0,1
+1.977573649,"mixed",8,0,0.3333333333333333,0.40547988352298736,1,Read,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 1 })",3,12770839,0,0.7720719738731888,0
+1.977573649,"mixed",9,0,0.5,0.41379874424123764,1,Read,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 2 })",2,16530581,0,1,0
+1.977573649,"mixed",10,0,0.6666666666666666,0.2896591209688663,1,Read,L0,"Some(L0)",1,15305199,1,0,1
+1.977573649,"mixed",11,0,0.16666666666666666,0.43382351083787435,1,Read,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 1 })",3,12770837,0,0.7744001248648389,0
+1.977573649,"mixed",12,0,0.5,0.4332440568830818,1,Read,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 2 })",2,16514004,0,1,0
+2.025767466,"final-flush",13,0,0.8333333333333334,0.3032708398181573,1,Read,L0,"Some(L0)",1,15334329,1,0,1
+3.026117171,"drain",14,0,0,0.44317604722329595,1,Read,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 1 })",3,12770840,0,0.7754400179533737,0
+3.026117171,"drain",15,0,0,0.4396150940182212,1,Read,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 2 })",2,16506633,0,1,0
+3.026117171,"drain",16,0,0,0.3077305658127548,1,Read,None,"None",0,0,0,0,0
+3.026117171,"drain",17,0,0,0.21541139606892837,1,Read,None,"None",0,0,0,0,0

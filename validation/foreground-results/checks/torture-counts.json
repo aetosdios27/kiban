@@ -1,0 +1,11 @@
+{
+  "simulated": {
+    "cycles": 1000,
+    "completed_ops": 414831,
+    "fault_triggered": 341
+  },
+  "process": {
+    "cycles": 1000,
+    "acknowledged_ops": 532576
+  }
+}

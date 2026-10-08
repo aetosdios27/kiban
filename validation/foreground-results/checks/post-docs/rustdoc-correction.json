@@ -1,0 +1,8 @@
+{
+  "revision": "8a3de5859d9ecd848803ae0aedd3663ae4a422b5",
+  "command": "RUSTDOCFLAGS=-Dwarnings cargo doc --all-features --no-deps",
+  "exit_code": 0,
+  "log": "rustdoc-fixed.log",
+  "replaces_failed_check": 9,
+  "change": "Public links to private items changed to code spans; no warning suppression."
+}

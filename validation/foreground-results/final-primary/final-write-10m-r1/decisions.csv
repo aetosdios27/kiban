@@ -1,0 +1,175 @@
+observed_elapsed_s,stage,sequence,gap_before,pressure_l0,pressure_debt,pressure_read,dominant,tier,chosen,candidates,predicted_rewrite_bytes,l0_relief,debt_relief,read_relief
+1.007846161,"random-write",1,0,0.16666666666666666,0,0,L0,None,"None",0,0,0,0,0
+1.007846161,"random-write",2,0,0.3333333333333333,0,0,L0,None,"None",0,0,0,0,0
+1.007846161,"random-write",3,0,0.5,0,0,L0,None,"None",0,0,0,0,0
+1.007846161,"random-write",4,0,0.6666666666666666,0,0,L0,L0,"Some(L0)",1,15329127,1,0,1
+1.007846161,"random-write",5,0,0.16666666666666666,0.3,0,DeepDebt,FocusReselected,"Some(TrivialMove { level: 1 })",5,0,0,1,0
+1.007846161,"random-write",6,0,0.16666666666666666,0.21,0,DeepDebt,None,"None",0,0,0,0,0
+1.007846161,"random-write",7,0,0.16666666666666666,0.147,0,L0,None,"None",0,0,0,0,0
+1.007846161,"random-write",8,0,0.3333333333333333,0.10289999999999999,0,L0,None,"None",0,0,0,0,0
+1.007846161,"random-write",9,0,0.5,0.07202999999999998,0,L0,None,"None",0,0,0,0,0
+1.007846161,"random-write",10,0,0.6666666666666666,0.05042099999999999,0,L0,L0,"Some(L0)",1,15329154,1,0,1
+1.007846161,"random-write",11,0,0.16666666666666666,0.3352947,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 4 })",4,29138937,0,1,0
+1.007846161,"random-write",12,0,0.5,0.23470628999999998,0,L0,None,"None",0,0,0,0,0
+1.007846161,"random-write",13,0,0.5,0.16429440299999998,0,L0,None,"None",0,0,0,0,0
+1.007846161,"random-write",14,0,0.6666666666666666,0.11500608209999998,0,L0,L0,"Some(L0)",1,15329151,1,0,1
+1.007846161,"random-write",15,0,0.16666666666666666,0.38050425746999994,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 2 })",4,25541680,0,0.819061648069829,0
+1.007846161,"random-write",16,0,0.3333333333333333,0.4111950803724326,0,DeepDebt,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 2 })",2,19515872,0,1,0
+2.015768746,"random-write",17,0,0.5,0.28783655626070276,0,L0,None,"None",0,0,0,0,0
+2.015768746,"random-write",18,0,0.5,0.20148558938249192,0,L0,None,"None",0,0,0,0,0
+2.015768746,"random-write",19,0,0.6666666666666666,0.14103991256774434,0,L0,L0,"Some(L0)",1,15329112,1,0,1
+2.015768746,"random-write",20,0,0.16666666666666666,0.398727938797421,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 2 })",4,34055521,0,0.821168178895767,0
+2.015768746,"random-write",21,0,0.5,0.4791095571581947,0,L0,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 2 })",7,26522910,0,1,0
+2.015768746,"random-write",22,0,0.8333333333333334,0.45583656130285055,0,L0,L0,"Some(L0)",10,19161362,1,0,1
+2.015768746,"random-write",23,0,0.16666666666666666,0.6190855929119954,0,DeepDebt,FocusReselected,"Some(TrivialMove { level: 2 })",14,0,0,1,0
+2.015768746,"random-write",24,0,0.16666666666666666,0.7333599150383967,0,DeepDebt,FocusReselected,"Some(TrivialMove { level: 1 })",6,0,0,0.30829574280065797,0
+2.015768746,"random-write",25,0,0.16666666666666666,0.8133519405268776,0,DeepDebt,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 2 })",4,21284807,0,0.8914056683395367,0
+2.015768746,"random-write",26,0,0.5,0.6940748949746492,0,DeepDebt,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 2 })",2,12007031,0,1,0
+2.015768746,"random-write",27,0,0.6666666666666666,0.48585242648225446,0,L0,L0,"Some(L0)",1,15329134,1,0,1
+2.015768746,"random-write",28,0,0.16666666666666666,0.6400966985375781,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 4 })",4,47138077,0,1,0
+3.024509448,"random-write",29,0,0.6666666666666666,0.5530310201988389,0,L0,L0,"Some(L0)",10,15329179,1,0,1
+3.024509448,"random-write",30,0,0.16666666666666666,0.6871217141391872,0,DeepDebt,FocusReselected,"Some(TrivialMove { level: 2 })",13,0,0,1,0
+3.024509448,"random-write",31,0,0.16666666666666666,0.780985199897431,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 2 })",4,25541569,0,0.8191735252838516,0
+3.024509448,"random-write",32,0,0.3333333333333333,0.6914979561589756,0,DeepDebt,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 2 })",2,25794930,0,1,0
+3.024509448,"random-write",33,0,0.6666666666666666,0.5922469068662145,0,L0,L0,"Some(L0)",9,15329046,1,0,1
+3.024509448,"random-write",34,0,0.16666666666666666,0.7145728348063501,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 2, batch_len: 8 })",12,72368014,0,1,0
+3.024509448,"random-write",35,0,1,0.8002009843644451,0,L0,L0,"Some(L0)",6,37573521,1,0,1
+3.024509448,"random-write",36,0,0.3333333333333333,0.8601406890551115,0,DeepDebt,FocusReselected,"Some(TrivialMove { level: 1 })",9,0,0,0.8603820480892239,0
+3.024509448,"random-write",37,0,0.3333333333333333,0.8009182388464515,0,DeepDebt,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 2 })",2,19665488,0,1,0
+4.032898629,"random-write",38,0,0.5,0.6624503877178761,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 2, batch_len: 8 })",8,102706244,0,1,0
+4.032898629,"random-write",39,0,1,0.46371527140251323,0,L0,L0,"Some(L0)",1,30658274,1,0,1
+4.032898629,"random-write",40,0,0,0.6246006899817592,0,DeepDebt,FocusReselected,"Some(TrivialMove { level: 1 })",8,0,0,0.9017558470865008,0
+4.032898629,"random-write",41,0,0,0.5925077249229614,0,DeepDebt,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 2 })",2,15158659,0,1,0
+4.032898629,"random-write",42,0,0.16666666666666666,0.414755407446073,0,DeepDebt,None,"None",0,0,0,0,0
+4.032898629,"random-write",43,0,0.16666666666666666,0.2903287852122511,0,DeepDebt,None,"None",0,0,0,0,0
+4.032898629,"random-write",44,0,0.3333333333333333,0.20323014964857575,0,L0,None,"None",0,0,0,0,0
+4.032898629,"random-write",45,0,0.5,0.14226110475400303,0,L0,None,"None",0,0,0,0,0
+4.032898629,"random-write",46,0,0.6666666666666666,0.09958277332780212,0,L0,L0,"Some(L0)",1,15329041,1,0,1
+4.032898629,"random-write",47,0,0.16666666666666666,0.3697079413294615,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 2 })",4,25541691,0,0.8204522806426163,0
+5.045234248,"random-write",48,0,0.5,0.40321751785396287,0,L0,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 2 })",2,26664510,0,1,0
+5.045234248,"random-write",49,0,0.8333333333333334,0.39236812200628834,0,L0,L0,"Some(L0)",9,19161466,1,0,1
+5.045234248,"random-write",50,0,0.16666666666666666,0.5746576854044019,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 2, batch_len: 8 })",13,119195086,0,1,0
+5.045234248,"random-write",51,0,1,0.7022603797830813,0,L0,L0,"Some(L0)",7,48678244,1,0,1
+6.054150323,"random-write",52,0,0,0.7915822658481568,0,DeepDebt,FocusReselected,"Some(TrivialMove { level: 1 })",9,0,0,0.8886759433538955,0
+6.054150323,"random-write",53,0,0,0.7558187162359216,0,DeepDebt,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 1 })",5,8513793,0,0.9978453257022734,0
+6.054150323,"random-write",54,0,0,0.729073101365145,0,DeepDebt,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 1 })",3,15630983,0,1,0
+6.054150323,"random-write",55,0,0.16666666666666666,0.6326357526168258,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 2, batch_len: 2 })",8,34055621,0,0.9108746055213793,0
+6.054150323,"random-write",56,0,0.5,0.5448311489631257,0,DeepDebt,FocusContinued,"Some(LevelBatch { level: 2, batch_len: 8 })",8,114709488,0,1,0
+6.054150323,"random-write",57,0,1,0.38138180427418794,0,L0,L0,"Some(L0)",1,30658313,1,0,1
+6.054150323,"random-write",58,0,0,0.5669672629919316,0,DeepDebt,FocusReselected,"Some(TrivialMove { level: 1 })",8,0,0,1,0
+6.054150323,"random-write",59,0,0,0.3968770840943521,0,DeepDebt,None,"None",0,0,0,0,0
+6.054150323,"random-write",60,0,0,0.27781395886604643,0,DeepDebt,None,"None",0,0,0,0,0
+6.054150323,"random-write",61,0,0.16666666666666666,0.1944697712062325,0,DeepDebt,None,"None",0,0,0,0,0
+7.064324326,"random-write",62,0,0.3333333333333333,0.13612883984436272,0,L0,None,"None",0,0,0,0,0
+7.064324326,"random-write",63,0,0.5,0.0952901878910539,0,L0,None,"None",0,0,0,0,0
+7.064324326,"random-write",64,0,0.6666666666666666,0.06670313152373772,0,L0,L0,"Some(L0)",1,17573945,1,0,1
+7.064324326,"random-write",65,0,0.16666666666666666,0.3466921920666164,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 4 })",4,50876363,0,1,0
+7.064324326,"random-write",66,0,0.6666666666666666,0.3528198608321295,0,L0,L0,"Some(L0)",10,15328977,1,0,1
+7.064324326,"random-write",67,0,0.16666666666666666,0.5469739025824907,0,DeepDebt,FocusReselected,"Some(TrivialMove { level: 2 })",13,0,0,1,0
+7.064324326,"random-write",68,0,0.16666666666666666,0.6828817318077434,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 2 })",4,34055495,0,0.8205886035280049,0
+7.064324326,"random-write",69,0,0.5,0.6780172122654203,0,DeepDebt,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 2 })",6,28751233,0,1,0
+7.064324326,"random-write",70,0,0.8333333333333334,0.5998823318079927,0,L0,L0,"Some(L0)",9,19161414,1,0,1
+7.064324326,"random-write",71,0,0.16666666666666666,0.7199176322655949,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 2, batch_len: 2 })",13,29798763,0,0.8032720625523333,0
+8.078186424,"random-write",72,0,0.5,0.8039423425859165,0,DeepDebt,FocusContinued,"Some(LevelBatch { level: 2, batch_len: 8 })",13,120911244,0,1,0
+8.078186424,"random-write",73,0,1,0.8627596398101414,0,L0,L0,"Some(L0)",7,48657285,1,0,1
+8.078186424,"random-write",74,0,0,0.903931747867099,0,DeepDebt,FocusReselected,"Some(TrivialMove { level: 1 })",9,0,0,0.8881347038712537,0
+8.078186424,"random-write",75,0,0,0.8350200848732412,0,DeepDebt,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 1 })",5,8513876,0,0.9924157666820145,0
+8.078186424,"random-write",76,0,0,0.7845140594112687,0,DeepDebt,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 1 })",3,13376551,0,1,0
+8.078186424,"random-write",77,0,0.16666666666666666,0.6678027773407568,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 2, batch_len: 8 })",8,140478822,0,1,0
+9.09483539,"random-write",78,0,1,0.4674619441385297,0,L0,L0,"Some(L0)",1,30658233,1,0,1
+9.09483539,"random-write",79,0,0,0.6272233608969708,0,DeepDebt,FocusReselected,"Some(TrivialMove { level: 1 })",8,0,0,0.9030878915690459,0
+9.09483539,"random-write",80,0,0,0.5935135164386095,0,DeepDebt,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 2 })",2,22185727,0,1,0
+9.09483539,"random-write",81,0,0.16666666666666666,0.4154594615070266,0,DeepDebt,None,"None",0,0,0,0,0
+9.09483539,"random-write",82,0,0.16666666666666666,0.2908216230549186,0,DeepDebt,None,"None",0,0,0,0,0
+9.09483539,"random-write",83,0,0.3333333333333333,0.203575136138443,0,L0,None,"None",0,0,0,0,0
+9.09483539,"random-write",84,0,0.5,0.1425025952969101,0,L0,None,"None",0,0,0,0,0
+9.09483539,"random-write",85,0,0.6666666666666666,0.09975181670783706,0,L0,L0,"Some(L0)",1,15329099,1,0,1
+9.09483539,"random-write",86,0,0,0.36982627169548593,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 2 })",4,25541568,0,0.8201747291874849,0
+10.10279649,"random-write",87,0,0.3333333333333333,0.45887839018684007,0,DeepDebt,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 2 })",8,32412278,0,1,0
+10.10279649,"random-write",88,0,0.6666666666666666,0.4437184279518024,0,L0,L0,"Some(L0)",9,15329081,1,0,1
+10.10279649,"random-write",89,0,0.16666666666666666,0.6106028995662616,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 2, batch_len: 2 })",12,38312434,0,0.9020161198473302,0
+10.10279649,"random-write",90,0,0.6666666666666666,0.7274220296963831,0,DeepDebt,L0,"Some(L0)",13,29914347,1,0,1
+10.10279649,"random-write",91,0,0.3333333333333333,0.8091954207874681,0,DeepDebt,FocusReselected,"Some(TrivialMove { level: 1 })",16,0,0,0.18063883998956973,0
+10.10279649,"random-write",92,0,0.3333333333333333,0.8664367945512277,0,DeepDebt,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 4 })",14,42569301,0,0.8818510646374778,0
+10.10279649,"random-write",93,0,0.6666666666666666,0.8065057561858593,0,DeepDebt,L0,"Some(L0)",8,21804698,1,0,1
+11.110257034,"random-write",94,0,0.3333333333333333,0.8645540293301015,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 2, batch_len: 5 })",10,38471209,0,0.9491427812327528,0
+11.110257034,"random-write",95,0,0.6666666666666666,0.905187820531071,0,DeepDebt,L0,"Some(L0)",15,35764795,1,0,1
+11.110257034,"random-write",96,0,0.5,0.9336314743717498,0,DeepDebt,FocusReselected,"Some(TrivialMove { level: 1 })",17,0,0,0.2612549819995521,0
+11.110257034,"random-write",97,0,0.5,0.9535420320602248,0,DeepDebt,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 5 })",14,63854012,0,0.9970633829871085,0
+11.110257034,"random-write",98,0,1,0.8674794224421573,0,L0,L0,"Some(L0)",5,34915326,1,0,1
+11.110257034,"random-write",99,0,0,0.90723559570951,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 6 })",11,82609398,0,0.9438372438361463,0
+12.117388825,"random-write",100,0,1,0.8350649169966569,0,L0,L0,"Some(L0)",5,28707813,1,0,1
+12.117388825,"random-write",101,0,0.3333333333333333,0.8845454418976597,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 5 })",9,96974605,0,0.9640742905134038,0
+13.124197213,"random-write",102,0,1,0.8328745030386889,0,L0,L0,"Some(L0)",4,35645669,1,0,1
+13.124197213,"random-write",103,0,0,0.8830121521270822,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 8 })",9,121501872,0,1,0
+13.124197213,"random-write",104,0,1,0.8657558944703723,0,L0,L0,"Some(L0)",9,30658196,1,0,1
+14.131106789,"random-write",105,0,0,0.9060291261292606,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 7 })",15,131656311,0,1,0
+14.131106789,"random-write",106,0,1,0.9030983546944436,0,L0,L0,"Some(L0)",9,30658281,1,0,1
+14.131106789,"random-write",107,0,0,0.9321688482861104,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 7 })",15,140538061,0,1,0
+15.139928314,"random-write",108,0,1,0.9388803029845423,0,L0,L0,"Some(L0)",9,30658066,1,0,1
+15.139928314,"random-write",109,0,0,0.9572162120891796,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 5 })",15,114937754,0,0.9026889452559634,0
+16.150730865,"random-write",110,0,1,0.967156965985619,0,L0,L0,"Some(L0)",10,37147063,1,0,1
+16.150730865,"random-write",111,0,0,0.9770098761899333,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 8 })",15,157718041,0,1,0
+17.157574973,"random-write",112,0,1,0.9839069133329532,0,L0,L0,"Some(L0)",9,30658136,1,0,1
+17.157574973,"random-write",113,0,0,0.9887348393330673,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 7 })",15,158820416,0,1,0
+18.167068726,"random-write",114,0,1,0.9921143875331471,0,L0,L0,"Some(L0)",9,30658228,1,0,1
+18.167068726,"random-write",115,0,0,0.9944800712732029,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 7 })",15,162823145,0,1,0
+19.174656393,"random-write",116,0,1,0.9961360498912419,0,L0,L0,"Some(L0)",9,30658091,1,0,1
+19.174656393,"random-write",117,0,0,0.9972952349238693,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 7 })",15,166209356,0,1,0
+20.185104721,"random-write",118,0,1,0.9981066644467085,0,L0,L0,"Some(L0)",9,30658136,1,0,1
+20.185104721,"random-write",119,0,0,0.9986746651126959,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 7 })",15,168923547,0,1,0
+21.194536608,"random-write",120,0,1,0.9990722655788871,0,L0,L0,"Some(L0)",9,30658277,1,0,1
+21.194536608,"random-write",121,0,0,0.999350585905221,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 7 })",15,171157391,0,1,0
+22.200858631,"random-write",122,0,1,0.9995454101336547,0,L0,L0,"Some(L0)",9,30658207,1,0,1
+22.200858631,"random-write",123,0,0,0.9996817870935581,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 7 })",15,172990164,0,1,0
+23.207193815,"random-write",124,0,1,0.9997772509654907,0,L0,L0,"Some(L0)",9,30658147,1,0,1
+24.214392781,"random-write",125,0,0,0.9998440756758435,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 7 })",15,174479797,0,1,0
+25.221365312,"random-write",126,0,1,0.9998908529730903,0,L0,L0,"Some(L0)",9,30658218,1,0,1
+25.221365312,"random-write",127,0,0,0.9999235970811631,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 7 })",15,175674186,0,1,0
+26.230429249,"random-write",128,0,1,0.9999465179568141,0,L0,L0,"Some(L0)",9,30658128,1,0,1
+26.230429249,"random-write",129,0,0,0.9999625625697699,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 5 })",15,136221912,0,0.9044123170921571,0
+27.237581687,"random-write",130,0,1,0.9999737937988389,0,L0,L0,"Some(L0)",11,37102038,1,0,1
+27.237581687,"random-write",131,0,0,0.9999816556591872,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 8 })",16,182542585,0,1,0
+28.246543817,"random-write",132,0,1,0.9999871589614309,0,L0,L0,"Some(L0)",9,30658265,1,0,1
+28.246543817,"random-write",133,0,0,0.9999910112730015,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 7 })",15,178135486,0,1,0
+30.268870154,"random-write",134,0,1,0.999993707891101,0,L0,L0,"Some(L0)",9,30658224,1,0,1
+30.268870154,"random-write",135,0,0,0.9999955955237707,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 7 })",15,178667670,0,1,0
+31.277705351,"random-write",136,0,1,0.9999969168666394,0,L0,L0,"Some(L0)",9,30658229,1,0,1
+31.277705351,"random-write",137,0,0,0.9999978418066475,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 7 })",15,179124487,0,1,0
+32.286447133,"random-write",138,0,1,0.9999984892646532,0,L0,L0,"Some(L0)",9,30658288,1,0,1
+32.286447133,"random-write",139,0,0,0.9999989424852571,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 7 })",15,179489596,0,1,0
+33.294482342,"random-write",140,0,1,0.9999992597396798,0,L0,L0,"Some(L0)",9,30658203,1,0,1
+33.294482342,"random-write",141,0,0,0.9999994818177758,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 7 })",15,179787908,0,1,0
+35.310040863,"random-write",142,0,1,0.9999996372724429,0,L0,L0,"Some(L0)",9,30658210,1,0,1
+35.310040863,"random-write",143,0,0,0.99999974609071,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 7 })",15,180030041,0,1,0
+36.316476015,"random-write",144,0,1,0.9999998222634969,0,L0,L0,"Some(L0)",9,30658096,1,0,1
+36.316476015,"random-write",145,0,0,0.9999998755844477,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 7 })",15,180202539,0,1,0
+38.332078235,"random-write",146,0,1,0.9999999129091133,0,L0,L0,"Some(L0)",9,30658205,1,0,1
+38.332078235,"random-write",147,0,0,0.9999999390363792,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 7 })",15,180397671,0,1,0
+39.340262601,"random-write",148,0,1,0.9999999573254654,0,L0,L0,"Some(L0)",9,30658241,1,0,1
+39.340262601,"random-write",149,0,0,0.9999999701278257,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 7 })",15,180507605,0,1,0
+40.348641866,"random-write",150,0,1,0.999999979089478,0,L0,L0,"Some(L0)",9,30658208,1,0,1
+40.348641866,"random-write",151,0,0,0.9999999853626345,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 7 })",15,180634419,0,1,0
+41.35571057,"random-write",152,0,1,0.9999999897538441,0,L0,L0,"Some(L0)",9,30658236,1,0,1
+41.35571057,"random-write",153,0,0,0.9999999928276908,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 7 })",15,180751927,0,1,0
+42.361936069,"random-write",154,0,1,0.9999999949793834,0,L0,L0,"Some(L0)",9,30658295,1,0,1
+42.361936069,"random-write",155,0,0,0.9999999964855684,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 7 })",15,180798593,0,1,0
+44.37582334,"random-write",156,0,1,0.9999999975398979,0,L0,L0,"Some(L0)",9,30658316,1,0,1
+44.37582334,"random-write",157,0,0,0.9999999982779284,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 7 })",15,180848346,0,1,0
+45.383025102,"random-write",158,0,1,0.9999999987945498,0,L0,L0,"Some(L0)",9,30658230,1,0,1
+45.383025102,"random-write",159,0,0,0.9999999991561848,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 7 })",15,180884888,0,1,0
+46.391552052,"random-write",160,0,1,0.9999999994093294,0,L0,L0,"Some(L0)",9,30658260,1,0,1
+46.391552052,"random-write",161,0,0,0.9999999995865305,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 7 })",15,180953903,0,1,0
+47.404683056,"random-write",162,0,1,0.9999999997105713,0,L0,L0,"Some(L0)",9,30658233,1,0,1
+47.404683056,"random-write",163,0,0,0.9999999997973998,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 7 })",15,180973525,0,1,0
+48.411319235,"random-write",164,0,1,0.9999999998581799,0,L0,L0,"Some(L0)",9,30658101,1,0,1
+48.411319235,"random-write",165,0,0,0.9999999999007259,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 7 })",15,181019086,0,1,0
+49.418234416,"random-write",166,0,1,0.999999999930508,0,L0,L0,"Some(L0)",9,30658251,1,0,1
+49.54953385,"random-write",167,0,0,0.9999999999513556,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 7 })",15,181015327,0,1,0
+50.584031046,"drain",168,0,0.3333333333333333,0.9999999999659488,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 2, batch_len: 8 })",8,68954548,0,0.3058723527245879,0
+51.584771733,"drain",169,0,0.3333333333333333,0.9842577814817488,0,DeepDebt,FocusContinued,"Some(LevelBatch { level: 2, batch_len: 8 })",8,67202916,0,0.4406571198453379,0
+51.584771733,"drain",170,0,0.3333333333333333,0.8920437252354664,0,DeepDebt,FocusContinued,"Some(LevelBatch { level: 2, batch_len: 8 })",8,66283673,0,0.7878122707497607,0
+51.584771733,"drain",171,0,0.3333333333333333,0.7462993706347971,0,DeepDebt,FocusReselected,"Some(LevelBatch { level: 2, batch_len: 2 })",8,18521705,0,0.9282015310238602,0
+51.584771733,"drain",172,0,0.3333333333333333,0.623979703144004,0,DeepDebt,FocusContinued,"Some(LevelBatch { level: 2, batch_len: 8 })",8,66507691,0,1,0
+51.584771733,"drain",173,0,0.3333333333333333,0.43678579220080277,0,DeepDebt,None,"None",0,0,0,0,0
+51.584771733,"drain",174,0,0.3333333333333333,0.3057500545405619,0,L0,None,"None",0,0,0,0,0

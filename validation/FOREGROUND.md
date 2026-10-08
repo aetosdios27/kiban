@@ -34,6 +34,13 @@ not interval maxima. Timings overlap across threads and do not measure lock hold
 or CPU time. Ordinary builds contain neither sampling nor clocks. Diagnostic
 rates must not be substituted for primary rates.
 
+`foreground-concurrency-plan.json` separately measures the complete
+1/2/4/8/16/32/64-thread curve: one million 50/50 mixed operations over 100,000
+preloaded keys, three repetitions and unchanged primary engine settings. Use
+the same paired command above with that plan and a new output/data directory.
+Worker counts above this host's 22 logical CPUs are oversubscription experiments,
+not evidence of scaling on a 64-core machine.
+
 The CPU profile uses a locally extracted Fedora perf package, with no root/global
 configuration changes:
 
@@ -110,3 +117,11 @@ python3 validation/foreground_analyze.py validation/foreground-results/large
 A complete status record and successful full reopened verification are required.
 Prepared commands or partial runs are not measured successes. Generated evidence
 is excluded from crate packaging. No automatic retries or workload resizing.
+
+`foreground-overnight-plan.json` prepares an eight-hour transition run with the
+same engine settings and explicit 9,600-second stages. Run it with the endurance
+command, replacing the plan and both directories with new `overnight` names.
+That plan is prepared, not part of the measured one-hour campaign. To test a
+larger operation budget such as 1B, copy the 100M case into a separately named
+plan, set `operations` and its timeout explicitly, and keep all other parameters
+recorded. No harness rewrite is needed.

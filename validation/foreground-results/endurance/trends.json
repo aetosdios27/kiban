@@ -1,0 +1,242 @@
+[
+  {
+    "run": "final-write-100m-r0",
+    "stage": "random-write",
+    "policy": "first versus last third of >=40-second minute windows",
+    "ops_s": {
+      "first": 152459.00769447765,
+      "last": 161437.76263444312,
+      "ratio": 1.0588929121063058
+    },
+    "write_median_interval_p99_ns": {
+      "first": 55808.0,
+      "last": 54272.0,
+      "ratio": 0.9724770642201835
+    },
+    "read_median_interval_p99_ns": {
+      "first": null,
+      "last": null,
+      "ratio": null
+    },
+    "rss_bytes_median": {
+      "first": 252121088,
+      "last": 277303296,
+      "ratio": 1.0998814030185369
+    },
+    "db_bytes_median": {
+      "first": 383217613.5,
+      "last": 397644671,
+      "ratio": 1.037647167018851
+    },
+    "debt_bytes_median": {
+      "first": 134212494,
+      "last": 134993438.0,
+      "ratio": 1.0058187131221927
+    },
+    "fds_median": {
+      "first": 147,
+      "last": 153,
+      "ratio": 1.0408163265306123
+    }
+  },
+  {
+    "run": "final-hour-transitions-r0",
+    "stage": "write-burst",
+    "policy": "first versus last third of >=40-second minute windows",
+    "ops_s": {
+      "first": 170667.86864974274,
+      "last": 169869.9814223196,
+      "ratio": 0.9953249124528495
+    },
+    "write_median_interval_p99_ns": {
+      "first": 56320.0,
+      "last": 55808.0,
+      "ratio": 0.990909090909091
+    },
+    "read_median_interval_p99_ns": {
+      "first": null,
+      "last": null,
+      "ratio": null
+    },
+    "rss_bytes_median": {
+      "first": 325220352.0,
+      "last": 324866048.0,
+      "ratio": 0.9989105724847134
+    },
+    "db_bytes_median": {
+      "first": 395717473.75,
+      "last": 407928818.0,
+      "ratio": 1.0308587440788999
+    },
+    "debt_bytes_median": {
+      "first": 134993703.0,
+      "last": 134996987.5,
+      "ratio": 1.0000243307645247
+    },
+    "fds_median": {
+      "first": 151.5,
+      "last": 154.5,
+      "ratio": 1.0198019801980198
+    }
+  },
+  {
+    "run": "final-hour-transitions-r0",
+    "stage": "steady",
+    "policy": "first versus last third of >=40-second minute windows",
+    "ops_s": {
+      "first": 185043.66430275678,
+      "last": 182610.53276376007,
+      "ratio": 0.9868510410871687
+    },
+    "write_median_interval_p99_ns": {
+      "first": 45568.0,
+      "last": 45824.0,
+      "ratio": 1.0056179775280898
+    },
+    "read_median_interval_p99_ns": {
+      "first": 61440.0,
+      "last": 62464.0,
+      "ratio": 1.0166666666666666
+    },
+    "rss_bytes_median": {
+      "first": 323567616.0,
+      "last": 324739072.0,
+      "ratio": 1.0036204364777963
+    },
+    "db_bytes_median": {
+      "first": 398872681.0,
+      "last": 401366487.0,
+      "ratio": 1.006252135377504
+    },
+    "debt_bytes_median": {
+      "first": 134992356.0,
+      "last": 134996756.0,
+      "ratio": 1.000032594438162
+    },
+    "fds_median": {
+      "first": 152.25,
+      "last": 153.0,
+      "ratio": 1.0049261083743843
+    }
+  },
+  {
+    "run": "final-hour-transitions-r0",
+    "stage": "read-recovery",
+    "policy": "first versus last third of >=40-second minute windows",
+    "ops_s": {
+      "first": 512533.1407984863,
+      "last": 511723.66917931667,
+      "ratio": 0.9984206453110358
+    },
+    "write_median_interval_p99_ns": {
+      "first": 16384.0,
+      "last": 16896.0,
+      "ratio": 1.03125
+    },
+    "read_median_interval_p99_ns": {
+      "first": 19968.0,
+      "last": 19968.0,
+      "ratio": 1.0
+    },
+    "rss_bytes_median": {
+      "first": 256065536.0,
+      "last": 313823232.0,
+      "ratio": 1.225558257086186
+    },
+    "db_bytes_median": {
+      "first": 190327715.75,
+      "last": 191513558.0,
+      "ratio": 1.0062305284615385
+    },
+    "debt_bytes_median": {
+      "first": 0.0,
+      "last": 0.0,
+      "ratio": null
+    },
+    "fds_median": {
+      "first": 58.0,
+      "last": 58.0,
+      "ratio": 1.0
+    }
+  },
+  {
+    "run": "final-concurrency-transition-10min-r0",
+    "stage": "high-concurrency",
+    "policy": "first versus last third of >=40-second minute windows",
+    "ops_s": {
+      "first": 289910.75125756447,
+      "last": 187552.91434090945,
+      "ratio": 0.6469332838721887
+    },
+    "write_median_interval_p99_ns": {
+      "first": 120832.0,
+      "last": 167936.0,
+      "ratio": 1.3898305084745763
+    },
+    "read_median_interval_p99_ns": {
+      "first": 167936.0,
+      "last": 311296.0,
+      "ratio": 1.853658536585366
+    },
+    "rss_bytes_median": {
+      "first": 280436736,
+      "last": 315949056,
+      "ratio": 1.1266321970028919
+    },
+    "db_bytes_median": {
+      "first": 362918019,
+      "last": 395782694,
+      "ratio": 1.0905567463708656
+    },
+    "debt_bytes_median": {
+      "first": 115824807,
+      "last": 131837409,
+      "ratio": 1.1382484669281598
+    },
+    "fds_median": {
+      "first": 138,
+      "last": 149,
+      "ratio": 1.0797101449275361
+    }
+  },
+  {
+    "run": "final-concurrency-transition-10min-r0",
+    "stage": "low-concurrency",
+    "policy": "first versus last third of >=40-second minute windows",
+    "ops_s": {
+      "first": 211181.0313506405,
+      "last": 208829.11853341444,
+      "ratio": 0.9888630489102925
+    },
+    "write_median_interval_p99_ns": {
+      "first": 7296.0,
+      "last": 7296.0,
+      "ratio": 1.0
+    },
+    "read_median_interval_p99_ns": {
+      "first": 16384.0,
+      "last": 16896.0,
+      "ratio": 1.03125
+    },
+    "rss_bytes_median": {
+      "first": 235384832,
+      "last": 165187584.0,
+      "ratio": 0.7017766718290497
+    },
+    "db_bytes_median": {
+      "first": 204937035,
+      "last": 202320343.5,
+      "ratio": 0.9872317294919388
+    },
+    "debt_bytes_median": {
+      "first": 626249,
+      "last": 0.0,
+      "ratio": 0.0
+    },
+    "fds_median": {
+      "first": 70,
+      "last": 62.0,
+      "ratio": 0.8857142857142857
+    }
+  }
+]

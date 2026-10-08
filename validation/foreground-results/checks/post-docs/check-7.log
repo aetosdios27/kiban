@@ -1,0 +1,10 @@
+   Compiling kiban v0.1.0 (/home/aetos/dev/personal/kiban)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.40s
+     Running unittests src/lib.rs (target/debug/deps/kiban-b0c25a1e286cf3bd)
+
+running 3 tests
+test engine_lock::loom_tests::loom_single_writer_excludes_concurrent_readers ... ok
+test engine_lock::loom_tests::loom_two_writers_never_share_the_gate ... ok
+test engine_lock::loom_tests::loom_write_handoff_is_ordered_and_visible ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 268 filtered out; finished in 16.13s

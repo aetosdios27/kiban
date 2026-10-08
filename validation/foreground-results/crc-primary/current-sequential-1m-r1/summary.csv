@@ -1,0 +1,3 @@
+stage,threads,elapsed_s,operations,reads,writes,total_ops_s,read_ops_s,write_ops_s,all_p50_ns,all_p95_ns,all_p99_ns,all_p999_ns,read_p50_ns,read_p95_ns,read_p99_ns,read_p999_ns,write_p50_ns,write_p95_ns,write_p99_ns,write_p999_ns,read_misses,app_bytes,sync_calls,all_max_ns,read_max_ns,write_max_ns
+"sequential-write",4,3.062230059,1000000,0,1000000,326559.3964963427,0,326559.3964963427,1760,24576,47104,233472,,,,,1760,24576,47104,233472,0,136000000,0,102316568,,102316568
+"total",4,3.062230059,1000000,0,1000000,326559.3964963427,0,326559.3964963427,1760,24576,47104,233472,,,,,1760,24576,47104,233472,0,136000000,0,102316568,,102316568

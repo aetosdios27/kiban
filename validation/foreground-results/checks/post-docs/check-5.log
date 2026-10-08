@@ -1,0 +1,33 @@
+   Compiling kiban v0.1.0 (/home/aetos/dev/personal/kiban)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.45s
+     Running unittests examples/basic.rs (target/debug/examples/basic-a34e014af7de4402)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/maintenance_verify.rs (target/debug/examples/maintenance_verify-bc44dfe601a77d28)
+
+running 3 tests
+test config::tests::rejects_ambiguous_or_invalid_config ... ok
+test workload::tests::deterministic_partition_covers_exact_budget ... ok
+test random::tests::keyed_values_are_stable_distinct_and_prefix_consistent ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/scale/main.rs (target/debug/examples/scale-6bc38fef5afc5837)
+
+running 4 tests
+test config::tests::rejects_ambiguous_or_invalid_config ... ok
+test workload::tests::deterministic_partition_covers_exact_budget ... ok
+test random::tests::keyed_values_are_stable_distinct_and_prefix_consistent ... ok
+test metrics::tests::bounds_and_merge ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/torture/main.rs (target/debug/examples/torture-8f4d001c95e7f0b1)
+
+running 1 test
+test workload::tests::keyed_values_are_stable_distinct_and_prefix_consistent ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

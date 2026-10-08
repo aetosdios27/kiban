@@ -1,0 +1,13 @@
+observed_elapsed_s,stage,sequence,gap_before,pressure_l0,pressure_debt,pressure_read,dominant,tier,chosen,candidates,predicted_rewrite_bytes,l0_relief,debt_relief,read_relief
+1.007251142,"mixed",1,0,0.3333333333333333,0,0.37484259976753187,Read,None,"None",0,0,0,0,0
+1.007251142,"mixed",2,0,0.5,0,0.8245813966949014,Read,None,"None",0,0,0,0,0
+1.007251142,"mixed",3,0,0.6666666666666666,0,1,Read,L0,"Some(L0)",1,11499128,1,0,1
+1.007251142,"mixed",4,0,0.16666666666666666,0.19305603504180907,1,Read,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 2 })",2,23413713,0,1,0
+1.007251142,"mixed",5,0,0.8333333333333334,0.13513922452926633,1,Read,L0,"Some(L0)",1,19131513,1,0,1
+1.007251142,"mixed",6,0,0.3333333333333333,0.35503434967994685,1,Read,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 3 })",3,26259969,0,1,0
+1.7733619919999999,"mixed",7,0,0.8333333333333334,0.24852404477596277,1,Read,L0,"Some(L0)",1,19131661,1,0,1
+1.7733619919999999,"mixed",8,0,0.3333333333333333,0.4345098916459083,1,Read,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 3 })",3,26264422,0,1,0
+1.7733619919999999,"mixed",9,0,0.8333333333333334,0.3041569241521358,1,Read,L0,"Some(L0)",1,19131537,1,0,1
+1.7733619919999999,"mixed",10,0,0.16666666666666666,0.47352545798285006,1,Read,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 3 })",3,26267465,0,1,0
+2.818955921,"drain",11,0,0.5,0.331467820587995,1,Read,None,"None",0,0,0,0,0
+2.818955921,"drain",12,0,0.5,0.2320274744115965,1,Read,None,"None",0,0,0,0,0

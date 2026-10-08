@@ -1,0 +1,35 @@
+observed_elapsed_s,stage,sequence,gap_before,pressure_l0,pressure_debt,pressure_read,dominant,tier,chosen,candidates,predicted_rewrite_bytes,l0_relief,debt_relief,read_relief
+0.99732698,"low-concurrency",1,0,0.3333333333333333,0,0.37483090970578287,Read,None,"None",0,0,0,0,0
+0.99732698,"low-concurrency",2,0,0.5,0,0.824555663219639,Read,None,"None",0,0,0,0,0
+0.99732698,"low-concurrency",3,0,0.6666666666666666,0,1,Read,L0,"Some(L0)",1,11499195,1,0,1
+0.99732698,"low-concurrency",4,0,0,0.1930224895477295,1,Read,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 2 })",2,23412155,0,1,0
+0.99732698,"low-concurrency",5,0,0.16666666666666666,0.13511574268341064,1,Read,None,"None",0,0,0,0,0
+0.99732698,"low-concurrency",6,0,0.16666666666666666,0.09458101987838745,1,Read,None,"None",0,0,0,0,0
+0.99732698,"low-concurrency",7,0,0.3333333333333333,0.0662067139148712,1,Read,None,"None",0,0,0,0,0
+0.99732698,"low-concurrency",8,0,0.5,0.04634469974040984,1,Read,None,"None",0,0,0,0,0
+0.99732698,"low-concurrency",9,0,0.6666666666666666,0.03244128981828689,1,Read,L0,"Some(L0)",1,15305298,1,0,1
+0.99732698,"low-concurrency",10,0,0,0.2538842063319683,1,Read,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 1 })",3,12770831,0,0.7737308863443496,0
+0.99732698,"low-concurrency",11,0,0,0.3073998640795946,1,Read,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 2 })",2,16518757,0,1,0
+0.99732698,"low-concurrency",12,0,0.16666666666666666,0.2151799048557162,1,Read,None,"None",0,0,0,0,0
+0.99732698,"low-concurrency",13,0,0.16666666666666666,0.15062593339900132,1,Read,None,"None",0,0,0,0,0
+0.99732698,"low-concurrency",14,0,0.3333333333333333,0.10543815337930092,1,Read,None,"None",0,0,0,0,0
+2.006758198,"high-concurrency",15,0,0.5,0.07380670736551063,1,Read,None,"None",0,0,0,0,0
+2.006758198,"high-concurrency",16,0,0.6666666666666666,0.05166469515585744,1,Read,L0,"Some(L0)",1,15305336,1,0,1
+2.006758198,"high-concurrency",17,0,0,0.267186595508026,1,Read,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 1 })",3,12770836,0,0.7746411929034879,0
+2.006758198,"high-concurrency",18,0,0.16666666666666666,0.3165574227333037,1,Read,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 2 })",2,16512293,0,1,0
+2.006758198,"high-concurrency",19,0,0.16666666666666666,0.22159019591331255,1,Read,None,"None",0,0,0,0,0
+2.006758198,"high-concurrency",20,0,0.16666666666666666,0.1551131371393188,1,Read,None,"None",0,0,0,0,0
+2.006758198,"high-concurrency",21,0,0.3333333333333333,0.10857919599752315,1,Read,None,"None",0,0,0,0,0
+2.006758198,"high-concurrency",22,0,0.5,0.0760054371982662,1,Read,None,"None",0,0,0,0,0
+2.006758198,"high-concurrency",23,0,0.6666666666666666,0.05320380603878634,1,Read,L0,"Some(L0)",1,15305285,1,0,1
+2.006758198,"high-concurrency",24,0,0,0.268033946880959,1,Read,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 1 })",3,12770838,0,0.7760039403665911,0
+2.006758198,"high-concurrency",25,0,0.16666666666666666,0.3169204947655238,1,Read,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 2 })",2,16502643,0,1,0
+2.006758198,"high-concurrency",26,0,0.16666666666666666,0.22184434633586664,1,Read,None,"None",0,0,0,0,0
+2.006758198,"high-concurrency",27,0,0.16666666666666666,0.15529104243510664,1,Read,None,"None",0,0,0,0,0
+2.006758198,"high-concurrency",28,0,0.3333333333333333,0.10870372970457463,1,Read,None,"None",0,0,0,0,0
+2.006758198,"high-concurrency",29,0,0.5,0.07609261079320224,1,Read,None,"None",0,0,0,0,0
+2.006758198,"high-concurrency",30,0,0.6666666666666666,0.05326482755524157,1,Read,L0,"Some(L0)",1,15305139,1,0,1
+2.058097166,"high-concurrency",31,0,0,0.2680875338296847,1,Read,FocusReselected,"Some(LevelBatch { level: 1, batch_len: 1 })",3,12770833,0,0.7759385298492227,0
+2.058097166,"high-concurrency",32,0,0,0.31696899672612844,1,Read,FocusContinued,"Some(LevelBatch { level: 1, batch_len: 2 })",2,16503104,0,1,0
+3.088641807,"drain",33,0,0.16666666666666666,0.2218782977082899,1,Read,None,"None",0,0,0,0,0
+3.088641807,"drain",34,0,0.16666666666666666,0.15531480839580292,1,Read,None,"None",0,0,0,0,0
