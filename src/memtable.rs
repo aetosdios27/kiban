@@ -70,7 +70,7 @@ pub struct Memtable {
     /// seq >= max_active are retained; min_active prunes history.
     min_active: u64,
     max_active: u64,
-    /// Running total of [`entry_size`] over every currently resident
+    /// Running total of `entry_size` over every currently resident
     /// entry (live + retained history) — phase 11.8's flush-threshold
     /// signal. Updated incrementally, never recomputed from scratch.
     logical_bytes: usize,
@@ -104,7 +104,7 @@ impl Memtable {
     }
 
     /// A cheap, deterministic estimate of currently resident bytes
-    /// (live + retained history versions) — see [`entry_size`]. Not
+    /// (live + retained history versions) — see `entry_size`. Not
     /// exact heap accounting; monotonic enough to threshold flushes on.
     pub fn logical_bytes(&self) -> usize {
         self.logical_bytes

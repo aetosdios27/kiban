@@ -1238,7 +1238,7 @@ impl Kiban {
     /// synchronous and deterministic (11.4): compaction happens inline,
     /// on this call, before returning. `SharedKiban::flush` instead
     /// hands compaction to its background worker — see
-    /// [`Kiban::flush_without_compaction`].
+    /// `flush_without_compaction`.
     pub fn flush(&mut self) -> Result<(), DbError> {
         self.flush_without_compaction()?;
         self.maybe_compact()
@@ -2066,7 +2066,7 @@ mod flush_tests {
 
 /// A consistent read boundary captured from the engine's sequence
 /// counter (snapshots.md D3). Copies the active memtable and pins the
-/// frozen memtable and [`Version`] current at capture time. Physical
+/// frozen memtable and `Version` current at capture time. Physical
 /// movement or reclamation cannot change this captured logical view.
 #[derive(Debug, Clone)]
 pub struct Snapshot {
@@ -4460,7 +4460,7 @@ type SnapEntry = (Vec<u8>, Vec<u8>);
 /// A consistent point-in-time view captured from a [`SharedKiban`].
 ///
 /// Capture copies the active memtable (O(its size)) under one lock hold
-/// and pins the immutable published [`Version`]. Reads afterwards never
+/// and pins the immutable published `Version`. Reads afterwards never
 /// touch the engine lock. The version's `Arc<TableEntry>` members keep a
 /// table usable even when a later compaction retires it from live state.
 ///
@@ -4564,7 +4564,7 @@ impl SharedSnapshot {
 }
 
 /// Table count and byte total for one level, read straight from the
-/// currently published [`Version`] — never from the filesystem.
+/// currently published `Version` — never from the filesystem.
 #[derive(Debug, Clone, Copy)]
 pub struct LevelStats {
     pub level: u32,

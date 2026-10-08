@@ -12,7 +12,7 @@
 //! The bound this cache enforces is real: unlike an `Arc<File>` LRU
 //! where an evicted-but-still-cloned handle can keep a descriptor
 //! alive outside the cache's accounting, callers here only ever get a
-//! [`FileLease`] — a private handle that cannot be cloned out from
+//! `FileLease` — a private handle that cannot be cloned out from
 //! under the cache. `capacity` is therefore a hard ceiling on
 //! concurrently open descriptors owned by this cache, not a target.
 //! Streaming compaction opens independent input handles outside this
@@ -67,7 +67,7 @@ pub(crate) struct TableFileCache {
     condvar: Condvar,
 }
 
-/// Raw counters for a [`TableFileCache`] (phase 11.7) — facts only, no
+/// Raw counters for a `TableFileCache` (phase 11.7) — facts only, no
 /// interpretation. `leased` counts descriptors currently checked out
 /// (>= 1 use), which can differ from `resident` since a resident but
 /// idle descriptor has zero current users.
