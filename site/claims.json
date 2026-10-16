@@ -1,100 +1,253 @@
 {
-  "specs": ["Rust 2024", "no runtime dependencies by default", "Linux", "MIT"],
+  "specs": [
+    "Rust 2024",
+    "no runtime dependencies by default",
+    "Linux",
+    "MIT"
+  ],
   "guarantees": {
     "promised": [
       {
-        "key": "Explicit durability",
-        "clause": "Successful sync() makes all previously accepted writes in every live WAL generation survive a crash, provided the OS, filesystem and device honor their persistence contract.",
-        "evidence": ["seeded_crash_fixed_corpus", "shared_seeded_crash_fixed_corpus", "power_loss_recovers_exactly_the_last_synced_state_across_the_flush_pipeline"]
+        "key": "sync()",
+        "clause": "every write accepted before it survives a crash",
+        "detail": "Successful sync() makes all previously accepted writes in every live WAL generation survive a crash, provided the OS, filesystem and device honor their persistence contract.",
+        "evidence": [
+          "seeded_crash_fixed_corpus",
+          "shared_seeded_crash_fixed_corpus",
+          "power_loss_recovers_exactly_the_last_synced_state_across_the_flush_pipeline"
+        ]
       },
       {
-        "key": "Atomic batches",
-        "clause": "A write batch publishes and recovers all its mutations together, without exposing a partial batch.",
-        "evidence": ["atomic_batch_never_exposes_a_prefix_to_gate_free_reads", "malformed_batch_never_applies_a_prefix", "torn_tail_inside_batch_drops_the_whole_batch"]
+        "key": "write(batch)",
+        "clause": "all or nothing, one WAL record",
+        "detail": "A write batch publishes and recovers all its mutations together, without exposing a partial batch.",
+        "evidence": [
+          "atomic_batch_never_exposes_a_prefix_to_gate_free_reads",
+          "malformed_batch_never_applies_a_prefix",
+          "torn_tail_inside_batch_drops_the_whole_batch"
+        ]
       },
       {
-        "key": "Stable snapshots",
-        "clause": "A captured snapshot keeps its logical view across later writes, flushes and compactions.",
-        "evidence": ["snapshot_captures_unflushed_versions_across_rotation_flush_and_compaction", "streaming_snapshot_range_and_backup_match_captured_state"]
+        "key": "snapshot()",
+        "clause": "unmoved by later writes and compactions",
+        "detail": "A captured snapshot keeps its logical view across later writes, flushes and compactions.",
+        "evidence": [
+          "snapshot_captures_unflushed_versions_across_rotation_flush_and_compaction",
+          "streaming_snapshot_range_and_backup_match_captured_state"
+        ]
       },
       {
-        "key": "Failed sync poisons",
-        "clause": "A failed WAL sync poisons the engine and blocks further mutations until a successful reopen of valid on-disk state.",
-        "evidence": ["wal_sync_failure_poisons_and_blocks_all_mutations", "poisoned_runtime_state_clears_on_reopen_when_disk_is_valid"]
+        "key": "a failed sync",
+        "clause": "the engine refuses writes until reopened",
+        "detail": "A failed WAL sync poisons the engine and blocks further mutations until a successful reopen of valid on-disk state.",
+        "evidence": [
+          "wal_sync_failure_poisons_and_blocks_all_mutations",
+          "poisoned_runtime_state_clears_on_reopen_when_disk_is_valid"
+        ]
       },
       {
-        "key": "CRC-32 checksums",
-        "clause": "WAL records, SST blocks and new versioned MANIFEST envelopes use CRC-32 checksums; legacy unversioned MANIFESTs upgrade on their next install.",
-        "evidence": ["corrupted_record_is_reported_not_truncated", "any_single_byte_corruption_is_detected_on_parse_or_read", "checksummed_manifest_rejects_every_single_bit_flip", "legacy_manifest_and_new_envelope_roundtrip"]
+        "key": "WAL, SST, MANIFEST",
+        "clause": "CRC-32 checksummed",
+        "detail": "WAL records, SST blocks and new versioned MANIFEST envelopes use CRC-32 checksums; legacy unversioned MANIFESTs upgrade on their next install.",
+        "evidence": [
+          "corrupted_record_is_reported_not_truncated",
+          "any_single_byte_corruption_is_detected_on_parse_or_read",
+          "checksummed_manifest_rejects_every_single_bit_flip",
+          "legacy_manifest_and_new_envelope_roundtrip"
+        ]
       },
       {
-        "key": "Crash prefix",
-        "clause": "Under the simulated device model, recovered state equals some prefix of acknowledged writes that includes every successfully synced write.",
-        "evidence": ["seeded_crash_fixed_corpus", "shared_seeded_crash_fixed_corpus"]
+        "key": "after a crash",
+        "clause": "a real past state, every synced write in it",
+        "detail": "Under the simulated device model, recovered state equals some prefix of acknowledged writes that includes every successfully synced write.",
+        "evidence": [
+          "seeded_crash_fixed_corpus",
+          "shared_seeded_crash_fixed_corpus"
+        ]
       },
       {
-        "key": "Synced WAL damage",
-        "clause": "Recovery reports corruption without modifying the WAL when a surviving later sync marker with the readable header's private nonce proves damaged bytes were synced; without that proof damage truncates, and deliberate nonce forgery is outside the threat model.",
-        "evidence": ["damaged_records_need_a_later_sync_marker_to_be_corruption", "unreadable_header_disables_matching_marker_proof", "embedded_marker_with_different_nonce_in_torn_unsynced_value_truncates"]
+        "key": "synced WAL damage",
+        "clause": "reported when a later sync mark proves it",
+        "detail": "Recovery reports corruption without modifying the WAL when a surviving later sync marker with the readable header's private nonce proves damaged bytes were synced; without that proof damage truncates, and deliberate nonce forgery is outside the threat model.",
+        "evidence": [
+          "damaged_records_need_a_later_sync_marker_to_be_corruption",
+          "unreadable_header_disables_matching_marker_proof",
+          "embedded_marker_with_different_nonce_in_torn_unsynced_value_truncates"
+        ]
       },
       {
-        "key": "Ordered WAL durability",
-        "clause": "Rotation syncs the closed WAL generation before creating the next, so generations become durable in order.",
-        "evidence": ["shared_frozen_wal_prefix_repro", "rotation_sync_failures_poison_before_creating_the_next_wal"]
+        "key": "WAL rotation",
+        "clause": "old log synced before the next opens",
+        "detail": "Rotation syncs the closed WAL generation before creating the next, so generations become durable in order.",
+        "evidence": [
+          "shared_frozen_wal_prefix_repro",
+          "rotation_sync_failures_poison_before_creating_the_next_wal"
+        ]
       }
     ],
     "not_promised": [
       {
-        "key": "Unsynced writes",
-        "clause": "A successful put() or delete() before sync() may be lost after a crash.",
-        "evidence": ["seeded_crash_fixed_corpus", "shared_seeded_crash_fixed_corpus"]
+        "key": "put() before sync()",
+        "clause": "lost if the machine goes down",
+        "detail": "A successful put() or delete() before sync() may be lost after a crash.",
+        "evidence": [
+          "seeded_crash_fixed_corpus",
+          "shared_seeded_crash_fixed_corpus"
+        ]
       },
       {
-        "key": "Drop is not sync",
-        "clause": "Dropping a handle does not acknowledge crash durability.",
-        "evidence": ["seeded_crash_fixed_corpus", "shared_seeded_crash_fixed_corpus"]
+        "key": "drop",
+        "clause": "not a sync",
+        "detail": "Dropping a handle does not acknowledge crash durability.",
+        "evidence": [
+          "seeded_crash_fixed_corpus",
+          "shared_seeded_crash_fixed_corpus"
+        ]
       },
       {
-        "key": "Independent processes",
-        "clause": "Concurrent access by two independent processes to one directory is not validated as a supported usage; the OS lock rejects a second owner.",
-        "evidence": ["offline_cli_rejects_another_process_owner_and_restores_backups"]
+        "key": "two processes, one directory",
+        "clause": "not validated",
+        "detail": "Concurrent access by two independent processes to one directory is not validated as a supported usage; the OS lock rejects a second owner.",
+        "evidence": [
+          "offline_cli_rejects_another_process_owner_and_restores_backups"
+        ]
       },
       {
-        "key": "Hardware power loss",
-        "clause": "Power loss is simulated with torn writes, directory durability and per-file loss; these suites do not establish behavior on physical hardware.",
-        "evidence": ["seeded_power_loss_is_deterministic_and_covers_every_tear", "create_without_directory_sync_is_lost", "directory_sync_makes_entries_durable_but_not_unsynced_bytes", "rename_and_remove_revert_without_directory_sync"]
+        "key": "machine power loss",
+        "clause": "simulated, not tested on hardware",
+        "detail": "Power loss is simulated with torn writes, directory durability and per-file loss; these suites do not establish behavior on physical hardware.",
+        "evidence": [
+          "seeded_power_loss_is_deterministic_and_covers_every_tear",
+          "create_without_directory_sync_is_lost",
+          "directory_sync_makes_entries_durable_but_not_unsynced_bytes",
+          "rename_and_remove_revert_without_directory_sync"
+        ]
       },
       {
-        "key": "Pre-1.0 compatibility",
-        "clause": "The API and storage format may change before 1.0."
+        "key": "API, on-disk format",
+        "clause": "may change before 1.0",
+        "detail": "The API and storage format may change before 1.0."
       }
     ],
     "not_built": [
-      {"key": "Compression", "clause": "Storage compression is not implemented."},
-      {"key": "Range deletes", "clause": "Range deletion is not implemented."},
-      {"key": "Reverse iteration", "clause": "Reverse iteration is not implemented."},
-      {"key": "Transactions", "clause": "Transactions are not implemented."}
+      {
+        "key": "not built yet",
+        "clause": "compression, range deletes, reverse iteration, transactions"
+      }
     ]
   },
   "bugs_found": [
-    {"date": "2026-10-16", "title": "Torn unsynced WAL tail rejected as corruption", "pr": 4},
-    {"date": "2026-10-16", "title": "User values could mimic a sync marker (found before merge)", "pr": 4},
-    {"date": "2026-10-16", "title": "Cross-generation WAL prefix violation on rotation", "pr": 5},
-    {"date": "2026-10-16", "title": "Headerless WAL after header truncation", "pr": 5}
+    {
+      "date": "2026-10-16",
+      "title": "Torn unsynced WAL tail rejected as corruption",
+      "pr": 4
+    },
+    {
+      "date": "2026-10-16",
+      "title": "User values could mimic a sync marker (found before merge)",
+      "pr": 4
+    },
+    {
+      "date": "2026-10-16",
+      "title": "Cross-generation WAL prefix violation on rotation",
+      "pr": 5
+    },
+    {
+      "date": "2026-10-16",
+      "title": "Headerless WAL after header truncation",
+      "pr": 5
+    }
   ],
   "capabilities": [
-    {"id": "rust", "label": "Rust", "status": "shipped"},
-    {"id": "python", "label": "Python (ctypes)", "status": "shipped", "link": "https://github.com/aetosdios27/kiban/pull/7"},
-    {"id": "mcp", "label": "MCP server", "status": "shipped", "link": "https://github.com/aetosdios27/kiban/pull/7"},
-    {"id": "c-abi", "label": "C ABI", "status": "shipped", "link": "https://github.com/aetosdios27/kiban/pull/7"}
+    {
+      "id": "rust",
+      "label": "Rust",
+      "status": "shipped"
+    },
+    {
+      "id": "python",
+      "label": "Python (ctypes)",
+      "status": "shipped",
+      "link": "https://github.com/aetosdios27/kiban/pull/7"
+    },
+    {
+      "id": "mcp",
+      "label": "MCP server",
+      "status": "shipped",
+      "link": "https://github.com/aetosdios27/kiban/pull/7"
+    },
+    {
+      "id": "c-abi",
+      "label": "C ABI",
+      "status": "shipped",
+      "link": "https://github.com/aetosdios27/kiban/pull/7"
+    }
   ],
   "roadmap": [
-    {"id": "crash-simulation", "title": "Crash-simulation suite", "status": "done"},
-    {"id": "storage-api", "title": "Storage API: reverse/prefix scans, namespaces, range deletes, TTL", "status": "next"},
-    {"id": "write-path", "title": "Write path: group commit", "status": "next"},
-    {"id": "transactions", "title": "Transactions", "status": "planned"},
-    {"id": "bindings", "title": "Bindings: Python/MCP", "status": "done"},
-    {"id": "benchmarks", "title": "Published benchmarks", "status": "planned"}
+    {
+      "id": "crash-simulation",
+      "title": "Crash-simulation suite",
+      "status": "done"
+    },
+    {
+      "id": "storage-api",
+      "title": "Storage API: reverse/prefix scans, namespaces, range deletes, TTL",
+      "status": "next"
+    },
+    {
+      "id": "write-path",
+      "title": "Write path: group commit",
+      "status": "next"
+    },
+    {
+      "id": "transactions",
+      "title": "Transactions",
+      "status": "planned"
+    },
+    {
+      "id": "bindings",
+      "title": "Bindings: Python/MCP",
+      "status": "done"
+    },
+    {
+      "id": "benchmarks",
+      "title": "Published benchmarks",
+      "status": "planned"
+    }
   ],
-  "local_sweeps": []
+  "local_sweeps": [],
+  "correctness_stats": [
+    {
+      "value": {
+        "ref": "tests.crash_seeds_per_pr"
+      },
+      "label": "Crash seeds on every PR"
+    },
+    {
+      "value": {
+        "ref": "tests.crashes_per_seed"
+      },
+      "label": "Power losses per seed"
+    },
+    {
+      "value": {
+        "ref": "bugs_found.length"
+      },
+      "label": "Bugs found and fixed"
+    },
+    {
+      "value": 1000,
+      "label": "SIGKILL / reopen cycles"
+    },
+    {
+      "value": 530100,
+      "label": "Acknowledged writes verified"
+    },
+    {
+      "value": {
+        "ref": "tests.lib_tests"
+      },
+      "label": "Library tests"
+    }
+  ]
 }

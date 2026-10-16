@@ -48,6 +48,12 @@ class ClaimsTests(unittest.TestCase):
             (lambda c: c["bugs_found"][0].update(date="2026-02-30"), "invalid date"),
             (lambda c: c["bugs_found"][0].update(pr=True), "integer"),
             (lambda c: c["local_sweeps"].append({"date": "2026-10-16", "commit": "abc", "suite": "local", "seeds": 1, "result": "passed"}), "full Git SHA"),
+            (lambda c: c["guarantees"]["promised"][0].update(clause="x" * 65), "keep it terse"),
+            (lambda c: c["guarantees"]["promised"][0].update(key="k" * 33), "short label"),
+            (lambda c: c["guarantees"]["promised"][0].update(detail=[]), "string"),
+            (lambda c: c["correctness_stats"].pop(), "exactly 6"),
+            (lambda c: c["correctness_stats"][0].update(value={"ref": "tests.imaginary"}), "unknown ref"),
+            (lambda c: c["correctness_stats"][0].update(value=True), "expected integer"),
         ]
         for mutate, message in mutations:
             with self.subTest(message=message, mutate=mutate):
@@ -55,6 +61,20 @@ class ClaimsTests(unittest.TestCase):
                 mutate(claims)
                 with self.assertRaisesRegex(facts.Invalid, message):
                     facts.validate_claims(claims, self.names)
+
+    def test_stat_refs_resolve_to_plain_values(self):
+        generated = facts.resolve_stats({
+            "tests": {"crash_seeds_per_pr": 128, "crashes_per_seed": 4, "lib_tests": 300, "nightly_seeds_total": 0},
+            "bugs_found": [{}, {}],
+            "local_sweeps": [{"seeds": 10}, {"seeds": 30}],
+            "correctness_stats": [
+                {"value": {"ref": "tests.crash_seeds_per_pr"}, "label": "a"},
+                {"value": {"ref": "bugs_found.length"}, "label": "b"},
+                {"value": {"ref": "local_sweeps.max_seeds"}, "label": "c"},
+                {"value": 1000, "label": "d"},
+            ],
+        })
+        self.assertEqual([c["value"] for c in generated["correctness_stats"]], [128, 2, 30, 1000])
 
     def test_duplicate_json_keys_fail(self):
         with tempfile.TemporaryDirectory() as directory:

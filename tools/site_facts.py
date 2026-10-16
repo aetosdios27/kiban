@@ -102,8 +102,26 @@ def rust_sources(root, directories=("src", "tests")):
             for path in sorted((root / directory).rglob("*.rs"))]
 
 
+STAT_REFS = {
+    "tests.crash_seeds_per_pr": lambda facts: facts["tests"]["crash_seeds_per_pr"],
+    "tests.crashes_per_seed": lambda facts: facts["tests"]["crashes_per_seed"],
+    "tests.lib_tests": lambda facts: facts["tests"]["lib_tests"],
+    "tests.nightly_seeds_total": lambda facts: facts["tests"]["nightly_seeds_total"],
+    "bugs_found.length": lambda facts: len(facts["bugs_found"]),
+    "local_sweeps.max_seeds": lambda facts: max((s["seeds"] for s in facts["local_sweeps"]), default=0),
+}
+
+
+def resolve_stats(facts):
+    facts["correctness_stats"] = [
+        {"value": STAT_REFS[c["value"]["ref"]](facts) if isinstance(c["value"], dict) else c["value"], "label": c["label"]}
+        for c in facts["correctness_stats"]
+    ]
+    return facts
+
+
 def validate_claims(claims, names):
-    fields(claims, ("specs", "guarantees", "bugs_found", "capabilities", "roadmap", "local_sweeps"), where="claims")
+    fields(claims, ("specs", "guarantees", "bugs_found", "capabilities", "roadmap", "local_sweeps", "correctness_stats"), where="claims")
     array(claims["specs"], "specs", True)
     for spec in claims["specs"]:
         string(spec, "specs[]")
@@ -114,11 +132,14 @@ def validate_claims(claims, names):
         array(entries, f"guarantees.{group}")
         for entry in entries:
             where = f"guarantees.{group}"
-            fields(entry, ("key", "clause"), ("evidence",), where)
+            fields(entry, ("key", "clause"), ("evidence", "detail"), where)
             for key in ("key", "clause"):
                 string(entry[key], f"{where}.{key}")
                 require("\n" not in entry[key], f"{where}.{key}: expected one line")
-            require(len(entry["key"]) <= 64, f"{where}.key: use a short label (<=64 characters)")
+            require(len(entry["key"]) <= 32, f"{where}.key: use a short label (<=32 characters)")
+            require(len(entry["clause"]) <= 64, f"{where}.clause: keep it terse (<=64 characters); put precise wording in detail")
+            if "detail" in entry:
+                string(entry["detail"], f"{where}.detail")
             keys.append(entry["key"])
             require(group != "promised" or "evidence" in entry, f"{where}.{entry['key']}: evidence required")
             if "evidence" in entry:
@@ -154,6 +175,17 @@ def validate_claims(claims, names):
                 url = urlparse(entry["link"])
                 require(url.scheme == "https" and bool(url.netloc), f"{group}.link: expected HTTPS URL")
         unique(ids, f"{group} ids")
+    array(claims["correctness_stats"], "correctness_stats")
+    require(len(claims["correctness_stats"]) == 6, "correctness_stats: expected exactly 6 cells (the site's 2x3 grid)")
+    for cell in claims["correctness_stats"]:
+        fields(cell, ("value", "label"), where="correctness_stats[]")
+        string(cell["label"], "correctness_stats.label")
+        value = cell["value"]
+        if isinstance(value, dict):
+            fields(value, ("ref",), where="correctness_stats.value")
+            require(value["ref"] in STAT_REFS, f"correctness_stats: unknown ref {value['ref']!r}; expected one of {sorted(STAT_REFS)}")
+        else:
+            require(isinstance(value, (int, str)) and not isinstance(value, bool), "correctness_stats.value: expected integer, string or {ref}")
     array(claims["local_sweeps"], "local_sweeps")
     for entry in claims["local_sweeps"]:
         fields(entry, ("date", "commit", "suite", "seeds", "result"), where="local_sweeps[]")
@@ -241,6 +273,7 @@ def simulation_metrics(source):
     require(len(rounds) == 1 and body.count("sys::power_loss_seeded(") == 1 and body.count("wal_creation_probe(") == 1, "simulation source: crash loop changed; review parser")
     probe = function_body(code, "wal_creation_probe")
     require(probe.count("sys::power_loss_seeded(") == 1 and not re.search(r"\b(for|while|loop)\b", probe), "simulation source: WAL probe changed; review parser")
+    # Crash rounds in run_seed plus the one WAL-creation probe crash.
     crashes = int(rounds[0][1]) - int(rounds[0][0]) + 1
     require(crashes > 1, "simulation source: empty crash loop")
     return seeds, crashes
@@ -385,7 +418,7 @@ def git(root, *args):
 def generate(root=ROOT, previous=None, additional=0, run_id=None, test_list=None):
     claims, package, examples, (seeds, crashes) = validate(root)
     total, ids = nightly_totals(previous, additional, run_id)
-    return {
+    return resolve_stats({
         "schema": 1,
         "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "engine": {"version": package["version"], "commit": git(root, "rev-parse", "HEAD"), "commit_date": git(root, "show", "-s", "--format=%cI", "HEAD")},
@@ -393,7 +426,7 @@ def generate(root=ROOT, previous=None, additional=0, run_id=None, test_list=None
         "tests": {"lib_tests": lib_tests(root, test_list), "crash_seeds_per_pr": seeds, "crashes_per_seed": crashes, "nightly_seeds_total": total, "nightly_run_ids": ids},
         "examples": examples,
         "benchmarks": benchmarks(root),
-    }
+    })
 
 
 def write_facts(path, facts, previous=None):

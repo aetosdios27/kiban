@@ -71,9 +71,18 @@ shards fail publication; receipts contain data only and are never executed.
 - `specs`: nonempty array of unique spec strings. Rust edition, default runtime
   dependencies, Linux target and license must match repository metadata.
 - `guarantees`: object with `promised`, `not_promised`, `not_built` arrays.
-  Each entry has a unique short `key`, a one-sentence `clause`, and optional
-  `evidence`: nonempty array of unique Rust function names in `src/` or `tests/`.
-  `promised` entries require evidence. References are not a semantic proof.
+  Each entry has a unique short `key` (<=32 characters), a terse `clause` (<=64
+  characters, in the site's voice: lowercase, no trailing period), optional
+  `detail` with the precise wording (shown only as a tooltip/accessible label),
+  and optional `evidence`: nonempty array of unique Rust function names in `src/`
+  or `tests/`. `promised` entries require evidence. References are not a
+  semantic proof.
+- `correctness_stats`: exactly 6 `{value, label}` cells for the site's 2x3 grid.
+  `value` is an integer, a string, or `{"ref": NAME}` resolved at generation time
+  to a plain value; NAME is one of `tests.crash_seeds_per_pr`,
+  `tests.crashes_per_seed`, `tests.lib_tests`, `tests.nightly_seeds_total`,
+  `bugs_found.length`, `local_sweeps.max_seeds`. After a large local sweep is
+  recorded in `local_sweeps`, point a cell at `local_sweeps.max_seeds`.
 - `bugs_found`: array of `{date, title, pr}`; `date` is ISO `YYYY-MM-DD`, `title`
   is text and `pr` is a positive GitHub PR number. Dates are fix/merge dates;
   discovery can precede the merge.
