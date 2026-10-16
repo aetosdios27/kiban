@@ -1,0 +1,23 @@
+# Dependency policy. Kiban has no runtime dependencies; this guards the
+# optional/dev graph (loom) and anything added later.
+
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+
+[licenses]
+version = 2
+allow = ["MIT", "Apache-2.0"]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

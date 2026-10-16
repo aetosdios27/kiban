@@ -1,33 +1,186 @@
-name: Rust release gate
-on: [push, pull_request, workflow_dispatch]
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Least privilege: no job needs to write to the repository.
+permissions:
+  contents: read
+
+# A newer push to the same PR supersedes the older run; main always runs fully.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  RUST_BACKTRACE: "1"
+
 jobs:
-  check:
+  lint:
+    name: Lint and docs
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
+          toolchain: stable
           components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - run: cargo fmt --check
-      - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo clippy --all-targets --features loom -- -D warnings
-      - run: cargo clippy --all-targets --features diagnostics -- -D warnings
-      - run: cargo test
-      - run: cargo test --features diagnostics
-      - run: cargo test --examples
-      - run: cargo test --features loom --lib -- --test-threads=1 loom_
-      - run: cargo test --release --lib -- --ignored --nocapture
-      - run: RUSTDOCFLAGS='-D warnings' cargo doc --no-deps
-      - run: python3 -m unittest discover -s tools/compare/tests -p 'test_*.py'
-      - run: cargo run --release --example torture -- --mode process --cycles 50 --operations 100 --keys 100 --threads 4 --snapshots true --db "$RUNNER_TEMP/kiban-torture-db" --output "$RUNNER_TEMP/kiban-torture-results"
-      - run: cargo run --example basic -- "$RUNNER_TEMP/kiban-example"
-      - run: cargo package
-      - run: cargo publish --dry-run
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo clippy --locked --all-targets --features loom -- -D warnings
+      - run: cargo clippy --locked --all-targets --features diagnostics -- -D warnings
+      - run: cargo doc --locked --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+  test:
+    name: Tests (${{ matrix.profile }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: debug
+            args: ""
+          - profile: release
+            args: "--release"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          key: ${{ matrix.profile }}
+      # Release builds compile out debug_assert!, debug builds keep them: the
+      # suite must pass under both.
+      - run: cargo test --locked ${{ matrix.args }}
+      - run: cargo test --locked ${{ matrix.args }} --features diagnostics
+      - run: cargo test --locked ${{ matrix.args }} --examples
+
+  stress:
+    name: Release stress tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - run: cargo test --locked --release --lib -- --ignored --nocapture
+
+  loom:
+    name: Loom interleaving models
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - run: cargo test --locked --features loom --lib -- --test-threads=1 loom_
+
+  torture:
+    name: Crash-recovery torture
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      # Real SIGKILLs against a real directory; every cycle reopens and verifies.
+      - run: >
+          cargo run --locked --release --example torture --
+          --mode process --cycles 50 --operations 100 --keys 100 --threads 4
+          --snapshots true --db "$RUNNER_TEMP/kiban-torture-db"
+          --output "$RUNNER_TEMP/kiban-torture-results"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: failure()
+        with:
+          name: torture-results
+          path: ${{ runner.temp }}/kiban-torture-results
+          if-no-files-found: ignore
+
   msrv:
+    name: MSRV (1.89)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: "1.89.0"
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - run: cargo check --locked --all-targets
+
+  package:
+    name: Package and examples
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - run: cargo run --locked --example basic -- "$RUNNER_TEMP/kiban-example"
+      - run: python3 -m unittest discover -s tools/compare/tests -p 'test_*.py'
+      - run: cargo package --locked
+      - run: cargo publish --locked --dry-run
+
+  supply-chain:
+    name: Dependency policy
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.89.0
-      - run: cargo check --locked --all-targets
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2
+        with:
+          tool: cargo-deny
+      - run: cargo deny --locked check
+
+  coverage:
+    name: Coverage (informational)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2
+        with:
+          tool: cargo-llvm-cov
+      - run: cargo llvm-cov --locked --lib --summary-only | tee coverage.txt
+      - run: |
+          {
+            echo '### Library line coverage'
+            echo '```'
+            tail -n 40 coverage.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # One stable status for branch protection: require only this check.
+  ci-ok:
+    name: CI passed
+    if: always()
+    needs: [lint, test, stress, loom, torture, msrv, package, supply-chain, coverage]
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo '${{ toJSON(needs) }}'
+          test "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = false
