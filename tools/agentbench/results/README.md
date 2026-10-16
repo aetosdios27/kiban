@@ -27,3 +27,10 @@ later trial median loads exceeded 3. All correctness and reopen checks passed.
 and independent HTTP evidence for Helix's large-N memory block, including the
 one-field BM25 config delta, exact generated query, server hash and full RSS
 curve. No diagnostic latency is pooled into either engine campaign.
+
+[cache-budget-1000000](cache-budget-1000000/) contains the separate read-only
+cache-budget diagnosis: three alternating trials of LMDB and Kiban with
+32/256/512/1024 MiB block caches. It is preliminary under the load gate.
+W5 is a labelled all-read key-sequence projection; cache counters come from a
+separate excluded SharedKiban replay. The old engine-study binary and all old
+raw results remain unchanged.

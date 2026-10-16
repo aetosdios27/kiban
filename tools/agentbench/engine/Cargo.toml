@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
+[[bin]]
+name = "kiban-cachebench"
+path = "src/cache_main.rs"
+
 [workspace]
 
 [dependencies]

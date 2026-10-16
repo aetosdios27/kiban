@@ -402,3 +402,74 @@ manifest/lockfile, query schema and equivalence record against the first build.
 Driver/report-only changes are snapshotted separately; no measurement binary
 was rebuilt. Archives preserve the scripts/hashes used at measurement time,
 while the auditor verifies those snapshots even if reporting scripts evolve.
+
+## Large-N cache budget diagnosis
+
+This separate read-only diagnosis varies only Kiban's existing
+`KibanOptions::block_cache_bytes`: 32 MiB (default/control), 256 MiB, 512 MiB and
+1 GiB. Range cache remains disabled, `range_readahead_bytes` remains 256 KiB,
+`max_open_table_files` remains 128, mmap remains off, and all other options stay
+default. It uses the original direct `Kiban` API and the unchanged raw-LMDB
+backend. No core source or dependency changes are required.
+
+The old frozen executable has no cache-size/read-only configuration fields.
+A separate `kiban-cachebench` binary supplies those fields, built once with the
+same compiler profile and Helix MiMalloc allocator, then hashed and reused for
+all 15 trials. It does not replace the original `kiban-enginebench` executable.
+The driver checks both executable hashes throughout the campaign when the
+original executable is present. Reproduce with one command:
+
+```sh
+python3 tools/agentbench/cache_run.py --build \
+  --output target/enginebench-results/cache-budget-repro \
+  --archive tools/agentbench/results/cache-budget-repro
+```
+
+Omit `--build` to reuse an already frozen diagnostic executable. The default
+campaign is three cycles of LMDB, K32, K256, K512, K1024, each in its own process
+and fresh database, at N=1,000,000, seed 20261016, K=10, 64 agents and 200-byte
+text. CPU affinity remains 1–4 for the benchmark and 12–21 for the driver.
+The driver waits up to two minutes for one-minute load below 3, then records
+whether each trial's timed median meets that gate, with 200 ms and boundary
+sampling. Failed gates are retained and labelled preliminary.
+
+There are 100,000 calls each for W2, W3 and the W5 key-sequence projection.
+Because the requested experiment is read-only, all W5 operations are point
+reads; its original stage-4 seed/key sequence is preserved, but the 10% writes
+are converted to reads. The output calls it **mixed-key-reads-only**, not
+90/10. All revisions remain zero and the population remains exactly N.
+This is a controlled diagnosis rather than an exact rerun of the earlier
+post-insert/post-update population. Fast mode is sufficient: no foreground
+read acknowledges a write or pays an fsync. Preload still ends with sync.
+
+Each process warms a separate discarded 100-record database. The measured
+base uses the same bulk path as the head-to-head: Kiban WriteBatch chunks of
+10,000, LMDB one large transaction, then sync and complete value verification.
+It closes/reopens and verifies all N records and recent lists again before
+measurement. Thus caches are deliberately warmed by a full sequential
+read-back, with no OS cache dropping. Every timed result is checked completely;
+all N records/lists are checked again after timing and in an independent reopen
+process. Any wrong value, command failure or SST-layout change invalidates the
+campaign. Foreground latency excludes sampling, oracle comparison and resource
+snapshots; verified throughput includes sampling and comparisons. It should
+not be pooled with the old five-workload campaign's throughput.
+
+RSS snapshots before/after reads and after final verification precede the
+optional counter replay; the high-water mark includes untimed preload. Stage
+rows also retain RSS. The decoded authoritative MANIFEST records every live
+SST file and level after preload; read-only work must preserve it.
+
+Direct `Kiban` exposes no public cache-counter snapshot. `SharedKiban::stats()`
+does, so after the direct engine has closed, an **excluded counter replay**
+opens the same files with SharedKiban, the same options and a fresh cache. It
+repeats full read-back warmup and the same three key sequences, verifying every
+result. W3 uses a shared snapshot's range iterator. Hit/miss deltas, evictions,
+resident cache bytes and level counts are saved per workload. SST identities and levels recorded in the manifest
+must remain unchanged after this replay. These are explicitly proxy counters
+from a different public API, not measured direct-call hit rates or SharedKiban
+latencies. No statistics instrumentation is inserted into the timed loop.
+
+Full logs, databases and source snapshots stay under ignored `target/`.
+Compact JSONL/config/resource/reopen evidence, compressed load samples, hashes
+and generated tables are archived separately. The diagnosis is reported in
+[ENGINE_H2H.md](../../../validation/ENGINE_H2H.md#large-n-read-diagnosis-cache-budget).

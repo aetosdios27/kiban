@@ -499,3 +499,50 @@ Sampled every 200 ms plus actual engine-side boundary samples; median [minimum, 
 | durable | 3 | lmdb | 814.44 | 1,329.29 | 807.46 | 807.45 |
 | fast | 3 | kiban | 955.00 | 1,604.43 | 376.14 | 376.16 |
 | fast | 3 | lmdb | 886.38 | 1,329.52 | 879.32 | 879.31 |
+
+
+## Large-N read diagnosis: cache budget
+
+**Cache budget explains most of the observed point-read gap, with a residual that needs profiling.** The contemporaneous W2 p50 gap narrowed from 4.35 µs (32 MiB) to 0.70 µs (512 MiB): about **84% closure** (80.6–85.9% when computed within each alternating cycle). At 1 GiB the residual was 0.58 µs, about 87% closure. These are differences between p50 medians, not an additive breakdown of read work.
+
+**Preliminary:** 8 of 15 trials exceeded the <3 timed-median load gate; all remain included. Three cycles alternate LMDB, K32, K256, K512, K1024. N=1,000,000; seed 20261016; 100,000 calls per stage; benchmark CPUs 1–4, driver 12–21. All options except block-cache capacity remain default: range cache off, file cache 128, read-ahead 256 KiB, mmap off.
+
+This is read-only and uses fast mode: reads pay no per-call fsync. W5 retains its stage-4 key sequence with writes converted to reads, explicitly **mixed-key-reads-only**, rather than 90/10. The original bulk-load/sync/verify/reopen/verify method warms caches; every revision stays zero and no W1 inserts expand the population. Compare against this sweep’s control/reference, rather than subtracting the older post-update measurements.
+
+Cells are median [minimum, maximum] across three trials. RSS is the whole direct benchmark process after reads.
+
+| Config | W2 p50 µs | W3 p50 µs | W5-key p50 µs | RSS MiB | W2 replay hit % |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| LMDB | 1.41 [1.34, 1.44] | 2.37 [2.18, 2.43] | 1.38 [1.38, 1.44] | 806.76 [806.60, 806.89] | not instrumented |
+| Kiban 32 MiB | 5.76 [5.63, 5.76] | 3.01 [2.94, 3.07] | 5.63 [5.50, 5.89] | 103.42 [91.61, 119.29] | 10.29 [10.29, 10.29] |
+| Kiban 256 MiB | 2.50 [2.37, 2.75] | 3.33 [3.14, 3.39] | 2.50 [2.37, 2.50] | 416.86 [416.48, 448.15] | 82.79 [82.79, 82.79] |
+| Kiban 512 MiB | 2.11 [2.05, 2.18] | 3.20 [3.20, 3.26] | 2.18 [2.11, 2.18] | 486.84 [486.25, 520.87] | 100.00 [100.00, 100.00] |
+| Kiban 1024 MiB | 1.98 [1.95, 2.05] | 3.26 [3.20, 3.26] | 2.02 [1.89, 2.24] | 504.45 [489.75, 536.27] | 100.00 [100.00, 100.00] |
+
+Every Kiban preload produced **one L0 SST and no other levels**, unchanged throughout. The separate replay’s resident cache was 32.00/256.00/309.14/309.14 MiB. Direct Kiban exposes no public cache counters, so the hit rates above are **proxy counters from an excluded SharedKiban replay**: fresh cache, identical files, full verification warmup, identical keys, all values checked. Its time/RSS is excluded. W3 already had 99.94% replay hits at 32 MiB; larger caches did not improve its latency.
+
+The block working set fits at 512 MiB, yet point reads remain slower than LMDB with lower end RSS. More capacity alone does not account for the remaining gap. Profile SST filter/index/restart-block lookup, cache locking and value materialization next. Source shows Kiban copies a found value into a Vec before JSON decoding; LMDB decodes directly from its mmap-backed slice. Both return the same owned fields. No profile here assigns the residual to those candidates. Median peak RSS includes preload: about 1,614–1,617 MiB for Kiban versus 1,329 MiB for LMDB.
+
+One new diagnostic executable (`430dd88d…`) served all configurations; the original frozen binary (`d3901e63…`) remains unchanged. No core source/dependency changed. All **4.5 million timed calls** and 15 million records checked after independent reopen passed, with zero timed writes.
+
+[Full percentiles, max, throughput, RSS/peak/disk, counters and raw evidence](../tools/agentbench/results/cache-budget-1000000/REPORT.md); [one-command reproduction and detailed method](../tools/agentbench/engine/README.md#large-n-cache-budget-diagnosis). Full binary/source hashes are archived.
+
+| Trial | Config | Timed 1-minute load median [min, max] | Gate |
+| ---: | --- | ---: | --- |
+| 1 | LMDB | 1.56 [1.56, 1.56] | pass |
+| 1 | Kiban 32 MiB | 1.63 [1.63, 1.63] | pass |
+| 1 | Kiban 256 MiB | 2.10 [2.10, 2.10] | pass |
+| 1 | Kiban 512 MiB | 2.27 [2.27, 2.27] | pass |
+| 1 | Kiban 1024 MiB | 3.47 [3.47, 3.47] | preliminary |
+| 2 | LMDB | 3.32 [3.32, 3.32] | preliminary |
+| 2 | Kiban 32 MiB | 3.28 [3.28, 3.34] | preliminary |
+| 2 | Kiban 256 MiB | 3.06 [3.06, 3.06] | preliminary |
+| 2 | Kiban 512 MiB | 2.90 [2.90, 2.90] | pass |
+| 2 | Kiban 1024 MiB | 2.85 [2.78, 2.85] | pass |
+| 3 | LMDB | 3.04 [2.96, 3.04] | preliminary |
+| 3 | Kiban 32 MiB | 3.04 [2.96, 3.04] | preliminary |
+| 3 | Kiban 256 MiB | 2.73 [2.73, 2.73] | pass |
+| 3 | Kiban 512 MiB | 3.12 [3.12, 3.12] | preliminary |
+| 3 | Kiban 1024 MiB | 3.02 [2.94, 3.02] | preliminary |
+
+All timed-interval sampling coverage checks passed (200 ms plus engine-side boundaries). Bulk load, full verification and counter replay are excluded from that interval; their recent activity can contribute to system load. Process-wide raw load samples are retained too.

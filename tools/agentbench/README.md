@@ -281,3 +281,8 @@ memory diagnostics reproduced growth outside the benchmark runner. The
 include the BM25 configuration difference and links to raw RSS/query-count
 samples. This HTTP diagnostic is separate from the in-process latency study;
 no Helix engine patch contributes published numbers.
+
+The [large-N cache-budget diagnosis](engine/README.md#large-n-cache-budget-diagnosis)
+uses one separately frozen binary for Kiban's four cache sizes and a raw-LMDB
+reference, with all foreground operations reading. Its W5 key-sequence projection
+and separate SharedKiban counter replay are explicitly labelled.
