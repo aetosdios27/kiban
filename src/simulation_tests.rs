@@ -1,4 +1,4 @@
-//! Seeded crash simulation for the direct engine and its storage boundaries.
+//! Seeded crash simulation for direct and manually scheduled shared engines.
 
 use super::*;
 use crate::sys;
@@ -65,11 +65,124 @@ fn matching_prefix(
 
 const SIM_KEYS: u64 = 16;
 
-fn read_model(db: &Kiban) -> Result<Model, String> {
-    let entries = db
-        .iter()
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("full scan: {e}"))?;
+#[derive(Clone, Copy)]
+enum EngineMode {
+    Direct,
+    Shared,
+}
+
+impl EngineMode {
+    fn open(self, path: &Path, mut options: KibanOptions) -> Result<Engine, DbError> {
+        match self {
+            Self::Direct => {
+                Kiban::open_with_options(path, options).map(|db| Engine::Direct(Box::new(db)))
+            }
+            Self::Shared => {
+                options.write_buffer_bytes = 512;
+                options.l0_write_stall_trigger = 4;
+                SharedKiban::open_manual(path, options).map(Engine::Shared)
+            }
+        }
+    }
+
+    fn long_test(self) -> &'static str {
+        match self {
+            Self::Direct => "seeded_crash_long",
+            Self::Shared => "shared_seeded_crash_long",
+        }
+    }
+}
+
+enum Engine {
+    Direct(Box<Kiban>),
+    Shared(SharedKiban),
+}
+
+impl Engine {
+    fn put(&mut self, key: &[u8], value: &[u8]) -> Result<(), DbError> {
+        match self {
+            Self::Direct(db) => db.put(key, value),
+            Self::Shared(db) => db.put(key, value),
+        }
+    }
+
+    fn delete(&mut self, key: &[u8]) -> Result<(), DbError> {
+        match self {
+            Self::Direct(db) => db.delete(key),
+            Self::Shared(db) => db.delete(key),
+        }
+    }
+
+    fn write(&mut self, batch: WriteBatch) -> Result<(), DbError> {
+        match self {
+            Self::Direct(db) => db.write(batch),
+            Self::Shared(db) => db.write(batch),
+        }
+    }
+
+    fn sync(&mut self) -> Result<(), DbError> {
+        match self {
+            Self::Direct(db) => db.sync(),
+            Self::Shared(db) => db.sync(),
+        }
+    }
+
+    fn flush(&mut self) -> Result<(), DbError> {
+        match self {
+            Self::Direct(db) => db.flush(),
+            Self::Shared(db) => db.flush(),
+        }
+    }
+
+    fn checkpoint(&mut self) -> Result<(), DbError> {
+        match self {
+            Self::Direct(db) => db.checkpoint(),
+            Self::Shared(db) => db.checkpoint(),
+        }
+    }
+
+    fn step(&self) -> Result<bool, DbError> {
+        match self {
+            Self::Direct(_) => Ok(false),
+            Self::Shared(db) => {
+                let did_work = db.step();
+                db.maintenance_error()
+                    .map_or(Ok(did_work), |e| Err(DbError::Maintenance(e)))
+            }
+        }
+    }
+
+    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DbError> {
+        match self {
+            Self::Direct(db) => db.get(key),
+            Self::Shared(db) => db.get(key),
+        }
+    }
+
+    fn entries(&self) -> Result<Vec<ScanEntry>, DbError> {
+        match self {
+            Self::Direct(db) => db.iter().collect(),
+            Self::Shared(db) => db.snapshot()?.iter().collect(),
+        }
+    }
+}
+
+type DeviceImage = BTreeMap<PathBuf, Vec<u8>>;
+
+fn device_image(dir: &Path) -> DeviceImage {
+    sys::simulated_files_under(dir)
+        .into_iter()
+        .map(|path| {
+            (
+                path.strip_prefix(dir).unwrap().to_path_buf(),
+                sys::read(&path).unwrap(),
+            )
+        })
+        .collect()
+}
+
+fn read_model(db: &Engine) -> Result<Model, String> {
+    let entries = db.entries().map_err(|e| format!("full scan: {e}"))?;
     if entries.windows(2).any(|pair| pair[0].0 >= pair[1].0) {
         return Err("scan returned duplicate or unordered keys".into());
     }
@@ -118,7 +231,7 @@ fn operation(rng: &mut sys::SplitMix64, id: u64) -> Vec<Mutation> {
         .collect()
 }
 
-fn write_operation(db: &mut Kiban, operation: &[Mutation]) -> Result<(), DbError> {
+fn write_operation(db: &mut Engine, operation: &[Mutation]) -> Result<(), DbError> {
     if let [mutation] = operation {
         return match mutation {
             Mutation::Put(key, value) => db.put(key, value),
@@ -152,7 +265,7 @@ fn wal_creation_probe(dir: &Path, rng: &mut sys::SplitMix64) -> Result<(), Strin
     Ok(())
 }
 
-fn run_seed(seed: u64) -> Result<(), String> {
+fn run_seed(seed: u64, mode: EngineMode) -> Result<Vec<DeviceImage>, String> {
     struct DeviceGuard;
     impl Drop for DeviceGuard {
         fn drop(&mut self) {
@@ -164,14 +277,16 @@ fn run_seed(seed: u64) -> Result<(), String> {
     let dir = TempDir::new("seeded-prefix");
     sys::enable_device_sim();
     let _device = DeviceGuard;
-    let run = || -> Result<(), String> {
+    let run = || -> Result<Vec<DeviceImage>, String> {
         let mut rng = sys::SplitMix64(seed);
         let probe_dir = TempDir::new("seeded-wal");
         wal_creation_probe(probe_dir.path(), &mut rng).map_err(|e| format!("WAL probe: {e}"))?;
         let options = super::compaction_tests::tiny_options();
-        let mut db = Kiban::open_with_options(dir.path(), options.clone())
+        let mut db = mode
+            .open(dir.path(), options.clone())
             .map_err(|e| format!("initial open: {e}"))?;
         let mut base = Model::new();
+        let mut images = Vec::new();
         for round in 0..3 {
             let mut acknowledged = Vec::new();
             let mut durable = 0;
@@ -185,6 +300,14 @@ fn run_seed(seed: u64) -> Result<(), String> {
                 write_operation(&mut db, &operation)
                     .map_err(|e| format!("round {round}, write {step}: {e}"))?;
                 acknowledged.push(operation);
+                // Sixteen writes without explicit steps exercise inline backpressure;
+                // the following burst varies between zero and four whole jobs.
+                if matches!(mode, EngineMode::Shared) && step % 24 >= 16 {
+                    for _ in 0..rng.below(5) {
+                        db.step()
+                            .map_err(|e| format!("round {round}, step after write {step}: {e}"))?;
+                    }
+                }
                 if step == 0 || rng.below(8) == 0 {
                     db.sync().map_err(|e| format!("sync: {e}"))?;
                     durable = acknowledged.len();
@@ -199,7 +322,8 @@ fn run_seed(seed: u64) -> Result<(), String> {
                 }
                 if round > 0 && rng.below(32) == 0 {
                     drop(db);
-                    db = Kiban::open_with_options(dir.path(), options.clone())
+                    db = mode
+                        .open(dir.path(), options.clone())
                         .map_err(|e| format!("graceful reopen: {e}"))?;
                     let recovered = read_model(&db)?;
                     matching_prefix(&base, &acknowledged, acknowledged.len(), &recovered)?;
@@ -219,7 +343,10 @@ fn run_seed(seed: u64) -> Result<(), String> {
                     let result = if checkpoint {
                         db.checkpoint()
                     } else {
-                        db.flush()
+                        db.flush().and_then(|()| {
+                            while db.step()? {}
+                            Ok(())
+                        })
                     };
                     drop(db);
                     result
@@ -230,14 +357,16 @@ fn run_seed(seed: u64) -> Result<(), String> {
                 }
             }
             sys::power_loss_seeded(crash_seed);
-            db = Kiban::open_with_options(dir.path(), options.clone())
+            db = mode
+                .open(dir.path(), options.clone())
                 .map_err(|e| format!("{context}, crash reopen: {e}"))?;
             let recovered = read_model(&db).map_err(|e| format!("{context}: {e}"))?;
             matching_prefix(&base, &acknowledged, durable, &recovered)
                 .map_err(|e| format!("{context}: {e}"))?;
             base = recovered;
+            images.push(device_image(dir.path()));
         }
-        Ok(())
+        Ok(images)
     };
     let result =
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(run)).unwrap_or_else(|panic| {
@@ -250,7 +379,8 @@ fn run_seed(seed: u64) -> Result<(), String> {
         });
     result.map_err(|e| {
         format!(
-            "seed {seed}: {e}\nrepro: KIBAN_SIM_SEED_START={seed} KIBAN_SIM_SEEDS=1 cargo test --lib seeded_crash_long -- --ignored --nocapture"
+            "seed {seed}: {e}\nrepro: KIBAN_SIM_SEED_START={seed} KIBAN_SIM_SEEDS=1 cargo test --lib {} -- --ignored --nocapture",
+            mode.long_test(),
         )
     })
 }
@@ -258,13 +388,48 @@ fn run_seed(seed: u64) -> Result<(), String> {
 #[test]
 fn seeded_crash_fixed_corpus() {
     for seed in 0..64 {
-        run_seed(seed).unwrap_or_else(|e| panic!("{e}"));
+        run_seed(seed, EngineMode::Direct).unwrap_or_else(|e| panic!("{e}"));
     }
 }
 
 #[test]
 #[ignore = "long seeded crash sweep; configure KIBAN_SIM_SEEDS and KIBAN_SIM_SEED_START"]
 fn seeded_crash_long() {
+    long_run(EngineMode::Direct);
+}
+
+#[test]
+fn shared_seeded_crash_fixed_corpus() {
+    for seed in 0..64 {
+        run_seed(seed, EngineMode::Shared).unwrap_or_else(|e| panic!("{e}"));
+    }
+}
+
+#[test]
+fn seeded_crash_device_state_is_deterministic() {
+    assert_deterministic(EngineMode::Direct);
+}
+
+#[test]
+fn shared_seeded_crash_device_state_is_deterministic() {
+    assert_deterministic(EngineMode::Shared);
+}
+
+fn assert_deterministic(mode: EngineMode) {
+    for seed in 0..8 {
+        let first = run_seed(seed, mode).unwrap_or_else(|e| panic!("{e}"));
+        let second = run_seed(seed, mode).unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(first, second, "seed {seed} produced different device bytes");
+    }
+}
+
+#[test]
+#[ignore = "long shared seeded crash sweep; configure KIBAN_SIM_SEEDS and KIBAN_SIM_SEED_START"]
+fn shared_seeded_crash_long() {
+    long_run(EngineMode::Shared);
+}
+
+fn long_run(mode: EngineMode) {
     fn setting(name: &str, default: u64) -> u64 {
         std::env::var(name).map_or(default, |value| {
             value
@@ -278,7 +443,7 @@ fn seeded_crash_long() {
     let end = start.checked_add(count).expect("seed range overflow");
     let started = std::time::Instant::now();
     for seed in start..end {
-        run_seed(seed).unwrap_or_else(|e| panic!("{e}"));
+        run_seed(seed, mode).unwrap_or_else(|e| panic!("{e}"));
     }
     let elapsed = started.elapsed().as_secs_f64();
     eprintln!(
