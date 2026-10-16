@@ -1,0 +1,2 @@
+{"call_ops_s":13464.018598495164,"call_seconds":0.742720305,"errors":0,"latency":{"count":10000,"max_ns":3771928,"p50_ns":50176,"p999_ns":3014656,"p99_ns":425984},"reads":{"count":10000,"max_ns":3771928,"p50_ns":50176,"p999_ns":3014656,"p99_ns":425984},"type":"stage","verified_ops_s":13456.649748670556,"wall_seconds":0.743127018,"workload":"transport-floor","write_readback_seconds":0.0,"writes":{"count":0,"max_ns":0,"p50_ns":null,"p999_ns":null,"p99_ns":null}}
+{"type":"complete","verified_responses":10000}

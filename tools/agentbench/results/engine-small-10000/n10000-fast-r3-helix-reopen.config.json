@@ -1,0 +1,13 @@
+{
+  "backend": "helix",
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-d4970700/target/enginebench-results/small-10000/data/n10000-fast-r3-helix",
+  "n": 10000,
+  "operations": 10000,
+  "k": 10,
+  "seed": 20261016,
+  "output": "/home/aetos/.t3/worktrees/kiban/t3-d4970700/target/enginebench-results/small-10000/n10000-fast-r3-helix-reopen.jsonl",
+  "verify_only": true,
+  "mode": "fast",
+  "warmup": 100,
+  "write_operations": 10000
+}

@@ -1,0 +1,11 @@
+{
+  "backend": "lmdb",
+  "cache_mib": null,
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-d4970700/target/enginebench-results/cache-budget-1000000/data/r2-lmdb",
+  "n": 1000000,
+  "operations": 100000,
+  "k": 10,
+  "seed": 20261016,
+  "output": "/home/aetos/.t3/worktrees/kiban/t3-d4970700/target/enginebench-results/cache-budget-1000000/r2-lmdb-reopen.jsonl",
+  "verify_only": true
+}

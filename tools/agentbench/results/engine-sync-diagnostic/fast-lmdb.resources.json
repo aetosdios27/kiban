@@ -1,0 +1,46 @@
+{
+  "base_records": 10000,
+  "boundary_load_samples": [
+    {
+      "epoch": 1792166191.682059,
+      "load": [
+        2.0751953125,
+        1.66845703125,
+        2.01318359375
+      ]
+    },
+    {
+      "epoch": 1792166191.7319922,
+      "load": [
+        2.0751953125,
+        1.66845703125,
+        2.01318359375
+      ]
+    }
+  ],
+  "cpus_allowed_list": "1-4",
+  "engine_settings": {
+    "heed3": "0.22.0",
+    "lmdb_flags": "EnvFlags(NO_SYNC | NO_META_SYNC)",
+    "lmdb_flags_bits": 327680,
+    "map_size_bytes": 10737418240
+  },
+  "final_population": 11000,
+  "measurement_end_epoch": 1792166191.7319922,
+  "measurement_start_epoch": 1792166191.682059,
+  "peak_rss_bytes": 22159360,
+  "preload": {
+    "base_records": 10000,
+    "durability": "relaxed bulk batches; explicit sync at end, all outside measurement",
+    "initial_verification_seconds": 0.016291345,
+    "kiban_batch_records": 10000,
+    "lmdb_helix_bulk_transactions": 1,
+    "load_and_final_sync_seconds": 0.017452107,
+    "reopen_verification_seconds": 0.013387502
+  },
+  "proc_io": "rchar: 20294\nwchar: 55740125\nsyscr: 41\nsyscw: 13058\nread_bytes: 0\nwrite_bytes: 17620992\ncancelled_write_bytes: 0\n",
+  "proc_stat": "487688 (kiban-engineben) R 487610 487688 487688 0 -1 4194304 2708 0 2 0 6 2 0 0 20 0 1 0 6509455 11821887488 3350 18446744073709551615 94281907261120 94281909699136 140721985142384 0 0 0 0 4096 1088 0 0 0 17 2 0 0 0 0 0 94281909745552 94281909762576 94282944667648 140721985147831 140721985148040 140721985148040 140721985154963 0\n",
+  "rss_bytes": 13996032,
+  "scope": "whole engine process including oracle, warmup and final verification; sampled before close",
+  "timed_write_operations": 1000
+}

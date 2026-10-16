@@ -1,0 +1,13 @@
+{
+  "backend": "lmdb",
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-d4970700/target/enginebench-results/large-1000000-kv/data/n1000000-fast-r3-lmdb",
+  "n": 1000000,
+  "operations": 100000,
+  "k": 10,
+  "seed": 20261016,
+  "output": "/home/aetos/.t3/worktrees/kiban/t3-d4970700/target/enginebench-results/large-1000000-kv/n1000000-fast-r3-lmdb.jsonl",
+  "verify_only": false,
+  "mode": "fast",
+  "warmup": 100,
+  "write_operations": 100000
+}

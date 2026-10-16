@@ -1,0 +1,37 @@
+{
+  "base_records": 10000,
+  "boundary_load_samples": [
+    {
+      "epoch": 1792166506.443819,
+      "load": [
+        2.31103515625,
+        2.15673828125,
+        2.1181640625
+      ]
+    },
+    {
+      "epoch": 1792166506.4730494,
+      "load": [
+        2.31103515625,
+        2.15673828125,
+        2.1181640625
+      ]
+    }
+  ],
+  "cpus_allowed_list": "1-4",
+  "engine_settings": {
+    "durable_call": "put + sync_data on WAL",
+    "fast_call": "put; default maintenance can still sync",
+    "per_write_sync": false
+  },
+  "final_population": 20000,
+  "measurement_end_epoch": 1792166506.4730494,
+  "measurement_start_epoch": 1792166506.443819,
+  "peak_rss_bytes": 18644992,
+  "preload": null,
+  "proc_io": "rchar: 7974236\nwchar: 52\nsyscr: 1907\nsyscw: 1\nread_bytes: 0\nwrite_bytes: 4096\ncancelled_write_bytes: 0\n",
+  "proc_stat": "490279 (kiban-engineben) R 488664 490279 490279 0 -1 4194304 259 0 0 0 2 0 0 0 20 0 1 0 6540937 1080705024 4516 18446744073709551615 94807027965632 94807030403648 140722087152160 0 0 0 0 4096 1088 0 0 0 17 4 0 0 0 0 0 94807030450064 94807030467088 94807618355200 140722087158940 140722087159164 140722087159164 140722087165843 0\n",
+  "rss_bytes": 18644992,
+  "scope": "whole engine process including oracle, warmup and final verification; sampled before close",
+  "timed_write_operations": 10000
+}

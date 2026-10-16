@@ -1,0 +1,62 @@
+{
+  "boundary_load_samples": [
+    {
+      "epoch": 1792169838.048459,
+      "load": [
+        3.32373046875,
+        1.96435546875,
+        1.8720703125
+      ]
+    },
+    {
+      "epoch": 1792169839.0426884,
+      "load": [
+        3.32373046875,
+        1.96435546875,
+        1.8720703125
+      ]
+    }
+  ],
+  "cache_counters": null,
+  "measurement_end_epoch": 1792169839.0426884,
+  "measurement_start_epoch": 1792169838.048459,
+  "memory_after_final_verification": {
+    "Cpus_allowed_list": "1-4",
+    "RssAnon": 3764224,
+    "RssFile": 841580544,
+    "VmHWM": 1393885184,
+    "VmRSS": 845344768,
+    "VmSwap": 0
+  },
+  "memory_after_timing": {
+    "Cpus_allowed_list": "1-4",
+    "RssAnon": 4370432,
+    "RssFile": 841580544,
+    "VmHWM": 1393885184,
+    "VmRSS": 845950976,
+    "VmSwap": 0
+  },
+  "memory_before_timing": {
+    "Cpus_allowed_list": "1-4",
+    "RssAnon": 11759616,
+    "RssFile": 841580544,
+    "VmHWM": 1393885184,
+    "VmRSS": 853340160,
+    "VmSwap": 0
+  },
+  "preload": {
+    "base_records": 1000000,
+    "load_sync_verify_close_seconds": 2.720508578
+  },
+  "rss_scope": "Direct benchmark process before SharedKiban counter replay; includes untimed preload; no isolated heap claim",
+  "settings": {
+    "block_cache_mib": null,
+    "lmdb_flags_bits": 327680,
+    "max_open_table_files": 128,
+    "mmap_max_level": null,
+    "mode": "fast",
+    "range_cache_bytes": 0,
+    "range_readahead_bytes": 262144
+  },
+  "sst_layout_after_preload": null
+}

@@ -1,0 +1,184 @@
+{
+  "boundary_load_samples": [
+    {
+      "epoch": 1792169908.4090815,
+      "load": [
+        2.96044921875,
+        2.1240234375,
+        1.9375
+      ]
+    },
+    {
+      "epoch": 1792169910.2207038,
+      "load": [
+        3.0439453125,
+        2.1552734375,
+        1.94873046875
+      ]
+    }
+  ],
+  "cache_counters": {
+    "scope": "Excluded SharedKiban counter replay, not timed direct Kiban calls; identical keys, preload verification and unchanged SST layout",
+    "stages": [
+      {
+        "after": {
+          "capacity_bytes": 33554432,
+          "evictions": 158728,
+          "hits": 933421,
+          "levels": [
+            {
+              "bytes": 329843853,
+              "level": 0,
+              "tables": 1
+            }
+          ],
+          "misses": 166690,
+          "resident_bytes": 33553798,
+          "resident_entries": 7962,
+          "table_files": "TableFileCacheStats { capacity: 128, resident: 1, leased: 0, hits: 166691, misses: 1, evictions: 0, waits: 0 }"
+        },
+        "before": {
+          "capacity_bytes": 33554432,
+          "evictions": 69025,
+          "hits": 923127,
+          "levels": [
+            {
+              "bytes": 329843853,
+              "level": 0,
+              "tables": 1
+            }
+          ],
+          "misses": 76984,
+          "resident_bytes": 33551416,
+          "resident_entries": 7959,
+          "table_files": "TableFileCacheStats { capacity: 128, resident: 1, leased: 0, hits: 76985, misses: 1, evictions: 0, waits: 0 }"
+        },
+        "hit_rate": 0.10294,
+        "hits": 10294,
+        "misses": 89706,
+        "workload": "recall-by-id"
+      },
+      {
+        "after": {
+          "capacity_bytes": 33554432,
+          "evictions": 158824,
+          "hits": 1103563,
+          "levels": [
+            {
+              "bytes": 329843853,
+              "level": 0,
+              "tables": 1
+            }
+          ],
+          "misses": 166786,
+          "resident_bytes": 33554225,
+          "resident_entries": 7962,
+          "table_files": "TableFileCacheStats { capacity: 128, resident: 1, leased: 0, hits: 166787, misses: 1, evictions: 0, waits: 0 }"
+        },
+        "before": {
+          "capacity_bytes": 33554432,
+          "evictions": 158728,
+          "hits": 933421,
+          "levels": [
+            {
+              "bytes": 329843853,
+              "level": 0,
+              "tables": 1
+            }
+          ],
+          "misses": 166690,
+          "resident_bytes": 33553798,
+          "resident_entries": 7962,
+          "table_files": "TableFileCacheStats { capacity: 128, resident: 1, leased: 0, hits: 166691, misses: 1, evictions: 0, waits: 0 }"
+        },
+        "hit_rate": 0.9994360836006062,
+        "hits": 170142,
+        "misses": 96,
+        "workload": "recent-for-agent"
+      },
+      {
+        "after": {
+          "capacity_bytes": 33554432,
+          "evictions": 248352,
+          "hits": 1114035,
+          "levels": [
+            {
+              "bytes": 329843853,
+              "level": 0,
+              "tables": 1
+            }
+          ],
+          "misses": 256314,
+          "resident_bytes": 33552456,
+          "resident_entries": 7962,
+          "table_files": "TableFileCacheStats { capacity: 128, resident: 1, leased: 0, hits: 256315, misses: 1, evictions: 0, waits: 0 }"
+        },
+        "before": {
+          "capacity_bytes": 33554432,
+          "evictions": 158824,
+          "hits": 1103563,
+          "levels": [
+            {
+              "bytes": 329843853,
+              "level": 0,
+              "tables": 1
+            }
+          ],
+          "misses": 166786,
+          "resident_bytes": 33554225,
+          "resident_entries": 7962,
+          "table_files": "TableFileCacheStats { capacity: 128, resident: 1, leased: 0, hits: 166787, misses: 1, evictions: 0, waits: 0 }"
+        },
+        "hit_rate": 0.10472,
+        "hits": 10472,
+        "misses": 89528,
+        "workload": "mixed-key-reads-only"
+      }
+    ]
+  },
+  "measurement_end_epoch": 1792169910.2207038,
+  "measurement_start_epoch": 1792169908.4090815,
+  "memory_after_final_verification": {
+    "Cpus_allowed_list": "1-4",
+    "RssAnon": 119484416,
+    "RssFile": 3555328,
+    "VmHWM": 1694502912,
+    "VmRSS": 123039744,
+    "VmSwap": 0
+  },
+  "memory_after_timing": {
+    "Cpus_allowed_list": "1-4",
+    "RssAnon": 121532416,
+    "RssFile": 3555328,
+    "VmHWM": 1694502912,
+    "VmRSS": 125087744,
+    "VmSwap": 0
+  },
+  "memory_before_timing": {
+    "Cpus_allowed_list": "1-4",
+    "RssAnon": 118374400,
+    "RssFile": 3555328,
+    "VmHWM": 1694502912,
+    "VmRSS": 121929728,
+    "VmSwap": 0
+  },
+  "preload": {
+    "base_records": 1000000,
+    "load_sync_verify_close_seconds": 4.712786543
+  },
+  "rss_scope": "Direct benchmark process before SharedKiban counter replay; includes untimed preload; no isolated heap claim",
+  "settings": {
+    "block_cache_mib": 32,
+    "lmdb_flags_bits": null,
+    "max_open_table_files": 128,
+    "mmap_max_level": null,
+    "mode": "fast",
+    "range_cache_bytes": 0,
+    "range_readahead_bytes": 262144
+  },
+  "sst_layout_after_preload": {
+    "0": [
+      2
+    ]
+  }
+}
