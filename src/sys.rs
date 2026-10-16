@@ -3,14 +3,18 @@
 //!
 //! Per `ARCHITECTURE.md`: production is passthrough;
 //! tests can (a) make the Nth checked operation return `EIO`, and
-//! (b) enable a simulated volatile device where writes land in an
-//! overlay that only `sync` commits to the "disk" — so a simulated
-//! power loss discards exactly the unsynced bytes and durability
-//! becomes *exactly* assertable, not banded.
+//! (b) enable a simulated volatile device. File bytes land in an overlay
+//! that only a file sync commits; creates, renames and removals are
+//! durable only after a sync of the parent directory.
 //!
-//! Reads are not fault-injected: the simulated crash is process death
-//! with a warm page cache, and the device simulation models exactly the
-//! volatile layers between Kiban and the medium.
+//! [`power_loss`] is strict: every unsynced byte and namespace change is
+//! lost, so recovery must equal the last synced state exactly.
+//! [`power_loss_seeded`] is adversarial and reproducible: an ordered prefix
+//! of namespace changes survives and unsynced bytes may be dropped, kept,
+//! cut short, zero-filled or torn by sector.
+//!
+//! Reads are not fault-injected. Truncation via `set_len` is treated as
+//! immediately durable, which is weaker than a real device.
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -95,7 +99,7 @@ fn check() -> io::Result<()> {
 
 // ------------------------------------------------- power-loss simulation
 
-/// One simulated file. `committed` is what survives power loss;
+/// One simulated inode. `committed` is what survives power loss;
 /// `overlay` is written-but-unsynced bytes living in volatile memory.
 #[derive(Debug, Default, Clone)]
 struct SimFile {
@@ -103,7 +107,152 @@ struct SimFile {
     overlay: Vec<u8>,
 }
 
-type SimDevice = Arc<Mutex<HashMap<PathBuf, SimFile>>>;
+/// A directory-entry change that is visible but not yet durable.
+#[derive(Debug, Clone)]
+enum NsOp {
+    Create {
+        path: PathBuf,
+        inode: u64,
+    },
+    Rename {
+        from: PathBuf,
+        to: PathBuf,
+        inode: u64,
+    },
+    Remove {
+        path: PathBuf,
+    },
+}
+
+impl NsOp {
+    /// The directory whose fsync makes this change durable.
+    fn dir(&self) -> &Path {
+        let path = match self {
+            NsOp::Create { path, .. } | NsOp::Remove { path } => path,
+            NsOp::Rename { to, .. } => to,
+        };
+        path.parent().unwrap_or(Path::new(""))
+    }
+
+    fn apply(&self, names: &mut HashMap<PathBuf, u64>) {
+        match self {
+            NsOp::Create { path, inode } => {
+                names.insert(path.clone(), *inode);
+            }
+            NsOp::Rename { from, to, inode } => {
+                if names.get(from) == Some(inode) {
+                    names.remove(from);
+                }
+                names.insert(to.clone(), *inode);
+            }
+            NsOp::Remove { path } => {
+                names.remove(path);
+            }
+        }
+    }
+}
+
+/// A volatile block device under a POSIX-like namespace: file data is
+/// durable only after a file sync, and creates, renames and removals are
+/// durable only after a sync of the parent directory.
+#[derive(Debug, Default)]
+struct Device {
+    /// The namespace as the running process observes it.
+    names: HashMap<PathBuf, u64>,
+    /// The namespace that survives power loss.
+    durable: HashMap<PathBuf, u64>,
+    /// Visible namespace changes not yet made durable, in issue order.
+    pending: Vec<NsOp>,
+    inodes: HashMap<u64, SimFile>,
+    next_inode: u64,
+}
+
+impl Device {
+    fn contains_key(&self, path: &Path) -> bool {
+        self.names.contains_key(path)
+    }
+
+    fn get(&self, path: &Path) -> Option<&SimFile> {
+        self.names.get(path).and_then(|i| self.inodes.get(i))
+    }
+
+    fn get_mut(&mut self, path: &Path) -> Option<&mut SimFile> {
+        let inode = *self.names.get(path)?;
+        self.inodes.get_mut(&inode)
+    }
+
+    fn keys(&self) -> impl Iterator<Item = &PathBuf> {
+        self.names.keys()
+    }
+
+    fn create(&mut self, path: &Path) {
+        let inode = self.next_inode;
+        self.next_inode += 1;
+        self.inodes.insert(inode, SimFile::default());
+        self.names.insert(path.to_path_buf(), inode);
+        self.pending.push(NsOp::Create {
+            path: path.to_path_buf(),
+            inode,
+        });
+    }
+
+    fn rename(&mut self, from: &Path, to: &Path) {
+        if let Some(inode) = self.names.remove(from) {
+            self.names.insert(to.to_path_buf(), inode);
+            self.pending.push(NsOp::Rename {
+                from: from.to_path_buf(),
+                to: to.to_path_buf(),
+                inode,
+            });
+        }
+    }
+
+    fn remove(&mut self, path: &Path) {
+        if self.names.remove(path).is_some() {
+            self.pending.push(NsOp::Remove {
+                path: path.to_path_buf(),
+            });
+        }
+    }
+
+    /// Directory fsync: every pending change to entries of `dir` becomes
+    /// durable, in issue order.
+    fn sync_dir(&mut self, dir: &Path) {
+        let mut rest = Vec::with_capacity(self.pending.len());
+        for op in self.pending.drain(..) {
+            if op.dir() == dir {
+                op.apply(&mut self.durable);
+            } else {
+                rest.push(op);
+            }
+        }
+        self.pending = rest;
+    }
+
+    /// Replaces the visible state with what survives the crash. `keep_ops`
+    /// pending namespace changes persist (a journal commits in order);
+    /// `tear` decides what remains of each inode's unsynced bytes.
+    fn crash(&mut self, keep_ops: usize, mut tear: impl FnMut(&[u8]) -> Vec<u8>) {
+        for op in self.pending.drain(..).take(keep_ops) {
+            op.apply(&mut self.durable);
+        }
+        self.pending.clear();
+        self.names = self.durable.clone();
+        let live: HashSet<u64> = self.names.values().copied().collect();
+        self.inodes.retain(|inode, _| live.contains(inode));
+        // Inode order, so a seeded tear is independent of map iteration order.
+        let mut order: Vec<u64> = self.inodes.keys().copied().collect();
+        order.sort_unstable();
+        for inode in order {
+            let file = self.inodes.get_mut(&inode).expect("live inode");
+            let overlay = std::mem::take(&mut file.overlay);
+            let survived = tear(&overlay);
+            file.committed.extend_from_slice(&survived);
+        }
+    }
+}
+
+type SimDevice = Arc<Mutex<Device>>;
 
 thread_local! {
     /// None = passthrough mode; Some = device simulation active. The device
@@ -116,7 +265,7 @@ thread_local! {
 /// Routes file operations through the simulated volatile device.
 pub fn enable_device_sim() {
     DEVICE.with(|d| {
-        *d.borrow_mut() = Some(Arc::new(Mutex::new(HashMap::new())));
+        *d.borrow_mut() = Some(Arc::new(Mutex::new(Device::default())));
     });
 }
 
@@ -145,23 +294,75 @@ pub fn disable_device_sim() {
     });
 }
 
-/// Discards every overlay: unsynced bytes never existed. Committed bytes
-/// remain exactly as last synced.
+/// Strict power loss: unsynced bytes and namespace changes not followed by
+/// a directory sync never existed. Committed state remains exactly as last
+/// synced.
 pub fn power_loss() {
-    DEVICE.with(|d| {
-        if let Some(files) = d.borrow().as_ref() {
-            for f in files.lock().expect("simulated device").values_mut() {
-                f.overlay.clear();
-            }
-        }
+    with_sim(|device| device.crash(0, |_| Vec::new()));
+}
+
+/// Adversarial power loss, fully determined by `seed`. An ordered prefix of
+/// the pending namespace changes persists, and each file keeps all, none, a
+/// prefix, a prefix followed by zeros, or an arbitrary set of 512-byte
+/// sectors (lost sectors read as zeros) of its unsynced bytes.
+pub fn power_loss_seeded(seed: u64) {
+    let mut rng = SplitMix64(seed);
+    with_sim(|device| {
+        let keep_ops = rng.below(device.pending.len() as u64 + 1) as usize;
+        device.crash(keep_ops, |overlay| tear(overlay, rng.next()));
     });
+}
+
+/// What survives of one file's unsynced bytes for tear decision `r`.
+fn tear(overlay: &[u8], r: u64) -> Vec<u8> {
+    const SECTOR: usize = 512;
+    let mut rng = SplitMix64(r);
+    let len = overlay.len();
+    match rng.below(5) {
+        0 => Vec::new(),
+        1 => overlay.to_vec(),
+        2 => overlay[..rng.below(len as u64 + 1) as usize].to_vec(),
+        3 => {
+            let keep = rng.below(len as u64 + 1) as usize;
+            let mut out = overlay[..keep].to_vec();
+            out.resize(len, 0);
+            out
+        }
+        _ => {
+            let mut out = overlay.to_vec();
+            for chunk in out.chunks_mut(SECTOR) {
+                if rng.below(2) == 0 {
+                    chunk.fill(0);
+                }
+            }
+            out
+        }
+    }
+}
+
+/// Small deterministic generator for crash decisions (no dependencies).
+pub(crate) struct SplitMix64(pub(crate) u64);
+
+impl SplitMix64 {
+    pub(crate) fn next(&mut self) -> u64 {
+        self.0 = self.0.wrapping_add(0x9e37_79b9_7f4a_7c15);
+        let mut z = self.0;
+        z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        z ^ (z >> 31)
+    }
+
+    /// Uniform-enough value in `0..n` (n > 0) for test decisions.
+    pub(crate) fn below(&mut self, n: u64) -> u64 {
+        self.next() % n.max(1)
+    }
 }
 
 fn sim_active() -> bool {
     DEVICE.with(|d| d.borrow().is_some())
 }
 
-fn with_sim<R>(f: impl FnOnce(&mut HashMap<PathBuf, SimFile>) -> R) -> Option<R> {
+fn with_sim<R>(f: impl FnOnce(&mut Device) -> R) -> Option<R> {
     let device = DEVICE.with(|d| d.borrow().clone())?;
     let mut files = device.lock().expect("simulated device");
     Some(f(&mut files))
@@ -232,9 +433,7 @@ impl File {
             return Err(io::Error::new(io::ErrorKind::AlreadyExists, "file exists"));
         }
         if existed == Some(false) {
-            with_sim(|files| {
-                files.insert(path.to_path_buf(), SimFile::default());
-            });
+            with_sim(|files| files.create(path));
             return Ok(File {
                 inner: None,
                 sim_path: Some(path.to_path_buf()),
@@ -410,13 +609,16 @@ impl File {
         Ok(buf)
     }
 
+    /// File sync commits the file's bytes; a sync of a path that is not a
+    /// simulated file is a directory sync and commits its entries.
     fn commit_overlay(&self) {
         if let Some(p) = &self.sim_path {
-            with_sim(|files| {
-                if let Some(f) = files.get_mut(p) {
-                    f.committed.extend_from_slice(&f.overlay);
-                    f.overlay.clear();
+            with_sim(|files| match files.get_mut(p) {
+                Some(f) => {
+                    let overlay = std::mem::take(&mut f.overlay);
+                    f.committed.extend_from_slice(&overlay);
                 }
+                None => files.sync_dir(p),
             });
         }
     }
@@ -494,11 +696,7 @@ pub fn read(path: &Path) -> io::Result<Vec<u8>> {
 
 pub fn rename(from: &Path, to: &Path) -> io::Result<()> {
     check()?;
-    with_sim(|files| {
-        if let Some(f) = files.remove(from) {
-            files.insert(to.to_path_buf(), f);
-        }
-    });
+    with_sim(|files| files.rename(from, to));
     match (sim_active(), known_real(from)) {
         (true, false) => Ok(()),
         _ => std::fs::rename(from, to),
@@ -513,9 +711,7 @@ fn known_real(_p: &Path) -> bool {
 
 pub fn remove_file(path: &Path) -> io::Result<()> {
     check()?;
-    with_sim(|files| {
-        files.remove(path);
-    });
+    with_sim(|files| files.remove(path));
     if sim_active() {
         return Ok(());
     }
