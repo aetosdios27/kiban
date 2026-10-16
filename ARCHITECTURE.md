@@ -24,6 +24,8 @@ batch uses one WAL record and publishes every operation under one shared-memtabl
 guard, so concurrent point reads cannot see a prefix. Buffered mutation success
 does not acknowledge crash durability. Successful `sync()` covers all live WAL
 generations; errors that leave WAL/commit state unsafe poison future mutations.
+Rotation syncs the closed WAL generation before opening the next generation, so
+WAL generations become durable in order and recovery is a prefix across generations.
 
 Flush and compaction write new immutable SSTs, sync them and install a new
 MANIFEST through temporary-file write, file sync, rename and directory sync.
@@ -55,7 +57,9 @@ User values can mimic such a marker only by guessing the private 64-bit nonce
 of scope under the buggy-not-malicious threat model. Recovery reports corruption
 and leaves the WAL untouched. Ordinary aligned records and markers with another
 nonce do not count. If the header is missing (an old-format log) or unreadable,
-no marker counts and damage truncates. Without a surviving matching marker,
+no marker counts and damage truncates. If truncation removes the header frame,
+open writes a fresh header with a new nonce and syncs it before accepting writes.
+Without a surviving matching marker,
 recovery truncates and syncs at the last valid frame boundary, including for
 zero-filled or partially written tails. Damage to synced bytes with no later
 surviving marker also truncates rather than errors. The new op codes change the

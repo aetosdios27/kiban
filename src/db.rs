@@ -1568,6 +1568,10 @@ impl Kiban {
             return Ok(());
         }
 
+        // Close this generation durably before the next WAL can accept writes.
+        // Use the normal sync path so failures poison and marker/padding state agrees.
+        self.sync()?;
+
         // Reserve identities before preparing cached SST handles. A failed
         // attempt must never reuse a number whose inode/blocks were cached.
         let sst_number = self.next_file_number.fetch_add(2, Ordering::SeqCst);
@@ -1719,6 +1723,10 @@ impl Kiban {
         if self.memtable.is_empty() || self.immutable.is_some() {
             return Ok(());
         }
+
+        // Close this generation durably before the next WAL can accept writes.
+        // Use the normal sync path so failures poison and marker/padding state agrees.
+        self.sync()?;
 
         // Reserve before creating the WAL, exactly like flush: a failed
         // attempt must never hand the same identity to a later file.
@@ -5070,6 +5078,27 @@ impl SharedKiban {
         dir: impl AsRef<Path>,
         options: KibanOptions,
     ) -> Result<SharedKiban, DbError> {
+        Self::open_with_maintenance(dir, options, Maintenance::spawn)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn open_manual(
+        dir: impl AsRef<Path>,
+        options: KibanOptions,
+    ) -> Result<SharedKiban, DbError> {
+        Self::open_with_maintenance(dir, options, Maintenance::manual)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn step(&self) -> bool {
+        self.maintenance.step()
+    }
+
+    fn open_with_maintenance(
+        dir: impl AsRef<Path>,
+        options: KibanOptions,
+        start: impl FnOnce(StdArc<ShardedRwLock<Kiban>>) -> StdArc<Maintenance>,
+    ) -> Result<SharedKiban, DbError> {
         let kiban = Kiban::open_with_options(dir, options)?;
         // Cloned out before `kiban` moves into the engine-wide gate:
         // this is `SharedKiban`'s OWN direct handle to the same
@@ -5078,7 +5107,7 @@ impl SharedKiban {
         let read_view = kiban.read_view.clone();
         let read_amp = kiban.read_amp.clone();
         let inner = std::sync::Arc::new(ShardedRwLock::new(kiban));
-        let maintenance = Maintenance::spawn(inner.clone());
+        let maintenance = start(inner.clone());
         Ok(SharedKiban {
             inner,
             read_view,
@@ -5497,6 +5526,73 @@ mod shared_tests {
     use crate::testutil::TempDir;
     use std::collections::BTreeMap;
     use std::sync::Arc as StdArc;
+
+    #[test]
+    fn manual_maintenance_steps_jobs_and_relieve_backpressure() {
+        let td = TempDir::new("manual-maintenance");
+        let mut options = super::compaction_tests::tiny_options();
+        options.write_buffer_bytes = 128;
+        options.l0_write_stall_trigger = 3;
+        let db = SharedKiban::open_manual(td.path(), options).unwrap();
+        assert!(!db.step());
+        for generation in 0..2 {
+            db.put([generation], [generation; 256]).unwrap();
+            assert_eq!(
+                db.stats().unwrap().maintenance.flushes_completed,
+                generation as u64
+            );
+            assert!(db.step());
+            let stats = db.stats().unwrap().maintenance;
+            assert_eq!(stats.flushes_completed, generation as u64 + 1);
+            assert_eq!(stats.compactions_completed, 0);
+        }
+        assert!(db.step());
+        assert_eq!(db.stats().unwrap().maintenance.compactions_completed, 1);
+        // No explicit steps: writers must drive both flush and L0 pressure.
+        for key in 2..20 {
+            db.put([key], [key; 256]).unwrap();
+        }
+        assert!(db.stats().unwrap().maintenance.write_stalls > 0);
+        db.flush().unwrap();
+        db.checkpoint().unwrap();
+        assert!(!db.step());
+        for key in 0..20 {
+            assert_eq!(db.get([key]).unwrap(), Some(vec![key; 256]));
+        }
+    }
+
+    #[test]
+    fn manual_maintenance_errors_and_panics_are_sticky() {
+        for panic in [false, true] {
+            let td = TempDir::new("manual-failure");
+            let mut options = super::compaction_tests::tiny_options();
+            options.write_buffer_bytes = 128;
+            let db = SharedKiban::open_manual(td.path(), options).unwrap();
+            db.put(b"key", [1; 256]).unwrap();
+            if panic {
+                db.maintenance
+                    .inject_on_worker(|| panic!("manual test panic"));
+            } else {
+                sys::install_fault(0);
+            }
+            assert!(!db.step());
+            sys::clear_fault();
+            let error = db.maintenance_error().unwrap().to_string();
+            if panic {
+                assert!(error.contains("worker thread panicked"));
+                assert_eq!(db.stats().unwrap().maintenance.compactions_failed, 1);
+            } else {
+                assert_eq!(db.stats().unwrap().maintenance.flushes_failed, 1);
+            }
+            assert!(!db.step());
+            assert!(matches!(
+                db.put(b"next", b"v"),
+                Err(DbError::Maintenance(_))
+            ));
+            assert!(matches!(db.checkpoint(), Err(DbError::Maintenance(_))));
+            assert_eq!(db.maintenance_error().unwrap().to_string(), error);
+        }
+    }
 
     #[test]
     fn handles_are_clonable_and_share_state() {
@@ -9179,3 +9275,68 @@ mod read_path_tests;
 #[cfg(test)]
 #[path = "simulation_tests.rs"]
 mod simulation_tests;
+
+#[cfg(test)]
+mod rotation_durability_tests {
+    use super::*;
+    use crate::{sys, testutil::TempDir};
+
+    #[test]
+    fn shared_frozen_wal_prefix_repro() {
+        let dir = TempDir::new("cross-wal-prefix");
+        sys::enable_device_sim();
+        let mut options = super::compaction_tests::tiny_options();
+        options.write_buffer_bytes = 512;
+        let db = SharedKiban::open_manual(dir.path(), options.clone()).unwrap();
+        db.put(b"earlier", [1; 700]).unwrap();
+        db.put(b"later", [2; 10_000]).unwrap();
+        sys::capture_crash(0, || drop(db));
+        sys::power_loss_seeded(4);
+        let db = Kiban::open_with_options(dir.path(), options).unwrap();
+        let earlier = db.get(b"earlier").unwrap().is_some();
+        let later = db.get(b"later").unwrap().is_some();
+        drop(db);
+        sys::disable_device_sim();
+        assert!(
+            earlier || !later,
+            "crash seed 4: earlier={earlier}, later={later}; later WAL write survived without earlier WAL write"
+        );
+    }
+
+    #[test]
+    fn rotation_sync_failures_poison_before_creating_the_next_wal() {
+        for freeze in [false, true] {
+            // The buffered record/padding write, then fdatasync.
+            for fault in 0..2 {
+                let dir = TempDir::new("rotation-sync-failure");
+                let mut db = Kiban::open(dir.path()).unwrap();
+                db.put(b"accepted", b"value").unwrap();
+                let old_wal = db.wal_number;
+                sys::install_fault(fault);
+                let result = if freeze { db.freeze() } else { db.flush() };
+                sys::clear_fault();
+                assert!(matches!(result, Err(DbError::Poisoned(_))), "{result:?}");
+                assert!(
+                    matches!(
+                        db.poison_cause(),
+                        Some(PoisonCause::WalAppendFailed(_)) if fault == 0
+                    ) || matches!(
+                        db.poison_cause(),
+                        Some(PoisonCause::WalSyncFailed(_)) if fault == 1
+                    )
+                );
+                assert_eq!(db.wal_number, old_wal);
+                assert!(db.immutable.is_none());
+                assert_eq!(
+                    fs::read_dir(dir.path())
+                        .unwrap()
+                        .filter_map(Result::ok)
+                        .filter(|e| e.path().extension().is_some_and(|ext| ext == WAL_EXTENSION))
+                        .count(),
+                    1
+                );
+                assert!(matches!(db.put(b"later", b"v"), Err(DbError::Poisoned(_))));
+            }
+        }
+    }
+}

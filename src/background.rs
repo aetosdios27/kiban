@@ -196,6 +196,10 @@ pub(crate) struct Maintenance {
     thread: Mutex<Option<JoinHandle<()>>>,
     #[cfg(test)]
     test: TestHooks,
+    #[cfg(test)]
+    manual_engine: Option<Arc<ShardedRwLock<Kiban>>>,
+    #[cfg(test)]
+    cascade_level: Mutex<u32>,
 }
 
 impl Maintenance {
@@ -203,6 +207,13 @@ impl Maintenance {
         loop {
             if let Some(error) = self.error() {
                 return Err(error);
+            }
+            #[cfg(test)]
+            if self.is_manual() {
+                if !self.step() {
+                    return self.error().map_or(Ok(()), Err);
+                }
+                continue;
             }
             let s = self.state.lock().unwrap();
             if !s.busy && !s.wake {
@@ -215,8 +226,8 @@ impl Maintenance {
         }
     }
 
-    pub(crate) fn spawn(engine: Arc<ShardedRwLock<Kiban>>) -> Arc<Maintenance> {
-        let m = Arc::new(Maintenance {
+    fn new() -> Self {
+        Maintenance {
             handles: AtomicUsize::new(1),
             state: Mutex::new(Signal {
                 wake: false,
@@ -242,7 +253,15 @@ impl Maintenance {
             thread: Mutex::new(None),
             #[cfg(test)]
             test: TestHooks::default(),
-        });
+            #[cfg(test)]
+            manual_engine: None,
+            #[cfg(test)]
+            cascade_level: Mutex::new(1),
+        }
+    }
+
+    pub(crate) fn spawn(engine: Arc<ShardedRwLock<Kiban>>) -> Arc<Maintenance> {
+        let m = Arc::new(Self::new());
         let worker = m.clone();
         let device = crate::sys::device_handle();
         let handle = std::thread::spawn(move || {
@@ -251,6 +270,48 @@ impl Maintenance {
         });
         *m.thread.lock().unwrap() = Some(handle);
         m
+    }
+
+    #[cfg(test)]
+    pub(crate) fn manual(engine: Arc<ShardedRwLock<Kiban>>) -> Arc<Maintenance> {
+        let mut m = Self::new();
+        m.manual_engine = Some(engine);
+        Arc::new(m)
+    }
+
+    fn is_manual(&self) -> bool {
+        #[cfg(test)]
+        return self.manual_engine.is_some();
+        #[cfg(not(test))]
+        false
+    }
+
+    /// Runs one pending job on the caller. Manual tests use one driver thread.
+    #[cfg(test)]
+    pub(crate) fn step(&self) -> bool {
+        let engine = self
+            .manual_engine
+            .as_ref()
+            .expect("manual maintenance only");
+        {
+            let mut s = self.state.lock().unwrap();
+            if !s.wake || s.stop || s.error.is_some() || s.busy {
+                return false;
+            }
+            s.busy = true;
+        }
+        let mut cascade = self.cascade_level.lock().unwrap();
+        let did_work =
+            catch_maintenance_panic(self, || run_one_maintenance(engine, self, &mut cascade));
+        let mut s = self.state.lock().unwrap();
+        s.busy = false;
+        if !did_work || s.error.is_some() {
+            s.wake = false;
+            *cascade = 1;
+        }
+        drop(s);
+        self.condvar.notify_all();
+        did_work
     }
 
     /// Registers one more `SharedKiban` handle sharing this worker.
@@ -328,6 +389,11 @@ impl Maintenance {
     /// commit that bumps the epoch between a caller's read of it and
     /// this call can never be missed.
     pub(crate) fn wait_for_progress(&self, since: u64) {
+        #[cfg(test)]
+        if self.is_manual() {
+            self.step();
+            return;
+        }
         let mut s = self.state.lock().unwrap();
         while s.progress_epoch == since && s.error.is_none() && !s.stop {
             s = self.condvar.wait(s).unwrap();
@@ -449,17 +515,10 @@ fn worker_loop(engine: Arc<ShardedRwLock<Kiban>>, m: Arc<Maintenance>) {
             // bug, not an expected runtime condition — that must still
             // become a recorded, wake-triggering failure rather than a
             // silently vanished thread nobody notified.
-            let engine = &engine;
-            let m_ref = &m;
-            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                run_pending_maintenance(engine, m_ref);
-            }));
-            if let Err(payload) = outcome {
-                record_error(
-                    &m,
-                    format!("worker thread panicked: {}", panic_message(&payload)),
-                );
-            }
+            catch_maintenance_panic(&m, || {
+                run_pending_maintenance(&engine, &m);
+                true
+            });
         }
 
         {
@@ -470,6 +529,19 @@ fn worker_loop(engine: Arc<ShardedRwLock<Kiban>>, m: Arc<Maintenance>) {
 
         if m.state.lock().unwrap().stop {
             return;
+        }
+    }
+}
+
+fn catch_maintenance_panic(m: &Maintenance, run: impl FnOnce() -> bool) -> bool {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(run)) {
+        Ok(did_work) => did_work,
+        Err(payload) => {
+            record_error(
+                m,
+                format!("worker thread panicked: {}", panic_message(&payload)),
+            );
+            false
         }
     }
 }
@@ -595,97 +667,106 @@ impl MaintenancePressure {
 ///
 /// At most one immutable memtable can ever be pending (this phase's
 /// own rule), so at most one flush job runs per pass through the outer
-/// loop; `continue` after committing one so the loop rechecks — a
+/// loop; recheck after committing one — a
 /// fresh freeze can land while this job's BUILD was running unlocked.
-fn run_pending_maintenance(engine: &Arc<ShardedRwLock<Kiban>>, m: &Arc<Maintenance>) {
+fn run_pending_maintenance(engine: &Arc<ShardedRwLock<Kiban>>, m: &Maintenance) {
     let mut cascade_level = 1u32;
-    loop {
-        // 11.17-round-3.3: PLAN is read-only against `version` and
-        // reserves its own bookkeeping (`next_file_number`, `governor`)
-        // through their own atomic/mutex, so it no longer needs the
-        // full 8-shard reader-excluding gate `write()` requires — only
-        // COMMIT (which actually mutates `version`) does. This is what
-        // was measured to cause elevated foreground PUT tail during a
-        // read-heavy recovery phase: every PLAN attempt, including one
-        // that finds nothing to do, used to queue behind `writer_serial`
-        // and drain every shard exactly like a real mutation.
-        match run_one_flush(engine, m, false) {
-            Ok(true) => continue,
-            Ok(false) => (),
-            Err(_) => return, // run_one_flush recorded the sticky failure
-        }
+    while run_one_maintenance(engine, m, &mut cascade_level) {}
+}
 
-        let plan = {
-            let Ok(guard) = engine.read() else {
-                return;
-            };
-            guard.plan_next_compaction(&mut cascade_level)
+fn run_one_maintenance(
+    engine: &Arc<ShardedRwLock<Kiban>>,
+    m: &Maintenance,
+    cascade_level: &mut u32,
+) -> bool {
+    // 11.17-round-3.3: PLAN is read-only against `version` and
+    // reserves its own bookkeeping (`next_file_number`, `governor`)
+    // through their own atomic/mutex, so it no longer needs the
+    // full 8-shard reader-excluding gate `write()` requires — only
+    // COMMIT (which actually mutates `version`) does. This is what
+    // was measured to cause elevated foreground PUT tail during a
+    // read-heavy recovery phase: every PLAN attempt, including one
+    // that finds nothing to do, used to queue behind `writer_serial`
+    // and drain every shard exactly like a real mutation.
+    match run_one_flush(engine, m, false) {
+        Ok(true) => return true,
+        Ok(false) => (),
+        Err(_) => return false, // run_one_flush recorded the sticky failure
+    }
+
+    let plan = {
+        let Ok(guard) = engine.read() else {
+            return false;
         };
-        let Some(plan) = plan else { return };
+        guard.plan_next_compaction(cascade_level)
+    };
+    let Some(plan) = plan else { return false };
 
+    #[cfg(test)]
+    m.test.before_build();
+
+    let started = std::time::Instant::now();
+    let mut flush_time = std::time::Duration::ZERO;
+    let outputs = plan.build_with_progress(|| {
         #[cfg(test)]
-        m.test.before_build();
-
-        let started = std::time::Instant::now();
-        let mut flush_time = std::time::Duration::ZERO;
-        let outputs = plan.build_with_progress(|| {
+        m.test.before_compaction_progress.hit();
+        let flush_started = std::time::Instant::now();
+        if run_one_flush(engine, m, true)? {
             #[cfg(test)]
-            m.test.before_compaction_progress.hit();
-            let flush_started = std::time::Instant::now();
-            if run_one_flush(engine, m, true)? {
-                #[cfg(test)]
-                m.test.after_compaction_flush.hit();
-                flush_time += flush_started.elapsed();
-            }
-            Ok(())
-        });
-        match outputs {
-            Ok(outputs) => {
-                // Nested flush work belongs to flush counters, not compaction.
-                let build_ns = nanos(started.elapsed().saturating_sub(flush_time));
-                let gate_started = std::time::Instant::now();
-                let (committed, pressure, phases) = {
-                    let Ok(mut guard) = engine.write() else {
-                        return;
-                    };
-                    let commit_wait_ns = nanos(gate_started.elapsed());
-                    let commit_started = std::time::Instant::now();
-                    let committed = guard.commit_compaction(plan, outputs);
-                    let commit_ns = nanos(commit_started.elapsed());
-                    (
-                        committed,
-                        MaintenancePressure::capture(&guard),
-                        PhaseTimes {
-                            build_ns,
-                            commit_wait_ns,
-                            commit_ns,
-                        },
-                    )
+            m.test.after_compaction_flush.hit();
+            flush_time += flush_started.elapsed();
+        }
+        Ok(())
+    });
+    match outputs {
+        Ok(outputs) => {
+            // Nested flush work belongs to flush counters, not compaction.
+            let build_ns = nanos(started.elapsed().saturating_sub(flush_time));
+            let gate_started = std::time::Instant::now();
+            let (committed, pressure, phases) = {
+                let Ok(mut guard) = engine.write() else {
+                    return false;
                 };
-                match committed {
-                    // A successful commit is exactly the progress a
-                    // stalled writer (11.5) is waiting to recheck
-                    // against — wake it now, not after the whole
-                    // cascade finishes.
-                    Ok(outcome) => record_compaction_success(
-                        m,
-                        outcome,
-                        started.elapsed().saturating_sub(flush_time),
-                        phases,
-                    ),
-                    Err(e) => {
-                        record_error(m, e.to_string());
-                        return;
-                    }
+                let commit_wait_ns = nanos(gate_started.elapsed());
+                let commit_started = std::time::Instant::now();
+                let committed = guard.commit_compaction(plan, outputs);
+                let commit_ns = nanos(commit_started.elapsed());
+                (
+                    committed,
+                    MaintenancePressure::capture(&guard),
+                    PhaseTimes {
+                        build_ns,
+                        commit_wait_ns,
+                        commit_ns,
+                    },
+                )
+            };
+            match committed {
+                // A successful commit is exactly the progress a
+                // stalled writer (11.5) is waiting to recheck
+                // against — wake it now, not after the whole
+                // cascade finishes.
+                Ok(outcome) => record_compaction_success(
+                    m,
+                    outcome,
+                    started.elapsed().saturating_sub(flush_time),
+                    phases,
+                ),
+                Err(e) => {
+                    record_error(m, e.to_string());
+                    return false;
                 }
+            }
+            if !m.is_manual() {
                 pressure.pace();
             }
-            Err(e) => {
-                record_error(m, e.to_string());
-                return;
-            }
+        }
+        Err(e) => {
+            record_error(m, e.to_string());
+            return false;
         }
     }
+    true
 }
 
 /// Service one frozen generation on the same worker, using the normal durable
@@ -694,7 +775,7 @@ fn run_pending_maintenance(engine: &Arc<ShardedRwLock<Kiban>>, m: &Arc<Maintenan
 /// per checkpoint bounds how much new writing can postpone compaction progress.
 fn run_one_flush(
     engine: &Arc<ShardedRwLock<Kiban>>,
-    m: &Arc<Maintenance>,
+    m: &Maintenance,
     during_compaction: bool,
 ) -> Result<bool, DbError> {
     let result: Result<bool, DbError> = (|| {
@@ -738,7 +819,9 @@ fn run_one_flush(
             )
         };
         record_flush_success(m, output_bytes, started.elapsed(), queue_ns, phases);
-        pressure.pace();
+        if !m.is_manual() {
+            pressure.pace();
+        }
         Ok(true)
     })();
     if let Err(e) = &result {
@@ -748,7 +831,7 @@ fn run_one_flush(
 }
 
 fn record_flush_success(
-    m: &Arc<Maintenance>,
+    m: &Maintenance,
     output_bytes: u64,
     elapsed: std::time::Duration,
     queue_ns: u64,
@@ -774,7 +857,7 @@ fn record_flush_success(
     m.condvar.notify_all();
 }
 
-fn record_flush_error(m: &Arc<Maintenance>, msg: String) {
+fn record_flush_error(m: &Maintenance, msg: String) {
     {
         let mut s = m.state.lock().unwrap();
         s.error = Some(MaintenanceError(msg));
@@ -785,7 +868,7 @@ fn record_flush_error(m: &Arc<Maintenance>, msg: String) {
 }
 
 fn record_compaction_success(
-    m: &Arc<Maintenance>,
+    m: &Maintenance,
     outcome: crate::db::CompactionOutcome,
     elapsed: std::time::Duration,
     phases: PhaseTimes,
@@ -817,7 +900,7 @@ fn record_compaction_success(
     m.condvar.notify_all();
 }
 
-fn record_error(m: &Arc<Maintenance>, msg: String) {
+fn record_error(m: &Maintenance, msg: String) {
     {
         let mut s = m.state.lock().unwrap();
         s.error = Some(MaintenanceError(msg));

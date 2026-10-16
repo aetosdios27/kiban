@@ -54,7 +54,7 @@ jobs:
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-      - name: Sweep deterministic crash seeds
+      - name: Sweep direct and shared deterministic crash seeds
         run: |
           set -o pipefail
           KIBAN_SIM_SEED_START=$(( ${{ matrix.shard }} * 100000 )) KIBAN_SIM_SEEDS=100000 \
