@@ -1568,6 +1568,10 @@ impl Kiban {
             return Ok(());
         }
 
+        // Close this generation durably before the next WAL can accept writes.
+        // Use the normal sync path so failures poison and marker/padding state agrees.
+        self.sync()?;
+
         // Reserve identities before preparing cached SST handles. A failed
         // attempt must never reuse a number whose inode/blocks were cached.
         let sst_number = self.next_file_number.fetch_add(2, Ordering::SeqCst);
@@ -1719,6 +1723,10 @@ impl Kiban {
         if self.memtable.is_empty() || self.immutable.is_some() {
             return Ok(());
         }
+
+        // Close this generation durably before the next WAL can accept writes.
+        // Use the normal sync path so failures poison and marker/padding state agrees.
+        self.sync()?;
 
         // Reserve before creating the WAL, exactly like flush: a failed
         // attempt must never hand the same identity to a later file.
@@ -9267,3 +9275,68 @@ mod read_path_tests;
 #[cfg(test)]
 #[path = "simulation_tests.rs"]
 mod simulation_tests;
+
+#[cfg(test)]
+mod rotation_durability_tests {
+    use super::*;
+    use crate::{sys, testutil::TempDir};
+
+    #[test]
+    fn shared_frozen_wal_prefix_repro() {
+        let dir = TempDir::new("cross-wal-prefix");
+        sys::enable_device_sim();
+        let mut options = super::compaction_tests::tiny_options();
+        options.write_buffer_bytes = 512;
+        let db = SharedKiban::open_manual(dir.path(), options.clone()).unwrap();
+        db.put(b"earlier", [1; 700]).unwrap();
+        db.put(b"later", [2; 10_000]).unwrap();
+        sys::capture_crash(0, || drop(db));
+        sys::power_loss_seeded(4);
+        let db = Kiban::open_with_options(dir.path(), options).unwrap();
+        let earlier = db.get(b"earlier").unwrap().is_some();
+        let later = db.get(b"later").unwrap().is_some();
+        drop(db);
+        sys::disable_device_sim();
+        assert!(
+            earlier || !later,
+            "crash seed 4: earlier={earlier}, later={later}; later WAL write survived without earlier WAL write"
+        );
+    }
+
+    #[test]
+    fn rotation_sync_failures_poison_before_creating_the_next_wal() {
+        for freeze in [false, true] {
+            // The buffered record/padding write, then fdatasync.
+            for fault in 0..2 {
+                let dir = TempDir::new("rotation-sync-failure");
+                let mut db = Kiban::open(dir.path()).unwrap();
+                db.put(b"accepted", b"value").unwrap();
+                let old_wal = db.wal_number;
+                sys::install_fault(fault);
+                let result = if freeze { db.freeze() } else { db.flush() };
+                sys::clear_fault();
+                assert!(matches!(result, Err(DbError::Poisoned(_))), "{result:?}");
+                assert!(
+                    matches!(
+                        db.poison_cause(),
+                        Some(PoisonCause::WalAppendFailed(_)) if fault == 0
+                    ) || matches!(
+                        db.poison_cause(),
+                        Some(PoisonCause::WalSyncFailed(_)) if fault == 1
+                    )
+                );
+                assert_eq!(db.wal_number, old_wal);
+                assert!(db.immutable.is_none());
+                assert_eq!(
+                    fs::read_dir(dir.path())
+                        .unwrap()
+                        .filter_map(Result::ok)
+                        .filter(|e| e.path().extension().is_some_and(|ext| ext == WAL_EXTENSION))
+                        .count(),
+                    1
+                );
+                assert!(matches!(db.put(b"later", b"v"), Err(DbError::Poisoned(_))));
+            }
+        }
+    }
+}

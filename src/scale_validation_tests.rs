@@ -174,7 +174,9 @@ fn frozen_wal_barrier_survives_every_flush_fault_and_power_loss() {
 
 #[test]
 fn frozen_wal_sync_failure_poisoning_covers_both_generations() {
-    for fault in 0..4 {
+    // Rotation already flushed/padded the frozen WAL: its fdatasync, then
+    // the active WAL's buffered write and fdatasync are the three fault points.
+    for fault in 0..3 {
         let dir = TempDir::new("frozen-wal-sync-failure");
         let _device = DeviceGuard::new();
         let mut db = Kiban::open(dir.path()).unwrap();

@@ -24,6 +24,8 @@ batch uses one WAL record and publishes every operation under one shared-memtabl
 guard, so concurrent point reads cannot see a prefix. Buffered mutation success
 does not acknowledge crash durability. Successful `sync()` covers all live WAL
 generations; errors that leave WAL/commit state unsafe poison future mutations.
+Rotation syncs the closed WAL generation before opening the next generation, so
+WAL generations become durable in order and recovery is a prefix across generations.
 
 Flush and compaction write new immutable SSTs, sync them and install a new
 MANIFEST through temporary-file write, file sync, rename and directory sync.
