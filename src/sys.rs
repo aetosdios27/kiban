@@ -80,6 +80,10 @@ pub fn op_count() -> usize {
 }
 
 fn check() -> io::Result<()> {
+    #[cfg(test)]
+    if capture_crash_point() {
+        return Err(io::Error::other("simulated crash boundary reached"));
+    }
     FAULT.with(|f| {
         let mut b = f.borrow_mut();
         match b.as_mut() {
@@ -155,7 +159,7 @@ impl NsOp {
 /// A volatile block device under a POSIX-like namespace: file data is
 /// durable only after a file sync, and creates, renames and removals are
 /// durable only after a sync of the parent directory.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 struct Device {
     /// The namespace as the running process observes it.
     names: HashMap<PathBuf, u64>,
@@ -254,6 +258,67 @@ impl Device {
 }
 
 type SimDevice = Arc<Mutex<Device>>;
+
+#[cfg(test)]
+struct CrashPoint {
+    remaining: usize,
+    snapshot: Option<Device>,
+}
+
+#[cfg(test)]
+thread_local! {
+    static CRASH_POINT: RefCell<Option<CrashPoint>> = const { RefCell::new(None) };
+}
+
+#[cfg(test)]
+fn capture_crash_point() -> bool {
+    CRASH_POINT.with(|point| {
+        let mut point = point.borrow_mut();
+        let Some(point) = point.as_mut() else {
+            return false;
+        };
+        if point.snapshot.is_some() {
+            return true;
+        }
+        if point.remaining > 0 {
+            point.remaining -= 1;
+            return false;
+        }
+        point.snapshot = with_sim(|device| device.clone());
+        true
+    })
+}
+
+/// Captures the device before the indexed checked syscall. Later checked
+/// calls fail to stop the operation; all cleanup is discarded on return.
+/// The closure must drop its engine/file handles before returning.
+#[cfg(test)]
+pub(crate) fn capture_crash<R>(index: usize, f: impl FnOnce() -> R) -> (R, bool) {
+    struct Restore;
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            let point = CRASH_POINT.with(|point| point.borrow_mut().take());
+            if let Some(snapshot) = point.and_then(|point| point.snapshot) {
+                with_sim(|device| *device = snapshot);
+            }
+        }
+    }
+
+    assert!(sim_active(), "crash capture requires a simulated device");
+    CRASH_POINT.with(|point| {
+        let mut point = point.borrow_mut();
+        assert!(point.is_none(), "nested crash capture");
+        *point = Some(CrashPoint {
+            remaining: index,
+            snapshot: None,
+        });
+    });
+    let restore = Restore;
+    let result = f();
+    let reached = CRASH_POINT.with(|point| point.borrow().as_ref().unwrap().snapshot.is_some());
+    drop(restore);
+    (result, reached)
+}
 
 thread_local! {
     /// None = passthrough mode; Some = device simulation active. The device
