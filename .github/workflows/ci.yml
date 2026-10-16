@@ -33,7 +33,7 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - run: cargo fmt --check
-      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo clippy --locked --all-targets --workspace -- -D warnings
       - run: cargo clippy --locked --all-targets --features loom -- -D warnings
       - run: cargo clippy --locked --all-targets --features diagnostics -- -D warnings
       - run: cargo doc --locked --no-deps
@@ -174,11 +174,33 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+  bindings:
+    name: Python and MCP bindings
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      KIBAN_LIB: ${{ github.workspace }}/target/debug/libkiban_ffi.so
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - run: cargo build --locked -p kiban-ffi
+      - run: cargo test --locked -p kiban-ffi
+      - run: python -m pip install ./bindings/python
+      - run: python -m unittest discover -s bindings/python/tests -p 'test_kiban.py' -v
+      - run: python -m pip install ./bindings/python/kiban_mcp
+      - run: python -m unittest discover -s bindings/python/tests -p 'test_mcp.py' -v
+
   # One stable status for branch protection: require only this check.
   ci-ok:
     name: CI passed
     if: always()
-    needs: [lint, test, stress, loom, torture, msrv, package, supply-chain, coverage]
+    needs: [lint, test, stress, loom, torture, msrv, package, supply-chain, coverage, bindings]
     runs-on: ubuntu-latest
     steps:
       - run: |
