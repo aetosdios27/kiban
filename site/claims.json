@@ -93,7 +93,7 @@
     {"id": "storage-api", "title": "Storage API: reverse/prefix scans, namespaces, range deletes, TTL", "status": "next"},
     {"id": "write-path", "title": "Write path: group commit", "status": "next"},
     {"id": "transactions", "title": "Transactions", "status": "planned"},
-    {"id": "bindings", "title": "Bindings: Python/MCP", "status": "active"},
+    {"id": "bindings", "title": "Bindings: Python/MCP", "status": "done"},
     {"id": "benchmarks", "title": "Published benchmarks", "status": "planned"}
   ],
   "local_sweeps": []
