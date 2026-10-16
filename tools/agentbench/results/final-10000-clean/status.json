@@ -1,0 +1,85 @@
+{
+  "status": "complete",
+  "runs": [
+    {
+      "trial": 1,
+      "backend": "kiban",
+      "file": "r1-kiban.jsonl"
+    },
+    {
+      "trial": 1,
+      "backend": "helix-floor",
+      "file": "r1-helix-floor.jsonl"
+    },
+    {
+      "trial": 1,
+      "backend": "helix",
+      "file": "r1-helix.jsonl"
+    },
+    {
+      "trial": 2,
+      "backend": "kiban",
+      "file": "r2-kiban.jsonl"
+    },
+    {
+      "trial": 2,
+      "backend": "helix-floor",
+      "file": "r2-helix-floor.jsonl"
+    },
+    {
+      "trial": 2,
+      "backend": "helix",
+      "file": "r2-helix.jsonl"
+    },
+    {
+      "trial": 3,
+      "backend": "kiban",
+      "file": "r3-kiban.jsonl"
+    },
+    {
+      "trial": 3,
+      "backend": "helix-floor",
+      "file": "r3-helix-floor.jsonl"
+    },
+    {
+      "trial": 3,
+      "backend": "helix",
+      "file": "r3-helix.jsonl"
+    },
+    {
+      "trial": 4,
+      "backend": "kiban",
+      "file": "r4-kiban.jsonl"
+    },
+    {
+      "trial": 4,
+      "backend": "helix-floor",
+      "file": "r4-helix-floor.jsonl"
+    },
+    {
+      "trial": 4,
+      "backend": "helix",
+      "file": "r4-helix.jsonl"
+    },
+    {
+      "trial": 5,
+      "backend": "kiban",
+      "file": "r5-kiban.jsonl"
+    },
+    {
+      "trial": 5,
+      "backend": "helix-floor",
+      "file": "r5-helix-floor.jsonl"
+    },
+    {
+      "trial": 5,
+      "backend": "helix",
+      "file": "r5-helix.jsonl"
+    }
+  ],
+  "errors": 0,
+  "preliminary": true,
+  "max_measured_load": 5.55126953125,
+  "load_threshold": 2,
+  "load_window": "1m"
+}

@@ -92,10 +92,13 @@ budget, not a claim that embedded and HTTP paths each take a minute. Increase
 `--operations` for slow-tail study; at least 10,000 samples are needed for p999.
 Use `--runs` to increase repetitions, never below five.
 
-Load is sampled once per second and at command boundaries. If any initial
-1/5/15-minute load is >=2, timing is refused unless `--allow-preliminary` is
-explicit. If any sampled load during foreground work is >=2, the entire report
-is labeled preliminary. Builds finish before measured trials. CPU-bound
+Load is sampled once per second and at command boundaries. The default
+`--load-window all` uses the maximum 1/5/15-minute average. To gate on current
+one-minute load while historical averages decay, pass `--load-window 1m`.
+If the selected initial load is >=2, timing is refused unless
+`--allow-preliminary` is explicit. If any selected load sample during foreground
+work is >=2, the entire report is labeled preliminary. All three averages are
+retained and reported regardless of the selected gate. Builds finish before measured trials. CPU-bound
 background jobs are not killed, paused or reniced. Suspend/clock discontinuities
 above two seconds, per-command timeout, HTTP errors, malformed responses, missing
 records and wrong values invalidate the campaign. The default command timeout is
@@ -247,3 +250,17 @@ stop any surviving original supervisor before resuming an older campaign that
 predates the lock. Load-sampling gaps caused by the interruption remain gaps.
 The report and `per-run-load.json` include observed 1/5/15-minute load ranges,
 sample counts and coverage for every timed backend/floor run.
+
+## Recorded campaign
+
+The [first-results report](../../validation/AGENT_MEMORY.md) records the fresh
+`final-10000-clean` attempt, its per-call durability costs, all five repetitions
+and load during each run. It remains preliminary because measured load exceeded 2. [Compact raw evidence](results/final-10000-clean/) includes
+per-run JSONL, configs, metadata, command/load logs, verification markers and
+source/binary hashes. Databases, binaries, build logs and full source snapshots
+remain under `target/agentbench-results/final-10000-clean`; they are not committed.
+The earlier loaded-host development campaign remains under
+`target/agentbench-results/first-10000` and is not pooled into these results.
+
+The earlier preliminary raw evidence remains in [results/final-10000/](results/final-10000/).
+[Results index](results/README.md) keeps the attempts separate; their numbers are never pooled.

@@ -45,7 +45,8 @@ def generate(root):
         lines += ['Campaign incomplete/invalid; no measurements qualify for comparison.', '',
                   'Reason: ' + status.get('error', 'still running'), '']
     else:
-        lines += [f"Maximum sampled 1/5/15-minute load during measurements: {status['max_measured_load']:.2f}; threshold <2.", '',
+        window = "1-minute" if status.get("load_window") == "1m" else "1/5/15-minute"
+        lines += [f"Maximum sampled {window} load during measurements: {status['max_measured_load']:.2f}; threshold <2.", '',
                   'Cells are median [minimum, maximum] of per-run metrics; percentiles are not pooled. Latencies are µs.', '',
                   '| Path | Kiban embedded | Kiban server (placeholder) | Helix client | Helix transport floor | Hydra hosted |',
                   '| --- | --- | --- | --- | --- | --- |',
@@ -85,6 +86,12 @@ def generate(root):
                       'The second Kiban run finished after load sampling stopped, so its observed load range has partial coverage.', '']
         lines += ['', 'Durability: Kiban put+sync per write; Helix v2.3.5 LMDB default synchronous commit. '
                   'No power-loss test was run. No-op has no durable writes.', '',
+                  '`remember` and `update` both acknowledge durable writes per call. Kiban performs `put` then `sync` inside the timer; '
+                  'the WAL flushes its userspace buffer and calls `sync_data` (`fdatasync` on Linux), covering active and any frozen WAL. '
+                  'Helix commits a default synchronous LMDB write transaction before returning its HTTP acknowledgement: dirty data pages are synchronized and '
+                  'the metadata commit is written through a synchronous file descriptor. Neither `MDB_NOSYNC` nor `MDB_NOMETASYNC` is enabled. '
+                  'Thus both paths pay per-call persistence work, without cross-call batching; this does not imply one identical `fsync` syscall per call. '
+                  'Helix remember also creates an agent edge. Separate read-back verification is outside write latency.', '',
                   'Every memory write was immediately read back and compared field-for-field; every foreground read/list was checked. '
                   'Every final record and each agent’s latest list was also verified after process/server restart. '
                   'Any error invalidates the campaign. Warmup is a separate, discarded database per backend/trial.', '',
@@ -94,7 +101,7 @@ def generate(root):
                   'Full post-run/reopen checks and sync/flush are outside both foreground metrics; their time is retained in JSONL.', '',
                   'p999 is unavailable below 10,000 samples. Histogram percentile upper bounds have <3.125% relative bucket error above 32 ns. '
                   'Max is exact. Per-kind read/write distributions for mixed traffic are retained in raw JSONL.', '',
-                  'The performance verdict is inconclusive on a loaded host. No causal bottleneck profile or adoption ranking is claimed. '
+                  'These client-path measurements do not establish an engine-level winner, causal bottleneck or adoption ranking. '
                   'These paths have different costs: embedded calls versus JSON/HTTP, and KV ordering versus graph adjacency plus sort. '
                   'The Noop row includes HTTP, routing and an empty read transaction, so it is a transport floor proxy, '
                   'not a pure wire measurement. Do not subtract percentiles or infer engine speedups from these rows.', '']

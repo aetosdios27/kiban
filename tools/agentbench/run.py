@@ -32,6 +32,10 @@ def capture(args):
     return {'command': args, 'exit_code': p.returncode, 'output': p.stdout}
 
 
+def load_level(averages, window):
+    return averages[0] if window == '1m' else max(averages)
+
+
 class Campaign:
     def __init__(self, output, timeout):
         self.output, self.timeout = output, timeout
@@ -153,6 +157,7 @@ def run(args):
         metadata = json.loads((output / 'metadata.json').read_text())
         for key in ['n', 'operations', 'runs', 'warmup', 'k', 'seed', 'port', 'timeout', 'build_jobs']:
             setattr(args, key, metadata['parameters'][key])
+        args.load_window = metadata['parameters'].get('load_window', 'all')
         campaign.timeout = args.timeout
         campaign.loads = [json.loads(line) for line in (output / 'load.jsonl').read_text().splitlines()]
     else:
@@ -225,8 +230,8 @@ def run(args):
                 'argv': sys.argv, 'git': capture(['git', 'rev-parse', 'HEAD']),
                 'note': 'External session interruption; completed trials retained. Missing load samples are not filled.'})
         campaign.load()
-        if max(os.getloadavg()) >= 2 and not args.allow_preliminary:
-            raise RuntimeError('Load >= 2. Rerun when quiet, or explicitly use --allow-preliminary')
+        if load_level(os.getloadavg(), args.load_window) >= 2 and not args.allow_preliminary:
+            raise RuntimeError(f'Load ({args.load_window}) >= 2. Rerun when quiet, or explicitly use --allow-preliminary')
         def invoke(backend, name, n, operations, endpoint='', verify=False, data=None):
             config = {'backend': backend, 'db': str(data or output / 'data' / name),
                       'endpoint': endpoint, 'n': n, 'operations': operations, 'k': args.k,
@@ -294,9 +299,9 @@ def run(args):
                     raise RuntimeError('Missing full verification marker')
                 status['runs'].append({'trial': trial + 1, 'backend': backend, 'file': name + '.jsonl'})
                 write_json(output / 'status.json', status)
-        measured = [max(row['load']) for row in campaign.loads if row['measuring']]
+        measured = [load_level(row['load'], args.load_window) for row in campaign.loads if row['measuring']]
         status.update(status='complete', preliminary=max(measured, default=99) >= 2,
-                      max_measured_load=max(measured, default=None), load_threshold=2)
+                      max_measured_load=max(measured, default=None), load_threshold=2, load_window=args.load_window)
     except BaseException as error:
         status.update(status='invalid', errors=1, error=str(error))
         raise
@@ -313,6 +318,8 @@ def main():
     p.add_argument('--install-helix', action='store_true')
     p.add_argument('--resume', action='store_true', help='retain completed units of an externally interrupted campaign, using its original parameters')
     p.add_argument('--allow-preliminary', action='store_true')
+    p.add_argument('--load-window', choices=['all', '1m'], default='all',
+                   help='load acceptance metric; all records maximum of 1/5/15-minute averages, 1m uses current one-minute average')
     p.add_argument('--n', type=int, default=10000, help='memory population and W1 call count')
     p.add_argument('--operations', type=int, default=10000, help='calls per W2-W5 and floor')
     p.add_argument('--runs', type=int, default=5)

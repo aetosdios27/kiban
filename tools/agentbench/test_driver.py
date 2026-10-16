@@ -9,10 +9,15 @@ from unittest.mock import patch
 
 import hydra
 import report
-from run import Campaign, server
+from run import Campaign, server, load_level
 
 
 class DriverTests(unittest.TestCase):
+    def test_one_minute_gate_ignores_decaying_historical_load(self):
+        self.assertLess(load_level((1.2, 12, 22), '1m'), 2)
+        self.assertGreaterEqual(load_level((2.1, 1, 1), '1m'), 2)
+        self.assertGreaterEqual(load_level((1.2, 12, 22), 'all'), 2)
+
     def test_failure_is_not_a_fast_success(self):
         with tempfile.TemporaryDirectory() as temp:
             root = pathlib.Path(temp)
