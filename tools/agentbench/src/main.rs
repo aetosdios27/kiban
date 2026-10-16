@@ -8,7 +8,7 @@ mod model;
 mod random;
 mod runner;
 
-use backend::{Embedded, Result};
+use backend::{Embedded, Helix, Result};
 use serde::Deserialize;
 use std::{io::Write, path::PathBuf};
 
@@ -47,15 +47,19 @@ fn run() -> Result<()> {
             .write(true)
             .open(&c.output)?,
     );
-    let _ = &c.endpoint;
-    if c.backend != "kiban" {
-        return Err("backend not implemented".into());
-    }
-    let mut backend = Embedded::open(&c.db)?;
-    if c.verify_only {
-        runner::verify_persisted(&mut backend, &c, &mut output)?;
+    if c.backend == "helix-floor" {
+        runner::floor(&Helix::new(&c.endpoint)?, &c, &mut output)?;
     } else {
-        runner::suite(&mut backend, &c, &mut output)?;
+        let mut backend: Box<dyn backend::Backend> = match c.backend.as_str() {
+            "kiban" => Box::new(Embedded::open(&c.db)?),
+            "helix" => Box::new(Helix::new(&c.endpoint)?),
+            _ => return Err("unknown backend".into()),
+        };
+        if c.verify_only {
+            runner::verify_persisted(backend.as_mut(), &c, &mut output)?;
+        } else {
+            runner::suite(backend.as_mut(), &c, &mut output)?;
+        }
     }
     output.flush()?;
     Ok(())
