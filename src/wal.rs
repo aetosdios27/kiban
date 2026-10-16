@@ -351,10 +351,24 @@ impl Wal {
             Self::create_durably(&path).map_err(WalError::Io)?;
         }
 
-        let file = sys::File::open_rw(&path).map_err(WalError::Io)?;
+        let mut file = sys::File::open_rw(&path).map_err(WalError::Io)?;
 
-        let (report, nonce) = Self::recover(&file, memtable)?;
+        let (report, mut nonce) = Self::recover(&file, memtable)?;
 
+        // A damaged first frame leaves no header to authenticate future markers.
+        // Replace it with a fresh identity before acknowledging any new writes.
+        if report.bytes_truncated > 0 && file.len().map_err(WalError::Io)? == 0 {
+            let fresh_nonce = sys::wal_nonce();
+            let mut payload = [0u8; WAL_HEADER_LEN];
+            payload[0] = OP_WAL_HEADER;
+            payload[1] = FORMAT_VERSION;
+            payload[2..].copy_from_slice(&fresh_nonce.to_le_bytes());
+            file.seek(SeekFrom::Start(0)).map_err(WalError::Io)?;
+            FrameWriter::new(&mut file)
+                .write_record(&payload)
+                .map_err(WalError::Io)?;
+            nonce = Some(fresh_nonce);
+        }
         file.sync_all().map_err(WalError::Io)?;
         let mut writer = BufWriter::new(file);
         let end = writer.seek(SeekFrom::End(0)).map_err(WalError::Io)?;
@@ -927,7 +941,58 @@ mod tests {
         let (_, report) = Wal::open(&path, &mut Memtable::new()).unwrap();
         assert!(report.torn_tail_truncated);
         assert_eq!(report.bytes_truncated, bytes.len() as u64);
-        assert_eq!(fs::metadata(&path).unwrap().len(), 0);
+        assert_eq!(
+            fs::metadata(&path).unwrap().len(),
+            (HEADER_LEN + WAL_HEADER_LEN) as u64
+        );
+    }
+
+    #[test]
+    fn truncated_header_is_replaced_durably_and_authenticates_new_markers() {
+        let td = TempDir::new("rewrite-header");
+        let path = td.path().join("WAL");
+        sys::enable_device_sim();
+        let (wal, _) = Wal::open(&path, &mut Memtable::new()).unwrap();
+        let old_nonce = wal.nonce.unwrap();
+        drop(wal);
+        let mut bytes = sys::read(&path).unwrap();
+        bytes[HEADER_LEN + 2] ^= 1;
+        {
+            let mut file = sys::File::open_rw(&path).unwrap();
+            file.set_len(0).unwrap();
+            file.write_all(&bytes).unwrap();
+            file.sync_all().unwrap();
+        }
+        let (wal, report) = Wal::open(&path, &mut Memtable::new()).unwrap();
+        assert!(report.torn_tail_truncated);
+        assert_eq!(report.bytes_truncated, bytes.len() as u64);
+        let new_nonce = wal.nonce.unwrap();
+        assert_ne!(old_nonce, new_nonce);
+        drop(wal);
+        let rewritten = sys::read(&path).unwrap();
+        sys::power_loss();
+        assert_eq!(sys::read(&path).unwrap(), rewritten);
+        let (mut wal, _) = Wal::open(&path, &mut Memtable::new()).unwrap();
+        assert_eq!(wal.nonce, Some(new_nonce));
+        wal.put(1, b"synced", b"value").unwrap();
+        wal.sync().unwrap();
+        wal.put(2, b"later", b"marker").unwrap();
+        wal.writer_flush_for_test();
+        drop(wal);
+        let mut bytes = sys::read(&path).unwrap();
+        bytes[HEADER_LEN + WAL_HEADER_LEN + HEADER_LEN] ^= 1;
+        {
+            let mut file = sys::File::open_rw(&path).unwrap();
+            file.set_len(0).unwrap();
+            file.write_all(&bytes).unwrap();
+            file.sync_all().unwrap();
+        }
+        assert!(matches!(
+            Wal::open(&path, &mut Memtable::new()),
+            Err(WalError::Corrupt { .. })
+        ));
+        assert_eq!(sys::read(&path).unwrap(), bytes);
+        sys::disable_device_sim();
     }
 
     #[test]
