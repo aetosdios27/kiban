@@ -9166,3 +9166,7 @@ mod correctness_tests;
 #[cfg(test)]
 #[path = "read_path_tests.rs"]
 mod read_path_tests;
+
+#[cfg(test)]
+#[path = "simulation_tests.rs"]
+mod simulation_tests;

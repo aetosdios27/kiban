@@ -16,6 +16,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 // ---------------------------------------------------------------- faults
 
@@ -102,17 +103,40 @@ struct SimFile {
     overlay: Vec<u8>,
 }
 
+type SimDevice = Arc<Mutex<HashMap<PathBuf, SimFile>>>;
+
 thread_local! {
-    /// None = passthrough mode; Some = device simulation active.
-    static DEVICE: RefCell<Option<HashMap<PathBuf, SimFile>>> =
-        const { RefCell::new(None) };
+    /// None = passthrough mode; Some = device simulation active. The device
+    /// is shared by `Arc` so engine-owned worker threads can adopt the same
+    /// simulated disk as the thread that enabled it; fault injection stays
+    /// per-thread.
+    static DEVICE: RefCell<Option<SimDevice>> = const { RefCell::new(None) };
 }
 
 /// Routes file operations through the simulated volatile device.
 pub fn enable_device_sim() {
     DEVICE.with(|d| {
-        *d.borrow_mut() = Some(HashMap::new());
+        *d.borrow_mut() = Some(Arc::new(Mutex::new(HashMap::new())));
     });
+}
+
+/// A handle to the calling thread's simulated device, for threads the engine
+/// spawns on its behalf.
+#[derive(Clone)]
+pub(crate) struct DeviceHandle(Option<SimDevice>);
+
+impl DeviceHandle {
+    /// Makes the calling thread use the captured device (a no-op when the
+    /// capturing thread had none).
+    pub(crate) fn adopt(self) {
+        if self.0.is_some() {
+            DEVICE.with(|d| *d.borrow_mut() = self.0);
+        }
+    }
+}
+
+pub(crate) fn device_handle() -> DeviceHandle {
+    DeviceHandle(DEVICE.with(|d| d.borrow().clone()))
 }
 
 pub fn disable_device_sim() {
@@ -125,8 +149,8 @@ pub fn disable_device_sim() {
 /// remain exactly as last synced.
 pub fn power_loss() {
     DEVICE.with(|d| {
-        if let Some(files) = d.borrow_mut().as_mut() {
-            for f in files.values_mut() {
+        if let Some(files) = d.borrow().as_ref() {
+            for f in files.lock().expect("simulated device").values_mut() {
                 f.overlay.clear();
             }
         }
@@ -138,7 +162,9 @@ fn sim_active() -> bool {
 }
 
 fn with_sim<R>(f: impl FnOnce(&mut HashMap<PathBuf, SimFile>) -> R) -> Option<R> {
-    DEVICE.with(|d| d.borrow_mut().as_mut().map(f))
+    let device = DEVICE.with(|d| d.borrow().clone())?;
+    let mut files = device.lock().expect("simulated device");
+    Some(f(&mut files))
 }
 
 fn merged(file: &SimFile) -> Vec<u8> {

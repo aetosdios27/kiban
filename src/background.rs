@@ -244,7 +244,11 @@ impl Maintenance {
             test: TestHooks::default(),
         });
         let worker = m.clone();
-        let handle = std::thread::spawn(move || worker_loop(engine, worker));
+        let device = crate::sys::device_handle();
+        let handle = std::thread::spawn(move || {
+            device.adopt();
+            worker_loop(engine, worker)
+        });
         *m.thread.lock().unwrap() = Some(handle);
         m
     }
