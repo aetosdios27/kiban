@@ -18,6 +18,22 @@ class BindingTests(unittest.TestCase):
         self.db = Kiban(self.path, write_buffer_bytes=4096, max_open_table_files=8)
         self.addCleanup(self.db.close)
 
+    def test_site_example(self):
+        directory = Path(self.tmp.name) / "site-example"
+        # site:begin python
+        from kiban import Kiban
+
+        with Kiban(directory) as db:
+            db.put("hello", "world")
+            db.sync()
+            assert db.get("hello") == b"world"
+            with db.snapshot() as snapshot:
+                db.put("hello", "later")
+                assert snapshot.get("hello") == b"world"
+            db.batch([("put", "a", "1"), ("put", "b", "2")])
+            assert list(db.scan("a", "c")) == [(b"a", b"1"), (b"b", b"2")]
+        # site:end
+
     def test_crud_binary_empty_and_str(self):
         for key, value in [(b"k\0\xff", b"v\0\xff"), (b"", b""), ("café", "你好")]:
             self.db.put(key, value)
