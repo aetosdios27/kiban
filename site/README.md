@@ -3,7 +3,8 @@
 Edit `site/claims.json` in a reviewed PR. Keep clauses within the limits in
 `README.md` and `ARCHITECTURE.md`; add real test function names as evidence.
 Run `python3 tools/site_facts.py validate` and
-`python3 -m unittest discover -s tools/tests` before committing.
+`python3 -m unittest discover -s tools/tests` before committing. Publication
+tests use disposable local Git remotes; they do not contact GitHub.
 Mark examples with `// site:begin <id>` and `// site:end` in Rust files that CI
 compiles or tests. Python uses `#` markers in binding tests when available.
 Regions are unique, non-nested, closed and extracted verbatim with common
@@ -14,7 +15,8 @@ CI validates the schema, evidence function references, example markers and the
 source patterns used for computed counts. It cannot prove that prose follows
 from a test or automatically detect a newly implemented roadmap feature. Review
 claims when behavior changes. Specs are checked against Cargo metadata and the
-Linux target; optional Loom test support is not a default runtime dependency.
+declared Linux target; optional Loom test support is not a default runtime
+dependency.
 
 ## Generate and consume
 
@@ -41,6 +43,8 @@ build/revalidate time. Reject unknown schema versions; show the engine revision
 and benchmark source beside claims. No website-repo changes are included here.
 
 Nightly shards upload success receipts for both direct and shared suites.
+`nightly-receipt --log FILE --out FILE` requires both actual seed-range completion
+lines and two passing long tests before it writes a receipt.
 Only a fully successful nightly run is counted. `--previous FILE` carries totals
 forward; `--add-nightly-seeds N --nightly-run-id ID` credits a run once, even on
 retry. Counts are seed executions across both engine modes, not unique numeric
@@ -48,7 +52,17 @@ seeds, crashes, process-torture cycles, or the local sweep. History starts at ze
 when the feed is introduced. Missing legacy receipts are skipped without credit.
 A failed fetch of an existing feed fails publication rather than resetting it.
 The publisher uses current main for facts even when an older nightly finishes;
-receipts retain the nightly run ID used for accounting.
+receipts retain the nightly run ID used for accounting. Publication uses normal
+fast-forward pushes with five fetch/regenerate retries, so competing events
+cannot overwrite a credited run. There is no concurrency group that could drop
+pending nightly events.
+
+`nightly-seeds --receipts DIR --run-id ID --commit SHA` checks the downloaded
+receipts and prints the total for `--add-nightly-seeds`. Each receipt has
+`run_id` (string), `commit` (nightly SHA), `shard` (zero-based index),
+`shard_count` (matrix size), `seed_start`, `seeds_per_suite` (positive integer),
+and `suites` (the direct/shared long-test names). Missing, duplicate or mismatched
+shards fail publication; receipts contain data only and are never executed.
 
 ## Fields
 

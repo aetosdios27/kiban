@@ -1,0 +1,118 @@
+name: Publish site facts
+
+on:
+  push:
+    branches: [main]
+  workflow_run:
+    workflows: [Nightly deep verification]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Do not use a concurrency group: GitHub can discard pending nightly credits.
+# Fast-forward-only pushes and bounded retries serialize changes on site-data.
+jobs:
+  publish:
+    if: >-
+      github.event_name == 'push' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      # Never execute code from a workflow_run artifact or a PR head.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - run: python3 tools/site_facts.py validate
+      - run: python3 -m unittest discover -s tools/tests -p 'test_*.py'
+      - name: Read completed nightly receipts
+        id: nightly
+        if: github.event_name == 'workflow_run'
+        env:
+          NIGHTLY_RUN: ${{ github.event.workflow_run.id }}
+          NIGHTLY_COMMIT: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$NIGHTLY_RUN/artifacts" \
+            --jq '.artifacts[] | select(.name | startswith("site-facts-nightly-")) | .name' \
+            > "$RUNNER_TEMP/nightly-artifacts.txt"
+          if [ ! -s "$RUNNER_TEMP/nightly-artifacts.txt" ]; then
+            echo 'No receipts (workflow predates the feed); no nightly credit.'
+            exit 0
+          fi
+          gh run download "$NIGHTLY_RUN" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'site-facts-nightly-*' --dir "$RUNNER_TEMP/nightly-receipts"
+          seeds=$(python3 tools/site_facts.py nightly-seeds \
+            --receipts "$RUNNER_TEMP/nightly-receipts" \
+            --run-id "$NIGHTLY_RUN" --commit "$NIGHTLY_COMMIT")
+          echo "seeds=$seeds" >> "$GITHUB_OUTPUT"
+      - name: Generate and publish facts
+        id: publish
+        env:
+          NIGHTLY_SEEDS: ${{ steps.nightly.outputs.seeds || '0' }}
+          NIGHTLY_RUN: ${{ github.event.workflow_run.id || '' }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          for attempt in 1 2 3 4 5; do
+            previous_args=()
+            parent_args=()
+            if git ls-remote --exit-code --heads origin refs/heads/site-data > "$RUNNER_TEMP/site-data-ref"; then
+              git fetch --no-tags origin '+refs/heads/site-data:refs/remotes/origin/site-data'
+              parent=$(git rev-parse refs/remotes/origin/site-data)
+              git show "$parent:facts.json" > "$RUNNER_TEMP/previous-facts.json"
+              previous_args=(--previous "$RUNNER_TEMP/previous-facts.json")
+              parent_args=(-p "$parent")
+            else
+              status=$?
+              # Exit 2 means no matching branch; all transport/auth errors fail.
+              test "$status" -eq 2
+            fi
+            # Read main AFTER the feed parent: a late writer cannot restore
+            # facts older than an already-published main revision.
+            git fetch --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
+            git checkout --detach refs/remotes/origin/main
+            python3 tools/site_facts.py generate --out "$RUNNER_TEMP/facts.json" \
+              "${previous_args[@]}" --add-nightly-seeds "$NIGHTLY_SEEDS" \
+              --nightly-run-id "$NIGHTLY_RUN"
+            if [ "${#previous_args[@]}" -gt 0 ] && cmp -s "$RUNNER_TEMP/previous-facts.json" "$RUNNER_TEMP/facts.json"; then
+              echo 'Facts unchanged.'
+              exit 0
+            fi
+            # A root tree with only facts.json; the first commit has no parent.
+            blob=$(git hash-object -w "$RUNNER_TEMP/facts.json")
+            tree=$(printf '100644 blob %s\tfacts.json\n' "$blob" | git mktree)
+            commit=$(git commit-tree "$tree" "${parent_args[@]}" \
+              -m 'site: publish engine facts' \
+              -m 'Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>')
+            if git push origin "$commit:refs/heads/site-data"; then
+              echo 'published=true' >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "Publication raced or push failed (attempt $attempt); refreshing."
+          done
+          echo 'Site-data publication failed after five attempts.' >&2
+          exit 1
+      - name: Revalidate website
+        if: steps.publish.outputs.published == 'true'
+        env:
+          VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          if [ -n "$VERCEL_DEPLOY_HOOK" ]; then
+            curl --fail --silent --show-error --output /dev/null --max-time 30 \
+              --request POST "$VERCEL_DEPLOY_HOOK"
+          fi

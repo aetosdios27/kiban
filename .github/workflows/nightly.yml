@@ -42,6 +42,10 @@ jobs:
 
   seeded-power-loss:
     name: Seeded power-loss sweep (shard ${{ matrix.shard }})
+    env:
+      KIBAN_SIM_SEEDS: "100000"
+      SHARD: ${{ matrix.shard }}
+      SHARD_COUNT: ${{ strategy.job-total }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     strategy:
@@ -57,9 +61,17 @@ jobs:
       - name: Sweep direct and shared deterministic crash seeds
         run: |
           set -o pipefail
-          KIBAN_SIM_SEED_START=$(( (${{ github.run_number }} * 4 + ${{ matrix.shard }}) * 100000 )) KIBAN_SIM_SEEDS=100000 \
-            cargo test --locked --release --lib seeded_crash_long -- --ignored --nocapture \
+          export KIBAN_SIM_SEED_START=$(( (GITHUB_RUN_NUMBER * SHARD_COUNT + SHARD) * KIBAN_SIM_SEEDS ))
+          cargo test --locked --release --lib seeded_crash_long -- --ignored --nocapture \
             2>&1 | tee "$RUNNER_TEMP/kiban-seeded-power-loss.log"
+          python3 tools/site_facts.py nightly-receipt \
+            --log "$RUNNER_TEMP/kiban-seeded-power-loss.log" --out "$RUNNER_TEMP/receipt.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: site-facts-nightly-${{ matrix.shard }}
+          path: ${{ runner.temp }}/receipt.json
+          if-no-files-found: error
+          overwrite: true
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: failure()
         with:
