@@ -264,3 +264,11 @@ The earlier loaded-host development campaign remains under
 
 The earlier preliminary raw evidence remains in [results/final-10000/](results/final-10000/).
 [Results index](results/README.md) keeps the attempts separate; their numbers are never pooled.
+
+## In-process engine comparison
+
+The optional [engine harness](engine/README.md) links the pinned Helix query core
+and raw heed3/LMDB alongside Kiban, with durable and fast modes, fixed P-core
+affinity, and separate datasets. It has its own crate/lockfile and never starts
+an HTTP server. Its results use a separate report and load rule; they are not
+pooled with the HTTP study.

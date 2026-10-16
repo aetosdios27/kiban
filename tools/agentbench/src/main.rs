@@ -1,4 +1,7 @@
+mod api;
 mod backend;
+mod embedded;
+mod http_floor;
 #[path = "../../../examples/scale/metrics.rs"]
 #[allow(dead_code)]
 mod metrics;
@@ -48,7 +51,7 @@ fn run() -> Result<()> {
             .open(&c.output)?,
     );
     if c.backend == "helix-floor" {
-        runner::floor(&Helix::new(&c.endpoint)?, &c, &mut output)?;
+        http_floor::floor(&Helix::new(&c.endpoint)?, &c, &mut output)?;
     } else {
         let mut backend: Box<dyn backend::Backend> = match c.backend.as_str() {
             "kiban" => Box::new(Embedded::open(&c.db)?),
