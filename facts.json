@@ -1,10 +1,10 @@
 {
   "schema": 1,
-  "generated_at": "2026-10-16T13:59:01+00:00",
+  "generated_at": "2026-10-16T14:21:25+00:00",
   "engine": {
     "version": "0.1.0",
-    "commit": "5a31b1552ea7b507fe9192b37efed8a91ac99378",
-    "commit_date": "2026-10-16T13:58:46Z"
+    "commit": "3a4fd9f636c1c1e061940b70a42b90e2b28a7c08",
+    "commit_date": "2026-10-16T14:21:10Z"
   },
   "specs": [
     "Rust 2024",
@@ -15,8 +15,9 @@
   "guarantees": {
     "promised": [
       {
-        "key": "Explicit durability",
-        "clause": "Successful sync() makes all previously accepted writes in every live WAL generation survive a crash, provided the OS, filesystem and device honor their persistence contract.",
+        "key": "sync()",
+        "clause": "every write accepted before it survives a crash",
+        "detail": "Successful sync() makes all previously accepted writes in every live WAL generation survive a crash, provided the OS, filesystem and device honor their persistence contract.",
         "evidence": [
           "seeded_crash_fixed_corpus",
           "shared_seeded_crash_fixed_corpus",
@@ -24,8 +25,9 @@
         ]
       },
       {
-        "key": "Atomic batches",
-        "clause": "A write batch publishes and recovers all its mutations together, without exposing a partial batch.",
+        "key": "write(batch)",
+        "clause": "all or nothing, one WAL record",
+        "detail": "A write batch publishes and recovers all its mutations together, without exposing a partial batch.",
         "evidence": [
           "atomic_batch_never_exposes_a_prefix_to_gate_free_reads",
           "malformed_batch_never_applies_a_prefix",
@@ -33,24 +35,27 @@
         ]
       },
       {
-        "key": "Stable snapshots",
-        "clause": "A captured snapshot keeps its logical view across later writes, flushes and compactions.",
+        "key": "snapshot()",
+        "clause": "unmoved by later writes and compactions",
+        "detail": "A captured snapshot keeps its logical view across later writes, flushes and compactions.",
         "evidence": [
           "snapshot_captures_unflushed_versions_across_rotation_flush_and_compaction",
           "streaming_snapshot_range_and_backup_match_captured_state"
         ]
       },
       {
-        "key": "Failed sync poisons",
-        "clause": "A failed WAL sync poisons the engine and blocks further mutations until a successful reopen of valid on-disk state.",
+        "key": "a failed sync",
+        "clause": "the engine refuses writes until reopened",
+        "detail": "A failed WAL sync poisons the engine and blocks further mutations until a successful reopen of valid on-disk state.",
         "evidence": [
           "wal_sync_failure_poisons_and_blocks_all_mutations",
           "poisoned_runtime_state_clears_on_reopen_when_disk_is_valid"
         ]
       },
       {
-        "key": "CRC-32 checksums",
-        "clause": "WAL records, SST blocks and new versioned MANIFEST envelopes use CRC-32 checksums; legacy unversioned MANIFESTs upgrade on their next install.",
+        "key": "WAL, SST, MANIFEST",
+        "clause": "CRC-32 checksummed",
+        "detail": "WAL records, SST blocks and new versioned MANIFEST envelopes use CRC-32 checksums; legacy unversioned MANIFESTs upgrade on their next install.",
         "evidence": [
           "corrupted_record_is_reported_not_truncated",
           "any_single_byte_corruption_is_detected_on_parse_or_read",
@@ -59,16 +64,18 @@
         ]
       },
       {
-        "key": "Crash prefix",
-        "clause": "Under the simulated device model, recovered state equals some prefix of acknowledged writes that includes every successfully synced write.",
+        "key": "after a crash",
+        "clause": "a real past state, every synced write in it",
+        "detail": "Under the simulated device model, recovered state equals some prefix of acknowledged writes that includes every successfully synced write.",
         "evidence": [
           "seeded_crash_fixed_corpus",
           "shared_seeded_crash_fixed_corpus"
         ]
       },
       {
-        "key": "Synced WAL damage",
-        "clause": "Recovery reports corruption without modifying the WAL when a surviving later sync marker with the readable header's private nonce proves damaged bytes were synced; without that proof damage truncates, and deliberate nonce forgery is outside the threat model.",
+        "key": "synced WAL damage",
+        "clause": "reported when a later sync mark proves it",
+        "detail": "Recovery reports corruption without modifying the WAL when a surviving later sync marker with the readable header's private nonce proves damaged bytes were synced; without that proof damage truncates, and deliberate nonce forgery is outside the threat model.",
         "evidence": [
           "damaged_records_need_a_later_sync_marker_to_be_corruption",
           "unreadable_header_disables_matching_marker_proof",
@@ -76,8 +83,9 @@
         ]
       },
       {
-        "key": "Ordered WAL durability",
-        "clause": "Rotation syncs the closed WAL generation before creating the next, so generations become durable in order.",
+        "key": "WAL rotation",
+        "clause": "old log synced before the next opens",
+        "detail": "Rotation syncs the closed WAL generation before creating the next, so generations become durable in order.",
         "evidence": [
           "shared_frozen_wal_prefix_repro",
           "rotation_sync_failures_poison_before_creating_the_next_wal"
@@ -86,31 +94,35 @@
     ],
     "not_promised": [
       {
-        "key": "Unsynced writes",
-        "clause": "A successful put() or delete() before sync() may be lost after a crash.",
+        "key": "put() before sync()",
+        "clause": "lost if the machine goes down",
+        "detail": "A successful put() or delete() before sync() may be lost after a crash.",
         "evidence": [
           "seeded_crash_fixed_corpus",
           "shared_seeded_crash_fixed_corpus"
         ]
       },
       {
-        "key": "Drop is not sync",
-        "clause": "Dropping a handle does not acknowledge crash durability.",
+        "key": "drop",
+        "clause": "not a sync",
+        "detail": "Dropping a handle does not acknowledge crash durability.",
         "evidence": [
           "seeded_crash_fixed_corpus",
           "shared_seeded_crash_fixed_corpus"
         ]
       },
       {
-        "key": "Independent processes",
-        "clause": "Concurrent access by two independent processes to one directory is not validated as a supported usage; the OS lock rejects a second owner.",
+        "key": "two processes, one directory",
+        "clause": "not validated",
+        "detail": "Concurrent access by two independent processes to one directory is not validated as a supported usage; the OS lock rejects a second owner.",
         "evidence": [
           "offline_cli_rejects_another_process_owner_and_restores_backups"
         ]
       },
       {
-        "key": "Hardware power loss",
-        "clause": "Power loss is simulated with torn writes, directory durability and per-file loss; these suites do not establish behavior on physical hardware.",
+        "key": "machine power loss",
+        "clause": "simulated, not tested on hardware",
+        "detail": "Power loss is simulated with torn writes, directory durability and per-file loss; these suites do not establish behavior on physical hardware.",
         "evidence": [
           "seeded_power_loss_is_deterministic_and_covers_every_tear",
           "create_without_directory_sync_is_lost",
@@ -119,26 +131,15 @@
         ]
       },
       {
-        "key": "Pre-1.0 compatibility",
-        "clause": "The API and storage format may change before 1.0."
+        "key": "API, on-disk format",
+        "clause": "may change before 1.0",
+        "detail": "The API and storage format may change before 1.0."
       }
     ],
     "not_built": [
       {
-        "key": "Compression",
-        "clause": "Storage compression is not implemented."
-      },
-      {
-        "key": "Range deletes",
-        "clause": "Range deletion is not implemented."
-      },
-      {
-        "key": "Reverse iteration",
-        "clause": "Reverse iteration is not implemented."
-      },
-      {
-        "key": "Transactions",
-        "clause": "Transactions are not implemented."
+        "key": "not built yet",
+        "clause": "compression, range deletes, reverse iteration, transactions"
       }
     ]
   },
@@ -222,6 +223,32 @@
     }
   ],
   "local_sweeps": [],
+  "correctness_stats": [
+    {
+      "value": 128,
+      "label": "Crash seeds on every PR"
+    },
+    {
+      "value": 4,
+      "label": "Power losses per seed"
+    },
+    {
+      "value": 4,
+      "label": "Bugs found and fixed"
+    },
+    {
+      "value": 1000,
+      "label": "SIGKILL / reopen cycles"
+    },
+    {
+      "value": 530100,
+      "label": "Acknowledged writes verified"
+    },
+    {
+      "value": 328,
+      "label": "Library tests"
+    }
+  ],
   "tests": {
     "lib_tests": 328,
     "crash_seeds_per_pr": 128,
@@ -230,7 +257,7 @@
     "nightly_run_ids": []
   },
   "examples": {
-    "basic": "use kiban::db::Kiban;\n\nlet mut db = Kiban::open(&directory)?;\ndb.put(b\"hello\", b\"world\")?;\ndb.sync()?; // Successful put alone does not promise crash durability.\nassert_eq!(db.get(b\"hello\")?, Some(b\"world\".to_vec()));\n",
+    "basic": "use kiban::db::Kiban;\n\nfn main() -> Result<(), Box<dyn std::error::Error>> {\n    let mut db = Kiban::open(\"example-db\")?;\n    db.put(b\"hello\", b\"world\")?;\n    db.sync()?; // put alone is not crash-durable\n    assert_eq!(db.get(b\"hello\")?, Some(b\"world\".to_vec()));\n    drop(db);\n\n    let reopened = Kiban::open(\"example-db\")?;\n    assert_eq!(reopened.get(b\"hello\")?, Some(b\"world\".to_vec()));\n    Ok(())\n}\n",
     "batch": "use kiban::db::{Kiban, WriteBatch};\n\nlet mut db = Kiban::open(directory)?;\nlet mut batch = WriteBatch::new();\nbatch.put(b\"hello\".to_vec(), b\"world\".to_vec());\nbatch.put(b\"goodbye\".to_vec(), b\"moon\".to_vec());\nbatch.delete(b\"obsolete\".to_vec());\ndb.write(batch)?;\ndb.sync()?;\nassert_eq!(db.get(b\"hello\")?, Some(b\"world\".to_vec()));\nassert_eq!(db.get(b\"goodbye\")?, Some(b\"moon\".to_vec()));\nassert_eq!(db.get(b\"obsolete\")?, None);\n",
     "python": "from kiban import Kiban\n\nwith Kiban(directory) as db:\n    db.put(\"hello\", \"world\")\n    db.sync()\n    assert db.get(\"hello\") == b\"world\"\n    with db.snapshot() as snapshot:\n        db.put(\"hello\", \"later\")\n        assert snapshot.get(\"hello\") == b\"world\"\n    db.batch([(\"put\", \"a\", \"1\"), (\"put\", \"b\", \"2\")])\n    assert list(db.scan(\"a\", \"c\")) == [(b\"a\", b\"1\"), (b\"b\", b\"2\")]\n",
     "range": "use kiban::db::Kiban;\n\nlet mut db = Kiban::open(directory)?;\ndb.put(b\"a\", b\"1\")?;\ndb.put(b\"b\", b\"2\")?;\ndb.put(b\"c\", b\"3\")?;\n// Byte-wise ascending order, start included and end excluded.\nlet entries = db.range(b\"a\", b\"c\").collect::<Result<Vec<_>, _>>()?;\nassert_eq!(\n    entries,\n    vec![\n        (b\"a\".to_vec(), b\"1\".to_vec()),\n        (b\"b\".to_vec(), b\"2\".to_vec())\n    ]\n);\n",
