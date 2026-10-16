@@ -28,11 +28,38 @@ generations; errors that leave WAL/commit state unsafe poison future mutations.
 Flush and compaction write new immutable SSTs, sync them and install a new
 MANIFEST through temporary-file write, file sync, rename and directory sync.
 Only then may old files be retired. An ambiguous commit is surfaced rather than
-guessed. WAL replay treats a torn final frame, or a zero-filled suffix starting at a frame
-boundary (a crash can commit the file size before its data; the writer never
-emits an empty frame), as a truncatable tail. Checksum or semantic corruption
-anywhere else is an error. Batch replay validates the entire payload before
-applying any operation.
+guessed. Batch replay validates the entire payload before applying any operation.
+
+Every new WAL begins with an `OP_WAL_HEADER` frame containing
+`[op u8][format_version u8 = 1][nonce u64 LE]`. The header is written before the
+existing durable-create file sync and directory sync; it adds no fsync. The nonce
+stays internal: production derives 64 bits from a freshly keyed `RandomState`
+hash of time and pid, while simulated devices use a deterministic counter.
+
+WAL sync appends an `OP_PAD` frame to end on a 4096-byte boundary before flushing
+and syncing. A gap smaller than a frame extends to the following boundary. After
+a successful sync, the next mutation first appends an `OP_SYNC_MARK` frame at that
+aligned offset, carrying `[op u8][synced_end u64 LE][nonce u64 LE]`. Padding can
+add write syscalls, but adds no fsyncs. Open syncs the recovered WAL once. When
+it contains more than a header, open schedules a lazy marker, padding first if
+needed.
+Headers, pads and markers have no memtable effect. Headerless logs do not emit
+new markers.
+
+On a framing or decode failure at offset X, recovery scans later 4096-aligned
+offsets for a valid sync marker carrying this file's header nonce and claiming
+`synced_end > X`. A writer marker exists only after the sync covering
+`[0, synced_end)` succeeded, so a surviving matching marker proves X was synced.
+User values can mimic such a marker only by guessing the private 64-bit nonce
+(accidental match approximately 2^-64 per candidate). Deliberate forgery is out
+of scope under the buggy-not-malicious threat model. Recovery reports corruption
+and leaves the WAL untouched. Ordinary aligned records and markers with another
+nonce do not count. If the header is missing (an old-format log) or unreadable,
+no marker counts and damage truncates. Without a surviving matching marker,
+recovery truncates and syncs at the last valid frame boundary, including for
+zero-filled or partially written tails. Damage to synced bytes with no later
+surviving marker also truncates rather than errors. The new op codes change the
+WAL format: old versions cannot read new logs, while new code reads old logs.
 
 ## Reads and snapshots
 

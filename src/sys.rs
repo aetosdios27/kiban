@@ -165,6 +165,7 @@ struct Device {
     pending: Vec<NsOp>,
     inodes: HashMap<u64, SimFile>,
     next_inode: u64,
+    next_nonce: u64,
 }
 
 impl Device {
@@ -366,6 +367,21 @@ fn with_sim<R>(f: impl FnOnce(&mut Device) -> R) -> Option<R> {
     let device = DEVICE.with(|d| d.borrow().clone())?;
     let mut files = device.lock().expect("simulated device");
     Some(f(&mut files))
+}
+
+/// Private WAL identity. Simulation uses a device-local counter so replaying
+/// the same sequence of operations produces exactly the same file bytes.
+pub(crate) fn wal_nonce() -> u64 {
+    if let Some(nonce) = with_sim(|device| {
+        let nonce = device.next_nonce;
+        device.next_nonce = nonce.checked_add(1).expect("WAL nonce counter exhausted");
+        nonce
+    }) {
+        return nonce;
+    }
+    use std::hash::BuildHasher;
+    std::collections::hash_map::RandomState::new()
+        .hash_one((std::time::SystemTime::now(), std::process::id()))
 }
 
 fn merged(file: &SimFile) -> Vec<u8> {

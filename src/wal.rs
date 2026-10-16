@@ -9,13 +9,20 @@ use std::io::{self, BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 use crate::atomic;
-use crate::frame::{FrameReader, FrameWriter, ReadRecordError};
+use crate::frame::{FrameReader, FrameWriter, HEADER_LEN, ReadRecordError};
 use crate::memtable::Memtable;
 use crate::sstable::Kind;
 use crate::sys;
 
 const OP_PUT: u8 = 0x01;
 const OP_DELETE: u8 = 0x02;
+const OP_PAD: u8 = 0x04;
+const OP_SYNC_MARK: u8 = 0x05;
+const OP_WAL_HEADER: u8 = 0x06;
+const FORMAT_VERSION: u8 = 1;
+const WAL_HEADER_LEN: usize = 10;
+const SYNC_MARK_LEN: usize = 17;
+const SYNC_ALIGNMENT: u64 = 4096;
 /// A batch record: one frame, many mutations, one contiguous sequence
 /// interval. Atomicity comes from framing — a torn or failed write
 /// discards the whole batch at recovery, never a prefix.
@@ -259,20 +266,40 @@ fn decode_into_memtable(
     Ok(())
 }
 
-/// Whether every byte of `file` from `offset` to its end is zero.
-fn zero_suffix(file: &sys::File, offset: u64) -> io::Result<bool> {
-    let mut reader = file.try_clone()?;
-    reader.seek(SeekFrom::Start(offset))?;
-    let mut chunk = [0u8; 8192];
-    loop {
-        let n = reader.read(&mut chunk)?;
-        if n == 0 {
-            return Ok(true);
-        }
-        if chunk[..n].iter().any(|&b| b != 0) {
+fn sync_marker(payload: &[u8], offset: u64, nonce: u64) -> Option<u64> {
+    if !offset.is_multiple_of(SYNC_ALIGNMENT)
+        || payload.len() != SYNC_MARK_LEN
+        || payload[0] != OP_SYNC_MARK
+        || u64::from_le_bytes(payload[9..17].try_into().unwrap()) != nonce
+    {
+        return None;
+    }
+    let synced_end = u64::from_le_bytes(payload[1..9].try_into().unwrap());
+    (synced_end <= offset).then_some(synced_end)
+}
+
+fn later_sync_marker(file: &sys::File, offset: u64, nonce: Option<u64>) -> io::Result<bool> {
+    let Some(nonce) = nonce else {
+        return Ok(false);
+    };
+    let mut probe = file.try_clone()?;
+    let end = file.len()?;
+    let mut boundary = offset - offset % SYNC_ALIGNMENT;
+    let mut bytes = [0u8; HEADER_LEN + SYNC_MARK_LEN];
+    while let Some(next) = boundary.checked_add(SYNC_ALIGNMENT) {
+        boundary = next;
+        if end.saturating_sub(boundary) < bytes.len() as u64 {
             return Ok(false);
         }
+        probe.seek(SeekFrom::Start(boundary))?;
+        probe.read_exact(&mut bytes)?;
+        if let Ok(Some(payload)) = FrameReader::new(bytes.as_slice()).read_record()
+            && sync_marker(&payload, boundary, nonce).is_some_and(|synced_end| synced_end > offset)
+        {
+            return Ok(true);
+        }
     }
+    Ok(false)
 }
 
 struct Counting<R> {
@@ -292,13 +319,28 @@ pub struct Wal {
     writer: BufWriter<sys::File>,
     path: PathBuf,
     payload_scratch: Vec<u8>,
+    position: u64,
+    pending_marker: Option<u64>,
+    nonce: Option<u64>,
 }
 
 impl Wal {
+    /// Persist the header in the existing durable-create file sync, before
+    /// syncing the directory entry. This adds a write, but no extra fsync.
+    pub(crate) fn create_durably(path: &Path) -> io::Result<()> {
+        let mut payload = [0u8; WAL_HEADER_LEN];
+        payload[0] = OP_WAL_HEADER;
+        payload[1] = FORMAT_VERSION;
+        payload[2..].copy_from_slice(&sys::wal_nonce().to_le_bytes());
+        let mut bytes = Vec::with_capacity(HEADER_LEN + WAL_HEADER_LEN);
+        FrameWriter::new(&mut bytes).write_record(&payload)?;
+        atomic::create_durably_with_contents(path, &bytes)
+    }
+
     /// Opens (or durably creates) the WAL at `path`, replaying any valid
     /// prefix of an existing log into `memtable`. A torn tail left by a
-    /// crash is truncated and reported; corruption short of the tail is
-    /// returned as an error and left untouched.
+    /// crash is truncated and reported. A surviving later sync marker
+    /// makes damage in its synced prefix an error, leaving the log untouched.
     pub fn open(
         path: impl AsRef<Path>,
         memtable: &mut Memtable,
@@ -306,51 +348,86 @@ impl Wal {
         let path = path.as_ref().to_path_buf();
 
         if !sys::exists(&path) {
-            atomic::create_durably(&path).map_err(WalError::Io)?;
+            Self::create_durably(&path).map_err(WalError::Io)?;
         }
 
         let file = sys::File::open_rw(&path).map_err(WalError::Io)?;
 
-        let report = Self::recover(&file, memtable)?;
+        let (report, nonce) = Self::recover(&file, memtable)?;
 
+        file.sync_all().map_err(WalError::Io)?;
         let mut writer = BufWriter::new(file);
-        writer.seek(SeekFrom::End(0)).map_err(WalError::Io)?;
+        let end = writer.seek(SeekFrom::End(0)).map_err(WalError::Io)?;
 
         Ok((
             Wal {
                 writer,
                 path,
                 payload_scratch: Vec::new(),
+                position: end,
+                pending_marker: nonce
+                    .filter(|_| end > (HEADER_LEN + WAL_HEADER_LEN) as u64)
+                    .map(|_| end),
+                nonce,
             },
             report,
         ))
     }
 
-    fn recover(file: &sys::File, memtable: &mut Memtable) -> Result<RecoveryReport, WalError> {
+    fn recover(
+        file: &sys::File,
+        memtable: &mut Memtable,
+    ) -> Result<(RecoveryReport, Option<u64>), WalError> {
         let mut reader = FrameReader::new(Counting {
             inner: BufReader::new(file.try_clone().map_err(WalError::Io)?),
             pos: 0,
         });
 
+        let mut nonce = None;
         let mut records_replayed = 0usize;
         let mut last_good_offset = 0u64;
         let mut max_sequence = 0u64;
-        let mut outcome = Result::<Option<u64>, ReadRecordError>::Ok(None);
+        let mut torn_tail_truncated = false;
 
         loop {
             let offset = reader.get_ref().pos;
             let failure = match reader.read_record() {
                 Ok(Some(payload)) => {
-                    // Batch records carry their own multi-op payload and
-                    // are applied atomically (all-or-corruption).
-                    let applied = if payload.first() == Some(&OP_BATCH) {
-                        decode_batch_into_memtable(&payload, offset, memtable, &mut max_sequence)
-                    } else {
-                        decode_into_memtable(&payload, offset, memtable, &mut max_sequence)
+                    let metadata = matches!(
+                        payload.first(),
+                        Some(&OP_PAD | &OP_SYNC_MARK | &OP_WAL_HEADER)
+                    );
+                    let applied = match payload.first() {
+                        Some(&OP_WAL_HEADER)
+                            if offset == 0
+                                && payload.len() == WAL_HEADER_LEN
+                                && payload[1] == FORMAT_VERSION =>
+                        {
+                            nonce = Some(u64::from_le_bytes(payload[2..].try_into().unwrap()));
+                            Ok(())
+                        }
+                        Some(&OP_PAD) => Ok(()),
+                        // Headerless logs have no authenticated markers. Accept
+                        // legacy metadata for replay, but never use it as proof.
+                        Some(&OP_SYNC_MARK)
+                            if nonce.is_none()
+                                || nonce.is_some_and(|n| {
+                                    sync_marker(&payload, offset, n).is_some()
+                                }) =>
+                        {
+                            Ok(())
+                        }
+                        Some(&OP_BATCH) => decode_batch_into_memtable(
+                            &payload,
+                            offset,
+                            memtable,
+                            &mut max_sequence,
+                        ),
+                        _ => decode_into_memtable(&payload, offset, memtable, &mut max_sequence),
                     };
                     match applied {
                         Ok(()) => {
-                            records_replayed += 1;
+                            records_replayed += usize::from(!metadata);
                             last_good_offset = reader.get_ref().pos;
                             continue;
                         }
@@ -358,47 +435,45 @@ impl Wal {
                     }
                 }
                 Ok(None) => break,
-                Err(e @ ReadRecordError::TornTail) => {
-                    outcome = Err(e);
-                    break;
-                }
                 Err(ReadRecordError::Io(e)) => return Err(WalError::Io(e)),
                 Err(
-                    e @ (ReadRecordError::ChecksumMismatch { .. }
+                    e @ (ReadRecordError::TornTail
+                    | ReadRecordError::ChecksumMismatch { .. }
                     | ReadRecordError::LengthInvalid(_)),
                 ) => WalError::Corrupt {
                     offset,
                     reason: e.to_string(),
                 },
             };
-            // A crash can leave the file size committed before its data, so
-            // the unwritten tail reads back as zeros. An all-zero header
-            // even frames "validly" (length 0, CRC-32 of nothing is 0), but
-            // the writer never emits an empty payload. A zero-only suffix
-            // from a frame boundary is therefore an unwritten tail, not
-            // corruption. Any nonzero byte keeps the strict error.
-            if zero_suffix(file, offset).map_err(WalError::Io)? {
-                outcome = Err(ReadRecordError::TornTail);
-                break;
+            // A writer marker exists only after the sync covering [0, synced_end)
+            // succeeded. Only an aligned, valid frame carrying this file's private
+            // header nonce counts: values can mimic a marker only by guessing the
+            // 64-bit secret (accidental match ~2^-64 per candidate). Deliberate
+            // forgery is outside our buggy-not-malicious threat model. Without a
+            // readable header, no marker proves durability and damage truncates.
+            if later_sync_marker(file, offset, nonce).map_err(WalError::Io)? {
+                return Err(failure);
             }
-            return Err(failure);
+            torn_tail_truncated = true;
+            break;
         }
 
         let end = file.len().map_err(WalError::Io)?;
         let bytes_truncated = end.saturating_sub(last_good_offset);
-        let torn_tail_truncated = outcome.is_err();
 
         if bytes_truncated > 0 {
             file.set_len(last_good_offset).map_err(WalError::Io)?;
-            file.sync_all().map_err(WalError::Io)?;
         }
 
-        Ok(RecoveryReport {
-            records_replayed,
-            torn_tail_truncated,
-            bytes_truncated,
-            max_sequence,
-        })
+        Ok((
+            RecoveryReport {
+                records_replayed,
+                torn_tail_truncated,
+                bytes_truncated,
+                max_sequence,
+            },
+            nonce,
+        ))
     }
 
     pub fn put(
@@ -452,9 +527,40 @@ impl Wal {
         self.append_scratch()
     }
 
+    fn pad_to_alignment(&mut self) -> io::Result<()> {
+        let remainder = self.position % SYNC_ALIGNMENT;
+        if remainder == 0 {
+            return Ok(());
+        }
+        let mut gap = SYNC_ALIGNMENT - remainder;
+        if gap < (HEADER_LEN + 1) as u64 {
+            gap += SYNC_ALIGNMENT;
+        }
+        let mut pad = [0u8; SYNC_ALIGNMENT as usize];
+        pad[0] = OP_PAD;
+        FrameWriter::new(&mut self.writer).write_record(&pad[..gap as usize - HEADER_LEN])?;
+        self.position += gap;
+        Ok(())
+    }
+
     fn append_scratch(&mut self) -> io::Result<()> {
+        if let Some(synced_end) = self.pending_marker {
+            self.pad_to_alignment()?;
+            let mut marker = [OP_SYNC_MARK; SYNC_MARK_LEN];
+            marker[1..9].copy_from_slice(&synced_end.to_le_bytes());
+            marker[9..].copy_from_slice(
+                &self
+                    .nonce
+                    .expect("marker requires a WAL header")
+                    .to_le_bytes(),
+            );
+            FrameWriter::new(&mut self.writer).write_record(&marker)?;
+            self.position += (HEADER_LEN + marker.len()) as u64;
+            self.pending_marker = None;
+        }
         let mut frame_writer = FrameWriter::new(&mut self.writer);
         frame_writer.write_record(&self.payload_scratch)?;
+        self.position += (HEADER_LEN + self.payload_scratch.len()) as u64;
         Ok(())
     }
 
@@ -463,11 +569,14 @@ impl Wal {
     /// acknowledged; per ARCHITECTURE.md D6, a failure here must not
     /// be retried into oblivion — treat it as fatal upstream.
     pub fn sync(&mut self) -> Result<(), SyncPhase> {
+        self.pad_to_alignment().map_err(SyncPhase::Flush)?;
         self.writer.flush().map_err(SyncPhase::Flush)?;
         self.writer
             .get_ref()
             .sync_data()
-            .map_err(SyncPhase::Fdatasync)
+            .map_err(SyncPhase::Fdatasync)?;
+        self.pending_marker = self.nonce.map(|_| self.position);
+        Ok(())
     }
 
     pub fn path(&self) -> &Path {
@@ -487,11 +596,9 @@ impl Wal {
 
 #[cfg(test)]
 mod tests {
-    /// A power-loss tail of zeros (size committed before data) after valid
-    /// records is truncated like a torn frame; a zero run followed by any
-    /// nonzero byte is still corruption.
+    /// Zero-filled tails truncate unless a later marker proves durability.
     #[test]
-    fn zero_filled_tail_is_torn_but_zeros_before_data_are_corrupt() {
+    fn zero_filled_tails_truncate_unless_a_later_marker_proves_sync() {
         use super::*;
         let dir = crate::testutil::TempDir::new("wal-zero-tail");
         let path = dir.path().join("1.wal");
@@ -518,6 +625,11 @@ mod tests {
         let mut bytes = std::fs::read(&path).unwrap();
         bytes.extend([0u8; 32]);
         bytes.push(1);
+        bytes.resize((valid + SYNC_ALIGNMENT) as usize, 0);
+        let mut marker = vec![OP_SYNC_MARK];
+        marker.extend_from_slice(&(valid + SYNC_ALIGNMENT).to_le_bytes());
+        marker.extend_from_slice(&frames(&path)[0].1[2..]);
+        FrameWriter::new(&mut bytes).write_record(&marker).unwrap();
         std::fs::write(&path, &bytes).unwrap();
         let mut memtable = Memtable::new();
         assert!(matches!(
@@ -529,6 +641,336 @@ mod tests {
             bytes,
             "corrupt log untouched"
         );
+    }
+
+    fn frames(path: &Path) -> Vec<(u64, Vec<u8>)> {
+        let bytes = fs::read(path).unwrap();
+        let mut reader = FrameReader::new(std::io::Cursor::new(bytes));
+        let mut frames = Vec::new();
+        loop {
+            let offset = reader.get_ref().position();
+            let Some(payload) = reader.read_record().unwrap() else {
+                return frames;
+            };
+            frames.push((offset, payload));
+        }
+    }
+
+    #[test]
+    fn sync_padding_ends_on_alignment_even_with_a_short_gap() {
+        for gap in [0, 1, 8, 9, 10, 4095] {
+            let td = TempDir::new("pad");
+            let path = td.path().join("WAL");
+            let (mut wal, _) = Wal::open(&path, &mut Memtable::new()).unwrap();
+            let record_end = 2 * SYNC_ALIGNMENT - gap;
+            let overhead =
+                (HEADER_LEN + WAL_HEADER_LEN + HEADER_LEN + PAYLOAD_FIXED_LEN + 1) as u64;
+            wal.put(1, b"k", vec![1; (record_end - overhead) as usize])
+                .unwrap();
+            assert_eq!(wal.position, record_end);
+            wal.sync().unwrap();
+            let expected = if gap == 0 {
+                record_end
+            } else if gap < 9 {
+                3 * SYNC_ALIGNMENT
+            } else {
+                2 * SYNC_ALIGNMENT
+            };
+            assert_eq!(wal.position, expected);
+            assert_eq!(fs::metadata(&path).unwrap().len(), expected);
+            let all = frames(&path);
+            let (offset, payload) = all.last().unwrap();
+            if gap != 0 {
+                assert_eq!(payload[0], OP_PAD);
+                assert_eq!(offset + (HEADER_LEN + payload.len()) as u64, expected);
+            } else {
+                assert_eq!(payload[0], OP_PUT);
+            }
+        }
+    }
+
+    #[test]
+    fn markers_are_lazy_and_cover_only_successful_syncs() {
+        let td = TempDir::new("lazy-marker");
+        let path = td.path().join("WAL");
+        let (mut wal, _) = Wal::open(&path, &mut Memtable::new()).unwrap();
+        assert_eq!(frames(&path)[0].1[0], OP_WAL_HEADER);
+        wal.put(1, b"a", b"1").unwrap();
+        wal.delete(2, b"a").unwrap();
+        wal.writer.flush().unwrap();
+        assert_eq!(
+            frames(&path)
+                .iter()
+                .filter(|(_, p)| p[0] == OP_SYNC_MARK)
+                .count(),
+            0
+        );
+        wal.sync().unwrap();
+        assert_eq!(
+            frames(&path)
+                .iter()
+                .filter(|(_, p)| p[0] == OP_SYNC_MARK)
+                .count(),
+            0
+        );
+        let synced_end = wal.position;
+        wal.append_batch(3, &[(Kind::Put, b"b".to_vec(), b"2".to_vec())])
+            .unwrap();
+        wal.writer.flush().unwrap();
+        assert_eq!(frames(&path)[3].1[0], OP_PAD);
+        assert_eq!(
+            sync_marker(&frames(&path)[4].1, synced_end, wal.nonce.unwrap()),
+            Some(synced_end)
+        );
+        assert_eq!(frames(&path)[4].0, synced_end);
+
+        for fault in [0, 1] {
+            crate::sys::install_fault(fault);
+            let result = wal.sync();
+            crate::sys::clear_fault();
+            assert!(matches!(
+                (fault, result),
+                (0, Err(SyncPhase::Flush(_))) | (1, Err(SyncPhase::Fdatasync(_)))
+            ));
+            assert!(wal.pending_marker.is_none());
+        }
+        wal.writer.flush().unwrap();
+        assert_eq!(
+            frames(&path)
+                .iter()
+                .filter(|(_, p)| p[0] == OP_SYNC_MARK)
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn damaged_records_need_a_later_sync_marker_to_be_corruption() {
+        for synced in [false, true] {
+            for marked in [false, true] {
+                if marked && !synced {
+                    continue;
+                }
+                for damage in 0..4 {
+                    let td = TempDir::new("damaged-tail");
+                    let path = td.path().join("WAL");
+                    let (mut wal, _) = Wal::open(&path, &mut Memtable::new()).unwrap();
+                    wal.put(1, b"first", [7; 10_000]).unwrap();
+                    if synced {
+                        wal.sync().unwrap();
+                    }
+                    if marked {
+                        wal.put(2, b"later", b"marker").unwrap();
+                    }
+                    drop(wal);
+                    let mut bytes = fs::read(&path).unwrap();
+                    let offset = frames(&path)
+                        .into_iter()
+                        .find(|(_, p)| p[0] == OP_PUT)
+                        .unwrap()
+                        .0;
+                    let start = offset as usize;
+                    match damage {
+                        0 => bytes[start + HEADER_LEN + 512..start + HEADER_LEN + 1024].fill(0),
+                        1 => bytes[start..start + 4].copy_from_slice(&u32::MAX.to_le_bytes()),
+                        2 => {
+                            let len =
+                                u32::from_le_bytes(bytes[start..start + 4].try_into().unwrap())
+                                    as usize;
+                            bytes[start + HEADER_LEN] = 0x7f;
+                            let crc = crate::crc32::crc32(
+                                &bytes[start + HEADER_LEN..start + HEADER_LEN + len],
+                            );
+                            bytes[start + 4..start + HEADER_LEN]
+                                .copy_from_slice(&crc.to_le_bytes());
+                        }
+                        3 => bytes[start..start + 4]
+                            .copy_from_slice(&crate::frame::MAX_RECORD_LEN.to_le_bytes()),
+                        _ => unreachable!(),
+                    }
+                    fs::write(&path, &bytes).unwrap();
+                    let mut mem = Memtable::new();
+                    let result = Wal::open(&path, &mut mem);
+                    if marked {
+                        assert!(
+                            matches!(result, Err(WalError::Corrupt { offset: x, .. }) if x == offset)
+                        );
+                        assert_eq!(fs::read(&path).unwrap(), bytes);
+                    } else {
+                        let (_, report) = result.unwrap();
+                        assert!(report.torn_tail_truncated);
+                        assert_eq!(report.bytes_truncated, bytes.len() as u64 - offset);
+                        assert_eq!(report.records_replayed, 0);
+                        assert!(mem.is_empty());
+                        assert_eq!(fs::metadata(&path).unwrap().len(), offset);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn legacy_headerless_logs_replay_and_ignore_markers() {
+        let td = TempDir::new("legacy");
+        let path = td.path().join("WAL");
+        let mut payload = Vec::new();
+        encode_put(1, b"old", b"version", &mut payload);
+        let mut bytes = Vec::new();
+        FrameWriter::new(&mut bytes).write_record(&payload).unwrap();
+        let mut pad = vec![0; SYNC_ALIGNMENT as usize - bytes.len() - HEADER_LEN];
+        pad[0] = OP_PAD;
+        FrameWriter::new(&mut bytes).write_record(&pad).unwrap();
+        // Both round-3 markers and nonce-bearing markers are ignored as proof.
+        for with_nonce in [false, true] {
+            let mut legacy = bytes.clone();
+            let mut marker = vec![OP_SYNC_MARK];
+            marker.extend_from_slice(&SYNC_ALIGNMENT.to_le_bytes());
+            if with_nonce {
+                marker.extend_from_slice(&42u64.to_le_bytes());
+            }
+            FrameWriter::new(&mut legacy).write_record(&marker).unwrap();
+            fs::write(&path, &legacy).unwrap();
+            let mut mem = Memtable::new();
+            let (mut wal, report) = Wal::open(&path, &mut mem).unwrap();
+            assert_eq!(report.records_replayed, 1);
+            assert_eq!(mem.get(b"old"), Some(b"version".to_vec()));
+            assert!(wal.nonce.is_none());
+            wal.delete(2, b"old").unwrap();
+            wal.sync().unwrap();
+            drop(wal);
+            let (_, report) = Wal::open(&path, &mut Memtable::new()).unwrap();
+            assert_eq!(report.records_replayed, 2);
+            legacy[HEADER_LEN + PAYLOAD_FIXED_LEN] ^= 1;
+            fs::write(&path, &legacy).unwrap();
+            let (_, report) = Wal::open(&path, &mut Memtable::new()).unwrap();
+            assert!(report.torn_tail_truncated);
+            assert_eq!(report.bytes_truncated, legacy.len() as u64);
+        }
+    }
+
+    #[test]
+    fn aligned_records_and_invalid_markers_do_not_prove_durability() {
+        for candidate in 0..6 {
+            let td = TempDir::new("invalid-marker");
+            let path = td.path().join("WAL");
+            let (wal, _) = Wal::open(&path, &mut Memtable::new()).unwrap();
+            let nonce = wal.nonce.unwrap();
+            drop(wal);
+            let mut bytes = fs::read(&path).unwrap();
+            let header_end = bytes.len();
+            bytes.resize(SYNC_ALIGNMENT as usize, 0);
+            let mut payload = vec![OP_SYNC_MARK];
+            payload.extend_from_slice(&SYNC_ALIGNMENT.to_le_bytes());
+            payload.extend_from_slice(&nonce.to_le_bytes());
+            match candidate {
+                0 => encode_put(1, b"ordinary", b"aligned", &mut payload),
+                1 => payload.push(0),
+                2 => payload[1..9].copy_from_slice(&(SYNC_ALIGNMENT + 1).to_le_bytes()),
+                3 => bytes.push(0),
+                5 => payload[9..].copy_from_slice(&(nonce ^ 1).to_le_bytes()),
+                _ => {}
+            }
+            FrameWriter::new(&mut bytes).write_record(&payload).unwrap();
+            if candidate == 4 {
+                *bytes.last_mut().unwrap() ^= 1;
+            }
+            fs::write(&path, &bytes).unwrap();
+            let (_, report) = Wal::open(&path, &mut Memtable::new()).unwrap();
+            assert!(report.torn_tail_truncated);
+            assert_eq!(report.bytes_truncated, (bytes.len() - header_end) as u64);
+        }
+    }
+
+    #[test]
+    fn embedded_marker_with_different_nonce_in_torn_unsynced_value_truncates() {
+        let td = TempDir::new("embedded-marker");
+        let path = td.path().join("WAL");
+        let (mut wal, _) = Wal::open(&path, &mut Memtable::new()).unwrap();
+        let mut fake = Vec::new();
+        let mut payload = vec![OP_SYNC_MARK];
+        payload.extend_from_slice(&SYNC_ALIGNMENT.to_le_bytes());
+        payload.extend_from_slice(&(wal.nonce.unwrap() ^ 1).to_le_bytes());
+        FrameWriter::new(&mut fake).write_record(&payload).unwrap();
+        let mut value = vec![7; 10_000];
+        let value_start = HEADER_LEN + WAL_HEADER_LEN + HEADER_LEN + PAYLOAD_FIXED_LEN + 1;
+        let embedded = SYNC_ALIGNMENT as usize - value_start;
+        value[embedded..embedded + fake.len()].copy_from_slice(&fake);
+        wal.put(1, b"k", &value).unwrap();
+        drop(wal); // Flush, but no sync of this put.
+        let mut bytes = fs::read(&path).unwrap();
+        assert_eq!(&bytes[4096..4096 + fake.len()], fake);
+        bytes[512..1024].fill(0);
+        fs::write(&path, &bytes).unwrap();
+        let mut mem = Memtable::new();
+        let (_, report) = Wal::open(&path, &mut mem).unwrap();
+        assert!(report.torn_tail_truncated);
+        assert_eq!(report.records_replayed, 0);
+        assert!(mem.is_empty());
+        assert_eq!(
+            fs::metadata(&path).unwrap().len(),
+            (HEADER_LEN + WAL_HEADER_LEN) as u64
+        );
+    }
+
+    #[test]
+    fn unreadable_header_disables_matching_marker_proof() {
+        let td = TempDir::new("damaged-header");
+        let path = td.path().join("WAL");
+        let (mut wal, _) = Wal::open(&path, &mut Memtable::new()).unwrap();
+        wal.put(1, b"k", b"synced").unwrap();
+        wal.sync().unwrap();
+        wal.put(2, b"later", b"marker").unwrap();
+        drop(wal);
+        let mut bytes = fs::read(&path).unwrap();
+        bytes[HEADER_LEN + 2] ^= 1;
+        fs::write(&path, &bytes).unwrap();
+        let (_, report) = Wal::open(&path, &mut Memtable::new()).unwrap();
+        assert!(report.torn_tail_truncated);
+        assert_eq!(report.bytes_truncated, bytes.len() as u64);
+        assert_eq!(fs::metadata(&path).unwrap().len(), 0);
+    }
+
+    #[test]
+    fn header_is_synced_during_creation_without_an_extra_fsync() {
+        struct DeviceGuard;
+        impl Drop for DeviceGuard {
+            fn drop(&mut self) {
+                sys::clear_fault();
+                sys::disable_device_sim();
+            }
+        }
+        let td = TempDir::new("durable-header");
+        let path = td.path().join("WAL");
+        sys::enable_device_sim();
+        let _guard = DeviceGuard;
+        sys::install_fault(usize::MAX);
+        Wal::create_durably(&path).unwrap();
+        // create, header write, file fsync, directory fsync.
+        assert_eq!(sys::op_count(), 4);
+        sys::clear_fault();
+        let before = sys::read(&path).unwrap();
+        sys::power_loss();
+        assert_eq!(sys::read(&path).unwrap(), before);
+        let payload = FrameReader::new(before.as_slice())
+            .read_record()
+            .unwrap()
+            .unwrap();
+        assert_eq!(payload.len(), WAL_HEADER_LEN);
+        assert_eq!(&payload[..2], &[OP_WAL_HEADER, FORMAT_VERSION]);
+        let (wal, report) = Wal::open(&path, &mut Memtable::new()).unwrap();
+        assert_eq!(
+            wal.nonce,
+            Some(u64::from_le_bytes(payload[2..].try_into().unwrap()))
+        );
+        assert_eq!(report.records_replayed, 0);
+        drop(wal);
+        // New simulated devices repeat their identities; successive WALs differ.
+        let next = td.path().join("NEXT");
+        Wal::create_durably(&next).unwrap();
+        assert_ne!(sys::read(&next).unwrap(), before);
+        sys::enable_device_sim();
+        Wal::create_durably(&path).unwrap();
+        assert_eq!(sys::read(&path).unwrap(), before);
     }
 
     #[test]
@@ -593,7 +1035,7 @@ mod tests {
     }
 
     #[test]
-    fn fresh_wal_is_created_empty_and_replays_nothing() {
+    fn fresh_wal_has_a_header_and_replays_nothing() {
         let td = TempDir::new("fresh");
         let wal_path = td.path().join("WAL");
         let mut m = Memtable::new();
@@ -712,11 +1154,16 @@ mod tests {
             wal.put(9, b"first", b"record").unwrap();
             wal.put(10, b"second", b"record").unwrap();
             wal.sync().unwrap();
+            wal.put(11, b"after-sync", b"marker").unwrap();
         }
         // flip one payload bit inside the first record's frame region
         let mut raw = fs::read(&wal_path).unwrap();
-        let header_len = 8usize;
-        raw[header_len + 9 + 1] ^= 0x08;
+        let first_record = frames(&wal_path)
+            .into_iter()
+            .find(|(_, p)| p[0] == OP_PUT)
+            .unwrap()
+            .0 as usize;
+        raw[first_record + HEADER_LEN + 9 + 1] ^= 0x08;
         fs::write(&wal_path, &raw).unwrap();
 
         let original_len = raw.len() as u64;

@@ -1143,7 +1143,7 @@ impl Kiban {
         }
         let manifest = Manifest::fresh();
         for &n in &manifest.wal_numbers {
-            atomic::create_durably(&dir.join(file_name(n, WAL_EXTENSION)))?;
+            Wal::create_durably(&dir.join(file_name(n, WAL_EXTENSION)))?;
         }
         manifest.install(dir).map_err(DbError::from)?;
         Ok(manifest)
@@ -1598,7 +1598,7 @@ impl Kiban {
         // D2 step 3: the WAL named by the upcoming MANIFEST must exist
         // durably before that MANIFEST does.
         let new_wal_path = self.dir.join(file_name(new_wal_number, WAL_EXTENSION));
-        atomic::create_durably(&new_wal_path)?;
+        Wal::create_durably(&new_wal_path)?;
 
         // Prepare every fallible handle before committing. Otherwise a
         // post-install open failure leaves RAM using a MANIFEST-retired WAL
@@ -1728,7 +1728,7 @@ impl Kiban {
 
         // The WAL a MANIFEST names must exist durably before that
         // MANIFEST does — same rule as every flush (D2 step 3).
-        atomic::create_durably(&new_wal_path)?;
+        Wal::create_durably(&new_wal_path)?;
         let mut throwaway = Memtable::new();
         let (new_wal, _report) = Wal::open(&new_wal_path, &mut throwaway)?;
 
@@ -6579,6 +6579,7 @@ mod write_batch_tests {
             b.put(b"k1", b"v1").put(b"k2", b"v2");
             db.write(b).unwrap();
             db.sync().unwrap();
+            db.put(b"after-sync", b"marker").unwrap();
         }
         // corrupt the first batch-op's kind byte inside the frame
         let dir = td.path();
@@ -6587,7 +6588,15 @@ mod write_batch_tests {
             if p.extension().and_then(|x| x.to_str()) == Some(WAL_EXTENSION) && sys::exists(&p) {
                 let mut raw = std::fs::read(&p).unwrap();
                 if raw.len() > 40 {
-                    raw[30] ^= 0xFF; // inside the batch payload region
+                    let mut reader = crate::frame::FrameReader::new(std::io::Cursor::new(&raw));
+                    let batch_offset = loop {
+                        let offset = reader.get_ref().position() as usize;
+                        let payload = reader.read_record().unwrap().expect("batch frame");
+                        if payload.first() == Some(&crate::wal::OP_BATCH) {
+                            break offset;
+                        }
+                    };
+                    raw[batch_offset + 30] ^= 0xFF; // inside the batch payload region
                     std::fs::write(&p, &raw).unwrap();
                     break;
                 }
