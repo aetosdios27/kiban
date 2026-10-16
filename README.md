@@ -4,6 +4,9 @@ Kiban is an embedded LSM-tree key-value storage engine written in Rust. It store
 ordered byte keys and byte values and targets Linux. **v0.1.0 is an early public
 release**, with no pre-1.0 API or storage-format compatibility promise.
 
+See [architecture](ARCHITECTURE.md) for the current invariants and [unreleased
+changes](CHANGELOG.md) for audit repairs on `main` that are newer than v0.1.0.
+
 ## Installation
 
 These are the release installation commands. Use the Git dependency after the
@@ -50,11 +53,12 @@ A missing or deleted key returns `None`.
 
 For a consistent logical view, use `let snapshot = db.snapshot()`,
 `db.get_at(&snapshot, key)` and `db.scan_at(&snapshot)`. Later writes, flushes and
-compactions do not change the captured view. Finish with
-`db.release_snapshot(&snapshot)` and drop the snapshot. Shared snapshots release
-bookkeeping on drop. `SharedKiban` offers clonable concurrent handles to one
+compactions do not change the captured view. Dropping the last snapshot clone releases bookkeeping automatically.
+`db.release_snapshot(&snapshot)` remains an optional, idempotent early release.
+Snapshots keep directory ownership while their captured files are needed. `SharedKiban` offers clonable concurrent handles to one
 engine with background flush/compaction; its snapshot exposes `get` and `scan`.
-Use one engine owner per directory; independent owners are not validated.
+One engine owner per directory is enforced with an OS lock; a second independent
+open returns `DbError::Locked`. Shared clones belong to one owner.
 
 ## Supported operations
 
@@ -63,10 +67,45 @@ Use one engine owner per directory; independent owners are not validated.
   governor by default; optional fixed-priority and scored schedulers.
 - Point reads, scans/iterators, tombstones and sequence-bounded snapshots.
 - Recovery from WAL/MANIFEST state; poisoning after unsafe WAL/commit failures.
-- Bloom filters, block cache, bounded SST descriptor cache and optional mmap.
+- Bloom filters, block cache, optional range read-ahead tier, bounded SST descriptor cache and optional mmap.
 - Maintenance/read-amplification metrics and reproducible validation tooling.
 
+Streaming scans are available through `SharedSnapshot::iter()` and
+`SharedSnapshot::range(start, end)`; `scan()` collects the results. Run
+`cargo run --example concurrent -- /path/to/new-db` for concurrent writes and a
+stable captured view.
+
+Mutation methods consistently return `DbError`, including typed invalid-input,
+locked-directory and sequence-exhaustion errors. Keys are limited to 1 MiB,
+values to 16 MiB, batches to 100,000 operations and WAL records to 64 MiB.
+Oversized input does not poison the engine. The write-buffer option is a flush
+trigger, not a hard RSS budget; direct `Kiban` requires explicit flushing.
+
 Compression, range deletes, reverse iterators and transactions are not implemented.
+
+## Checkpoints, backups and inspection
+
+`checkpoint()` syncs accepted writes and flushes them to SSTs; shared checkpoints
+also wait for requested maintenance. `close()` performs that checkpoint and
+reports errors before releasing the handle. Other clones/snapshots may retain
+ownership. Coordinate concurrent writers for a quiescent checkpoint.
+
+`db.backup(new_directory)` exports a logical view into a newly created database;
+shared backups capture a snapshot while writers continue. A completed backup is
+synced; an error can leave a partial destination. Existing destinations are never
+overwritten. Backup preserves live keys/values, not tuning or version history.
+
+```sh
+cargo run --bin kiban -- check /path/to/existing-db
+cargo run --bin kiban -- inspect /path/to/existing-db
+cargo run --bin kiban -- backup /path/to/existing-db /path/to/new-backup
+cargo run --bin kiban -- restore /path/to/new-backup /path/to/new-restored-db
+```
+
+The CLI requires exclusive ownership. Inspection/checking performs ordinary open
+recovery and may truncate a torn WAL tail or sweep orphan files; use a copy for
+forensic examination. Integrity checks read every SST entry and compare point
+lookups with scans.
 
 ## Durability and limitations
 
@@ -82,9 +121,10 @@ Snapshots retain captured state conservatively. Point reads and scans select the
 newest visible sequence; a visible tombstone hides older values, while a future
 invisible tombstone cannot hide a snapshot's value.
 
-WAL records and SST blocks have checksums. MANIFEST has structural validation
-but **no checksum**. Independent processes opening the same directory are not
-validated. SIGKILL testing preserves the OS cache and is not machine power-loss
+WAL records and SST blocks have checksums. New MANIFESTs have a versioned CRC-32 envelope and strict structural validation.
+Legacy unversioned MANIFESTs remain readable and upgrade at their next install;
+older Kiban builds cannot read the new envelope. Records above the current size
+limits are rejected. Independent engine owners are rejected by the directory lock. SIGKILL testing preserves the OS cache and is not machine power-loss
 testing. The volatile-device model and Loom models are bounded; arbitrary
 OS/device behavior and every thread schedule have not been proved correct.
 These results do not establish production readiness or formal correctness.
@@ -96,6 +136,14 @@ These results do not establish production readiness or formal correctness.
 documents workloads, cache treatment, fault injection and reproduction commands.
 The [first scale report](validation/REPORT.md) is historical evidence from before
 the correctness repairs; its numbers are not v0.1.0 performance results.
+
+The [foreground report](validation/FOREGROUND_REPORT.md) records the latest
+published optimization/endurance campaign, including an unresolved concurrency
+throughput decline. [Audit repair evidence](validation/AUDIT_REPAIRS.md) tracks
+subsequent fixes and their validation; the
+[read-path and range-cache report](validation/RANGE_CACHE.md) covers the read-path
+rework, the optional range tier and their benchmarks. Historical measurements describe their
+recorded source revision; they are not automatic performance claims for `main`.
 
 The [release baseline and gate](validation/RELEASE.md) records post-correctness
 benchmarks, exact source/environment metadata, limitations and release commands.

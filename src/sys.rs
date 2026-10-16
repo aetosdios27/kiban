@@ -1,7 +1,7 @@
 //! Durability-relevant syscall wrappers with test-time fault injection
 //! and optional power-loss device simulation.
 //!
-//! Per `docs/design/fault-injection.md`: production is passthrough;
+//! Per `ARCHITECTURE.md`: production is passthrough;
 //! tests can (a) make the Nth checked operation return `EIO`, and
 //! (b) enable a simulated volatile device where writes land in an
 //! overlay that only `sync` commits to the "disk" — so a simulated
@@ -374,7 +374,12 @@ impl File {
 
     /// Positioned read served through the simulated device when active.
     pub fn read_range_at(&self, path_for_sim: &Path, offset: u64, len: u64) -> io::Result<Vec<u8>> {
-        let mut buf = vec![0u8; len as usize];
+        let len = usize::try_from(len).map_err(|_| {
+            io::Error::new(io::ErrorKind::InvalidData, "read exceeds address space")
+        })?;
+        let mut buf = Vec::new();
+        buf.try_reserve_exact(len).map_err(io::Error::other)?;
+        buf.resize(len, 0);
         self.read_exact_at(path_for_sim, &mut buf, offset)?;
         Ok(buf)
     }

@@ -1,7 +1,7 @@
 //! The write-ahead log: one framed record per mutation, explicit
 //! durability, replay-and-truncate recovery.
 //!
-//! Implements `docs/design/wal.md`. `append`-family methods do not make
+//! Implements `ARCHITECTURE.md`. `append`-family methods do not make
 //! data durable; only a successful `sync()` does.
 
 use std::fmt;
@@ -144,12 +144,27 @@ pub(crate) fn decode_batch_into_memtable(
     }
     let count = u32::from_le_bytes(payload[1..5].try_into().unwrap()) as usize;
     let first_seq = u64::from_le_bytes(payload[5..13].try_into().unwrap());
+    if count == 0
+        || count > crate::limits::MAX_BATCH_OPERATIONS
+        || count > (payload.len() - 13) / BATCH_OP_FIXED_LEN
+    {
+        return Err(bad("invalid batch count".to_string()));
+    }
+    if first_seq == 0 || first_seq.checked_add(count as u64 - 1).is_none() {
+        return Err(bad("invalid batch sequence interval".to_string()));
+    }
     let mut pos = 13usize;
+    let mut decoded = Vec::new();
+    decoded
+        .try_reserve(count)
+        .map_err(|e| bad(format!("batch allocation: {e}")))?;
+    let mut latest = std::collections::HashMap::new();
     for i in 0..count {
         let expected_seq = first_seq + i as u64;
-        if pos + BATCH_OP_FIXED_LEN > payload.len() {
-            return Err(bad("batch op header runs past payload".to_string()));
-        }
+        let header_end = pos
+            .checked_add(BATCH_OP_FIXED_LEN)
+            .filter(|end| *end <= payload.len())
+            .ok_or_else(|| bad("batch op header runs past payload".to_string()))?;
         let kind = match payload[pos] {
             OP_PUT => Kind::Put,
             OP_DELETE => Kind::Tombstone,
@@ -157,22 +172,41 @@ pub(crate) fn decode_batch_into_memtable(
         };
         let klen = u32::from_le_bytes(payload[pos + 1..pos + 5].try_into().unwrap()) as usize;
         let vlen = u32::from_le_bytes(payload[pos + 5..pos + 9].try_into().unwrap()) as usize;
-        let end = pos + BATCH_OP_FIXED_LEN + klen + vlen;
-        if end > payload.len() {
-            return Err(bad("batch op key/value runs past payload".to_string()));
+        let key_end = header_end
+            .checked_add(klen)
+            .ok_or_else(|| bad("batch key length overflow".to_string()))?;
+        let end = key_end
+            .checked_add(vlen)
+            .filter(|end| *end <= payload.len())
+            .ok_or_else(|| bad("batch key/value runs past payload".to_string()))?;
+        let key = &payload[header_end..key_end];
+        let value = &payload[key_end..end];
+        crate::limits::mutation(key, value).map_err(|e| bad(e.to_string()))?;
+        if kind == Kind::Tombstone && !value.is_empty() {
+            return Err(bad("delete carries a value".to_string()));
         }
-        let key = &payload[pos + BATCH_OP_FIXED_LEN..pos + BATCH_OP_FIXED_LEN + klen];
-        let value = if vlen > 0 {
-            &payload[end - vlen..end]
-        } else {
-            &[]
-        };
-        match kind {
-            Kind::Put => memtable.put(key, value, expected_seq),
-            Kind::Tombstone => memtable.delete(key, expected_seq),
+        let previous = latest
+            .get(key)
+            .copied()
+            .or_else(|| memtable.entry(key).map(|e| e.seq()));
+        if previous.is_some_and(|seq| seq >= expected_seq) {
+            return Err(bad("batch sequence is not increasing for key".to_string()));
         }
-        *max_seq = (*max_seq).max(expected_seq);
+        latest.insert(key, expected_seq);
+        decoded.push((kind, key, value, expected_seq));
         pos = end;
+    }
+    if pos != payload.len() {
+        return Err(bad("batch has trailing bytes".to_string()));
+    }
+    // No mutation until all records, sequence ranges and exact consumption
+    // have passed validation. A malformed suffix cannot apply a prefix.
+    for (kind, key, value, seq) in decoded {
+        match kind {
+            Kind::Put => memtable.put(key, value, seq),
+            Kind::Tombstone => memtable.delete(key, seq),
+        }
+        *max_seq = (*max_seq).max(seq);
     }
     Ok(())
 }
@@ -195,7 +229,6 @@ fn decode_into_memtable(
     let seq = u64::from_le_bytes(payload[1..9].try_into().unwrap());
     let klen = u32::from_le_bytes(payload[9..13].try_into().unwrap()) as usize;
     let vlen = u32::from_le_bytes(payload[13..17].try_into().unwrap()) as usize;
-    *max_seq = (*max_seq).max(seq);
     let key_end = PAYLOAD_FIXED_LEN
         .checked_add(klen)
         .ok_or_else(|| bad("key length overflows payload".to_string()))?;
@@ -210,12 +243,36 @@ fn decode_into_memtable(
         )));
     }
     let key = &payload[PAYLOAD_FIXED_LEN..key_end];
+    crate::limits::mutation(key, &payload[key_end..value_end]).map_err(|e| bad(e.to_string()))?;
+    if seq == 0 || memtable.entry(key).is_some_and(|e| e.seq() >= seq) {
+        return Err(bad("sequence is not increasing for key".to_string()));
+    }
+    if op == OP_DELETE && vlen != 0 {
+        return Err(bad("delete carries a value".to_string()));
+    }
     match op {
         OP_PUT => memtable.put(key, &payload[key_end..value_end], seq),
         OP_DELETE => memtable.delete(key, seq),
         other => return Err(bad(format!("unknown op byte {other:#04x}"))),
     }
+    *max_seq = (*max_seq).max(seq);
     Ok(())
+}
+
+/// Whether every byte of `file` from `offset` to its end is zero.
+fn zero_suffix(file: &sys::File, offset: u64) -> io::Result<bool> {
+    let mut reader = file.try_clone()?;
+    reader.seek(SeekFrom::Start(offset))?;
+    let mut chunk = [0u8; 8192];
+    loop {
+        let n = reader.read(&mut chunk)?;
+        if n == 0 {
+            return Ok(true);
+        }
+        if chunk[..n].iter().any(|&b| b != 0) {
+            return Ok(false);
+        }
+    }
 }
 
 struct Counting<R> {
@@ -282,19 +339,23 @@ impl Wal {
 
         loop {
             let offset = reader.get_ref().pos;
-            match reader.read_record() {
+            let failure = match reader.read_record() {
                 Ok(Some(payload)) => {
                     // Batch records carry their own multi-op payload and
                     // are applied atomically (all-or-corruption).
-                    if payload.first() == Some(&OP_BATCH) {
-                        decode_batch_into_memtable(&payload, offset, memtable, &mut max_sequence)?;
-                        records_replayed += 1;
-                        last_good_offset = reader.get_ref().pos;
-                        continue;
+                    let applied = if payload.first() == Some(&OP_BATCH) {
+                        decode_batch_into_memtable(&payload, offset, memtable, &mut max_sequence)
+                    } else {
+                        decode_into_memtable(&payload, offset, memtable, &mut max_sequence)
+                    };
+                    match applied {
+                        Ok(()) => {
+                            records_replayed += 1;
+                            last_good_offset = reader.get_ref().pos;
+                            continue;
+                        }
+                        Err(e) => e,
                     }
-                    decode_into_memtable(&payload, offset, memtable, &mut max_sequence)?;
-                    records_replayed += 1;
-                    last_good_offset = reader.get_ref().pos;
                 }
                 Ok(None) => break,
                 Err(e @ ReadRecordError::TornTail) => {
@@ -305,13 +366,22 @@ impl Wal {
                 Err(
                     e @ (ReadRecordError::ChecksumMismatch { .. }
                     | ReadRecordError::LengthInvalid(_)),
-                ) => {
-                    return Err(WalError::Corrupt {
-                        offset,
-                        reason: e.to_string(),
-                    });
-                }
+                ) => WalError::Corrupt {
+                    offset,
+                    reason: e.to_string(),
+                },
+            };
+            // A crash can leave the file size committed before its data, so
+            // the unwritten tail reads back as zeros. An all-zero header
+            // even frames "validly" (length 0, CRC-32 of nothing is 0), but
+            // the writer never emits an empty payload. A zero-only suffix
+            // from a frame boundary is therefore an unwritten tail, not
+            // corruption. Any nonzero byte keeps the strict error.
+            if zero_suffix(file, offset).map_err(WalError::Io)? {
+                outcome = Err(ReadRecordError::TornTail);
+                break;
             }
+            return Err(failure);
         }
 
         let end = file.len().map_err(WalError::Io)?;
@@ -337,11 +407,25 @@ impl Wal {
         key: impl AsRef<[u8]>,
         value: impl AsRef<[u8]>,
     ) -> io::Result<()> {
+        if seq == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "sequence zero is reserved",
+            ));
+        }
+        crate::limits::mutation(key.as_ref(), value.as_ref())?;
         encode_put(seq, key.as_ref(), value.as_ref(), &mut self.payload_scratch);
         self.append_scratch()
     }
 
     pub fn delete(&mut self, seq: u64, key: impl AsRef<[u8]>) -> io::Result<()> {
+        if seq == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "sequence zero is reserved",
+            ));
+        }
+        crate::limits::mutation(key.as_ref(), b"")?;
         encode_delete(seq, key.as_ref(), &mut self.payload_scratch);
         self.append_scratch()
     }
@@ -354,6 +438,16 @@ impl Wal {
         first_seq: u64,
         ops: &[(Kind, Vec<u8>, Vec<u8>)],
     ) -> io::Result<()> {
+        if ops.is_empty() {
+            return Ok(());
+        }
+        crate::limits::batch(ops)?;
+        if first_seq == 0 || first_seq.checked_add(ops.len() as u64 - 1).is_none() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "invalid batch sequence interval",
+            ));
+        }
         encode_batch(ops, first_seq, &mut self.payload_scratch);
         self.append_scratch()
     }
@@ -366,7 +460,7 @@ impl Wal {
 
     /// Makes all appended records durable: flushes userspace buffers,
     /// then fdatasyncs. Only after this returns success may the write be
-    /// acknowledged; per docs/design/wal.md D6, a failure here must not
+    /// acknowledged; per ARCHITECTURE.md D6, a failure here must not
     /// be retried into oblivion — treat it as fatal upstream.
     pub fn sync(&mut self) -> Result<(), SyncPhase> {
         self.writer.flush().map_err(SyncPhase::Flush)?;
@@ -393,6 +487,78 @@ impl Wal {
 
 #[cfg(test)]
 mod tests {
+    /// A power-loss tail of zeros (size committed before data) after valid
+    /// records is truncated like a torn frame; a zero run followed by any
+    /// nonzero byte is still corruption.
+    #[test]
+    fn zero_filled_tail_is_torn_but_zeros_before_data_are_corrupt() {
+        use super::*;
+        let dir = crate::testutil::TempDir::new("wal-zero-tail");
+        let path = dir.path().join("1.wal");
+        {
+            let mut memtable = Memtable::new();
+            let (mut wal, _) = Wal::open(&path, &mut memtable).unwrap();
+            wal.put(1, b"a", b"1").unwrap();
+            wal.put(2, b"b", b"2").unwrap();
+            wal.sync().unwrap();
+        }
+        let valid = std::fs::metadata(&path).unwrap().len();
+        for zeros in [1usize, 8, 25, 4096] {
+            let mut bytes = std::fs::read(&path).unwrap();
+            bytes.truncate(valid as usize);
+            bytes.extend(std::iter::repeat_n(0u8, zeros));
+            std::fs::write(&path, &bytes).unwrap();
+            let mut memtable = Memtable::new();
+            let (_, report) = Wal::open(&path, &mut memtable).unwrap();
+            assert_eq!(report.records_replayed, 2);
+            assert!(report.torn_tail_truncated);
+            assert_eq!(report.bytes_truncated, zeros as u64);
+            assert_eq!(std::fs::metadata(&path).unwrap().len(), valid);
+        }
+        let mut bytes = std::fs::read(&path).unwrap();
+        bytes.extend([0u8; 32]);
+        bytes.push(1);
+        std::fs::write(&path, &bytes).unwrap();
+        let mut memtable = Memtable::new();
+        assert!(matches!(
+            Wal::open(&path, &mut memtable),
+            Err(WalError::Corrupt { .. })
+        ));
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            bytes,
+            "corrupt log untouched"
+        );
+    }
+
+    #[test]
+    fn malformed_batch_never_applies_a_prefix() {
+        use super::*;
+        let ops = vec![
+            (Kind::Put, b"a".to_vec(), b"1".to_vec()),
+            (Kind::Put, b"b".to_vec(), b"2".to_vec()),
+        ];
+        let mut payload = Vec::new();
+        encode_batch(&ops, 1, &mut payload);
+        let mut trailing = payload.clone();
+        trailing.push(0);
+        let mut invalid_delete = payload.clone();
+        invalid_delete[13] = OP_DELETE;
+        let mut overflow = payload.clone();
+        overflow[5..13].copy_from_slice(&u64::MAX.to_le_bytes());
+        for bad in [
+            payload[..payload.len() - 1].to_vec(),
+            trailing,
+            invalid_delete,
+            overflow,
+        ] {
+            let mut mem = Memtable::new();
+            let mut max = 0;
+            assert!(decode_batch_into_memtable(&bad, 0, &mut mem, &mut max).is_err());
+            assert!(mem.is_empty());
+            assert_eq!(max, 0);
+        }
+    }
     use super::*;
     use crate::memtable::Entry;
     use std::env;

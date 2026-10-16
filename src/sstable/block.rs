@@ -1,5 +1,5 @@
 //! Data-block encoding: prefix-compressed entries anchored by restart
-//! points, per `docs/design/sstable.md`.
+//! points, per `ARCHITECTURE.md`.
 
 use super::{Kind, SstError, common_prefix_len};
 use crate::cache::{ArcBlock, BlockMeta, CachedBlock};
@@ -191,26 +191,8 @@ impl VerifiedBlock {
         header_at(&self.data, &self.meta, pos)
     }
 
-    fn full_key_at_restart(&self, i: usize) -> Result<Vec<u8>, SstError> {
-        full_key_at_restart(&self.data, &self.meta, i)
-    }
-
     pub fn get(&self, target: &[u8], limit: Option<u64>) -> Result<Option<Match<'_>>, SstError> {
-        let mut lo = 0usize;
-        let mut hi = self.meta.num_restarts;
-        while lo < hi {
-            let mid = lo + (hi - lo) / 2;
-            if self.full_key_at_restart(mid)?.as_slice() < target {
-                lo = mid + 1;
-            } else {
-                hi = mid;
-            }
-        }
-        // Start before the FIRST restart equal to target. Equal-key
-        // versions can begin in the preceding interval and extend across
-        // many restarts; starting at the last equal restart skips newer
-        // visible versions (including tombstones).
-        let start = lo.saturating_sub(1);
+        let start = seek_restart_index(&self.data, &self.meta, target)?;
         let mut key: Vec<u8> = Vec::new();
         let mut pos = self.restart_offset(start);
 
@@ -219,6 +201,11 @@ impl VerifiedBlock {
                 return Ok(None);
             }
             let (kind, seq, shared, non_shared, value_len) = self.header(pos)?;
+            if shared > key.len() {
+                return Err(SstError::Corrupt(
+                    "shared length exceeds previous key".to_string(),
+                ));
+            }
             key.truncate(shared);
             key.extend_from_slice(
                 &self.data[pos + ENTRY_FIXED_LEN..pos + ENTRY_FIXED_LEN + non_shared],
@@ -266,7 +253,10 @@ fn header_at(
     pos: usize,
 ) -> Result<(Kind, u64, usize, usize, usize), SstError> {
     let bad = |m: String| SstError::Corrupt(format!("data block entry at {pos}: {m}"));
-    if pos + ENTRY_FIXED_LEN > meta.entries_end {
+    if pos
+        .checked_add(ENTRY_FIXED_LEN)
+        .is_none_or(|end| end > meta.entries_end)
+    {
         return Err(bad("header runs past entries area".to_string()));
     }
     let kind = Kind::from_u8(data[pos]).ok_or_else(|| bad("unknown entry kind".to_string()))?;
@@ -277,8 +267,11 @@ fn header_at(
     if kind == Kind::Tombstone && value_len != 0 {
         return Err(bad("tombstone with non-zero value length".to_string()));
     }
-    let end = pos + ENTRY_FIXED_LEN + non_shared + value_len;
-    if end > meta.entries_end {
+    let end = pos
+        .checked_add(ENTRY_FIXED_LEN)
+        .and_then(|n| n.checked_add(non_shared))
+        .and_then(|n| n.checked_add(value_len));
+    if end.is_none_or(|end| end > meta.entries_end) {
         return Err(bad("key/value runs past entries area".to_string()));
     }
     Ok((kind, seq, shared, non_shared, value_len))
@@ -292,7 +285,11 @@ fn restart_offset_of(data: &[u8], restart_start: usize, i: usize) -> usize {
     ) as usize
 }
 
-fn full_key_at_restart(data: &[u8], meta: &BlockMeta, i: usize) -> Result<Vec<u8>, SstError> {
+fn full_key_at_restart<'a>(
+    data: &'a [u8],
+    meta: &BlockMeta,
+    i: usize,
+) -> Result<&'a [u8], SstError> {
     let pos = restart_offset_of(data, meta.restart_start, i);
     let (_, _, shared, non_shared, _) = header_at(data, meta, pos)?;
     if shared != 0 {
@@ -300,7 +297,26 @@ fn full_key_at_restart(data: &[u8], meta: &BlockMeta, i: usize) -> Result<Vec<u8
             "restart point entry has shared bytes".to_string(),
         ));
     }
-    Ok(data[pos + ENTRY_FIXED_LEN..pos + ENTRY_FIXED_LEN + non_shared].to_vec())
+    Ok(&data[pos + ENTRY_FIXED_LEN..pos + ENTRY_FIXED_LEN + non_shared])
+}
+
+/// Restart interval where a forward search for `target` must begin: the one
+/// before the FIRST restart whose key is >= `target`. Equal-key versions can
+/// begin in the preceding interval and extend across many restarts;
+/// starting at the last equal restart would skip newer visible versions
+/// (including tombstones).
+fn seek_restart_index(data: &[u8], meta: &BlockMeta, target: &[u8]) -> Result<usize, SstError> {
+    let mut lo = 0usize;
+    let mut hi = meta.num_restarts;
+    while lo < hi {
+        let mid = lo + (hi - lo) / 2;
+        if full_key_at_restart(data, meta, mid)? < target {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    Ok(lo.saturating_sub(1))
 }
 
 fn entry_value(data: &[u8], pos: usize, kind: Kind, non_shared: usize, value_len: usize) -> &[u8] {
@@ -336,6 +352,23 @@ impl BlockIter {
     }
 }
 
+impl BlockIter {
+    /// Repositions an unstarted iterator at the restart interval where
+    /// entries >= `target` can begin, skipping earlier intervals without
+    /// decoding them. Entries before `target` may still follow; callers
+    /// filter those as before.
+    pub(crate) fn seek_restart(&mut self, target: &[u8]) -> Result<(), SstError> {
+        debug_assert!(
+            self.pos == 0 && self.key.is_empty(),
+            "seek on a started iterator"
+        );
+        let start = seek_restart_index(&self.block.data, &self.block.meta, target)?;
+        self.pos = restart_offset_of(&self.block.data, self.block.meta.restart_start, start);
+        self.key.clear();
+        Ok(())
+    }
+}
+
 impl Iterator for BlockIter {
     type Item = Result<(Kind, u64, Vec<u8>, Vec<u8>), SstError>;
 
@@ -346,6 +379,15 @@ impl Iterator for BlockIter {
         let data = &self.block.data;
         let meta = &self.block.meta;
         let pos = self.pos;
+        if pos
+            .checked_add(ENTRY_FIXED_LEN)
+            .is_none_or(|end| end > meta.entries_end)
+        {
+            self.failed = true;
+            return Some(Err(SstError::Corrupt(
+                "entry header runs past entries area".to_string(),
+            )));
+        }
         let bad = |m: String| SstError::Corrupt(format!("data block entry at {pos}: {m}"));
         let kind = match Kind::from_u8(data[pos]) {
             Some(k) => k,
@@ -358,11 +400,17 @@ impl Iterator for BlockIter {
         let non_shared = u32::from_le_bytes(data[pos + 5..pos + 9].try_into().unwrap()) as usize;
         let value_len = u32::from_le_bytes(data[pos + 9..pos + 13].try_into().unwrap()) as usize;
         let seq = u64::from_le_bytes(data[pos + 13..pos + 21].try_into().unwrap());
-        let end = pos + ENTRY_FIXED_LEN + non_shared + value_len;
-        if end > meta.entries_end || (kind == Kind::Tombstone && value_len != 0) {
+        let end = pos
+            .checked_add(ENTRY_FIXED_LEN)
+            .and_then(|n| n.checked_add(non_shared))
+            .and_then(|n| n.checked_add(value_len));
+        if end.is_none_or(|end| end > meta.entries_end)
+            || (kind == Kind::Tombstone && value_len != 0)
+        {
             self.failed = true;
             return Some(Err(bad("entry runs past entries area".to_string())));
         }
+        let end = end.unwrap();
         if shared > self.key.len() {
             self.failed = true;
             return Some(Err(bad("shared length exceeds previous key".to_string())));

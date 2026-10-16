@@ -1,6 +1,6 @@
 //! One background compaction worker per [`crate::db::SharedKiban`].
 //!
-//! Compaction is split PLAN/BUILD/COMMIT (`docs/design/compaction.md`,
+//! Compaction is split PLAN/BUILD/COMMIT (`ARCHITECTURE.md`,
 //! phase 11.4): PLAN and COMMIT run under the engine lock and are
 //! cheap; BUILD — the merge and sstable construction — runs here, on
 //! this worker thread, outside the lock, so foreground reads and
@@ -199,6 +199,22 @@ pub(crate) struct Maintenance {
 }
 
 impl Maintenance {
+    pub(crate) fn drain(&self) -> Result<(), MaintenanceError> {
+        loop {
+            if let Some(error) = self.error() {
+                return Err(error);
+            }
+            let s = self.state.lock().unwrap();
+            if !s.busy && !s.wake {
+                return Ok(());
+            }
+            let _ = self
+                .condvar
+                .wait_timeout(s, std::time::Duration::from_millis(100))
+                .unwrap();
+        }
+    }
+
     pub(crate) fn spawn(engine: Arc<ShardedRwLock<Kiban>>) -> Arc<Maintenance> {
         let m = Arc::new(Maintenance {
             handles: AtomicUsize::new(1),

@@ -1,6 +1,6 @@
 //! Table reader: lazy table handles with cached block reads.
 //!
-//! Per `docs/design/block-cache.md` D1: opening reads only footer,
+//! Per `ARCHITECTURE.md` D1: opening reads only footer,
 //! index, and bloom filter; data blocks load on demand through the
 //! shared LRU. Corruption is detected and reported, never repaired.
 //!
@@ -18,6 +18,7 @@ use crate::bloom::BloomFilter;
 use crate::cache::{BlockCache, CachedBlock};
 use crate::crc32;
 use crate::file_cache::TableFileCache;
+use crate::range_cache::Window;
 
 struct IndexEntry {
     separator: Vec<u8>,
@@ -196,6 +197,8 @@ impl SstTable {
         let filter_len = u64::from_le_bytes(footer[28..36].try_into().unwrap());
         let data_end = file_len - FOOTER_LEN as u64;
         if index_len == 0
+            || index_len > crate::limits::MAX_RECORD_BYTES as u64
+            || filter_len > crate::limits::MAX_RECORD_BYTES as u64
             || index_offset
                 .checked_add(index_len)
                 .is_none_or(|end| end > data_end)
@@ -221,7 +224,7 @@ impl SstTable {
         verify_trailer(&filter_raw, "filter")?;
         let filter = BloomFilter::decode(&filter_raw[..filter_raw.len() - 5])
             .ok_or_else(|| bad("filter block payload is malformed".to_string()))?;
-        let index = parse_index(&index_raw, data_end)?;
+        let index = parse_index(&index_raw, filter_offset)?;
 
         // Best-effort: a failed mmap degrades silently to the pread
         // path (see `SstTable::mmap`'s doc), never fails the open.
@@ -330,6 +333,114 @@ impl SstTable {
         Ok(VerifiedBlock::from_cached(cached))
     }
 
+    /// Sequential-iterator block read. Identical to `read_block` unless the
+    /// block cache has an enabled range tier and this table is not mapped.
+    /// Then a block-cache miss is served, in order, from the iterator's
+    /// pinned window, from a resident range-tier window (which becomes the
+    /// pin), or by one positional read of a forward window of whole blocks
+    /// that is admitted to the range tier and pinned. Blocks inside a pinned
+    /// window therefore cost no lock and no syscall.
+    ///
+    /// An iterator's first `READS_BEFORE_READAHEAD` source reads fetch only
+    /// their block and are not admitted, so short scans read nothing extra;
+    /// after that each source read doubles the window up to
+    /// `BlockCache::readahead_bytes`. Range-tier
+    /// entries are unions of whole blocks, so a block is either entirely
+    /// inside a resident range or not in the tier at all.
+    fn read_block_sequential(
+        &self,
+        idx: usize,
+        state: &mut ReadAhead,
+    ) -> Result<VerifiedBlock, SstError> {
+        let ranges = self.block_cache.range_cache();
+        let entry = &self.index[idx];
+        if self.mmap.is_some() || !ranges.is_enabled() {
+            return self.read_block(entry);
+        }
+        let number = self.number;
+        let span = entry.offset..entry.offset + entry.len;
+        let mut fetched = false;
+        let cached = self
+            .block_cache
+            .get_or_load(
+                (number, entry.offset),
+                || -> Result<CachedBlock, SstError> {
+                    let pinned = state.pinned.as_ref().filter(|(start, window)| {
+                        *start <= span.start && span.end <= start + window.len() as u64
+                    });
+                    if pinned.is_none() {
+                        state.pinned = ranges.get_window(number, span.clone());
+                    }
+                    if state.pinned.as_ref().is_none_or(|(start, window)| {
+                        span.start < *start || start + (window.len() as u64) < span.end
+                    }) {
+                        state.pinned = Some(self.read_window(idx, state.window)?);
+                        fetched = true;
+                    }
+                    let (start, window) = state.pinned.as_ref().expect("window pinned above");
+                    let offset = (span.start - start) as usize;
+                    let data = &window[offset..offset + entry.len as usize];
+                    let meta = VerifiedBlock::verify(data)?;
+                    Ok(CachedBlock {
+                        data: Arc::from(data),
+                        meta,
+                    })
+                },
+            )
+            .map_err(SstError::Corrupt)?;
+        if fetched {
+            state.source_reads += 1;
+            let max = self.block_cache.readahead_bytes();
+            state.window = if state.source_reads < READS_BEFORE_READAHEAD {
+                0
+            } else if state.window == 0 {
+                INITIAL_READAHEAD_BYTES.min(max)
+            } else {
+                state.window.saturating_mul(2).min(max)
+            };
+        }
+        Ok(VerifiedBlock::from_cached(cached))
+    }
+
+    /// One positional read starting at block `idx`, extended over whole
+    /// following blocks up to `window` bytes but stopping before bytes the
+    /// range tier already holds. Multi-block windows are admitted.
+    fn read_window(&self, idx: usize, window: u64) -> Result<(u64, Window), SstError> {
+        let ranges = self.block_cache.range_cache();
+        let number = self.number;
+        let entry = &self.index[idx];
+        let start = entry.offset;
+        let mut end = start + entry.len;
+        if window > entry.len {
+            for next in &self.index[idx + 1..] {
+                let candidate = next.offset + next.len;
+                if candidate - start > window {
+                    break;
+                }
+                end = candidate;
+            }
+            if let Some(gap) = ranges.missing_ranges(number, start..end).first()
+                && gap.start == start
+            {
+                end = gap.end;
+            }
+        }
+        let lease = self
+            .file_cache
+            .acquire(number, &self.path)
+            .map_err(|e| SstError::Corrupt(format!("table {number} cannot be opened: {e}")))?;
+        let data = lease
+            .read_range_at(&self.path, start, end - start)
+            .map_err(|e| SstError::Corrupt(format!("read failed at offset {start}: {e}")))?;
+        drop(lease);
+        ranges.record_source_read(data.len());
+        let data: Window = Arc::new(data);
+        if end > entry.offset + entry.len {
+            ranges.insert_window(number, start, &data);
+        }
+        Ok((start, data))
+    }
+
     /// Point lookup. Returns the newest version of `key` whose sequence
     /// number does not exceed `limit`, or `None` when provably absent.
     pub fn get(&self, key: &[u8], limit: Option<u64>) -> Result<Option<Found>, SstError> {
@@ -366,6 +477,7 @@ impl SstTable {
             current: None,
             failed: false,
             lower_bound: None,
+            readahead: ReadAhead::default(),
         }
     }
 
@@ -377,7 +489,7 @@ impl SstTable {
     /// `block_cache` for no benefit and (b) lease `file_cache` — a
     /// shared, bounded descriptor pool foreground GETs also need — once
     /// per ~block-sized positional read instead of once for the whole
-    /// scan. `compaction_iter` opens its own OWNED file handle up front
+    /// scan. `compaction_iter` opens an independent handle for each refill
     /// (never touches `file_cache`) and reads ahead in large sequential
     /// chunks (see `CompactionIter::read_block_bulk`), touching neither
     /// shared cache at all.
@@ -394,15 +506,8 @@ impl SstTable {
         &self,
         window_bytes: u64,
     ) -> Result<CompactionIter<'_>, SstError> {
-        let file = crate::sys::File::open_read(&self.path).map_err(|e| {
-            SstError::Corrupt(format!(
-                "table {} cannot be opened for compaction: {e}",
-                self.number
-            ))
-        })?;
         Ok(CompactionIter {
             table: self,
-            file,
             next_block: 0,
             buffer: Vec::new(),
             buffer_start: 0,
@@ -420,9 +525,17 @@ impl SstTable {
 /// typical table needs only one or two refills total.
 const COMPACTION_READ_AHEAD_BYTES: u64 = 4 * 1024 * 1024;
 
+/// First foreground read-ahead window after an iterator's initial
+/// single-block source read; see `SstTable::read_block_sequential`.
+const INITIAL_READAHEAD_BYTES: u64 = 16 * 1024;
+
+/// Single-block source reads an iterator makes before reading ahead, as in
+/// RocksDB's automatic iterator read-ahead: one block boundary crossed by a
+/// short scan must not fetch blocks it never uses.
+const READS_BEFORE_READAHEAD: u32 = 2;
+
 pub(crate) struct CompactionIter<'a> {
     table: &'a SstTable,
-    file: crate::sys::File,
     next_block: usize,
     /// Bytes covering `[buffer_start, buffer_start + buffer.len())` of
     /// the file, refilled forward as blocks are consumed. Never
@@ -458,8 +571,11 @@ impl CompactionIter<'_> {
                 window_end = candidate_end;
             }
             let mut buf = vec![0u8; (window_end - start) as usize];
-            self.file
-                .read_exact_at(&self.table.path, &mut buf, start)
+            // Keep only the active refill descriptor open. A merge can have
+            // many source iterators without pinning one descriptor per input.
+            let file = crate::sys::File::open_read(&self.table.path)
+                .map_err(|e| SstError::Corrupt(format!("compaction open: {e}")))?;
+            file.read_exact_at(&self.table.path, &mut buf, start)
                 .map_err(|e| {
                     SstError::Corrupt(format!("compaction read failed at offset {start}: {e}"))
                 })?;
@@ -531,11 +647,22 @@ fn parse_index(index_raw: &[u8], data_end: u64) -> Result<Vec<IndexEntry>, SstEr
         Ok(v)
     };
     let count = read_u32(&mut pos)? as usize;
-    let mut index = Vec::with_capacity(count);
+    if count == 0 || count > payload.len().saturating_sub(pos) / 20 {
+        return Err(bad("index count exceeds encoded entries".to_string()));
+    }
+    let mut index = Vec::new();
+    index
+        .try_reserve(count)
+        .map_err(|e| bad(format!("index allocation: {e}")))?;
     let mut prev_separator: Option<Vec<u8>> = None;
+    let mut previous_end = 0;
     for _ in 0..count {
         let sep_len = read_u32(&mut pos)? as usize;
-        if pos + sep_len + 16 > payload.len() {
+        if pos
+            .checked_add(sep_len)
+            .and_then(|n| n.checked_add(16))
+            .is_none_or(|end| end > payload.len())
+        {
             return Err(bad("index entry runs past index block".to_string()));
         }
         let separator = payload[pos..pos + sep_len].to_vec();
@@ -544,9 +671,14 @@ fn parse_index(index_raw: &[u8], data_end: u64) -> Result<Vec<IndexEntry>, SstEr
         pos += 8;
         let len = u64::from_le_bytes(payload[pos..pos + 8].try_into().unwrap());
         pos += 8;
-        if offset + len > data_end || len < 14 {
+        if offset != previous_end
+            || offset.checked_add(len).is_none_or(|end| end > data_end)
+            || len < 14
+            || len > crate::limits::MAX_RECORD_BYTES as u64
+        {
             return Err(bad("index entry points outside data area".to_string()));
         }
+        previous_end = offset + len;
         if let Some(prev) = &prev_separator
             && separator <= *prev
         {
@@ -562,6 +694,9 @@ fn parse_index(index_raw: &[u8], data_end: u64) -> Result<Vec<IndexEntry>, SstEr
     if pos != payload.len() {
         return Err(bad("index block has trailing garbage".to_string()));
     }
+    if previous_end != data_end {
+        return Err(bad("data blocks do not exactly cover data area".to_string()));
+    }
     Ok(index)
 }
 
@@ -571,6 +706,18 @@ pub struct Iter<'a> {
     current: Option<BlockIter>,
     failed: bool,
     lower_bound: Option<Vec<u8>>,
+    readahead: ReadAhead,
+}
+
+/// Per-iterator read-ahead state; see `SstTable::read_block_sequential`.
+/// The pinned window keeps at most one window alive outside the range
+/// tier's budget per iterator, like compaction's read-ahead buffers.
+#[derive(Default)]
+struct ReadAhead {
+    /// Size of the next source read (0 = only the requested block).
+    window: u64,
+    source_reads: u32,
+    pinned: Option<(u64, Window)>,
 }
 
 impl<'a> Iterator for Iter<'a> {
@@ -602,9 +749,19 @@ impl<'a> Iterator for Iter<'a> {
             if self.next_block >= self.table.index.len() {
                 return None;
             }
-            match self.table.read_block(&self.table.index[self.next_block]) {
+            match self
+                .table
+                .read_block_sequential(self.next_block, &mut self.readahead)
+            {
                 Ok(block) => {
-                    self.current = Some(BlockIter::from_verified(block));
+                    let mut iter = BlockIter::from_verified(block);
+                    if let Some(bound) = &self.lower_bound
+                        && let Err(e) = iter.seek_restart(bound)
+                    {
+                        self.failed = true;
+                        return Some(Err(e));
+                    }
+                    self.current = Some(iter);
                     self.next_block += 1;
                 }
                 Err(e) => {
@@ -618,6 +775,31 @@ impl<'a> Iterator for Iter<'a> {
 
 #[cfg(test)]
 mod compaction_iter_tests {
+    #[test]
+    fn malformed_index_counts_and_ranges_are_rejected_before_allocation_or_read() {
+        use super::*;
+        let mut builder = crate::sstable::TableBuilder::new();
+        builder.add(Kind::Put, b"k", b"v", 1).unwrap();
+        let table = builder.finish().unwrap();
+        let footer = table.len() - FOOTER_LEN;
+        let offset = u64::from_le_bytes(table[footer..footer + 8].try_into().unwrap()) as usize;
+        let len = u64::from_le_bytes(table[footer + 8..footer + 16].try_into().unwrap()) as usize;
+        let data_end = u64::from_le_bytes(table[footer + 20..footer + 28].try_into().unwrap());
+        let raw = table[offset..offset + len].to_vec();
+        for huge_count in [false, true] {
+            let mut bad = raw.clone();
+            if huge_count {
+                bad[..4].copy_from_slice(&u32::MAX.to_le_bytes());
+            } else {
+                let key_len = u32::from_le_bytes(bad[4..8].try_into().unwrap()) as usize;
+                bad[8 + key_len..16 + key_len].copy_from_slice(&u64::MAX.to_le_bytes());
+            }
+            let n = bad.len();
+            let crc = crate::crc32::crc32(&bad[..n - 4]);
+            bad[n - 4..].copy_from_slice(&crc.to_le_bytes());
+            assert!(parse_index(&bad, data_end).is_err());
+        }
+    }
     use super::*;
     use crate::sstable::TableBuilder;
     use crate::testutil::TempDir;

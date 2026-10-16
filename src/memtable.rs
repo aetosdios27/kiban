@@ -1,6 +1,6 @@
 //! The in-memory ordered store that accepts every write.
 //!
-//! Implements `docs/design/memtable.md`: byte keys in lexicographic
+//! Implements `ARCHITECTURE.md`: byte keys in lexicographic
 //! order, tombstone-on-delete, two iteration views.
 
 use std::collections::BTreeMap;
@@ -47,7 +47,7 @@ impl Entry {
 #[derive(Debug, Clone)]
 struct KeyVersions {
     live: Entry,
-    /// Superseded entries, newest first. Retained only while an active
+    /// Superseded entries, oldest first; appending does not shift history. Retained only while an active
     /// snapshot bound requires them.
     history: Vec<Entry>,
 }
@@ -63,30 +63,43 @@ impl Default for KeyVersions {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct Memtable {
     map: BTreeMap<Vec<u8>, KeyVersions>,
-    /// Snapshot retention bounds: superseded versions with
-    /// seq >= max_active are retained; min_active prunes history.
+    /// Optional low-level retention bounds. Engine snapshots copy the active
+    /// memtable, so engine memtables use no retained history by default.
     min_active: u64,
     max_active: u64,
     /// Running total of `entry_size` over every currently resident
     /// entry (live + retained history) — phase 11.8's flush-threshold
     /// signal. Updated incrementally, never recomputed from scratch.
     logical_bytes: usize,
+    /// Mutation volume in this generation, independent of overwritten values.
+    /// Bounds WAL growth even when a hot working set stays small in memory.
+    written_bytes: usize,
+}
+
+impl Default for Memtable {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Memtable {
     pub fn new() -> Self {
         Memtable {
             map: BTreeMap::new(),
-            min_active: 0,
-            max_active: 0,
+            min_active: u64::MAX,
+            max_active: u64::MAX,
             logical_bytes: 0,
+            written_bytes: 0,
         }
     }
 
     fn insert_entry(&mut self, key: &[u8], new: Entry) {
+        self.written_bytes = self
+            .written_bytes
+            .saturating_add(entry_size(key.len(), &new));
         let slot = self.map.entry(key.to_vec()).or_default();
         debug_assert!(
             slot.live.seq() < new.seq(),
@@ -94,9 +107,10 @@ impl Memtable {
         );
         // Retain the superseded version iff some active snapshot can
         // still observe it; otherwise it stops being resident.
-        if slot.live.seq() >= self.max_active {
-            slot.history.insert(0, slot.live.clone());
-        } else {
+        if self.max_active != u64::MAX && slot.live.seq() != 0 && slot.live.seq() <= self.max_active
+        {
+            slot.history.push(slot.live.clone());
+        } else if slot.live.seq() != 0 {
             self.logical_bytes -= entry_size(key.len(), &slot.live);
         }
         self.logical_bytes += entry_size(key.len(), &new);
@@ -108,6 +122,11 @@ impl Memtable {
     /// exact heap accounting; monotonic enough to threshold flushes on.
     pub fn logical_bytes(&self) -> usize {
         self.logical_bytes
+    }
+
+    /// Bytes of logical mutations accepted in this generation.
+    pub fn write_bytes(&self) -> usize {
+        self.written_bytes
     }
 
     pub fn put(&mut self, key: impl AsRef<[u8]>, value: impl AsRef<[u8]>, seq: u64) {
@@ -146,8 +165,8 @@ impl Memtable {
         if slot.live.seq() <= snap {
             return Some(&slot.live);
         }
-        // history is newest-first; the first entry <= snap wins
-        slot.history.iter().find(|e| e.seq() <= snap)
+        // Reverse the append-only history to select the newest visible version.
+        slot.history.iter().rev().find(|e| e.seq() <= snap)
     }
 
     /// Updates snapshot retention bounds and prunes history no active
@@ -157,14 +176,21 @@ impl Memtable {
         self.max_active = max_active;
         let mut removed_bytes = 0usize;
         for (key, kv) in self.map.iter_mut() {
-            let key_len = key.len();
+            // Keep the newest version at/below the oldest active boundary,
+            // plus newer versions. With no boundaries all history is dead.
+            let boundary = kv
+                .history
+                .iter()
+                .rev()
+                .find(|e| e.seq() <= min_active)
+                .map(Entry::seq);
             kv.history.retain(|e| {
-                if e.seq() >= min_active {
-                    true
-                } else {
-                    removed_bytes += entry_size(key_len, e);
-                    false
+                let keep =
+                    max_active != u64::MAX && (e.seq() > min_active || Some(e.seq()) == boundary);
+                if !keep {
+                    removed_bytes += entry_size(key.len(), e);
                 }
+                keep
             });
         }
         self.logical_bytes = self.logical_bytes.saturating_sub(removed_bytes);
@@ -174,25 +200,12 @@ impl Memtable {
     /// within a key, live first then history (seq descending) — the order
     /// the flush builder requires.
     pub fn iter_all_versions(&self) -> impl DoubleEndedIterator<Item = (&[u8], &Entry)> + '_ {
-        let mut out: Vec<(&[u8], &Entry)> = Vec::new();
-        for (k, kv) in &self.map {
-            // seq 0 is the synthetic placeholder `KeyVersions::default`
-            // starts every key with ("equivalent to no entry" per its
-            // own doc comment) — never a real mutation, so it must
-            // never reach a persistent format. `entry_at` tolerates it
-            // silently (its Tombstone meaning happens to already say
-            // "absent"); a flushed table must not carry a phantom
-            // record for every key ever written.
-            if kv.live.seq() != 0 {
-                out.push((k.as_slice(), &kv.live));
-            }
-            for h in &kv.history {
-                if h.seq() != 0 {
-                    out.push((k.as_slice(), h));
-                }
-            }
-        }
-        out.into_iter()
+        self.map.iter().flat_map(|(k, kv)| {
+            std::iter::once(&kv.live)
+                .chain(kv.history.iter().rev())
+                .filter(|e| e.seq() != 0)
+                .map(move |e| (k.as_slice(), e))
+        })
     }
 
     /// Number of entries stored, tombstones included.
@@ -207,29 +220,18 @@ impl Memtable {
     /// Iterates all entries in ascending byte-wise key order, tombstones
     /// included.
     pub fn iter(&self) -> impl DoubleEndedIterator<Item = (&[u8], &Entry)> + '_ {
-        let mut out: Vec<(&[u8], &Entry)> = Vec::new();
-        for (k, kv) in &self.map {
-            out.push((k.as_slice(), &kv.live));
-        }
-        out.into_iter()
+        self.map.iter().map(|(k, kv)| (k.as_slice(), &kv.live))
     }
 
     /// Iterates all entries from `start` (inclusive) in ascending
     /// byte-wise key order, tombstones included.
     pub fn iter_from(&self, start: &[u8]) -> impl DoubleEndedIterator<Item = (&[u8], &Entry)> + '_ {
         let start = start.to_vec();
-        self.map
-            .range(start..)
-            .flat_map(|(k, kv)| {
-                let mut v: Vec<(&[u8], &Entry)> = Vec::with_capacity(1 + kv.history.len());
-                v.push((k.as_slice(), &kv.live));
-                for h in &kv.history {
-                    v.push((k.as_slice(), h));
-                }
-                v
-            })
-            .collect::<Vec<_>>()
-            .into_iter()
+        self.map.range(start..).flat_map(|(k, kv)| {
+            std::iter::once(&kv.live)
+                .chain(kv.history.iter().rev())
+                .map(move |e| (k.as_slice(), e))
+        })
     }
 
     /// Iterates live entries only (tombstones skipped), same ordering.

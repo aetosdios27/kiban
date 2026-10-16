@@ -1,6 +1,6 @@
 //! Table builder: ordered entries in, one atomic byte blob out.
 //!
-//! Per `docs/design/sstable.md` and `docs/design/bloom.md`: soft 4 KiB
+//! Per `ARCHITECTURE.md` and `ARCHITECTURE.md`: soft 4 KiB
 //! block cutting, delayed index entries with shortest separators, a
 //! whole-table bloom filter block, fixed 44-byte footer with trailing
 //! magic.
@@ -36,7 +36,7 @@ pub struct TableBuilder {
     last_key: Vec<u8>,
     last_seq: u64,
     has_last: bool,
-    all_keys: Vec<(u64, Vec<u8>)>,
+    key_hashes: Vec<u64>,
 }
 
 impl TableBuilder {
@@ -94,7 +94,9 @@ impl TableBuilder {
             });
         }
         self.block.add(kind, key, value, seq);
-        self.all_keys.push((seq, key.to_vec()));
+        if !self.has_last || key != self.last_key.as_slice() {
+            self.key_hashes.push(crate::bloom::fnv1a_64(key));
+        }
 
         self.last_key.clear();
         self.last_key.extend_from_slice(key);
@@ -149,7 +151,7 @@ impl TableBuilder {
 
         // Filter block (bloom.md D4): sits directly before the index;
         // carries the standard trailer.
-        let filter = BloomFilter::build(self.all_keys.iter().map(|(_, k)| k.as_slice()));
+        let filter = BloomFilter::build_hashes(&self.key_hashes);
         let mut filter_bytes = filter.encode();
         filter_bytes.push(BLOCK_TYPE_NONE);
         let crc = crc32::crc32(&filter_bytes);

@@ -1,6 +1,6 @@
 //! Atomic, durable publication of file contents.
 //!
-//! Implements the policy decided in `docs/design/atomic-commit.md`:
+//! Implements the policy decided in `ARCHITECTURE.md`:
 //! temp-file write, fsync, rename, directory fsync.
 
 use std::fmt;

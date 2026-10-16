@@ -3,6 +3,7 @@ on: [push, pull_request, workflow_dispatch]
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -11,10 +12,22 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo clippy --all-targets --features loom -- -D warnings
+      - run: cargo clippy --all-targets --features diagnostics -- -D warnings
       - run: cargo test
+      - run: cargo test --features diagnostics
       - run: cargo test --examples
       - run: cargo test --features loom --lib -- --test-threads=1 loom_
       - run: cargo test --release --lib -- --ignored --nocapture
+      - run: RUSTDOCFLAGS='-D warnings' cargo doc --no-deps
+      - run: python3 -m unittest discover -s tools/compare/tests -p 'test_*.py'
+      - run: cargo run --release --example torture -- --mode process --cycles 50 --operations 100 --keys 100 --threads 4 --snapshots true --db "$RUNNER_TEMP/kiban-torture-db" --output "$RUNNER_TEMP/kiban-torture-results"
       - run: cargo run --example basic -- "$RUNNER_TEMP/kiban-example"
       - run: cargo package
       - run: cargo publish --dry-run
+  msrv:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.89.0
+      - run: cargo check --locked --all-targets

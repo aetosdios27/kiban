@@ -1,6 +1,6 @@
 //! Checksummed, length-prefixed record framing for append-only logs.
 //!
-//! Implements the format specified in `docs/design/record-framing.md`:
+//! Implements the format specified in `ARCHITECTURE.md`:
 //! each record is a 8-byte little-endian header (payload length, CRC-32
 //! of payload) followed by the raw payload. The reader classifies every
 //! end-of-stream outcome explicitly so recovery code never has to guess.
@@ -11,7 +11,7 @@ use std::io;
 use crate::crc32;
 
 pub const HEADER_LEN: usize = 8;
-pub const MAX_RECORD_LEN: u32 = 1 << 30;
+pub const MAX_RECORD_LEN: u32 = crate::limits::MAX_RECORD_BYTES as u32;
 
 #[derive(Debug)]
 pub enum ReadRecordError {
@@ -120,17 +120,23 @@ impl<R: io::Read> FrameReader<R> {
         }
         let expected_crc = u32::from_le_bytes(header[4..].try_into().unwrap());
 
-        let mut payload = vec![0u8; len as usize];
-        let mut filled = 0usize;
-        while filled < payload.len() {
-            match self
+        // Grow only as bytes arrive: a torn header cannot force a full
+        // maximum-size allocation. Every growth is fallible and bounded.
+        let mut payload = Vec::new();
+        let mut chunk = [0u8; 8192];
+        while payload.len() < len as usize {
+            let want = chunk.len().min(len as usize - payload.len());
+            let n = self
                 .inner
-                .read(&mut payload[filled..])
-                .map_err(ReadRecordError::Io)?
-            {
-                0 => return Err(ReadRecordError::TornTail),
-                n => filled += n,
+                .read(&mut chunk[..want])
+                .map_err(ReadRecordError::Io)?;
+            if n == 0 {
+                return Err(ReadRecordError::TornTail);
             }
+            payload
+                .try_reserve(n)
+                .map_err(|e| ReadRecordError::Io(io::Error::other(e)))?;
+            payload.extend_from_slice(&chunk[..n]);
         }
 
         let actual_crc = crc32::crc32(&payload);

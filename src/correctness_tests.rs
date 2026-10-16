@@ -188,13 +188,14 @@ fn point_selection_uses_sequence_not_file_or_level_order() {
     }
     .install(dir.path())
     .unwrap();
-    db.version = StdArc::new(Version { id: 1, tables });
+    db.version = StdArc::new(Version::new(1, tables));
     db.last_sequence = 40;
     assert_current(&db, None); // newest visible version is a deeper tombstone
     for seq in 0..=40 {
         let snap = Snapshot {
+            lease: None,
             seq,
-            memtable: Memtable::new(),
+            memtable: StdArc::new(Memtable::new()),
             immutable: None,
             version: db.version.clone(),
         };
@@ -227,6 +228,9 @@ fn point_scan_and_snapshots_agree_through_overlapping_generations_and_compaction
     let mut db = Kiban::open_with_options(dir.path(), options).unwrap();
     let mut snapshots = Vec::new();
     let mut expected = None;
+    // Keep live data in the compacted topology even when every target-key
+    // tombstone can now be reclaimed. Snapshots pin their older files.
+    db.put(b"survivor", b"stable").unwrap();
     for round in 0..8 {
         for i in 0..40 {
             if i % 11 == 0 {
@@ -273,6 +277,7 @@ fn point_scan_and_snapshots_agree_through_overlapping_generations_and_compaction
     drop(db);
     let db = Kiban::open(dir.path()).unwrap();
     assert_current(&db, expected.as_deref());
+    assert_eq!(db.get(b"survivor").unwrap(), Some(b"stable".to_vec()));
 }
 
 #[test]

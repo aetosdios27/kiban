@@ -1,6 +1,6 @@
 //! CRC-32/IEEE checksum.
 //!
-//! Implements the decision in `docs/design/record-framing.md` (D2):
+//! Implements the decision in `ARCHITECTURE.md` (D2):
 //! slicing-by-eight CRC-32/IEEE, no external dependencies, verified against
 //! published check values and an independent bitwise reference. The polynomial,
 //! streaming state and stored checksum bytes are unchanged.

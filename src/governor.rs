@@ -237,7 +237,7 @@ pub(crate) struct PressureSample {
 //
 // Chosen from `benches/steady_state.rs` (churny + sequential) and
 // `benches/phase_changing.rs` (all six phases), not from any single
-// benchmark — see `docs/design/compaction.md` governor section and the
+// benchmark — see `ARCHITECTURE.md` governor section and the
 // session's final report for the evidence. Kept few and named for what
 // they mean, not fit to squeeze one more point out of one workload.
 
@@ -343,7 +343,8 @@ pub(crate) struct GovernorState {
     last_probed: u64,
     last_resolved: u64,
     // Reporting-only accumulators (section 9/final report).
-    batch_sizes_chosen: Vec<usize>,
+    batch_size_sum: u64,
+    batch_size_count: u64,
     trivial_moves_performed: u64,
     trivial_move_bytes_avoided: u64,
     predicted_actual_abs_pct_error_sum: f64,
@@ -370,7 +371,8 @@ impl GovernorState {
             last_transition: std::time::Instant::now(),
             last_probed: 0,
             last_resolved: 0,
-            batch_sizes_chosen: Vec::new(),
+            batch_size_sum: 0,
+            batch_size_count: 0,
             trivial_moves_performed: 0,
             trivial_move_bytes_avoided: 0,
             predicted_actual_abs_pct_error_sum: 0.0,
@@ -609,7 +611,8 @@ impl GovernorState {
 
     pub(crate) fn record_candidate_chosen(&mut self, kind: CandidateKind) {
         if let CandidateKind::LevelBatch { batch_len, .. } = kind {
-            self.batch_sizes_chosen.push(batch_len);
+            self.batch_size_sum = self.batch_size_sum.saturating_add(batch_len as u64);
+            self.batch_size_count = self.batch_size_count.saturating_add(1);
         }
     }
 
@@ -630,11 +633,10 @@ impl GovernorState {
     pub(crate) fn snapshot(&self) -> GovernorStats {
         let mut time_in_mode = self.time_in_mode;
         time_in_mode[self.mode.idx()] += self.last_transition.elapsed();
-        let avg_batch_size = if self.batch_sizes_chosen.is_empty() {
+        let avg_batch_size = if self.batch_size_count == 0 {
             0.0
         } else {
-            self.batch_sizes_chosen.iter().sum::<usize>() as f64
-                / self.batch_sizes_chosen.len() as f64
+            self.batch_size_sum as f64 / self.batch_size_count as f64
         };
         let mean_abs_pct_error = if self.predicted_actual_samples == 0 {
             0.0

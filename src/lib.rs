@@ -7,7 +7,7 @@
 //! Start with [`db::Kiban`] for a single owner or [`db::SharedKiban`] for
 //! concurrent access. Accepted writes require a successful sync for crash
 //! durability. This early release targets Linux; independent database owners
-//! opening one directory concurrently are not validated. Low-level modules
+//! opening one directory concurrently are rejected by an OS lock. Low-level modules
 //! are exposed for tooling and do not promise stable pre-1.0 APIs.
 
 // Diagnostic clocks and sampling disappear entirely from ordinary builds.
@@ -37,8 +37,13 @@ pub(crate) mod engine_lock;
 pub mod file_cache;
 pub mod frame;
 pub mod governor;
+pub mod limits;
 pub mod manifest;
 pub mod memtable;
+mod ownership;
+#[cfg(test)]
+mod parser_tests;
+pub mod range_cache;
 pub mod sstable;
 pub mod sys;
 #[cfg(test)]

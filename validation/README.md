@@ -131,9 +131,15 @@ weakened. Preload syncs and flushes before measurement.
   budget ratio and overbudget-level count. Pending flush is separate. Neither is
   a literal job queue: the scheduler synthesizes jobs on demand.
 
-The existing governor's `batch_sizes_chosen` vector grows with deep-level jobs;
-`stats()` recomputes its average by scanning that vector. This is a code-level
-long-run risk, not a measured cause of degradation. Left unchanged in this phase.
+Current governor batch averages use constant-space running totals. Earlier
+campaigns used an unbounded history vector; that was repaired in the audit pass.
+See [audit repairs](AUDIT_REPAIRS.md) for the source and validation boundary.
+
+Current shared memtables retain latest versions only; copied snapshots retain
+captured values. Flushing is triggered by cumulative mutation volume so hot-key
+updates do not leave an indefinitely growing WAL. Resident logical bytes and
+mutation volume are distinct metrics. The descriptor cache limits foreground
+handles; compaction now opens one independent handle only while refilling data.
 
 ## Larger than memory and cache attribution
 

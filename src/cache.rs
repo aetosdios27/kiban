@@ -4,8 +4,13 @@
 //! immutable `Arc`-backed blocks, and set a relaxed CLOCK reference bit.
 //! Insertion and second-chance eviction own the write lock; capacity is a
 //! hard global byte bound.
+//!
+//! A [`RangeCache`] tier may sit beneath the blocks: sequential iterators
+//! read ahead into it so neighbouring block misses avoid another positional
+//! read. It has its own byte budget and is disabled when that budget is zero.
 
 use crate::counter::Counter;
+use crate::range_cache::RangeCache;
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, PoisonError, RwLock};
@@ -90,6 +95,10 @@ pub struct BlockCache {
     /// second physical read — the duplicate I/O `get_or_load` exists to
     /// avoid.
     coalesced: Counter,
+    /// Raw read-ahead tier for sequential iterators (disabled at zero bytes).
+    range: RangeCache,
+    /// Largest read-ahead window a sequential iterator may request.
+    readahead_bytes: u64,
 }
 
 /// Raw counters for a [`BlockCache`] (phase 11.7, extended 11.17-F) —
@@ -110,6 +119,17 @@ pub struct BlockCacheStats {
 
 impl BlockCache {
     pub fn new(capacity_bytes: usize) -> BlockCache {
+        BlockCache::with_range_cache(capacity_bytes, 0, 0)
+    }
+
+    /// A block cache with a raw range tier of `range_bytes` that sequential
+    /// iterators fill with windows of up to `readahead_bytes`.
+    pub fn with_range_cache(
+        capacity_bytes: usize,
+        range_bytes: usize,
+        readahead_bytes: u64,
+    ) -> BlockCache {
+        let readahead_bytes = if range_bytes == 0 { 0 } else { readahead_bytes };
         BlockCache {
             inner: RwLock::new(Inner {
                 map: HashMap::new(),
@@ -122,7 +142,19 @@ impl BlockCache {
             evictions: Counter::default(),
             in_flight: Mutex::new(HashMap::new()),
             coalesced: Counter::default(),
+            // Merging full windows would only save LRU entries while copying
+            // both; let small early windows merge up to one full window.
+            range: RangeCache::new(range_bytes, readahead_bytes as usize),
+            readahead_bytes,
         }
+    }
+
+    pub fn range_cache(&self) -> &RangeCache {
+        &self.range
+    }
+
+    pub fn readahead_bytes(&self) -> u64 {
+        self.readahead_bytes
     }
 
     pub fn capacity(&self) -> usize {

@@ -2,6 +2,7 @@
 name = "kiban"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.89"
 description = "An embedded LSM-tree key-value storage engine with WAL durability, snapshots, and leveled compaction"
 repository = "https://github.com/aetosdios27/kiban"
 readme = "README.md"
@@ -32,6 +33,10 @@ harness = false
 
 [[bench]]
 name = "phase_changing"
+harness = false
+
+[[bench]]
+name = "read_paths"
 harness = false
 
 [[example]]

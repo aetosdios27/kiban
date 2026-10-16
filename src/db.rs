@@ -1,8 +1,8 @@
 //! The engine handle: open, recover, read, write.
 //!
 //! Assembles WAL + memtable + sstables + MANIFEST into a crash-
-//! recoverable database, per `docs/design/db-layout.md`. Single-threaded
-//! by decision D7; only `sync()` earns a durability claim.
+//! recoverable database. See `ARCHITECTURE.md` for the direct/shared handle
+//! protocols; only successful explicit barriers acknowledge durability.
 
 use std::collections::HashSet;
 use std::fmt;
@@ -23,17 +23,54 @@ use crate::sys;
 use crate::wal::{Wal, WalError};
 use std::sync::Arc as StdArc;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 /// Owned key/value pair yielded by scans.
 pub type ScanEntry = (Vec<u8>, Vec<u8>);
 pub type ScanResult = Vec<ScanEntry>;
 
+/// Counts from a full offline data-block and lookup consistency check.
+#[derive(Debug, Clone, Copy)]
+pub struct IntegrityReport {
+    pub tables: usize,
+    pub live_keys: u64,
+    pub logical_bytes: u64,
+}
+
+fn backup_entries(
+    entries: impl Iterator<Item = Result<ScanEntry, DbError>>,
+    destination: &Path,
+) -> Result<(), DbError> {
+    fs::create_dir(destination)?;
+    let mut backup = Kiban::open(destination)?;
+    for entry in entries {
+        let (key, value) = entry?;
+        backup.put(key, value)?;
+        if backup.memtable.logical_bytes() >= backup.options.write_buffer_bytes {
+            backup.flush()?;
+        }
+    }
+    backup.close()?;
+    let parent = destination
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    sys::File::open_read(parent)?.sync_all()?;
+    Ok(())
+}
+
 pub const SST_EXTENSION: &str = "sst";
 pub const WAL_EXTENSION: &str = "wal";
 
+#[cfg(test)]
+#[path = "audit_regression_tests.rs"]
+mod audit_regression_tests;
+
 #[derive(Debug)]
 pub enum DbError {
+    InvalidArgument(String),
+    Locked,
+    SequenceExhausted,
     Io(io::Error),
     Corrupt(String),
     CommitFailed(io::Error),
@@ -49,6 +86,9 @@ pub enum DbError {
 impl fmt::Display for DbError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            DbError::InvalidArgument(m) => write!(f, "invalid argument: {m}"),
+            DbError::Locked => write!(f, "database directory is already owned by another engine"),
+            DbError::SequenceExhausted => write!(f, "database sequence numbers exhausted"),
             DbError::Io(e) => write!(f, "database i/o error: {e}"),
             DbError::Corrupt(m) => write!(f, "database corrupt: {m}"),
             DbError::CommitFailed(e) => {
@@ -74,7 +114,11 @@ impl std::error::Error for DbError {
         match self {
             DbError::Io(e) | DbError::CommitFailed(e) | DbError::CommitAmbiguous(e) => Some(e),
             DbError::Maintenance(e) => Some(e),
-            DbError::Corrupt(_) | DbError::Poisoned(_) => None,
+            DbError::Corrupt(_)
+            | DbError::Poisoned(_)
+            | DbError::InvalidArgument(_)
+            | DbError::Locked
+            | DbError::SequenceExhausted => None,
         }
     }
 }
@@ -82,6 +126,18 @@ impl std::error::Error for DbError {
 impl From<io::Error> for DbError {
     fn from(e: io::Error) -> Self {
         DbError::Io(e)
+    }
+}
+
+impl From<DbError> for io::Error {
+    fn from(e: DbError) -> Self {
+        let kind = match &e {
+            DbError::InvalidArgument(_) => io::ErrorKind::InvalidInput,
+            DbError::Locked => io::ErrorKind::WouldBlock,
+            DbError::Io(e) => e.kind(),
+            _ => io::ErrorKind::Other,
+        };
+        io::Error::new(kind, e)
     }
 }
 
@@ -170,9 +226,121 @@ pub(crate) struct Version {
     pub(crate) id: u64,
     /// Sorted by (level, number). Immutable once published.
     pub(crate) tables: Vec<StdArc<TableEntry>>,
+    /// One entry per populated level >= 1, ascending by level.
+    levels: Vec<LevelIndex>,
+}
+
+/// Key-ordered view of one level >= 1 of a `Version`.
+#[derive(Debug)]
+struct LevelIndex {
+    /// Indices into `Version::tables`, sorted by `first_key`.
+    by_key: Vec<usize>,
+    /// Whether consecutive tables in `by_key` have strictly disjoint key
+    /// ranges. Recovery and compaction maintain this invariant; if it is
+    /// ever false, lookups and scans fall back to probing every table of
+    /// the level instead of trusting a binary search.
+    disjoint: bool,
 }
 
 impl Version {
+    pub(crate) fn new(id: u64, tables: Vec<StdArc<TableEntry>>) -> Version {
+        let mut levels: Vec<LevelIndex> = Vec::new();
+        let mut i = 0;
+        while i < tables.len() {
+            let level = tables[i].level;
+            let end = i + tables[i..].partition_point(|t| t.level == level);
+            if level >= 1 {
+                let mut by_key: Vec<usize> = (i..end).collect();
+                by_key.sort_by(|&a, &b| tables[a].first_key.cmp(&tables[b].first_key));
+                let disjoint = by_key
+                    .windows(2)
+                    .all(|w| tables[w[0]].last_key < tables[w[1]].first_key);
+                levels.push(LevelIndex { by_key, disjoint });
+            }
+            i = end;
+        }
+        Version { id, tables, levels }
+    }
+
+    /// Tables that may hold keys in `[start, end)` (`end = None`: unbounded),
+    /// in the order a newest-first merge expects: L0 newest first, then each
+    /// level >= 1 ascending by key. The second element groups the leveled
+    /// tables per level, with a flag saying whether that level is disjoint
+    /// and may therefore be read through one concatenating iterator.
+    fn overlapping<'a>(
+        &'a self,
+        start: &[u8],
+        end: Option<&[u8]>,
+    ) -> (Vec<&'a TableEntry>, Vec<(bool, Vec<&'a TableEntry>)>) {
+        let overlaps = |t: &TableEntry| {
+            t.last_key.as_slice() >= start && end.is_none_or(|end| t.first_key.as_slice() < end)
+        };
+        let l0 = self
+            .tables
+            .iter()
+            .rev()
+            .filter(|t| t.level == 0)
+            .map(|t| &**t)
+            .filter(|t| overlaps(t))
+            .collect();
+        let leveled = self
+            .levels
+            .iter()
+            .map(|level| {
+                let tables: Vec<&TableEntry> = if level.disjoint {
+                    // Disjoint and key-sorted, so last keys ascend too.
+                    let from = level
+                        .by_key
+                        .partition_point(|&i| self.tables[i].last_key.as_slice() < start);
+                    level.by_key[from..]
+                        .iter()
+                        .map(|&i| &*self.tables[i])
+                        .take_while(|t| end.is_none_or(|end| t.first_key.as_slice() < end))
+                        .collect()
+                } else {
+                    level
+                        .by_key
+                        .iter()
+                        .map(|&i| &*self.tables[i])
+                        .filter(|t| overlaps(t))
+                        .collect()
+                };
+                (level.disjoint, tables)
+            })
+            .collect();
+        (l0, leveled)
+    }
+
+    /// Merge sources for every table that may hold keys in `[start, end)`.
+    /// A disjoint level contributes one lazily advancing source instead of
+    /// one per table, so a short range read touches one block per level
+    /// rather than the first block of every table in the database.
+    fn table_sources<'a>(&'a self, start: &[u8], end: Option<&[u8]>) -> Vec<SourceHead<'a>> {
+        let (l0, leveled) = self.overlapping(start, end);
+        let mut sources = Vec::with_capacity(l0.len() + leveled.len());
+        let head = |feed: TableFeed<'a>| SourceHead {
+            feed: SourceFeed::Table(feed),
+            head: None,
+            exhausted: false,
+        };
+        for t in l0 {
+            sources.push(head(Box::new(t.table.iter_from(start))));
+        }
+        for (disjoint, tables) in leveled {
+            if tables.is_empty() {
+                continue;
+            }
+            if disjoint {
+                sources.push(head(Box::new(LevelIter::new(tables, start))));
+            } else {
+                for t in tables {
+                    sources.push(head(Box::new(t.table.iter_from(start))));
+                }
+            }
+        }
+        sources
+    }
+
     pub(crate) fn l0_count(&self) -> usize {
         self.tables.iter().filter(|t| t.level == 0).count()
     }
@@ -207,25 +375,38 @@ fn get_from_version_at(
     read_amp: &ReadAmpCounters,
 ) -> Result<Option<Vec<u8>>, DbError> {
     let mut newest: Option<crate::sstable::Found> = None;
-    for entry in version
-        .tables
-        .iter()
-        .rev()
-        .filter(|t| t.level == 0)
-        .chain(version.tables.iter().filter(|t| t.level >= 1))
-    {
-        if entry.level == 0 {
-            read_amp.l0_tables_probed.increment();
-        } else {
-            if key < entry.first_key.as_slice() || key > entry.last_key.as_slice() {
-                continue;
-            }
-            read_amp.leveled_tables_probed.increment();
-        }
+    let mut probe = |entry: &TableEntry| -> Result<(), DbError> {
         if let Some(found) = entry.table.get(key, Some(sequence))?
             && newest.as_ref().is_none_or(|best| found.seq > best.seq)
         {
             newest = Some(found);
+        }
+        Ok(())
+    };
+    let contains = |t: &TableEntry| key >= t.first_key.as_slice() && key <= t.last_key.as_slice();
+    for entry in version.tables.iter().rev().filter(|t| t.level == 0) {
+        read_amp.l0_tables_probed.increment();
+        probe(entry)?;
+    }
+    for level in &version.levels {
+        if level.disjoint {
+            // At most one table of a disjoint level can contain `key`.
+            let at = level
+                .by_key
+                .partition_point(|&i| version.tables[i].last_key.as_slice() < key);
+            if let Some(&i) = level.by_key.get(at)
+                && contains(&version.tables[i])
+            {
+                read_amp.leveled_tables_probed.increment();
+                probe(&version.tables[i])?;
+            }
+        } else {
+            for &i in &level.by_key {
+                if contains(&version.tables[i]) {
+                    read_amp.leveled_tables_probed.increment();
+                    probe(&version.tables[i])?;
+                }
+            }
         }
     }
     // Exactly the merge iterator's decision: newest visible sequence wins,
@@ -262,13 +443,13 @@ pub struct KibanOptions {
     pub block_cache_bytes: usize,
     /// Hard bound on SST descriptors owned by the shared foreground
     /// `TableFileCache` (11.6), not a target or a soft threshold.
-    /// Streaming compaction uses separate input handles to avoid
-    /// starvation behind foreground leases; those handles are outside
-    /// this budget and their count depends on compaction fan-in.
+    /// Streaming compaction opens one independent input handle only during
+    /// a refill, avoiding starvation behind foreground leases. That handle
+    /// is outside this budget; it is not retained per input table.
     /// This is not a bound on all engine or process descriptors.
     pub max_open_table_files: usize,
     /// Flush trigger (11.8): once the active memtable's
-    /// [`Memtable::logical_bytes`] reaches this, `SharedKiban` freezes
+    /// [`Memtable::write_bytes`] reaches this, `SharedKiban` freezes
     /// it and continues writing against a fresh memtable/WAL while the
     /// frozen one flushes to L0 in the background. A deliberately
     /// boring, untuned default — not a claim of measurement. Direct
@@ -324,6 +505,19 @@ pub struct KibanOptions {
     /// change from the pacing change instead of always measuring both
     /// together.
     pub maintenance_pacing_enabled: bool,
+    /// Byte budget of the raw SST range tier beneath the block cache
+    /// (0, the default, disables it). Sequential iterators read ahead into
+    /// it so the next block misses of a scan avoid another positional read;
+    /// point lookups never use it. Ported from HelixDB's `range-cache`; see
+    /// [`crate::range_cache`]. Separate from, and in addition to,
+    /// `block_cache_bytes`. On page-cache-resident local files it measured
+    /// at parity for short and full scans and slower for medium scans, so
+    /// it is opt-in; see `validation/RANGE_CACHE.md`.
+    pub range_cache_bytes: usize,
+    /// Largest read-ahead window a sequential iterator requests when the
+    /// range tier is enabled. Windows start at one block and double per
+    /// source read up to this bound.
+    pub range_readahead_bytes: u64,
 }
 
 /// See `KibanOptions::compaction_scheduler`.
@@ -363,6 +557,11 @@ impl Default for KibanOptions {
             compaction_scheduler: CompactionScheduler::Governor,
             compaction_batch_size: 1,
             maintenance_pacing_enabled: true,
+            // Opt-in: with buffered I/O the OS page cache already serves
+            // ranges, so the tier only pays off for expensive sources; see
+            // `validation/RANGE_CACHE.md`.
+            range_cache_bytes: 0,
+            range_readahead_bytes: 256 * 1024,
         }
     }
 }
@@ -372,24 +571,42 @@ impl KibanOptions {
     /// bound (11.6) cannot reason about.
     fn validate(&self) -> Result<(), DbError> {
         if self.l0_write_stall_trigger <= self.l0_compaction_trigger {
-            return Err(DbError::Corrupt(format!(
+            return Err(DbError::InvalidArgument(format!(
                 "invalid options: l0_write_stall_trigger ({}) must be greater than l0_compaction_trigger ({})",
                 self.l0_write_stall_trigger, self.l0_compaction_trigger
             )));
         }
         if self.max_open_table_files == 0 {
-            return Err(DbError::Corrupt(
+            return Err(DbError::InvalidArgument(
                 "invalid options: max_open_table_files must be greater than zero".to_string(),
             ));
         }
         if self.write_buffer_bytes == 0 {
-            return Err(DbError::Corrupt(
+            return Err(DbError::InvalidArgument(
                 "invalid options: write_buffer_bytes must be greater than zero".to_string(),
             ));
         }
+        if self.range_cache_bytes > 0
+            && (self.range_readahead_bytes == 0
+                || self.range_readahead_bytes > crate::limits::MAX_RECORD_BYTES as u64)
+        {
+            return Err(DbError::InvalidArgument(
+                "invalid options: range_readahead_bytes must be in 1..=64 MiB when the range cache is enabled".to_string(),
+            ));
+        }
         if self.compaction_batch_size == 0 {
-            return Err(DbError::Corrupt(
+            return Err(DbError::InvalidArgument(
                 "invalid options: compaction_batch_size must be at least 1".to_string(),
+            ));
+        }
+        if self.l0_compaction_trigger == 0
+            || self.base_level_bytes == 0
+            || self.level_multiplier < 2
+            || self.target_file_size == 0
+            || self.target_file_size > crate::limits::MAX_RECORD_BYTES as u64
+        {
+            return Err(DbError::InvalidArgument(
+                "invalid compaction trigger, level budget, multiplier or target size".to_string(),
             ));
         }
         Ok(())
@@ -457,6 +674,9 @@ struct Immutable {
 /// [`SharedKiban`] for concurrent access to the same engine. Independent
 /// owners opening the same directory concurrently are not validated.
 pub struct Kiban {
+    ownership: StdArc<crate::ownership::Ownership>,
+    #[cfg(test)]
+    batch_checkpoint: StdArc<ReadCheckpoint>,
     dir: PathBuf,
     options: KibanOptions,
     cache: StdArc<BlockCache>,
@@ -500,8 +720,8 @@ pub struct Kiban {
     next_file_number: AtomicU64,
     wal_number: u64,
     last_sequence: u64,
-    /// Sorted ascending; the oldest entry gates tombstone GC.
-    active_snapshots: Vec<u64>,
+    /// Live snapshot identities; captured versions pin their physical files.
+    active_snapshots: SnapshotRegistry,
     /// The authoritative published topology (MANIFEST-committed).
     version: StdArc<Version>,
     /// Retired-from-the-current-Version tables, not yet provably safe
@@ -513,6 +733,7 @@ pub struct Kiban {
     /// Set when a durability-relevant failure makes future
     /// acknowledgement unsafe (engine-poisoning.md D1/D2).
     poisoned: Option<PoisonCause>,
+    reclamation_failures: u64,
     /// 11.17-readview: the published, gate-free read path. Updated only
     /// at structural commits (`freeze`, `commit_flush`,
     /// `commit_compaction` — see `publish_read_view`), never per-put:
@@ -620,6 +841,73 @@ pub(crate) struct ReadView {
 }
 
 impl Kiban {
+    /// Reads every SST entry (including shadowed versions), verifies ordering
+    /// and point lookup agreement, then checks the live merged view.
+    pub fn check_integrity(&self) -> Result<IntegrityReport, DbError> {
+        for table in &self.version.tables {
+            let mut previous: Option<(Vec<u8>, u64)> = None;
+            for entry in table.table.iter_from(b"") {
+                let (kind, seq, key, value) = entry?;
+                if seq == 0
+                    || previous.as_ref().is_some_and(|(prev, prev_seq)| {
+                        prev > &key || (prev == &key && *prev_seq <= seq)
+                    })
+                {
+                    return Err(DbError::Corrupt(format!(
+                        "table {} has unordered entries",
+                        table.number
+                    )));
+                }
+                let found = table.table.get(&key, Some(seq))?;
+                if found.is_none_or(|entry| {
+                    entry.seq != seq || entry.kind != kind || entry.value != value
+                }) {
+                    return Err(DbError::Corrupt(format!(
+                        "table {} lookup disagrees with scan",
+                        table.number
+                    )));
+                }
+                previous = Some((key, seq));
+            }
+        }
+        let mut report = IntegrityReport {
+            tables: self.version.tables.len(),
+            live_keys: 0,
+            logical_bytes: 0,
+        };
+        for entry in self.iter() {
+            let (key, value) = entry?;
+            if self.get(&key)?.as_deref() != Some(value.as_slice()) {
+                return Err(DbError::Corrupt(
+                    "live lookup disagrees with scan".to_string(),
+                ));
+            }
+            report.live_keys += 1;
+            report.logical_bytes += (key.len() + value.len()) as u64;
+        }
+        Ok(report)
+    }
+
+    /// Syncs accepted writes, flushes them to SSTs and retries reclamation.
+    pub fn checkpoint(&mut self) -> Result<(), DbError> {
+        self.sync()?;
+        self.flush()?;
+        self.reclaim_obsolete();
+        Ok(())
+    }
+
+    /// Fallible durability barrier before releasing this engine owner.
+    /// Snapshots retain directory ownership until their last clone drops.
+    pub fn close(mut self) -> Result<(), DbError> {
+        self.checkpoint()
+    }
+
+    /// Exports logical contents to an exclusively created database directory.
+    /// Errors may leave an incomplete destination; nothing is overwritten.
+    pub fn backup(&self, destination: impl AsRef<Path>) -> Result<(), DbError> {
+        backup_entries(self.iter(), destination.as_ref())
+    }
+
     /// Opens (or creates) a database in `dir`, running full recovery:
     /// MANIFEST validation, WAL replay, orphan sweep. See db-layout D3.
     pub fn open(dir: impl AsRef<Path>) -> Result<Kiban, DbError> {
@@ -633,10 +921,15 @@ impl Kiban {
         options.validate()?;
         let dir = dir.as_ref().to_path_buf();
         fs::create_dir_all(&dir)?;
+        let ownership = StdArc::new(crate::ownership::Ownership::acquire(&dir)?);
         // Exactly one of each, constructed once, shared by every table
         // this Kiban ever opens or creates (11.6) — recovered tables
         // below, and later anything flush/compaction produces.
-        let cache = StdArc::new(BlockCache::new(options.block_cache_bytes));
+        let cache = StdArc::new(BlockCache::with_range_cache(
+            options.block_cache_bytes,
+            options.range_cache_bytes,
+            options.range_readahead_bytes,
+        ));
         let file_cache = StdArc::new(TableFileCache::new(options.max_open_table_files));
 
         let manifest = match Manifest::load(&dir)? {
@@ -774,7 +1067,7 @@ impl Kiban {
             .map(|t| &**t)
             .filter(|t| t.level >= 1)
             .collect();
-        level_view.sort_by(|a, b| a.first_key.cmp(&b.first_key));
+        level_view.sort_by(|a, b| a.level.cmp(&b.level).then(a.first_key.cmp(&b.first_key)));
         for window in level_view.windows(2) {
             if window[0].level == window[1].level && window[0].last_key >= window[1].first_key {
                 return Err(DbError::Corrupt(format!(
@@ -791,7 +1084,7 @@ impl Kiban {
         }
 
         let shared_memtable = StdArc::new(ShardedRwLock::new(memtable.clone()));
-        let version = StdArc::new(Version { id: 0, tables });
+        let version = StdArc::new(Version::new(0, tables));
         let last_sequence = manifest.last_sequence.max(wal_max_seq);
         let read_view = StdArc::new(ShardedRwLock::new(StdArc::new(ReadView {
             memtable: shared_memtable.clone(),
@@ -800,6 +1093,9 @@ impl Kiban {
             last_sequence,
         })));
         Ok(Kiban {
+            ownership,
+            #[cfg(test)]
+            batch_checkpoint: StdArc::new(ReadCheckpoint::default()),
             dir,
             options,
             cache,
@@ -818,10 +1114,11 @@ impl Kiban {
             next_file_number: AtomicU64::new(next_file_number),
             wal_number,
             last_sequence,
-            active_snapshots: Vec::new(),
+            active_snapshots: SnapshotRegistry::default(),
             version,
             obsolete: Vec::new(),
             poisoned: None,
+            reclamation_failures: 0,
             read_view,
             read_amp: StdArc::new(ReadAmpCounters::default()),
             governor: Mutex::new(governor::GovernorState::new()),
@@ -969,18 +1266,20 @@ impl Kiban {
 
     /// Appends a value to the WAL and makes it visible in memory.
     /// A successful return does not promise crash durability; call [`Self::sync`].
-    pub fn put(&mut self, key: impl AsRef<[u8]>, value: impl AsRef<[u8]>) -> io::Result<()> {
-        if let Err(e) = self.check_poisoned() {
-            return Err(io::Error::other(e.to_string()));
-        }
+    pub fn put(&mut self, key: impl AsRef<[u8]>, value: impl AsRef<[u8]>) -> Result<(), DbError> {
+        self.check_poisoned()?;
         let key = key.as_ref();
         let value = value.as_ref();
-        let seq = self.last_sequence + 1;
+        crate::limits::mutation(key, value).map_err(|e| DbError::InvalidArgument(e.to_string()))?;
+        let seq = self
+            .last_sequence
+            .checked_add(1)
+            .ok_or(DbError::SequenceExhausted)?;
         if let Err(e) = self.wal.put(seq, key, value) {
             // A torn WAL frame would silently discard later, successfully
             // synced records at recovery: append failure poisons.
             self.poison(PoisonCause::WalAppendFailed(e.to_string()));
-            return Err(io::Error::other("wal append failed; engine poisoned"));
+            return Err(DbError::Poisoned(self.poisoned.clone().unwrap()));
         }
         self.memtable.put(key, value, seq);
         self.mirror_put(key, value, seq);
@@ -990,15 +1289,17 @@ impl Kiban {
 
     /// Records a tombstone hiding older values. Call [`Self::sync`] to
     /// make the deletion crash-durable, including deletion of an absent key.
-    pub fn delete(&mut self, key: impl AsRef<[u8]>) -> io::Result<()> {
-        if let Err(e) = self.check_poisoned() {
-            return Err(io::Error::other(e.to_string()));
-        }
+    pub fn delete(&mut self, key: impl AsRef<[u8]>) -> Result<(), DbError> {
+        self.check_poisoned()?;
         let key = key.as_ref();
-        let seq = self.last_sequence + 1;
+        crate::limits::mutation(key, b"").map_err(|e| DbError::InvalidArgument(e.to_string()))?;
+        let seq = self
+            .last_sequence
+            .checked_add(1)
+            .ok_or(DbError::SequenceExhausted)?;
         if let Err(e) = self.wal.delete(seq, key) {
             self.poison(PoisonCause::WalAppendFailed(e.to_string()));
-            return Err(io::Error::other("wal append failed; engine poisoned"));
+            return Err(DbError::Poisoned(self.poisoned.clone().unwrap()));
         }
         self.memtable.delete(key, seq);
         self.mirror_delete(key, seq);
@@ -1018,34 +1319,45 @@ impl Kiban {
         if batch.ops.is_empty() {
             return Ok(());
         }
+        crate::limits::batch(&batch.ops).map_err(|e| DbError::InvalidArgument(e.to_string()))?;
+        let last_seq = self
+            .last_sequence
+            .checked_add(batch.ops.len() as u64)
+            .ok_or(DbError::SequenceExhausted)?;
         let first_seq = self.last_sequence + 1;
         if let Err(e) = self.wal.append_batch(first_seq, &batch.ops) {
             self.poison(PoisonCause::WalAppendFailed(e.to_string()));
             return Err(DbError::Poisoned(self.poisoned.clone().unwrap()));
         }
+        // Readers bypass the engine gate, so retain the mirror guard for
+        // the entire batch. No read can observe an intermediate operation.
+        let mut mirror = measured!(MemtableWrite, self.shared_memtable.write())
+            .expect("shared memtable poisoned");
         for (i, (kind, key, value)) in batch.ops.iter().enumerate() {
             let seq = first_seq + i as u64;
             match kind {
                 Kind::Put => {
                     self.memtable.put(key, value, seq);
-                    self.mirror_put(key, value, seq);
+                    mirror.put(key, value, seq);
                 }
                 Kind::Tombstone => {
                     self.memtable.delete(key, seq);
-                    self.mirror_delete(key, seq);
+                    mirror.delete(key, seq);
                 }
             }
+            #[cfg(test)]
+            if i == 0 {
+                self.batch_checkpoint.hit();
+            }
         }
-        self.last_sequence = first_seq + batch.ops.len() as u64 - 1;
+        self.last_sequence = last_seq;
         Ok(())
     }
 
     /// Makes every accepted mutation durable, including the frozen WAL
     /// generation until its SST has been durably installed in the MANIFEST.
-    pub fn sync(&mut self) -> io::Result<()> {
-        if let Err(e) = self.check_poisoned() {
-            return Err(io::Error::other(e.to_string()));
-        }
+    pub fn sync(&mut self) -> Result<(), DbError> {
+        self.check_poisoned()?;
         let result = self
             .immutable
             .as_mut()
@@ -1055,11 +1367,11 @@ impl Kiban {
             Ok(()) => Ok(()),
             Err(crate::wal::SyncPhase::Flush(e)) => {
                 self.poison(PoisonCause::WalAppendFailed(e.to_string()));
-                Err(io::Error::other("wal append failed; engine poisoned"))
+                Err(DbError::Poisoned(self.poisoned.clone().unwrap()))
             }
             Err(crate::wal::SyncPhase::Fdatasync(e)) => {
                 self.poison(PoisonCause::WalSyncFailed(e.to_string()));
-                Err(io::Error::other("wal sync failed; engine poisoned"))
+                Err(DbError::Poisoned(self.poisoned.clone().unwrap()))
             }
         }
     }
@@ -1090,15 +1402,15 @@ impl Kiban {
 
     /// Captures a snapshot: a sequence boundary and every source needed
     /// to read that boundary, independent of later flushes or compactions.
-    /// The engine retains history needed by this snapshot until
-    /// [`Kiban::release_snapshot`] is called (or the process ends).
+    /// The captured sources remain pinned until the last clone drops;
+    /// explicit release only removes retention bookkeeping.
     pub fn snapshot(&mut self) -> Snapshot {
         let seq = self.last_sequence;
-        let pos = self.active_snapshots.partition_point(|s| *s < seq);
-        self.active_snapshots.insert(pos, seq);
+        let lease = self.active_snapshots.capture(seq, &self.ownership);
         Snapshot {
+            lease: Some(lease),
             seq,
-            memtable: self.memtable.clone(),
+            memtable: StdArc::new(self.memtable.clone()),
             immutable: self.immutable.as_ref().map(|im| im.memtable.clone()),
             version: StdArc::clone(&self.version),
         }
@@ -1107,13 +1419,9 @@ impl Kiban {
     /// Releases the engine's retention bookkeeping for a direct snapshot.
     /// Drop the snapshot too when its captured memory/files are no longer needed.
     pub fn release_snapshot(&mut self, snap: &Snapshot) {
-        if let Some(pos) = self.active_snapshots.iter().position(|s| *s == snap.seq) {
-            self.active_snapshots.remove(pos);
+        if let Some(lease) = &snap.lease {
+            self.active_snapshots.release(lease);
         }
-    }
-
-    fn oldest_active_snapshot(&self) -> Option<u64> {
-        self.active_snapshots.first().copied()
     }
 
     /// Reads `key` as of snapshot `snap` (snapshots.md D3).
@@ -1122,6 +1430,15 @@ impl Kiban {
         snap: &Snapshot,
         key: impl AsRef<[u8]>,
     ) -> Result<Option<Vec<u8>>, DbError> {
+        if snap
+            .lease
+            .as_ref()
+            .is_some_and(|lease| !StdArc::ptr_eq(&lease._ownership, &self.ownership))
+        {
+            return Err(DbError::InvalidArgument(
+                "snapshot belongs to another engine".to_string(),
+            ));
+        }
         let key = key.as_ref();
         self.read_amp.gets_total.increment();
         // Use captured sources: current memtables may have rotated or
@@ -1151,6 +1468,15 @@ impl Kiban {
     /// Scans live entries as of snapshot `snap`, reading the pinned
     /// version's tables.
     pub fn scan_at(&self, snap: &Snapshot) -> Result<ScanResult, DbError> {
+        if snap
+            .lease
+            .as_ref()
+            .is_some_and(|lease| !StdArc::ptr_eq(&lease._ownership, &self.ownership))
+        {
+            return Err(DbError::InvalidArgument(
+                "snapshot belongs to another engine".to_string(),
+            ));
+        }
         let mut sources: Vec<SourceHead<'_>> = Vec::new();
         sources.push(SourceHead {
             feed: SourceFeed::Mem(Box::new(snap.memtable.iter_from(b""))),
@@ -1164,20 +1490,7 @@ impl Kiban {
                 exhausted: false,
             });
         }
-        for t in snap.version.tables.iter().rev().filter(|t| t.level == 0) {
-            sources.push(SourceHead {
-                feed: SourceFeed::Table(Box::new(t.table.iter_from(b""))),
-                head: None,
-                exhausted: false,
-            });
-        }
-        for t in snap.version.tables.iter().filter(|t| t.level >= 1) {
-            sources.push(SourceHead {
-                feed: SourceFeed::Table(Box::new(t.table.iter_from(b""))),
-                head: None,
-                exhausted: false,
-            });
-        }
+        sources.extend(snap.version.table_sources(b"", None));
         let mut core = MergeCore {
             sources,
             user_mode: true,
@@ -1345,18 +1658,16 @@ impl Kiban {
 
         // D2 step 5: everything below only runs once the commit point has
         // returned success.
+        // Never move the allocator backwards past a concurrent reservation.
         self.next_file_number
-            .store(new_next_file_number, Ordering::SeqCst);
+            .fetch_max(new_next_file_number, Ordering::SeqCst);
         self.wal_number = new_wal_number;
         // Publish Version N+1: current tables + the flushed sstable.
         let mut new_tables = self.version.tables.clone();
         let pos = new_tables.partition_point(|t| (t.level, t.number) < (entry.level, entry.number));
         new_tables.insert(pos, entry.clone());
         let next_version_id = self.version.id + 1;
-        self.version = StdArc::new(Version {
-            id: next_version_id,
-            tables: new_tables,
-        });
+        self.version = StdArc::new(Version::new(next_version_id, new_tables));
 
         let old_wal_path = self.wal.path().to_path_buf();
         self.wal = wal;
@@ -1409,7 +1720,9 @@ impl Kiban {
             return Ok(());
         }
 
-        let new_wal_number = self.next_file_number.load(Ordering::SeqCst);
+        // Reserve before creating the WAL, exactly like flush: a failed
+        // attempt must never hand the same identity to a later file.
+        let new_wal_number = self.next_file_number.fetch_add(1, Ordering::SeqCst);
         let new_next_file_number = new_wal_number + 1;
         let new_wal_path = self.dir.join(file_name(new_wal_number, WAL_EXTENSION));
 
@@ -1454,7 +1767,7 @@ impl Kiban {
         // Only now: disk truth confirms both WALs are live, so the RAM
         // handoff can happen. Never before — never publish RAM state
         // ahead of what the MANIFEST actually says.
-        let old_memtable = std::mem::replace(&mut self.memtable, Memtable::new());
+        let old_memtable = std::mem::take(&mut self.memtable);
         // The shadow rotates too: readers holding an already-published
         // `ReadView` still keep the OLD `Arc<ShardedRwLock<Memtable>>`
         // alive through their own clone (freeze publishes a fresh
@@ -1467,8 +1780,9 @@ impl Kiban {
         let old_wal_number = self.wal_number;
         let old_wal = std::mem::replace(&mut self.wal, new_wal);
         self.wal_number = new_wal_number;
+        // Never move the allocator backwards past a concurrent reservation.
         self.next_file_number
-            .store(new_next_file_number, Ordering::SeqCst);
+            .fetch_max(new_next_file_number, Ordering::SeqCst);
         let generation = self.next_flush_generation;
         self.next_flush_generation += 1;
         self.immutable = Some(Immutable {
@@ -1563,10 +1877,7 @@ impl Kiban {
         let entry = StdArc::new(output);
         let pos = new_tables.partition_point(|t| (t.level, t.number) < (entry.level, entry.number));
         new_tables.insert(pos, entry);
-        self.version = StdArc::new(Version {
-            id: self.version.id + 1,
-            tables: new_tables,
-        });
+        self.version = StdArc::new(Version::new(self.version.id + 1, new_tables));
         self.last_completed_flush_generation =
             self.last_completed_flush_generation.max(plan.generation);
 
@@ -1588,8 +1899,7 @@ impl Kiban {
     /// caller's job (`SharedKiban::wait_for_write_room`'s own
     /// immutable-slot wait), not this method silently trying forever.
     pub(crate) fn maybe_freeze(&mut self) -> Result<bool, DbError> {
-        if self.immutable.is_some()
-            || self.memtable.logical_bytes() < self.options.write_buffer_bytes
+        if self.immutable.is_some() || self.memtable.write_bytes() < self.options.write_buffer_bytes
         {
             return Ok(false);
         }
@@ -1626,7 +1936,7 @@ impl Kiban {
         end: &'a [u8],
     ) -> impl Iterator<Item = Result<(Vec<u8>, Vec<u8>), DbError>> + 'a {
         let core = MergeCore {
-            sources: self.sources_from(start),
+            sources: self.sources_from(start, Some(end)),
             user_mode: true,
             failed: false,
             snap_limit: None,
@@ -1651,7 +1961,7 @@ impl Kiban {
 
     fn merge_core<'a>(&'a self, user_mode: bool) -> MergeCore<'a> {
         MergeCore {
-            sources: self.sources_from(b""),
+            sources: self.sources_from(b"", None),
             user_mode,
             failed: false,
             snap_limit: None,
@@ -1659,20 +1969,15 @@ impl Kiban {
         }
     }
 
-    fn sources_from<'a>(&'a self, start: &[u8]) -> Vec<SourceHead<'a>> {
-        let mut sources = Vec::with_capacity(self.version.tables.len() + 1);
-        // newest first: memtable, then L0 by descending number, then
-        // deeper levels ascending (within a level, higher number = newer
-        // for L0; deeper levels are disjoint so order is irrelevant but
-        // kept deterministic)
+    fn sources_from<'a>(&'a self, start: &[u8], end: Option<&[u8]>) -> Vec<SourceHead<'a>> {
+        let mut sources = Vec::with_capacity(self.version.tables.len() + 2);
+        // The merge is a proper (key asc, seq desc) merge, so source order
+        // affects only tidiness, never which version wins.
         sources.push(SourceHead {
             feed: SourceFeed::Mem(Box::new(self.memtable.iter_from(start))),
             head: None,
             exhausted: false,
         });
-        // 11.8: the merge is a proper (key asc, seq desc) merge — the
-        // frozen memtable slots in as just one more source; where it
-        // sits in this Vec doesn't affect correctness, only tidiness.
         if let Some(im) = &self.immutable {
             sources.push(SourceHead {
                 feed: SourceFeed::Mem(Box::new(im.memtable.iter_from(start))),
@@ -1680,20 +1985,7 @@ impl Kiban {
                 exhausted: false,
             });
         }
-        for table in self.version.tables.iter().rev().filter(|t| t.level == 0) {
-            sources.push(SourceHead {
-                feed: SourceFeed::Table(Box::new(table.table.iter_from(start))),
-                head: None,
-                exhausted: false,
-            });
-        }
-        for table in self.version.tables.iter().filter(|t| t.level >= 1) {
-            sources.push(SourceHead {
-                feed: SourceFeed::Table(Box::new(table.table.iter_from(start))),
-                head: None,
-                exhausted: false,
-            });
-        }
+        sources.extend(self.version.table_sources(start, end));
         sources
     }
 
@@ -1701,7 +1993,7 @@ impl Kiban {
     pub(crate) fn iter_from<'a>(&'a self, start: &[u8]) -> DbIter<'a> {
         DbIter {
             core: MergeCore {
-                sources: self.sources_from(start),
+                sources: self.sources_from(start, None),
                 user_mode: true,
                 failed: false,
                 snap_limit: None,
@@ -1871,8 +2163,8 @@ mod tests {
         .unwrap();
 
         let manifest = Manifest {
-            next_file_number: 3,
-            wal_numbers: vec![1],
+            next_file_number: 4,
+            wal_numbers: vec![3],
             last_sequence: 0,
             tables: vec![
                 TableRef {
@@ -1885,7 +2177,7 @@ mod tests {
                 },
             ],
         };
-        atomic::create_durably(&dir.join(file_name(1, WAL_EXTENSION))).unwrap();
+        atomic::create_durably(&dir.join(file_name(3, WAL_EXTENSION))).unwrap();
         manifest.install(dir).unwrap();
 
         let mut db = Kiban::open(dir).unwrap();
@@ -2064,14 +2356,75 @@ mod flush_tests {
     }
 }
 
+#[derive(Debug)]
+struct SnapshotLease {
+    seq: u64,
+    released: AtomicBool,
+    _ownership: StdArc<crate::ownership::Ownership>,
+}
+
+#[derive(Debug, Default)]
+struct SnapshotRegistry(Mutex<Vec<std::sync::Weak<SnapshotLease>>>);
+impl SnapshotRegistry {
+    fn capture(
+        &self,
+        seq: u64,
+        ownership: &StdArc<crate::ownership::Ownership>,
+    ) -> StdArc<SnapshotLease> {
+        let lease = StdArc::new(SnapshotLease {
+            seq,
+            released: AtomicBool::new(false),
+            _ownership: ownership.clone(),
+        });
+        let mut entries = self.0.lock().unwrap();
+        entries.retain(|entry| {
+            entry
+                .upgrade()
+                .is_some_and(|v| !v.released.load(Ordering::Relaxed))
+        });
+        entries.push(StdArc::downgrade(&lease));
+        lease
+    }
+    fn release(&self, lease: &StdArc<SnapshotLease>) {
+        let entries = self.0.lock().unwrap();
+        if entries
+            .iter()
+            .any(|entry| entry.ptr_eq(&StdArc::downgrade(lease)))
+        {
+            lease.released.store(true, Ordering::Relaxed);
+        }
+    }
+    fn oldest(&self) -> Option<u64> {
+        let mut entries = self.0.lock().unwrap();
+        entries.retain(|entry| {
+            entry
+                .upgrade()
+                .is_some_and(|v| !v.released.load(Ordering::Relaxed))
+        });
+        entries
+            .iter()
+            .filter_map(|entry| entry.upgrade().map(|v| v.seq))
+            .min()
+    }
+    fn len(&self) -> usize {
+        self.oldest();
+        self.0.lock().unwrap().len()
+    }
+    #[cfg(test)]
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
 /// A consistent read boundary captured from the engine's sequence
 /// counter (snapshots.md D3). Copies the active memtable and pins the
 /// frozen memtable and `Version` current at capture time. Physical
 /// movement or reclamation cannot change this captured logical view.
 #[derive(Debug, Clone)]
 pub struct Snapshot {
+    lease: Option<StdArc<SnapshotLease>>,
     pub(crate) seq: u64,
-    pub(crate) memtable: Memtable,
+    pub(crate) memtable: StdArc<Memtable>,
     pub(crate) immutable: Option<StdArc<Memtable>>,
     pub(crate) version: StdArc<Version>,
 }
@@ -2149,6 +2502,46 @@ impl<'a> SourceHead<'a> {
     #[allow(dead_code)]
     fn advance(&mut self) {
         self.head = None;
+    }
+}
+
+/// Concatenates the key-ordered, disjoint tables of one level into a single
+/// merge source, opening each table's iterator only when the previous one is
+/// exhausted. The first table is positioned at `start`; later tables begin
+/// past it by disjointness.
+struct LevelIter<'a> {
+    tables: std::vec::IntoIter<&'a TableEntry>,
+    current: Option<crate::sstable::Iter<'a>>,
+    start: Option<Vec<u8>>,
+}
+
+impl<'a> LevelIter<'a> {
+    fn new(tables: Vec<&'a TableEntry>, start: &[u8]) -> LevelIter<'a> {
+        LevelIter {
+            tables: tables.into_iter(),
+            current: None,
+            start: Some(start.to_vec()),
+        }
+    }
+}
+
+impl Iterator for LevelIter<'_> {
+    type Item = TableItem;
+
+    fn next(&mut self) -> Option<TableItem> {
+        loop {
+            if let Some(current) = &mut self.current {
+                match current.next() {
+                    Some(item) => return Some(item),
+                    None => self.current = None,
+                }
+            }
+            let table = &self.tables.next()?.table;
+            self.current = Some(match self.start.take() {
+                Some(start) if !start.is_empty() => table.iter_from(&start),
+                _ => table.iter(),
+            });
+        }
     }
 }
 
@@ -2477,7 +2870,7 @@ pub(crate) struct CompactionPlan {
     inputs: Vec<StdArc<TableEntry>>,
     input_numbers: HashSet<u64>,
     output_level: u32,
-    smallest_snapshot: u64,
+    visible_sequence: u64,
     gc_allowed: bool,
     /// Reserved output file numbers, in the order BUILD may use them.
     /// Reserved generously at PLAN time (a cheap counter bump) so BUILD
@@ -2588,15 +2981,13 @@ impl CompactionPlan {
             done_key: None,
         };
 
-        // Faithful port of LevelDB DoCompactionWork drop rules
-        // (db_impl.cc): per user key, newest-first — an entry is dropped
-        // when the previously seen (newer) sibling's seq <= the smallest
-        // active snapshot; a leading deletion marker is additionally
-        // dropped when universally hidden and no deeper level can hold
-        // older data for that key (gc_allowed).
+        // Resolve newest-visible siblings for the current live topology.
+        // Captured snapshots pin prior files instead of consulting this new
+        // output. A leading tombstone can be dropped only when deeper live
+        // levels cannot contain an older value (gc_allowed).
         let mut next_output = 0usize;
         let mut current_key: Option<Vec<u8>> = None;
-        let mut last_seq_for_key = u64::MAX;
+        let mut last_seq_for_key: Option<u64> = None;
         let mut last_added_key: Option<Vec<u8>> = None;
         // Count processed input, including dropped versions/tombstones, so a
         // merge producing little output still services pending flushes. The
@@ -2617,19 +3008,17 @@ impl CompactionPlan {
 
             if current_key.as_deref() != Some(v.key.as_slice()) {
                 current_key = Some(v.key.clone());
-                last_seq_for_key = u64::MAX;
+                last_seq_for_key = None;
             }
 
             let mut drop_entry = false;
-            if last_seq_for_key <= self.smallest_snapshot {
-                drop_entry = true; // hidden by a newer version every snapshot sees
-            } else if v.kind == Kind::Tombstone
-                && v.seq <= self.smallest_snapshot
-                && self.gc_allowed
+            if last_seq_for_key.is_some_and(|seq| seq <= self.visible_sequence) {
+                drop_entry = true; // hidden in the newly published live topology
+            } else if v.kind == Kind::Tombstone && v.seq <= self.visible_sequence && self.gc_allowed
             {
                 drop_entry = true; // obsolete deletion at base level
             }
-            last_seq_for_key = v.seq;
+            last_seq_for_key = Some(v.seq);
 
             if drop_entry {
                 continue;
@@ -2964,7 +3353,7 @@ impl Kiban {
     /// them there preserves that level's disjointness too; and no data
     /// is read, merged, or dropped, so none of the tombstone/snapshot
     /// drop-rule reasoning that gates a real compaction (`gc_allowed`,
-    /// `smallest_snapshot`) applies — there is nothing here that could
+    /// `visible_sequence`) applies — there is nothing here that could
     /// violate it. L0 is deliberately never a source level: L0 tables
     /// can overlap each other, so moving one out from under the others
     /// would change which value wins for any key more than one L0
@@ -2989,7 +3378,7 @@ impl Kiban {
             inputs,
             input_numbers: numbers.iter().copied().collect(),
             output_level: level + 1,
-            smallest_snapshot: self.oldest_active_snapshot().unwrap_or(self.last_sequence),
+            visible_sequence: self.last_sequence,
             gc_allowed: false,
             output_numbers: Vec::new(),
             dir: self.dir.clone(),
@@ -3286,13 +3675,16 @@ impl Kiban {
             .fetch_add(max_outputs, Ordering::SeqCst);
         let output_numbers: Vec<u64> = (start..start + max_outputs).collect();
 
-        let smallest_snapshot = self.oldest_active_snapshot().unwrap_or(self.last_sequence);
+        // Captured snapshots own their memtables and old SST topology. They
+        // never read this new output, so hidden versions in it need not be
+        // retained for them; physical input files remain pinned separately.
+        let visible_sequence = self.last_sequence;
 
         Some(CompactionPlan {
             inputs,
             input_numbers,
             output_level,
-            smallest_snapshot,
+            visible_sequence,
             gc_allowed,
             output_numbers,
             dir: self.dir.clone(),
@@ -3400,10 +3792,7 @@ impl Kiban {
                 .partition_point(|t| (t.level, t.number) < (out.level, out.number));
             new_version_tables.insert(pos, StdArc::new(out));
         }
-        self.version = StdArc::new(Version {
-            id: self.version.id + 1,
-            tables: new_version_tables,
-        });
+        self.version = StdArc::new(Version::new(self.version.id + 1, new_version_tables));
 
         // Obsolete files are reclaimable only when nothing still
         // references them (11.3); until then they stay on disk. Each
@@ -3483,7 +3872,14 @@ impl Kiban {
             if StdArc::strong_count(&entry) == 1 && StdArc::strong_count(&entry.file_lifetime) == 1
             {
                 self.file_cache.invalidate(entry.number);
-                let _ = sys::remove_file(&self.dir.join(file_name(entry.number, SST_EXTENSION)));
+                let _ = self.cache.range_cache().invalidate(entry.number);
+                if let Err(e) =
+                    sys::remove_file(&self.dir.join(file_name(entry.number, SST_EXTENSION)))
+                    && e.kind() != io::ErrorKind::NotFound
+                {
+                    self.reclamation_failures = self.reclamation_failures.saturating_add(1);
+                    kept.push(entry);
+                }
             } else {
                 kept.push(entry);
             }
@@ -3525,6 +3921,8 @@ mod compaction_tests {
             compaction_scheduler: CompactionScheduler::FixedPriority,
             compaction_batch_size: 1,
             maintenance_pacing_enabled: true,
+            range_cache_bytes: 64 * 1024,
+            range_readahead_bytes: 8 * 1024,
         }
     }
 
@@ -4064,6 +4462,8 @@ mod crash_sweep_tests {
             compaction_scheduler: CompactionScheduler::FixedPriority,
             compaction_batch_size: 1,
             maintenance_pacing_enabled: true,
+            range_cache_bytes: 64 * 1024,
+            range_readahead_bytes: 8 * 1024,
         }
     }
 
@@ -4200,6 +4600,8 @@ mod crash_sweep_tests {
                     compaction_scheduler: CompactionScheduler::FixedPriority,
                     compaction_batch_size: 1,
                     maintenance_pacing_enabled: true,
+                    range_cache_bytes: 64 * 1024,
+                    range_readahead_bytes: 8 * 1024,
                 },
             ) {
                 Ok(db) => db,
@@ -4464,14 +4866,12 @@ type SnapEntry = (Vec<u8>, Vec<u8>);
 /// touch the engine lock. The version's `Arc<TableEntry>` members keep a
 /// table usable even when a later compaction retires it from live state.
 ///
-/// Dropping a `SharedSnapshot` releases its hold on the engine's
-/// `smallest_snapshot` boundary (compaction's tombstone/old-version GC),
-/// mirroring `Kiban::release_snapshot` for the direct API — without
-/// this, a `SharedSnapshot` would suppress GC for the engine's entire
-/// remaining lifetime, not just while it's live.
+/// Dropping a `SharedSnapshot` automatically releases retention bookkeeping.
+/// Its lease keeps directory ownership until its captured files are no longer
+/// needed. Direct snapshots follow the same automatic lifetime rule.
 #[allow(dead_code)]
 pub struct SharedSnapshot {
-    engine: std::sync::Arc<ShardedRwLock<Kiban>>,
+    _lease: StdArc<SnapshotLease>,
     seq: u64,
     memtable: Memtable,
     /// The frozen immutable memtable at capture time, if any (11.8) —
@@ -4484,17 +4884,12 @@ pub struct SharedSnapshot {
     read_amp: StdArc<ReadAmpCounters>,
 }
 
-impl Drop for SharedSnapshot {
-    fn drop(&mut self) {
-        if let Ok(mut guard) = self.engine.write()
-            && let Some(pos) = guard.active_snapshots.iter().position(|s| *s == self.seq)
-        {
-            guard.active_snapshots.remove(pos);
-        }
-    }
-}
-
 impl SharedSnapshot {
+    /// Exports exactly this snapshot into a fresh database directory.
+    pub fn backup(&self, destination: impl AsRef<Path>) -> Result<(), DbError> {
+        backup_entries(self.iter(), destination.as_ref())
+    }
+
     pub fn seq(&self) -> u64 {
         self.seq
     }
@@ -4519,47 +4914,56 @@ impl SharedSnapshot {
 
     /// Scans all live entries visible at this snapshot.
     #[allow(dead_code)]
-    pub fn scan(&self) -> Result<Vec<SnapEntry>, DbError> {
+    pub fn iter(&self) -> DbIter<'_> {
+        self.iter_from(b"")
+    }
+
+    fn iter_from(&self, start: &[u8]) -> DbIter<'_> {
+        self.iter_between(start, None)
+    }
+
+    fn iter_between(&self, start: &[u8], end: Option<&[u8]>) -> DbIter<'_> {
         let mut sources: Vec<SourceHead<'_>> = Vec::new();
         sources.push(SourceHead {
-            feed: SourceFeed::Mem(Box::new(self.memtable.iter_from(b""))),
+            feed: SourceFeed::Mem(Box::new(self.memtable.iter_from(start))),
             head: None,
             exhausted: false,
         });
         if let Some(immutable) = &self.immutable {
             sources.push(SourceHead {
-                feed: SourceFeed::Mem(Box::new(immutable.iter_from(b""))),
+                feed: SourceFeed::Mem(Box::new(immutable.iter_from(start))),
                 head: None,
                 exhausted: false,
             });
         }
-        for t in self.version.tables.iter().rev().filter(|t| t.level == 0) {
-            sources.push(SourceHead {
-                feed: SourceFeed::Table(Box::new(t.table.iter_from(b""))),
-                head: None,
-                exhausted: false,
-            });
-        }
-        for t in self.version.tables.iter().filter(|t| t.level >= 1) {
-            sources.push(SourceHead {
-                feed: SourceFeed::Table(Box::new(t.table.iter_from(b""))),
-                head: None,
-                exhausted: false,
-            });
-        }
-        let mut core = MergeCore {
+        sources.extend(self.version.table_sources(start, end));
+        let core = MergeCore {
             sources,
             user_mode: true,
             failed: false,
             snap_limit: Some(self.seq),
             done_key: None,
         };
-        let mut out = Vec::new();
-        while let Some(item) = core.next_scanned() {
-            let entry = item?;
-            out.push((entry.key, entry.value));
-        }
-        Ok(out)
+        DbIter { core }
+    }
+
+    /// Collects the snapshot. Prefer `iter` or `range` for bounded memory.
+    pub fn scan(&self) -> Result<Vec<SnapEntry>, DbError> {
+        self.iter().collect()
+    }
+
+    /// Streams the half-open range `[start, end)` in byte-key order.
+    pub fn range<'a>(
+        &'a self,
+        start: &[u8],
+        end: &[u8],
+    ) -> impl Iterator<Item = Result<ScanEntry, DbError>> + 'a {
+        let iter = self.iter_between(start, Some(end));
+        let end = end.to_vec();
+        iter.take_while(move |item| match item {
+            Ok((key, _)) => key < &end,
+            Err(_) => true,
+        })
     }
 }
 
@@ -4588,9 +4992,10 @@ pub struct LevelStats {
 #[derive(Debug, Clone)]
 pub struct KibanStats {
     pub memtable_entries: usize,
-    /// Active memtable's [`Memtable::logical_bytes`] (11.8) — the
-    /// signal `write_buffer_bytes` thresholds against.
+    /// Active memtable resident logical bytes (excluding its mirror).
+    /// The flush trigger uses cumulative mutation volume instead.
     pub memtable_logical_bytes: usize,
+    pub memtable_write_bytes: usize,
     /// Whether one frozen memtable is currently pending background
     /// flush (11.8). At most one, ever, this phase.
     pub immutable_present: bool,
@@ -4598,10 +5003,15 @@ pub struct KibanStats {
     pub immutable_logical_bytes: usize,
     pub active_snapshots: usize,
     pub obsolete_files_pending: usize,
+    pub obsolete_bytes_pending: u64,
+    /// Cumulative failed unlink attempts, retained for retry.
+    pub reclamation_failures: u64,
     /// One entry per level that currently holds at least one table,
     /// ascending by level. An empty database yields an empty vec.
     pub levels: Vec<LevelStats>,
     pub block_cache: crate::cache::BlockCacheStats,
+    /// The raw range tier beneath the block cache (all zero when disabled).
+    pub range_cache: crate::range_cache::RangeCacheStats,
     pub table_files: crate::file_cache::TableFileCacheStats,
     pub maintenance: crate::background::MaintenanceStats,
     pub read_amp: ReadAmpStats,
@@ -4631,6 +5041,27 @@ fn levels_from_version(version: &Version) -> Vec<LevelStats> {
 }
 
 impl SharedKiban {
+    /// Makes prior writes durable and waits for requested maintenance.
+    /// Coordinate with other writers for a quiescent checkpoint.
+    pub fn checkpoint(&self) -> Result<(), DbError> {
+        self.sync()?;
+        self.flush()?;
+        self.maintenance.wake();
+        self.maintenance.drain().map_err(DbError::Maintenance)?;
+        self.write_lock()?.reclaim_obsolete();
+        Ok(())
+    }
+
+    /// Checkpoints and releases this handle. Other clones remain usable.
+    pub fn close(self) -> Result<(), DbError> {
+        self.checkpoint()
+    }
+
+    /// Exports one snapshot while concurrent writers continue.
+    pub fn backup(&self, destination: impl AsRef<Path>) -> Result<(), DbError> {
+        self.snapshot()?.backup(destination)
+    }
+
     pub fn open(dir: impl AsRef<Path>) -> Result<SharedKiban, DbError> {
         Self::open_with_options(dir, KibanOptions::default())
     }
@@ -4754,7 +5185,7 @@ impl SharedKiban {
                 guard.check_poisoned()?;
                 let l0_ok = guard.l0_count() < guard.options().l0_write_stall_trigger;
                 let immutable_ok = guard.immutable.is_none()
-                    || guard.memtable.logical_bytes() < guard.options().write_buffer_bytes;
+                    || guard.memtable.write_bytes() < guard.options().write_buffer_bytes;
                 if l0_ok && immutable_ok {
                     let mutate = mutate.take().expect("loop runs the mutation at most once");
                     mutate(&mut guard)?;
@@ -4825,10 +5256,13 @@ impl SharedKiban {
         let (
             memtable_entries,
             memtable_logical_bytes,
+            memtable_write_bytes,
             immutable_present,
             immutable_logical_bytes,
             active_snapshots,
             obsolete_files_pending,
+            obsolete_bytes_pending,
+            reclamation_failures,
             levels,
             cache,
             file_cache,
@@ -4838,6 +5272,7 @@ impl SharedKiban {
             (
                 guard.memtable.len(),
                 guard.memtable.logical_bytes(),
+                guard.memtable.write_bytes(),
                 guard.immutable.is_some(),
                 guard
                     .immutable
@@ -4846,6 +5281,8 @@ impl SharedKiban {
                     .unwrap_or(0),
                 guard.active_snapshots.len(),
                 guard.obsolete.len(),
+                guard.obsolete.iter().map(|t| t.size).sum(),
+                guard.reclamation_failures,
                 levels_from_version(&guard.version),
                 guard.cache.clone(),
                 guard.file_cache.clone(),
@@ -4855,12 +5292,16 @@ impl SharedKiban {
         Ok(KibanStats {
             memtable_entries,
             memtable_logical_bytes,
+            memtable_write_bytes,
             immutable_present,
             immutable_logical_bytes,
             active_snapshots,
             obsolete_files_pending,
+            obsolete_bytes_pending,
+            reclamation_failures,
             levels,
             block_cache: cache.stats(),
+            range_cache: cache.range_cache().stats(),
             table_files: file_cache.stats(),
             maintenance: self.maintenance.stats(),
             read_amp: self.read_amp.snapshot(),
@@ -4886,14 +5327,16 @@ impl SharedKiban {
     /// May freeze the active memtable afterward if it has crossed
     /// `write_buffer_bytes` (11.8) — same lock hold as the write
     /// itself, so the check and the freeze are atomic together.
-    pub fn put(&self, key: impl AsRef<[u8]>, value: impl AsRef<[u8]>) -> io::Result<()> {
-        self.mutate_with_write_room(|guard| Ok(guard.put(key, value)?))
-            .map_err(|e| io::Error::other(e.to_string()))
+    pub fn put(&self, key: impl AsRef<[u8]>, value: impl AsRef<[u8]>) -> Result<(), DbError> {
+        crate::limits::mutation(key.as_ref(), value.as_ref())
+            .map_err(|e| DbError::InvalidArgument(e.to_string()))?;
+        self.mutate_with_write_room(|guard| guard.put(key, value))
     }
 
-    pub fn delete(&self, key: impl AsRef<[u8]>) -> io::Result<()> {
-        self.mutate_with_write_room(|guard| Ok(guard.delete(key)?))
-            .map_err(|e| io::Error::other(e.to_string()))
+    pub fn delete(&self, key: impl AsRef<[u8]>) -> Result<(), DbError> {
+        crate::limits::mutation(key.as_ref(), b"")
+            .map_err(|e| DbError::InvalidArgument(e.to_string()))?;
+        self.mutate_with_write_room(|guard| guard.delete(key))
     }
 
     /// Whether the shared engine is poisoned.
@@ -4907,9 +5350,9 @@ impl SharedKiban {
     /// 11.17-readview: gate-free. Never calls `read_lock`/`write_lock`
     /// — reads through `self.read_view` only, the SAME sharded-lock
     /// primitive the (now-bypassed) engine-wide gate uses, scoped down
-    /// to a small published bundle instead of the whole engine. A
-    /// concurrent put/delete/write/flush/compaction never blocks this
-    /// call at all, at any point.
+    /// to a small published bundle instead of the whole engine. Reads
+    /// can briefly wait for mirrored memtable mutation/publication;
+    /// they do not acquire the engine-wide writer gate.
     ///
     /// Sequencing: `view.memtable`/`view.immutable` are read live and
     /// unbounded (`entry`, not `entry_at`) — they're either the actual
@@ -4951,11 +5394,8 @@ impl SharedKiban {
     /// `sync` durably persists WAL state already accepted, it does not
     /// publish another L0 table, so durability must never depend on
     /// compaction catching up (11.5).
-    pub fn sync(&self) -> io::Result<()> {
-        match self.write_lock() {
-            Ok(mut guard) => guard.sync(),
-            Err(e) => Err(io::Error::other(e.to_string())),
-        }
+    pub fn sync(&self) -> Result<(), DbError> {
+        self.write_lock()?.sync()
     }
 
     /// Commits a batch atomically under the engine lock. One `sync`
@@ -4963,6 +5403,7 @@ impl SharedKiban {
     /// commit applies. May freeze the active memtable afterward,
     /// exactly like `put`/`delete` (11.8).
     pub fn write(&self, batch: WriteBatch) -> Result<(), DbError> {
+        crate::limits::batch(&batch.ops).map_err(|e| DbError::InvalidArgument(e.to_string()))?;
         self.mutate_with_write_room(|guard| guard.write(batch))
     }
 
@@ -4971,12 +5412,11 @@ impl SharedKiban {
     /// subject to backpressure — a read must not stall because writers
     /// are stalled.
     pub fn snapshot(&self) -> Result<SharedSnapshot, DbError> {
-        let mut guard = self.write_lock()?;
+        let guard = self.write_lock()?;
         let seq = guard.last_sequence;
-        let pos = guard.active_snapshots.partition_point(|s| *s < seq);
-        guard.active_snapshots.insert(pos, seq);
+        let lease = guard.active_snapshots.capture(seq, &guard.ownership);
         Ok(SharedSnapshot {
-            engine: self.inner.clone(),
+            _lease: lease,
             seq,
             memtable: guard.memtable.clone(),
             immutable: guard.immutable.as_ref().map(|im| im.memtable.clone()),
@@ -5202,6 +5642,16 @@ mod shared_tests {
     /// loudly and fast instead of hanging the whole suite.
     #[test]
     fn concurrent_reads_complete_under_sustained_compaction_churn() {
+        read_churn(50_000);
+    }
+
+    #[test]
+    #[ignore = "release endurance campaign"]
+    fn sustained_read_churn_release_stress() {
+        read_churn(2_000_000);
+    }
+
+    fn read_churn(iters_per_reader: usize) {
         let td = TempDir::new("read-under-churn");
         let options = KibanOptions {
             write_buffer_bytes: 64 * 1024,
@@ -5223,15 +5673,20 @@ mod shared_tests {
         db.flush().unwrap();
 
         let stop = StdArc::new(std::sync::atomic::AtomicBool::new(false));
+        let (tx, rx) = std::sync::mpsc::channel();
         let writers: Vec<_> = (0..4)
             .map(|w| {
                 let db = db.clone();
                 let stop = stop.clone();
+                let tx = tx.clone();
                 std::thread::spawn(move || {
                     let mut i = 0usize;
                     while !stop.load(std::sync::atomic::Ordering::Relaxed) {
                         let idx = (w * 5000 + i) % hot_keys;
-                        let _ = db.put(format!("hot{idx:06}"), [b'w'; 80]);
+                        if let Err(error) = db.put(format!("hot{idx:06}"), [b'w'; 80]) {
+                            let _ = tx.send(Err(format!("writer {w}: {error}")));
+                            return;
+                        }
                         i += 1;
                     }
                 })
@@ -5239,21 +5694,27 @@ mod shared_tests {
             .collect();
 
         let readers = 4usize;
-        let iters_per_reader = 2_000_000usize;
-        let (tx, rx) = std::sync::mpsc::channel();
+        let progress = StdArc::new([const { std::sync::atomic::AtomicUsize::new(0) }; 4]);
         let reader_handles: Vec<_> = (0..readers)
             .map(|r| {
                 let db = db.clone();
                 let tx = tx.clone();
+                let progress = progress.clone();
+                let stop = stop.clone();
                 std::thread::spawn(move || {
                     for i in 0..iters_per_reader {
+                        if stop.load(Ordering::Relaxed) {
+                            return;
+                        }
                         let idx = (i.wrapping_mul(7) + r * 13) % hot_keys;
                         let got = db.get(format!("hot{idx:06}").as_bytes());
-                        if matches!(got, Ok(None)) {
-                            let _ = tx.send(Err(format!(
-                                "reader {r}: unexpected miss at iter {i}, idx={idx}"
-                            )));
+                        if !matches!(got, Ok(Some(_))) {
+                            let _ =
+                                tx.send(Err(format!("reader {r}: invalid read at {i}: {got:?}")));
                             return;
+                        }
+                        if i % 256 == 0 {
+                            progress[r].store(i + 1, Ordering::Relaxed);
                         }
                     }
                     let _ = tx.send(Ok(r));
@@ -5262,31 +5723,49 @@ mod shared_tests {
             .collect();
         drop(tx);
 
-        let deadline = std::time::Duration::from_secs(60);
+        let started = std::time::Instant::now();
+        let mut last_progress = started;
+        let mut last = [0; 4];
+        let mut failure = None;
         let mut completed = std::collections::HashSet::new();
         while completed.len() < readers {
-            match rx.recv_timeout(deadline) {
+            match rx.recv_timeout(std::time::Duration::from_millis(100)) {
                 Ok(Ok(r)) => {
                     completed.insert(r);
                 }
-                Ok(Err(msg)) => panic!("{msg}"),
-                Err(_) => panic!(
-                    "reader(s) {:?} never completed {iters_per_reader} gets within {deadline:?} — \
-                     a reader thread is stuck, not just slow (evidence: {} of {readers} readers finished)",
-                    (0..readers)
-                        .filter(|r| !completed.contains(r))
-                        .collect::<Vec<_>>(),
-                    completed.len(),
-                ),
+                Ok(Err(msg)) => {
+                    failure = Some(msg);
+                    break;
+                }
+                Err(_) => {
+                    let now = std::array::from_fn(|r| progress[r].load(Ordering::Relaxed));
+                    if now != last {
+                        last = now;
+                        last_progress = std::time::Instant::now();
+                    }
+                    if last_progress.elapsed() > std::time::Duration::from_secs(10)
+                        || started.elapsed() > std::time::Duration::from_secs(180)
+                    {
+                        failure = Some(format!(
+                            "read churn progress stalled or total budget exceeded: {last:?}"
+                        ));
+                        break;
+                    }
+                }
             }
         }
         stop.store(true, std::sync::atomic::Ordering::Relaxed);
-        for h in writers {
-            h.join().unwrap();
+        if failure.is_none() {
+            for h in writers {
+                h.join().unwrap();
+            }
+            for h in reader_handles {
+                h.join().unwrap();
+            }
         }
-        for h in reader_handles {
-            h.join().unwrap();
-        }
+        // On failure the stop flag is still set; do not join a thread that
+        // might be stuck inside a call. CI also bounds the test process.
+        assert!(failure.is_none(), "{}", failure.unwrap_or_default());
     }
 
     /// 11.17-round-2, section 6: the read-amplification counters must
@@ -5341,6 +5820,8 @@ mod cache_scaling_tests {
             compaction_scheduler: CompactionScheduler::FixedPriority,
             compaction_batch_size: 1,
             maintenance_pacing_enabled: true,
+            range_cache_bytes: 64 * 1024,
+            range_readahead_bytes: 8 * 1024,
         }
     }
 
@@ -5788,6 +6269,7 @@ mod poisoning_tests {
         db.put(b"safe", b"v").unwrap();
         db.sync().unwrap();
 
+        drop(db);
         // find the WAL sync op index: put(1 op) + sync(1 op) happened at
         // open+seed; the next sync is the target. Compute by replaying.
         // Deterministic approach: install a fault sweep — fail each
@@ -5826,10 +6308,7 @@ mod poisoning_tests {
         if db2.is_poisoned() {
             // every mutation path refuses; reads remain available
             let e = db2.put(b"later", b"v").unwrap_err();
-            assert!(
-                matches!(e.kind(), io::ErrorKind::Other),
-                "put after poison: {e}"
-            );
+            assert!(matches!(e, DbError::Poisoned(_)), "put after poison: {e}");
             let e = db2.delete(b"later").unwrap_err();
             let _ = e;
             let e = db2.sync().unwrap_err();
@@ -8683,3 +9162,7 @@ mod scale_validation_tests;
 #[cfg(test)]
 #[path = "correctness_tests.rs"]
 mod correctness_tests;
+
+#[cfg(test)]
+#[path = "read_path_tests.rs"]
+mod read_path_tests;

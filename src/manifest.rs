@@ -1,6 +1,6 @@
 //! The MANIFEST: the authoritative record of database state.
 //!
-//! Per `docs/design/db-layout.md` D1 and `docs/design/compaction.md`
+//! Per `ARCHITECTURE.md` D1 and `ARCHITECTURE.md`
 //! D1/D2: a single small file, rewritten atomically through the commit
 //! policy on every change. Table entries carry their level; the level
 //! axis carries recency between levels, file numbers within L0.
@@ -11,9 +11,71 @@ use std::path::Path;
 
 use crate::atomic;
 use crate::sys;
+use std::collections::HashSet;
+
+const MAGIC: &[u8; 8] = b"KIBANMAN";
+const VERSION: u32 = 1;
 
 pub const MANIFEST_NAME: &str = "MANIFEST";
 pub const MAX_LEVEL: u32 = 1_000;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn checksummed_manifest_rejects_every_single_bit_flip() {
+        let encoded = Manifest::fresh().encode();
+        for i in 0..encoded.len() {
+            for bit in 0..8 {
+                let mut bad = encoded.clone();
+                bad[i] ^= 1 << bit;
+                assert!(
+                    Manifest::decode(&bad).is_err(),
+                    "accepted bit flip at {i}/{bit}"
+                );
+            }
+        }
+    }
+    #[test]
+    fn legacy_manifest_and_new_envelope_roundtrip() {
+        let manifest = Manifest::fresh();
+        assert_eq!(
+            Manifest::decode(&manifest.encode_legacy()).unwrap(),
+            manifest
+        );
+        assert_eq!(Manifest::decode(&manifest.encode()).unwrap(), manifest);
+    }
+    #[test]
+    fn duplicate_file_identity_is_rejected_globally() {
+        for tables in [
+            vec![TableRef {
+                level: 0,
+                number: 1,
+            }],
+            vec![
+                TableRef {
+                    level: 1,
+                    number: 2,
+                },
+                TableRef {
+                    level: 1,
+                    number: 3,
+                },
+                TableRef {
+                    level: 2,
+                    number: 2,
+                },
+            ],
+        ] {
+            let manifest = Manifest {
+                next_file_number: 10,
+                tables,
+                ..Manifest::fresh()
+            };
+            assert!(Manifest::decode(&manifest.encode()).is_err());
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TableRef {
@@ -67,6 +129,18 @@ impl Manifest {
     /// ([level : u32 LE][number : u64 LE]) * num_tables
     /// ```
     pub fn encode(&self) -> Vec<u8> {
+        let payload = self.encode_legacy();
+        let mut out = Vec::with_capacity(payload.len() + 20);
+        out.extend_from_slice(MAGIC);
+        out.extend_from_slice(&VERSION.to_le_bytes());
+        out.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+        out.extend_from_slice(&payload);
+        let checksum = crate::crc32::crc32(&out);
+        out.extend_from_slice(&checksum.to_le_bytes());
+        out
+    }
+
+    fn encode_legacy(&self) -> Vec<u8> {
         let mut out =
             Vec::with_capacity(8 + 4 + self.wal_numbers.len() * 8 + 8 + 4 + self.tables.len() * 12);
         out.extend_from_slice(&self.next_file_number.to_le_bytes());
@@ -89,6 +163,25 @@ impl Manifest {
     /// corruption — never repaired, never guessed.
     pub fn decode(bytes: &[u8]) -> Result<Manifest, ManifestError> {
         let bad = |m: &str| ManifestError(m.to_string());
+        let bytes = if bytes.starts_with(MAGIC) {
+            if bytes.len() < 20 {
+                return Err(bad("short manifest envelope"));
+            }
+            let version = u32::from_le_bytes(bytes[8..12].try_into().unwrap());
+            let size = u32::from_le_bytes(bytes[12..16].try_into().unwrap()) as usize;
+            if version != VERSION || size.checked_add(20) != Some(bytes.len()) {
+                return Err(bad("unsupported version or invalid envelope length"));
+            }
+            let checksum = u32::from_le_bytes(bytes[bytes.len() - 4..].try_into().unwrap());
+            if crate::crc32::crc32(&bytes[..bytes.len() - 4]) != checksum {
+                return Err(bad("checksum mismatch"));
+            }
+            &bytes[16..bytes.len() - 4]
+        } else {
+            // Existing unversioned files remain readable. The next install
+            // writes the checksummed envelope; no in-place migration occurs.
+            bytes
+        };
         if bytes.len() < 12 {
             return Err(bad("shorter than the fixed header"));
         }
@@ -97,8 +190,11 @@ impl Manifest {
         if num_wals == 0 {
             return Err(bad("no live wal generations"));
         }
-        let wal_end = 12 + num_wals * 8;
-        if bytes.len() < wal_end + 12 {
+        let wal_end = num_wals
+            .checked_mul(8)
+            .and_then(|n| n.checked_add(12))
+            .ok_or_else(|| bad("wal count overflow"))?;
+        if wal_end.checked_add(12).is_none_or(|end| bytes.len() < end) {
             return Err(bad("shorter than the wal list plus fixed trailer header"));
         }
         let mut wal_numbers = Vec::with_capacity(num_wals);
@@ -123,11 +219,16 @@ impl Manifest {
         let last_sequence = u64::from_le_bytes(bytes[wal_end..wal_end + 8].try_into().unwrap());
         let num_tables =
             u32::from_le_bytes(bytes[wal_end + 8..wal_end + 12].try_into().unwrap()) as usize;
-        if bytes.len() != wal_end + 12 + num_tables * 12 {
+        if num_tables
+            .checked_mul(12)
+            .and_then(|n| n.checked_add(wal_end + 12))
+            != Some(bytes.len())
+        {
             return Err(bad("length does not match declared table count"));
         }
         let mut tables = Vec::with_capacity(num_tables);
         let mut prev: Option<TableRef> = None;
+        let mut numbers: HashSet<u64> = wal_numbers.iter().copied().collect();
         for i in 0..num_tables {
             let start = wal_end + 12 + i * 12;
             let level = u32::from_le_bytes(bytes[start..start + 4].try_into().unwrap());
@@ -140,6 +241,9 @@ impl Manifest {
             }
             if number >= next_file_number {
                 return Err(bad("table number not below next_file_number"));
+            }
+            if !numbers.insert(number) {
+                return Err(bad("duplicate file number across tables or WALs"));
             }
             if let Some(p) = prev {
                 let ordered = p < TableRef { level, number } && p.number != number;
@@ -166,7 +270,19 @@ impl Manifest {
 
     /// `Ok(None)` when no MANIFEST exists (fresh or crashed-first-open).
     pub fn load(dir: &Path) -> Result<Option<Manifest>, ManifestError> {
-        match sys::read(&dir.join(MANIFEST_NAME)) {
+        let path = dir.join(MANIFEST_NAME);
+        let read = || -> io::Result<Vec<u8>> {
+            let file = sys::File::open_read(&path)?;
+            let len = file.len()?;
+            if len > crate::limits::MAX_RECORD_BYTES as u64 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "manifest exceeds metadata limit",
+                ));
+            }
+            file.read_range_at(&path, 0, len)
+        };
+        match read() {
             Ok(bytes) => Manifest::decode(&bytes).map(Some),
             Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
             Err(e) => Err(ManifestError(format!("reading manifest failed: {e}"))),

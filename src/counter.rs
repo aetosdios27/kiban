@@ -18,6 +18,9 @@ impl Counter {
     pub(crate) fn increment(&self) {
         self.slots[counter_shard()].0.fetch_add(1, Relaxed);
     }
+    pub(crate) fn add(&self, n: u64) {
+        self.slots[counter_shard()].0.fetch_add(n, Relaxed);
+    }
     pub(crate) fn load(&self) -> u64 {
         self.slots
             .iter()

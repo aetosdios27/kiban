@@ -1,6 +1,6 @@
 //! Bloom filter for point-lookup absence proofs.
 //!
-//! Per `docs/design/bloom.md`: bit-array Bloom, FNV-1a 64-bit with
+//! Per `ARCHITECTURE.md`: bit-array Bloom, FNV-1a 64-bit with
 //! double hashing, 10 bits/key and 7 probes. False positives fall
 //! through to normal probing; false negatives are impossible.
 
@@ -28,15 +28,22 @@ pub struct BloomFilter {
 
 impl BloomFilter {
     pub fn build<'a>(keys: impl Iterator<Item = &'a [u8]>) -> Self {
-        let keys: Vec<&[u8]> = keys.collect();
-        let num_bits = (keys.len() * BITS_PER_KEY).max(MIN_BITS) as u64;
+        let hashes: Vec<u64> = keys.map(fnv1a_64).collect();
+        Self::build_hashes(&hashes)
+    }
+
+    pub(crate) fn build_hashes(hashes: &[u64]) -> Self {
+        let num_bits = (hashes.len() * BITS_PER_KEY).max(MIN_BITS) as u64;
         let mut filter = BloomFilter {
             bits: vec![0u8; (num_bits / 8) as usize + 1],
             num_bits,
             num_probes: NUM_PROBES,
         };
-        for key in &keys {
-            filter.insert(key);
+        for hash in hashes {
+            let (h1, h2) = probe_pair(hash);
+            for i in 0..filter.num_probes {
+                filter.set_bit(h1.wrapping_add((i as u64).wrapping_mul(h2)) % filter.num_bits);
+            }
         }
         filter
     }
@@ -46,13 +53,6 @@ impl BloomFilter {
             bits: vec![0u8; MIN_BITS / 8],
             num_bits: MIN_BITS as u64,
             num_probes: NUM_PROBES,
-        }
-    }
-
-    fn insert(&mut self, key: &[u8]) {
-        let (h1, h2) = probe_pair(&fnv1a_64(key));
-        for i in 0..self.num_probes {
-            self.set_bit(h1.wrapping_add((i as u64).wrapping_mul(h2)) % self.num_bits);
         }
     }
 

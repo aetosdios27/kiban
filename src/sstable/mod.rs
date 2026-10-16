@@ -1,6 +1,6 @@
 //! SSTable format: immutable sorted tables.
 //!
-//! Specified in `docs/design/sstable.md`.
+//! Specified in `ARCHITECTURE.md`.
 
 mod block;
 pub mod builder;
