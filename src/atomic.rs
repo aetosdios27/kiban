@@ -94,11 +94,18 @@ pub fn commit_file(target: &Path, contents: &[u8]) -> Result<(), CommitError> {
 }
 
 pub fn create_durably(path: &Path) -> io::Result<()> {
+    create_durably_with_contents(path, b"")
+}
+
+pub(crate) fn create_durably_with_contents(path: &Path, contents: &[u8]) -> io::Result<()> {
     let dir = match path.parent() {
         Some(p) if !p.as_os_str().is_empty() => p.to_path_buf(),
         _ => PathBuf::from("."),
     };
-    let file = sys::File::create_new(path)?;
+    let mut file = sys::File::create_new(path)?;
+    if !contents.is_empty() {
+        file.write_all(contents)?;
+    }
     file.sync_all()?;
     drop(file);
     sys::File::open_read(&dir)?.sync_all()
