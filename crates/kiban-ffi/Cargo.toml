@@ -1,0 +1,13 @@
+[package]
+name = "kiban-ffi"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+kiban = { path = "../.." }
