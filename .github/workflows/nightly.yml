@@ -57,7 +57,7 @@ jobs:
       - name: Sweep direct and shared deterministic crash seeds
         run: |
           set -o pipefail
-          KIBAN_SIM_SEED_START=$(( ${{ matrix.shard }} * 100000 )) KIBAN_SIM_SEEDS=100000 \
+          KIBAN_SIM_SEED_START=$(( (${{ github.run_number }} * 4 + ${{ matrix.shard }}) * 100000 )) KIBAN_SIM_SEEDS=100000 \
             cargo test --locked --release --lib seeded_crash_long -- --ignored --nocapture \
             2>&1 | tee "$RUNNER_TEMP/kiban-seeded-power-loss.log"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
