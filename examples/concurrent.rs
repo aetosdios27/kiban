@@ -1,10 +1,12 @@
 //! Concurrent writes, a stable snapshot, streaming scans and explicit close.
-use kiban::db::SharedKiban;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let directory = std::env::args()
         .nth(1)
         .unwrap_or_else(|| "concurrent-db".into());
+    // site:begin shared
+    use kiban::db::SharedKiban;
+
     let db = SharedKiban::open(directory)?;
     db.put(b"greeting", b"before")?;
     let snapshot = db.snapshot()?;
@@ -24,5 +26,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     drop(snapshot);
     db.close()?;
+    // site:end
     Ok(())
 }
