@@ -5,10 +5,17 @@ import tempfile
 import unittest
 
 import engine_report
-from engine_run import Campaign, cpus, load_summary, trial_preliminary
+from engine_run import Campaign, compiled_input, cpus, load_summary, parser, trial_preliminary
 
 
 class EngineDriverTest(unittest.TestCase):
+    def test_partial_matrix_preserves_binary_reuse_contract(self):
+        args=parser().parse_args(['--output','unused','--engines','kiban','lmdb'])
+        self.assertEqual(args.engines,['kiban','lmdb'])
+        for path in ['src/db.rs','tools/agentbench/engine/Cargo.lock','tools/agentbench/engine/equivalence.json']:
+            self.assertTrue(compiled_input(path))
+        self.assertFalse(compiled_input('tools/agentbench/engine_run.py'))
+
     def test_affinity_range_parser(self):
         self.assertEqual(cpus('1-4,8'),{1,2,3,4,8})
         with self.assertRaises(ValueError):

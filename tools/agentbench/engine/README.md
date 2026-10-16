@@ -19,8 +19,8 @@ On this Intel hybrid-core Linux host, from the repository root:
 ```sh
 python3 tools/agentbench/engine_run.py --install-helix \
   --output target/enginebench-results/h2h \
-  --sizes 10000 1000000 --operations 10000 100000 \
-  --runs 5 --large-runs 3 --cpus 1-4 --driver-cpus 12-21
+  --sizes 10000 --operations 10000 \
+  --runs 5 --cpus 1-4 --driver-cpus 12-21
 ```
 
 Omit `--install-helix` to reuse the verified installation from the HTTP study.
@@ -68,13 +68,13 @@ For staged delivery, finish small N first, then reuse the identical binary:
 python3 tools/agentbench/engine_run.py --output target/enginebench-results/small \
   --sizes 10000 --operations 10000
 python3 tools/agentbench/engine_run.py --output target/enginebench-results/large \
-  --sizes 1000000 --operations 100000 --large-runs 3 \
+  --sizes 1000000 --operations 100000 --large-runs 3 --engines kiban lmdb \
   --reuse-binary-from target/enginebench-results/small
 ```
 
 The first command builds once and records the executable hash. The second
-checks that hash and all measured source inputs, and does not run a build.
-Every engine and every trial uses the same executable.
+checks that hash and all compiled inputs, snapshots the current driver/report scripts, and does not run a build.
+Every engine and every trial uses the same executable. The large-N subset omits memory-blocked Helix; see the reproduction below.
 
 ## Included and excluded layers
 
@@ -265,3 +265,140 @@ that bypass those libc symbols. It helps confirm the durability path without
 changing the engine. `LD_PRELOAD` diagnostics and their latency values are
 excluded from the comparison campaign. Diagnostic rows must never be pooled
 with the five uninstrumented measurement trials.
+
+## Recorded results
+
+[ENGINE_H2H.md](../../../validation/ENGINE_H2H.md) contains the small-N study,
+all percentiles, throughput, RSS/disk, load conditions and interpretation.
+[Raw small-N evidence](../results/engine-small-10000/) is kept separately from
+the HTTP study. The large-N report records the Kiban/LMDB subset and the evidence for memory-blocked Helix separately.
+
+## Helix memory growth repro
+
+The large-N Helix calibration was stopped at a 6 GiB RSS bound, after the five
+1,000-operation stages but during final verification. It is invalid as a
+comparison trial. Before excluding Helix, a separate HTTP reproduction completed
+1,000 W3 requests against the same pinned v2.3.5 / `17e7ecf` engine and a copy of
+that 1,001,000-record database. Server RSS increased from 74.45 to 4,765.00 MiB;
+the standalone Python client's RSS settled at 20.86 MiB. Every response was
+checked and discarded. The growth therefore also occurs without our in-process
+adapter, oracle, histograms or benchmark runner. No Helix engine patch was used.
+
+The exact query is in [queries.hx](../helix/queries.hx):
+
+```text
+QUERY Recent(agent: U32, k: U32) =>
+    memories <- N<Agent>({agent_num: agent})::Out<Remembers>::ORDER<Desc>(_::{created_at})::RANGE(0, k)
+    RETURN memories
+```
+
+The minimal request/RSS client is [helix_memory_repro.py](../helix_memory_repro.py).
+It uses only Python's standard library, works against an independently running
+Helix server, keeps one response at a time, and streams query-count/RSS pairs.
+It checks IDs, agent, creation sequence, revision type, text size, list count
+and ordering; it is a memory diagnostic, not another latency trial or a complete
+benchmark value oracle. Its 6 GiB RSS limit stops requests; it never kills an
+externally owned server. Stop that server yourself when the client exits.
+
+A bounded seed can be made with the already built binary (no rebuild):
+
+```sh
+python3 tools/agentbench/engine_probe.py --n 1000000 --operations 1 \
+  --engines helix --modes fast --output target/helix-memory-seed
+mkdir -p target/helix-memory-http/data
+cp -a --reflink=auto target/helix-memory-seed/data/fast-helix \
+  target/helix-memory-http/data/user
+```
+
+That seed has 1,000,001 final records; use `--population 1000001` below. The
+archived diagnostic used 1,000 insert operations instead and therefore has
+1,001,000 records. Bulk load is one relaxed transaction plus final sync; all
+seed values are verified before and after reopen. Keep the seed process within
+available RAM, and use a fresh destination for every attempt.
+
+The server appends `user/` to `HELIX_DATA_DIR`. Its generated default config has
+BM25 enabled; opening this non-BM25 seed triggers a full BM25 rebuild and the
+stock 10 GiB map fills before requests can run. For this diagnostic only, use
+the same `bm25: Some(false)` setting as the engine study in the generated
+`helix-container/src/queries.rs`, then build a separate server executable. This
+changes one application configuration field, not Helix engine or query logic.
+Preserve the installed executable and restore the generated file afterwards:
+
+```sh
+repo=target/agentbench-setup/project/.helix/dev/helix-repo-copy
+cp "$repo/helix-container/src/queries.rs" target/helix-memory-http/queries.original.rs
+cp "$repo/target/release/helix-container" target/helix-memory-http/server.original
+python3 - <<'PY'
+from pathlib import Path
+p=Path('target/agentbench-setup/project/.helix/dev/helix-repo-copy/helix-container/src/queries.rs')
+s=p.read_text()
+assert s.count('bm25: Some(true)') == 1
+p.write_text(s.replace('bm25: Some(true)','bm25: Some(false)'))
+PY
+cargo build --release --locked --manifest-path "$repo/helix-container/Cargo.toml"
+cp "$repo/target/release/helix-container" target/helix-memory-http/server.bm25-off
+cp target/helix-memory-http/server.original "$repo/target/release/helix-container"
+cp target/helix-memory-http/queries.original.rs "$repo/helix-container/src/queries.rs"
+sha256sum target/helix-memory-http/server.bm25-off
+HELIX_DATA_DIR="$PWD/target/helix-memory-http/data" HELIX_PORT=16971 \
+  taskset -c 1-4 target/helix-memory-http/server.bm25-off \
+  >target/helix-memory-http/server.log 2>&1 &
+server_pid=$!
+trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+# Wait for POST /Noop {} to return agentbench-noop, then:
+taskset -c 12-21 python3 tools/agentbench/helix_memory_repro.py \
+  --server-pid "$server_pid" --population 1000001 --queries 1000 \
+  --output target/helix-memory-http/client
+kill "$server_pid"
+wait "$server_pid" || true
+trap - EXIT
+```
+
+The configured server is outside the frozen benchmark binary and never supplies
+published engine latency numbers. The engine source tree, generated W3 core,
+query text, config delta, server hash, all 1,001 RSS samples and server logs are
+retained in [helix-memory-diagnostic](../results/helix-memory-diagnostic/).
+Its HTTP W3 storage/traversal core was compared byte-for-byte to the frozen
+in-process adapter. CLI-generated schema JSON/function ordering can differ;
+the archive retains the actual HTTP source rather than assuming byte identity
+of the entire generated file.
+
+The direct adapter creates/drops its local Bump arena and traversal result Vec
+on every call (`engine/src/generated.rs`, `recent`). It returns K owned Memory
+values. `src/runner.rs` consumes `many` in the iteration's `if let` and drops it
+before the next iteration. Only fixed-size revision/recent-ID oracles and
+histograms persist; logs contain one row per stage, not response records.
+The HTTP client explicitly deletes each decoded result and retains no list of
+responses. Its stable RSS and independent server growth exclude accumulation
+in those harness Vecs/logs as the explanation.
+
+The likely allocation mechanism is pinned Helix's `ImmutablePropertiesMap`:
+it is Copy, stores raw `Value` pointers allocated with `Bump::alloc_layout`,
+and writes owning values with `values.add(index).write(value)`. `Value::String`
+owns a heap String, while the map has no Drop implementation and Bump does not
+run destructors for raw arena allocations. W3 decodes all roughly 15,640
+neighbors before sorting/taking ten. This is source-supported attribution, not
+a heap-profiler proof that every retained byte has that origin. Mapped pages
+and allocator overhead also contribute to RSS, especially early in the curve.
+Do not patch Helix or replace the query when reproducing the published study.
+
+Large-N Helix is reported as **memory-blocked** in both modes, with no valid
+latency/RSS/disk trial cells. The only direct calibration was fast mode; W3 is a
+read-only query with the same allocation path in durable mode. A separate
+100,000-call W3 projection was roughly 27 minutes per Helix trial, over 163
+minutes across six trials before other work, independently exceeding the
+90-minute full-matrix budget. Calibration timings are not comparison results.
+The approved remaining large-N command is:
+
+```sh
+python3 tools/agentbench/engine_run.py --output target/enginebench-results/large-1000000-kv \
+  --sizes 1000000 --operations 100000 --large-runs 3 --engines kiban lmdb \
+  --reuse-binary-from target/enginebench-results/small-10000
+```
+
+A backend subset is explicitly recorded in metadata; a successful subset does
+not imply Helix completed. Binary reuse checks every compiled Rust input,
+manifest/lockfile, query schema and equivalence record against the first build.
+Driver/report-only changes are snapshotted separately; no measurement binary
+was rebuilt. Archives preserve the scripts/hashes used at measurement time,
+while the auditor verifies those snapshots even if reporting scripts evolve.

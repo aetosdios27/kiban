@@ -1,0 +1,499 @@
+{
+  "status": "complete",
+  "errors": 0,
+  "runs": [
+    {
+      "name": "n1000000-durable-r1-kiban",
+      "n": 1000000,
+      "operations": 100000,
+      "trial": 1,
+      "mode": "durable",
+      "backend": "kiban",
+      "write_operations": 10000,
+      "final_population": 1010000,
+      "file": "n1000000-durable-r1-kiban.jsonl",
+      "disk": {
+        "apparent_bytes": 339641269,
+        "allocated_bytes": 339652608,
+        "files": 5
+      },
+      "load_summary": {
+        "start_epoch": 1792167955.2083604,
+        "end_epoch": 1792167976.269268,
+        "samples": 106,
+        "largest_sample_gap_seconds": 0.2727646827697754,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.72314453125,
+            "min": 2.3984375,
+            "max": 2.7861328125
+          },
+          {
+            "median": 2.28076171875,
+            "min": 2.20068359375,
+            "max": 2.29296875
+          },
+          {
+            "median": 2.142578125,
+            "min": 2.1162109375,
+            "max": 2.1474609375
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n1000000-durable-r1-lmdb",
+      "n": 1000000,
+      "operations": 100000,
+      "trial": 1,
+      "mode": "durable",
+      "backend": "lmdb",
+      "write_operations": 10000,
+      "final_population": 1010000,
+      "file": "n1000000-durable-r1-lmdb.jsonl",
+      "disk": {
+        "apparent_bytes": 846684800,
+        "allocated_bytes": 846675968,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792167982.9055903,
+        "end_epoch": 1792168037.695881,
+        "samples": 276,
+        "largest_sample_gap_seconds": 0.20186781883239746,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.52587890625,
+            "min": 2.4208984375,
+            "max": 2.716796875
+          },
+          {
+            "median": 2.2919921875,
+            "min": 2.24072265625,
+            "max": 2.3193359375
+          },
+          {
+            "median": 2.154296875,
+            "min": 2.1328125,
+            "max": 2.1630859375
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n1000000-fast-r1-kiban",
+      "n": 1000000,
+      "operations": 100000,
+      "trial": 1,
+      "mode": "fast",
+      "backend": "kiban",
+      "write_operations": 100000,
+      "final_population": 1100000,
+      "file": "n1000000-fast-r1-kiban.jsonl",
+      "disk": {
+        "apparent_bytes": 394415978,
+        "allocated_bytes": 394428416,
+        "files": 5
+      },
+      "load_summary": {
+        "start_epoch": 1792168044.3784266,
+        "end_epoch": 1792168049.124529,
+        "samples": 26,
+        "largest_sample_gap_seconds": 0.20047307014465332,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.92041015625,
+            "min": 2.7666015625,
+            "max": 2.92041015625
+          },
+          {
+            "median": 2.39892578125,
+            "min": 2.37548828125,
+            "max": 2.39892578125
+          },
+          {
+            "median": 2.19384765625,
+            "min": 2.18701171875,
+            "max": 2.19384765625
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n1000000-fast-r1-lmdb",
+      "n": 1000000,
+      "operations": 100000,
+      "trial": 1,
+      "mode": "fast",
+      "backend": "lmdb",
+      "write_operations": 100000,
+      "final_population": 1100000,
+      "file": "n1000000-fast-r1-lmdb.jsonl",
+      "disk": {
+        "apparent_bytes": 922030720,
+        "allocated_bytes": 922021888,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792168054.765282,
+        "end_epoch": 1792168061.8511362,
+        "samples": 37,
+        "largest_sample_gap_seconds": 0.2781796455383301,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.78564453125,
+            "min": 2.78564453125,
+            "max": 3.36376953125
+          },
+          {
+            "median": 2.38623046875,
+            "min": 2.38623046875,
+            "max": 2.5126953125
+          },
+          {
+            "median": 2.19140625,
+            "min": 2.19140625,
+            "max": 2.2333984375
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n1000000-durable-r2-kiban",
+      "n": 1000000,
+      "operations": 100000,
+      "trial": 2,
+      "mode": "durable",
+      "backend": "kiban",
+      "write_operations": 10000,
+      "final_population": 1010000,
+      "file": "n1000000-durable-r2-kiban.jsonl",
+      "disk": {
+        "apparent_bytes": 339641269,
+        "allocated_bytes": 339652608,
+        "files": 5
+      },
+      "load_summary": {
+        "start_epoch": 1792168070.373039,
+        "end_epoch": 1792168092.0081115,
+        "samples": 110,
+        "largest_sample_gap_seconds": 0.20852923393249512,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 3.32763671875,
+            "min": 3.07373046875,
+            "max": 3.5302734375
+          },
+          {
+            "median": 2.568359375,
+            "min": 2.478515625,
+            "max": 2.59521484375
+          },
+          {
+            "median": 2.25927734375,
+            "min": 2.22509765625,
+            "max": 2.26904296875
+          }
+        ]
+      },
+      "preliminary": true
+    },
+    {
+      "name": "n1000000-durable-r2-lmdb",
+      "n": 1000000,
+      "operations": 100000,
+      "trial": 2,
+      "mode": "durable",
+      "backend": "lmdb",
+      "write_operations": 10000,
+      "final_population": 1010000,
+      "file": "n1000000-durable-r2-lmdb.jsonl",
+      "disk": {
+        "apparent_bytes": 846684800,
+        "allocated_bytes": 846675968,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792168097.9755497,
+        "end_epoch": 1792168147.39013,
+        "samples": 248,
+        "largest_sample_gap_seconds": 0.20058798789978027,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 3.72607421875,
+            "min": 3.32275390625,
+            "max": 3.92626953125
+          },
+          {
+            "median": 2.7451171875,
+            "min": 2.59912109375,
+            "max": 2.84033203125
+          },
+          {
+            "median": 2.33056640625,
+            "min": 2.2734375,
+            "max": 2.369140625
+          }
+        ]
+      },
+      "preliminary": true
+    },
+    {
+      "name": "n1000000-fast-r2-kiban",
+      "n": 1000000,
+      "operations": 100000,
+      "trial": 2,
+      "mode": "fast",
+      "backend": "kiban",
+      "write_operations": 100000,
+      "final_population": 1100000,
+      "file": "n1000000-fast-r2-kiban.jsonl",
+      "disk": {
+        "apparent_bytes": 394415978,
+        "allocated_bytes": 394428416,
+        "files": 5
+      },
+      "load_summary": {
+        "start_epoch": 1792168155.7734466,
+        "end_epoch": 1792168160.5604866,
+        "samples": 26,
+        "largest_sample_gap_seconds": 0.20050883293151855,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 3.37890625,
+            "min": 3.37890625,
+            "max": 3.5087890625
+          },
+          {
+            "median": 2.78466796875,
+            "min": 2.78466796875,
+            "max": 2.82177734375
+          },
+          {
+            "median": 2.35986328125,
+            "min": 2.35986328125,
+            "max": 2.37451171875
+          }
+        ]
+      },
+      "preliminary": true
+    },
+    {
+      "name": "n1000000-fast-r2-lmdb",
+      "n": 1000000,
+      "operations": 100000,
+      "trial": 2,
+      "mode": "fast",
+      "backend": "lmdb",
+      "write_operations": 100000,
+      "final_population": 1100000,
+      "file": "n1000000-fast-r2-lmdb.jsonl",
+      "disk": {
+        "apparent_bytes": 922030720,
+        "allocated_bytes": 922021888,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792168166.2951398,
+        "end_epoch": 1792168173.1604125,
+        "samples": 36,
+        "largest_sample_gap_seconds": 0.23453187942504883,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 4.0654296875,
+            "min": 3.54833984375,
+            "max": 4.0654296875
+          },
+          {
+            "median": 2.9609375,
+            "min": 2.841796875,
+            "max": 2.9609375
+          },
+          {
+            "median": 2.42431640625,
+            "min": 2.38330078125,
+            "max": 2.42431640625
+          }
+        ]
+      },
+      "preliminary": true
+    },
+    {
+      "name": "n1000000-durable-r3-kiban",
+      "n": 1000000,
+      "operations": 100000,
+      "trial": 3,
+      "mode": "durable",
+      "backend": "kiban",
+      "write_operations": 10000,
+      "final_population": 1010000,
+      "file": "n1000000-durable-r3-kiban.jsonl",
+      "disk": {
+        "apparent_bytes": 339641269,
+        "allocated_bytes": 339652608,
+        "files": 5
+      },
+      "load_summary": {
+        "start_epoch": 1792168181.1212573,
+        "end_epoch": 1792168203.0738833,
+        "samples": 112,
+        "largest_sample_gap_seconds": 0.2226581573486328,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 3.64306640625,
+            "min": 3.59375,
+            "max": 3.78662109375
+          },
+          {
+            "median": 2.94775390625,
+            "min": 2.89599609375,
+            "max": 2.95068359375
+          },
+          {
+            "median": 2.42822265625,
+            "min": 2.40869140625,
+            "max": 2.43798828125
+          }
+        ]
+      },
+      "preliminary": true
+    },
+    {
+      "name": "n1000000-durable-r3-lmdb",
+      "n": 1000000,
+      "operations": 100000,
+      "trial": 3,
+      "mode": "durable",
+      "backend": "lmdb",
+      "write_operations": 10000,
+      "final_population": 1010000,
+      "file": "n1000000-durable-r3-lmdb.jsonl",
+      "disk": {
+        "apparent_bytes": 846684800,
+        "allocated_bytes": 846675968,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792168209.5488417,
+        "end_epoch": 1792168264.9585457,
+        "samples": 279,
+        "largest_sample_gap_seconds": 0.20076346397399902,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 3.70849609375,
+            "min": 3.37158203125,
+            "max": 4.0341796875
+          },
+          {
+            "median": 3.0439453125,
+            "min": 2.984375,
+            "max": 3.10009765625
+          },
+          {
+            "median": 2.4951171875,
+            "min": 2.45458984375,
+            "max": 2.51708984375
+          }
+        ]
+      },
+      "preliminary": true
+    },
+    {
+      "name": "n1000000-fast-r3-kiban",
+      "n": 1000000,
+      "operations": 100000,
+      "trial": 3,
+      "mode": "fast",
+      "backend": "kiban",
+      "write_operations": 100000,
+      "final_population": 1100000,
+      "file": "n1000000-fast-r3-kiban.jsonl",
+      "disk": {
+        "apparent_bytes": 394415978,
+        "allocated_bytes": 394428416,
+        "files": 5
+      },
+      "load_summary": {
+        "start_epoch": 1792168273.0262015,
+        "end_epoch": 1792168277.4779096,
+        "samples": 24,
+        "largest_sample_gap_seconds": 0.20056700706481934,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 3.5986328125,
+            "min": 3.5986328125,
+            "max": 3.8251953125
+          },
+          {
+            "median": 3.10546875,
+            "min": 3.10546875,
+            "max": 3.14111328125
+          },
+          {
+            "median": 2.533203125,
+            "min": 2.533203125,
+            "max": 2.54150390625
+          }
+        ]
+      },
+      "preliminary": true
+    },
+    {
+      "name": "n1000000-fast-r3-lmdb",
+      "n": 1000000,
+      "operations": 100000,
+      "trial": 3,
+      "mode": "fast",
+      "backend": "lmdb",
+      "write_operations": 100000,
+      "final_population": 1100000,
+      "file": "n1000000-fast-r3-lmdb.jsonl",
+      "disk": {
+        "apparent_bytes": 922030720,
+        "allocated_bytes": 922021888,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792168282.9498754,
+        "end_epoch": 1792168289.45535,
+        "samples": 35,
+        "largest_sample_gap_seconds": 0.20900273323059082,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 3.58642578125,
+            "min": 3.55029296875,
+            "max": 3.69970703125
+          },
+          {
+            "median": 3.11865234375,
+            "min": 3.103515625,
+            "max": 3.14990234375
+          },
+          {
+            "median": 2.54443359375,
+            "min": 2.5361328125,
+            "max": 2.55810546875
+          }
+        ]
+      },
+      "preliminary": true
+    }
+  ],
+  "preliminary": true
+}

@@ -137,6 +137,10 @@ def installation():
     return manifest
 
 
+def compiled_input(name):
+    return pathlib.Path(name).suffix in ('.rs', '.toml', '.lock', '.hx') or name.endswith('/equivalence.json')
+
+
 def snapshot(output):
     files = list((ROOT / 'src').rglob('*.rs')) + list((HERE / 'src').glob('*.rs'))
     files += list((ENGINE / 'src').glob('*.rs')) + list((ENGINE).glob('*.py'))
@@ -177,8 +181,8 @@ def run(args):
             metadata = json.loads((output/'metadata.json').read_text())
             parameters = metadata['parameters']
             assert args.cpus == parameters['cpus'] and args.driver_cpus == parameters['driver_cpus']
-            for name in ('runs','large_runs','sizes','operations','modes','k','seed','timeout'):
-                setattr(args,name,parameters[name])
+            for name in ('runs','large_runs','sizes','operations','modes','k','seed','timeout','engines'):
+                setattr(args,name,parameters.get(name,getattr(args,name)))
             campaign.timeout = args.timeout
             assert install.sha(BINARY) == metadata['binary_sha256']
             for name, digest in json.loads((output/'source-hashes.json').read_text()).items():
@@ -198,7 +202,8 @@ def run(args):
                 previous = pathlib.Path(args.reuse_binary_from)
                 assert install.sha(BINARY) == json.loads((previous/'metadata.json').read_text())['binary_sha256']
                 for name,digest in json.loads((previous/'source-hashes.json').read_text()).items():
-                    assert install.sha(ROOT/name) == digest, f'Source changed before binary reuse: {name}'
+                    if compiled_input(name):
+                        assert install.sha(ROOT/name) == digest, f'Compiled input changed before binary reuse: {name}'
             else:
                 campaign.command(['cargo','build','--release','--locked','--manifest-path',ENGINE/'Cargo.toml'], 'build')
             metadata = {'date_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -226,7 +231,7 @@ def run(args):
             for trial in range(1, (args.large_runs if n > 10000 else args.runs)+1):
                 for mode in args.modes:
                     write_operations = min(operations,10000) if mode == 'durable' else operations
-                    for backend in ENGINES:
+                    for backend in args.engines:
                         name = f'n{n}-{mode}-r{trial}-{backend}'
                         if any(run['name'] == name for run in status['runs']):
                             continue
@@ -278,6 +283,7 @@ def parser():
     p.add_argument('--sizes',nargs='+',type=int,default=[10000,1000000])
     p.add_argument('--operations',nargs='+',type=int,default=[10000,100000])
     p.add_argument('--modes',nargs='+',choices=['durable','fast'],default=['durable','fast'])
+    p.add_argument('--engines',nargs='+',choices=ENGINES,default=list(ENGINES))
     p.add_argument('--runs',type=int,default=5)
     p.add_argument('--large-runs',type=int,default=3)
     p.add_argument('--reuse-binary-from')

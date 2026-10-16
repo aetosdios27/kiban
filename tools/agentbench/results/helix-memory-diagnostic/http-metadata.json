@@ -1,0 +1,20 @@
+{
+  "version": "2.3.5",
+  "commit": "17e7ecf764aecd553e1f54ca25320d654153a9aa",
+  "server_sha256": "2380637190af2e3d536b6bbe26537665ebe094b2b608db52a6527bdb1cdc284a",
+  "population": 1001000,
+  "bm25": false,
+  "configuration_change": "Only generated config bm25 Some(true) -> Some(false); engine and generated query bodies unmodified",
+  "source_database": "/home/aetos/.t3/worktrees/kiban/t3-d4970700/target/enginebench-probes/large-guarded/probe/data/fast-helix",
+  "argv": [
+    "taskset",
+    "-c",
+    "1-4",
+    "/home/aetos/.t3/worktrees/kiban/t3-d4970700/target/enginebench-probes/helix-container-bm25-off"
+  ],
+  "environment": {
+    "HELIX_DATA_DIR": "/home/aetos/.t3/worktrees/kiban/t3-d4970700/target/enginebench-probes/http-memory-bm25-off/data",
+    "HELIX_PORT": "16971",
+    "RUST_LOG": "error"
+  }
+}

@@ -272,3 +272,12 @@ and raw heed3/LMDB alongside Kiban, with durable and fast modes, fixed P-core
 affinity, and separate datasets. It has its own crate/lockfile and never starts
 an HTTP server. Its results use a separate report and load rule; they are not
 pooled with the HTTP study.
+
+## Helix memory growth repro
+
+The million-record engine study excludes Helix after bounded direct and HTTP
+memory diagnostics reproduced growth outside the benchmark runner. The
+[standalone client, exact query and setup instructions](engine/README.md#helix-memory-growth-repro)
+include the BM25 configuration difference and links to raw RSS/query-count
+samples. This HTTP diagnostic is separate from the in-process latency study;
+no Helix engine patch contributes published numbers.

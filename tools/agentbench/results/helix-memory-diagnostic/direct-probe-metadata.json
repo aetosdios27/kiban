@@ -1,0 +1,20 @@
+{
+  "purpose": "Excluded diagnostic/calibration, not reported latency evidence",
+  "parameters": {
+    "output": "/home/aetos/.t3/worktrees/kiban/t3-d4970700/target/enginebench-probes/large-guarded/probe",
+    "n": 1000000,
+    "operations": 1000,
+    "engines": [
+      "helix"
+    ],
+    "modes": [
+      "fast"
+    ],
+    "cpus": "1-4",
+    "driver_cpus": "12-21",
+    "sync_profile": false
+  },
+  "binary": "/home/aetos/.t3/worktrees/kiban/t3-d4970700/tools/agentbench/engine/target/release/kiban-enginebench",
+  "binary_sha256": "d3901e63d7dd7b24529c5d2768762ae3d8ff40a6d7439a3d264d40d45e1c84ce",
+  "helix_bm25": false
+}

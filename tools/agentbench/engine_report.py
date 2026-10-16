@@ -17,6 +17,7 @@ def generate(root):
         lines += ['Campaign incomplete/invalid; no comparison table.', '',status.get('error','still running')]
     else:
         metadata = json.loads((root/'metadata.json').read_text())
+        engines = metadata['parameters'].get('engines', ENGINES)
         label = 'PRELIMINARY — at least one per-trial median load gate or coverage check failed' if status['preliminary'] else 'Measured on a shared desktop, pinned cores'
         lines += [f'**{label}.**', '',
             f"Benchmark CPUs: `{metadata['parameters']['cpus']}`; driver CPUs: `{metadata['parameters']['driver_cpus']}`. "
@@ -37,7 +38,7 @@ def generate(root):
             for mode in metadata['parameters']['modes']:
                 runs = [r for r in status['runs'] if r['n'] == n and r['mode'] == mode]
                 repetitions = metadata['parameters']['large_runs'] if n > 10000 else metadata['parameters']['runs']
-                assert len(runs) == 3*repetitions
+                assert len(runs) == len(engines)*repetitions
                 lines += [f'## N={n:,}, {mode}', '',
                     f"{'Preliminary: load/coverage gate failed.' if any(r['preliminary'] for r in runs) else 'Measured on a shared desktop, pinned cores.'} "
                     f"Untimed verified/reopened base: {n:,} records. W1 inserts {runs[0]['write_operations']:,} fresh records; "
@@ -46,7 +47,7 @@ def generate(root):
                     '| Engine | Workload | p50 µs | p99 µs | p999 µs | max µs | Verified ops/s | Call-only ops/s |',
                     '| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |']
                 for workload in WORKLOADS:
-                    for backend in ENGINES:
+                    for backend in engines:
                         rows = groups[n,mode,backend,workload]
                         assert len(rows) == repetitions
                         metrics = [spread([r['latency'][m] for r in rows],1000) for m in ('p50_ns','p99_ns','p999_ns','max_ns')]
@@ -54,7 +55,7 @@ def generate(root):
                         lines.append(f'| {backend} | {workload} | '+' | '.join(metrics)+' |')
                 lines += ['', '| Engine | End RSS MiB | Peak RSS MiB | Disk apparent MiB | Disk allocated MiB |',
                     '| --- | ---: | ---: | ---: | ---: |']
-                for backend in ENGINES:
+                for backend in engines:
                     own = [r for r in runs if r['backend'] == backend]
                     resources = [json.loads((root/(r['name']+'.resources.json')).read_text()) for r in own]
                     metrics = [spread([r[m] for r in resources],1024**2) for m in ('rss_bytes','peak_rss_bytes')]
