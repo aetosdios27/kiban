@@ -70,6 +70,7 @@ fn options(o: &BenchOptions) -> Options {
 pub struct Rocks {
     db: DB,
     write: WriteOptions,
+    point_read: ReadOptions,
     tuning: Tuning,
     bulk: bool,
     path: std::path::PathBuf,
@@ -88,6 +89,7 @@ impl Rocks {
         let this = Self {
             db,
             write,
+            point_read: ReadOptions::default(),
             tuning: o.rocks.clone(),
             bulk: o.layout == "bulk",
             path: o.suite.db.clone(),
@@ -161,7 +163,7 @@ impl Backend for Rocks {
     fn get(&mut self, id: u64) -> Result<Memory> {
         let value = self
             .db
-            .get_pinned(key(id))?
+            .get_pinned_opt(key(id), &self.point_read)?
             .ok_or("missing RocksDB memory")?;
         Ok(serde_json::from_slice(&value)?)
     }
