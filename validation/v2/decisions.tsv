@@ -1,3 +1,4 @@
 ts	phase	decision	why	evidence	result
 2026-10-17T18:40:32Z	start	Imported isolated tool on main 2a083fa; perform all review in this worktree	User requires implementation with attributable measurements and no subagents	71acf68; validation/phash/REPORT.md	ablation running
 2026-10-17T18:55:30Z	ablation	Keep MPHF plus full-key records and Bloom-first rejection	Five-trial decoded binary search is slower than the old path; THP does not explain the MPHF win	validation/v2/ablation/REPORT.md; validation/v2/ablation/summary.json	80/80 commands; zero errors
+2026-10-17T18:58:50Z	implementation	Add optional format-4 MPHF plus full-key MVCC records under the shared cache budget	A hit must compare full keys; sequence resolution and sorted scans retain existing behavior	src/sstable/point.rs; validation/v2/DESIGN.md; validation/v2/implementation-checks/point-unit.log	focused engine tests and workspace debug/release pass; clippy clean
