@@ -80,6 +80,7 @@ pub(super) fn run(o: &Options) -> Result<()> {
     }
     let cache = BlockCache::new(512 << 20);
     let mut blocks = Vec::with_capacity(index.len());
+    let mut cached_blocks = Vec::with_capacity(index.len());
     for e in &index {
         let data: Arc<[u8]> = table[e.offset..e.offset + e.len].into();
         let block = CachedBlock {
@@ -87,6 +88,7 @@ pub(super) fn run(o: &Options) -> Result<()> {
             data,
         };
         cache.insert((number, e.offset as u64), block.clone());
+        cached_blocks.push(block.clone());
         blocks.push(VerifiedBlock::from_cached(block));
     }
     let ids: Vec<_> = (0..100000)
@@ -102,6 +104,33 @@ pub(super) fn run(o: &Options) -> Result<()> {
         .zip(&positions)
         .map(|(k, &i)| blocks[i].get(k, None).unwrap().unwrap().value.to_vec())
         .collect();
+    if o.micro == "block-compare" {
+        for (key, &i) in keys.iter().zip(&positions) {
+            let original = blocks[i].get(key, None)?.ok_or("original miss")?;
+            assert_eq!(
+                crate::block_compare::get(&cached_blocks[i], key, None)?,
+                Some((original.kind, original.seq, original.value))
+            );
+        }
+    }
+    let packed = if o.micro == "block-indexed" {
+        let packed = cached_blocks
+            .iter()
+            .map(crate::block_index::BlockIndex::build)
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        for (key, &i) in keys.iter().zip(&positions) {
+            if let Some(packed) = &packed[i] {
+                let original = blocks[i].get(key, None)?.ok_or("original miss")?;
+                assert_eq!(
+                    packed.get(&cached_blocks[i].data, key, None),
+                    Some((original.kind, original.seq, original.value))
+                );
+            }
+        }
+        Some(packed)
+    } else {
+        None
+    };
     let hints = (o.micro == "index-hints").then(|| crate::index_hints::IndexHints::new(&index));
     let inline = (o.micro == "index-inline").then(|| {
         index
@@ -172,6 +201,23 @@ pub(super) fn run(o: &Options) -> Result<()> {
             }
             "block-seek" => {
                 black_box(blocks[i].get(black_box(key), None)?.ok_or("block miss")?);
+            }
+            "block-compare" => {
+                black_box(
+                    crate::block_compare::get(&cached_blocks[i], black_box(key), None)?
+                        .ok_or("compare miss")?,
+                );
+            }
+            "block-indexed" => {
+                if let Some(packed) = &packed.as_ref().unwrap()[i] {
+                    black_box(
+                        packed
+                            .get(&cached_blocks[i].data, black_box(key), None)
+                            .ok_or("indexed miss")?,
+                    );
+                } else {
+                    black_box(blocks[i].get(black_box(key), None)?.ok_or("block miss")?);
+                }
             }
             "block-linear" => {
                 black_box(

@@ -66,3 +66,19 @@ other stages and final verification. Original read-only datasets remain
 available for later comparisons.
 The default write check uses the 10k bulk database. Use `--populations` and
 `--layouts` to select additional datasets.
+
+`micro_compare.py` alternates two component cases or two frozen binaries,
+with counters enabled only during their loops. For example:
+
+```sh
+python3 tools/agentbench/readpath/micro_compare.py --before block-seek --after block-compare --out validation/read-path-results/block-compare-prototype
+python3 tools/agentbench/readpath/micro_compare.py --before iter-construct --after iter-construct --before-binary target/read-path-tools/kiban-readbench-inline --after-binary target/read-path-tools/kiban-readbench-range-alloc-final --layout normal --out validation/read-path-results/range-construct-normal
+```
+
+`block-indexed` and `block-compare` verify sampled results against the
+engine decoder before enabling counters. Resident-index and borrowed-cache
+prototypes that failed complete-read comparisons are preserved as patches
+under `validation/read-path-results/indexed-prototype-source`, based on
+`1a685d1`. Apply each independently in a disposable worktree; the packed
+variant uses `inline-search.patch` with its block-index module replaced by
+`packed-block-index.rs.txt`. Neither cache prototype is part of the engine.

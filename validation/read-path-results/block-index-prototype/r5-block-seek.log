@@ -1,0 +1,4 @@
+Events disabled
+Events enabled
+Events disabled
+{"errors":0,"name":"block-seek","ns":968912181,"ns_per_op":968.912181,"operations":1000000,"type":"micro"}

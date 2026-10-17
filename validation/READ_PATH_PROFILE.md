@@ -213,7 +213,20 @@ No performance implementation is included in the profile commit.
   The point copy alone saves only about 35 ns; a ten-row range has many more
   copies. Lifetimes must pin cached blocks and snapshots through consumption.
   No API change is included, and an end-to-end gain is not claimed without
-  a prototype against the same harness.
+  a prototype against the same harness. A ten-row borrowed range is estimated
+  to save 0.1–0.4 µs through fewer allocations and copies; multiplying the
+  35 ns point-copy microbenchmark by ten is only a rough scale, not an
+  end-to-end prediction. A shorter restart interval is estimated to save
+  0.1–0.3 µs on a point seek, with larger SSTs and possible write costs.
+- A mapped point path could read verified bytes directly from a pinned SST
+  mapping instead of copying an OS-cached block through pread and the data
+  cache. The observed default-cache/hit gap gives a roughly 1–3 µs target
+  at 1M, not a measured gain for this design. Existing `mmap_max_level=None`
+  explicitly means off; silently changing that documented option contract
+  is outside this implementation. Its documentation also records much worse
+  cold concurrent tails. A proposal must preserve mapping/file lifetime,
+  define checksum verification state, and measure those tails before changing
+  the default. Enabling the current mapping option alone still copies blocks.
 
 ## Implementation results
 
@@ -303,3 +316,87 @@ uses the remaining cache-line room for up to 46 without enlarging the entry.
 and [all correctness gates](read-path-results/inline-checks) are retained.
 Writes show no regression outside the observed trial variation. Scan control
 ranges largely overlap; the retained benefit is point-read search.
+
+### Rejected cache and resident-index experiments
+
+The packed resident-block index reduced isolated block search from
+951.6 [929.2, 989.4] ns to 533.0 [524.6, 606.8] ns over five alternating
+trials. Each sampled key was checked against the existing decoder before
+timing. This saving did not transfer to complete reads. A second representation
+kept suffixes and offsets in aligned entries, but its clean bulk W2 p50 was
+2.176 → 2.432 µs and the paired K/LMDB ratio 1.222 → 1.310. Normal W2
+p50 was 2.496 µs for both versions, with overlapping control ratios. Neither
+representation is retained in the engine. The aligned variant increased
+median bulk process RSS from 425.8 to 501.4 MiB (the `VmRSS` fields in the
+same completed trials). Metadata adds a real memory cost even though the
+raw data-block budget is unchanged.
+
+The cache-borrow prototype removed the data Arc increment/decrement for
+blocks up to 16 KiB, retaining owned decoding for larger blocks. It passed
+unit tests and a new loom model, but bulk W2 p50 was 2.112 → 2.304 µs
+and normal 2.304 → 2.496 µs. Both point control ratios worsened. The scan
+controls also moved, so these observations do not isolate one instruction
+or cache-line change as the cause. There is no demonstrated full-path gain;
+the borrowed callback and longer cache read guards are removed.
+
+[Packed component trials](read-path-results/block-index-prototype),
+[compact index bulk](read-path-results/PAIRED_INDEXED_INLINE_BULK.md),
+[compact index normal](read-path-results/PAIRED_INDEXED_INLINE_NORMAL.md),
+[borrow bulk](read-path-results/BORROW_PAIRED_BULK.md), and
+[borrow normal](read-path-results/BORROW_PAIRED_NORMAL.md) retain the evidence.
+[Prototype source patches](read-path-results/indexed-prototype-source) permit
+reproduction. The earlier packed full-path screening folders are explicitly
+excluded: compilation overlapped their final bulk/initial normal trials.
+All retained comparisons run without overlapping our own build/test work.
+The engine retains its original cache ownership and synchronization.
+
+### Reduce range source and key-buffer allocations
+
+Range planning now borrows disjoint level-index slices rather than building
+nested table lists, and allocates source capacity for candidate sources rather
+than every table in the database. Empty memtables are omitted. The merge reuses
+its deduplication key buffer, and direct ranges retain their already-borrowed
+end bound. Public signatures, snapshot visibility, merge ordering, error
+handling, file bytes, and cache budgets are unchanged.
+
+Frozen-binary comparisons on CPU 3 improved 1M/512 MiB W3 p50 by 0.256 µs
+in each layout: bulk 4.480 → 4.224 µs and normal 5.376 → 5.120 µs.
+Bulk p99 was 9.984 → 8.704 µs; normal 12.288 → 11.776 µs. Paired
+K/LMDB p50 ratios improved 1.273 → 1.250 and 1.569 → 1.509, with
+overlapping trial ranges. The improvement is modest, and no point-read gain
+is attributed to this change.
+
+Isolated bulk construction improved 310.1 → 255.7 ns. Normal construction
+increased 398.2 → 532.2 ns because the initial SST index positioning moved
+from the first `next` into construction. The complete first-row operation
+improved 1327.9 [1309.5, 1530.4] → 1069.8 [1054.9, 1088.3] ns, with
+instructions/op 9923 → 8449, branch misses 11.32 → 4.65, and dTLB
+misses 1.040 → 0.026. These phases overlap and are not added.
+
+[Full before/after matrix](read-path-results/RANGE_ALLOC_COMPARISON.md),
+[bulk paired trials](read-path-results/RANGE_ALLOC_PAIRED_BULK.md),
+[normal paired trials](read-path-results/RANGE_ALLOC_PAIRED_NORMAL.md),
+[bulk construction counters](read-path-results/RANGE_CONSTRUCT_BULK.md),
+[normal construction counters](read-path-results/RANGE_CONSTRUCT_NORMAL.md),
+and [first-row counters](read-path-results/RANGE_FIRST_NORMAL.md) retain all
+trials. The pruning test now checks returned keys and actual block-access
+counts instead of calling the deleted planner helper. Existing randomized
+multi-level, overlapping-level, snapshot, tombstone, and bound tests pass.
+
+Fast W1/W4 p50 was 0.944/1.120 → 0.912/1.088 µs, with overlapping
+throughput ranges. Durable timings moved between batches, so the frozen
+builds were additionally interleaved with their LMDB controls. Paired durable
+W1/W4 p50 was 589.824 → 622.592 µs; before/after ranges overlap for both,
+and call throughput moved 1567 → 1517 and 1548 → 1522 ops/s within those
+ranges. No write speedup is claimed. The mutation/WAL/sync implementation is
+unchanged. [Write ranges](read-path-results/RANGE_ALLOC_WRITE_COMPARISON.md)
+and [paired durable writes](read-path-results/RANGE_ALLOC_PAIRED_WRITES_DURABLE.md)
+show the variation explicitly rather than treating a single median as a
+regression or improvement.
+
+[Every correctness gate](read-path-results/range-alloc-checks) passed, including
+20,000 release seeds in each crash suite. There is no new synchronization:
+level slices borrow the same immutable Version already pinned by the caller,
+and Rust's iterator lifetime prevents them outliving that Version. No shared
+mutation or publication protocol changes; existing loom models cover the
+unchanged publication and locking paths and passed again.

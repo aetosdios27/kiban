@@ -1,0 +1,1 @@
+Screening run only: the alternate index representation was compiled on CPUs 2–5 during the end of bulk trials and beginning of normal trials. These runs are excluded from retained performance claims. Early uncontended bulk pairs already showed a regression; a clean comparison will be required for any retained fix.

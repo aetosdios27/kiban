@@ -262,79 +262,49 @@ impl Version {
         Version { id, tables, levels }
     }
 
-    /// Tables that may hold keys in `[start, end)` (`end = None`: unbounded),
-    /// in the order a newest-first merge expects: L0 newest first, then each
-    /// level >= 1 ascending by key. The second element groups the leveled
-    /// tables per level, with a flag saying whether that level is disjoint
-    /// and may therefore be read through one concatenating iterator.
-    fn overlapping<'a>(
-        &'a self,
-        start: &[u8],
-        end: Option<&[u8]>,
-    ) -> (Vec<&'a TableEntry>, Vec<(bool, Vec<&'a TableEntry>)>) {
-        let overlaps = |t: &TableEntry| {
-            t.last_key.as_slice() >= start && end.is_none_or(|end| t.first_key.as_slice() < end)
-        };
-        let l0 = self
-            .tables
-            .iter()
-            .rev()
-            .filter(|t| t.level == 0)
-            .map(|t| &**t)
-            .filter(|t| overlaps(t))
-            .collect();
-        let leveled = self
-            .levels
-            .iter()
-            .map(|level| {
-                let tables: Vec<&TableEntry> = if level.disjoint {
-                    // Disjoint and key-sorted, so last keys ascend too.
-                    let from = level
-                        .by_key
-                        .partition_point(|&i| self.tables[i].last_key.as_slice() < start);
-                    level.by_key[from..]
-                        .iter()
-                        .map(|&i| &*self.tables[i])
-                        .take_while(|t| end.is_none_or(|end| t.first_key.as_slice() < end))
-                        .collect()
-                } else {
-                    level
-                        .by_key
-                        .iter()
-                        .map(|&i| &*self.tables[i])
-                        .filter(|t| overlaps(t))
-                        .collect()
-                };
-                (level.disjoint, tables)
-            })
-            .collect();
-        (l0, leveled)
-    }
-
-    /// Merge sources for every table that may hold keys in `[start, end)`.
-    /// A disjoint level contributes one lazily advancing source instead of
-    /// one per table, so a short range read touches one block per level
-    /// rather than the first block of every table in the database.
+    /// Merge only overlapping tables. Disjoint levels borrow their index
+    /// slices instead of allocating a temporary table list for each range.
     fn table_sources<'a>(&'a self, start: &[u8], end: Option<&[u8]>) -> Vec<SourceHead<'a>> {
-        let (l0, leveled) = self.overlapping(start, end);
-        let mut sources = Vec::with_capacity(l0.len() + leveled.len());
+        let l0_end = self.tables.partition_point(|table| table.level == 0);
+        let mut sources = Vec::with_capacity(l0_end + self.levels.len());
+        let overlaps = |table: &TableEntry| {
+            table.last_key.as_slice() >= start
+                && end.is_none_or(|end| table.first_key.as_slice() < end)
+        };
         let head = |feed: TableFeed<'a>| SourceHead {
             feed: SourceFeed::Table(feed),
             head: None,
             exhausted: false,
         };
-        for t in l0 {
-            sources.push(head(Box::new(t.table.iter_from(start))));
+        for table in self.tables[..l0_end]
+            .iter()
+            .rev()
+            .filter(|table| overlaps(table))
+        {
+            sources.push(head(Box::new(table.table.iter_from(start))));
         }
-        for (disjoint, tables) in leveled {
-            if tables.is_empty() {
-                continue;
-            }
-            if disjoint {
-                sources.push(head(Box::new(LevelIter::new(tables, start))));
+        for level in &self.levels {
+            if level.disjoint {
+                let from = level
+                    .by_key
+                    .partition_point(|&i| self.tables[i].last_key.as_slice() < start);
+                let to = end.map_or(level.by_key.len(), |end| {
+                    level
+                        .by_key
+                        .partition_point(|&i| self.tables[i].first_key.as_slice() < end)
+                });
+                if from < to {
+                    sources.push(head(Box::new(LevelIter::new(
+                        self,
+                        &level.by_key[from..to],
+                        start,
+                    ))));
+                }
             } else {
-                for t in tables {
-                    sources.push(head(Box::new(t.table.iter_from(start))));
+                for &i in &level.by_key {
+                    if overlaps(&self.tables[i]) {
+                        sources.push(head(Box::new(self.tables[i].table.iter_from(start))));
+                    }
                 }
             }
         }
@@ -1950,9 +1920,8 @@ impl Kiban {
             snap_limit: None,
             done_key: None,
         };
-        let end = end.to_vec();
         DbIter { core }.take_while(move |item| match item {
-            Ok((k, _)) => k.as_slice() < end.as_slice(),
+            Ok((k, _)) => k.as_slice() < end,
             Err(_) => true,
         })
     }
@@ -1978,22 +1947,24 @@ impl Kiban {
     }
 
     fn sources_from<'a>(&'a self, start: &[u8], end: Option<&[u8]>) -> Vec<SourceHead<'a>> {
-        let mut sources = Vec::with_capacity(self.version.tables.len() + 2);
-        // The merge is a proper (key asc, seq desc) merge, so source order
-        // affects only tidiness, never which version wins.
-        sources.push(SourceHead {
-            feed: SourceFeed::Mem(Box::new(self.memtable.iter_from(start))),
-            head: None,
-            exhausted: false,
-        });
-        if let Some(im) = &self.immutable {
+        let mut sources = self.version.table_sources(start, end);
+        // Empty memtables contribute no records, including tombstones.
+        if !self.memtable.is_empty() {
+            sources.push(SourceHead {
+                feed: SourceFeed::Mem(Box::new(self.memtable.iter_from(start))),
+                head: None,
+                exhausted: false,
+            });
+        }
+        if let Some(im) = &self.immutable
+            && !im.memtable.is_empty()
+        {
             sources.push(SourceHead {
                 feed: SourceFeed::Mem(Box::new(im.memtable.iter_from(start))),
                 head: None,
                 exhausted: false,
             });
         }
-        sources.extend(self.version.table_sources(start, end));
         sources
     }
 
@@ -2518,17 +2489,21 @@ impl<'a> SourceHead<'a> {
 /// exhausted. The first table is positioned at `start`; later tables begin
 /// past it by disjointness.
 struct LevelIter<'a> {
-    tables: std::vec::IntoIter<&'a TableEntry>,
+    version: &'a Version,
+    tables: std::slice::Iter<'a, usize>,
     current: Option<crate::sstable::Iter<'a>>,
-    start: Option<Vec<u8>>,
 }
 
 impl<'a> LevelIter<'a> {
-    fn new(tables: Vec<&'a TableEntry>, start: &[u8]) -> LevelIter<'a> {
-        LevelIter {
-            tables: tables.into_iter(),
-            current: None,
-            start: Some(start.to_vec()),
+    fn new(version: &'a Version, tables: &'a [usize], start: &[u8]) -> Self {
+        let mut tables = tables.iter();
+        let current = tables
+            .next()
+            .map(|&i| version.tables[i].table.iter_from(start));
+        Self {
+            version,
+            tables,
+            current,
         }
     }
 }
@@ -2544,11 +2519,8 @@ impl Iterator for LevelIter<'_> {
                     None => self.current = None,
                 }
             }
-            let table = &self.tables.next()?.table;
-            self.current = Some(match self.start.take() {
-                Some(start) if !start.is_empty() => table.iter_from(&start),
-                _ => table.iter(),
-            });
+            let table = &self.version.tables[*self.tables.next()?].table;
+            self.current = Some(table.iter());
         }
     }
 }
@@ -2631,7 +2603,9 @@ impl<'a> MergeCore<'a> {
                 continue; // invisible here; older siblings may show
             }
             // decision point: newest visible version of this key
-            self.done_key = Some(head.key.clone());
+            self.done_key
+                .get_or_insert_with(Vec::new)
+                .clone_from(&head.key);
             if self.user_mode && head.kind == Kind::Tombstone {
                 continue;
             }

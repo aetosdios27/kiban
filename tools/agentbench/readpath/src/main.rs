@@ -4,6 +4,8 @@
 mod api;
 #[allow(dead_code)]
 mod backend;
+mod block_compare;
+mod block_index;
 #[path = "../../src/embedded.rs"]
 #[allow(dead_code)]
 mod embedded;
