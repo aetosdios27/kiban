@@ -1,3 +1,28 @@
+# Round-two retained result
+
+The target of beating LMDB is **not met**. Only the RAM/cgroup cache-budget
+policy is retained. Point handles, mapped points and the latest-K merge
+candidate were rejected; see [REJECTED.md](REJECTED.md) for source patches,
+paired results and cold/concurrent tails. Public APIs, SST format and
+`mmap_max_level` semantics are unchanged.
+
+The table below selects the `before` binary from [latest](latest), whose
+engine is exactly the cache-budget commit. LMDB controls are from those same
+trial halves. Reproduce the audit with:
+
+```sh
+python3 tools/agentbench/readpath/round2_report.py validation/read-path-results/round2/latest --retained before
+```
+
+The cache-budget commit's separate [before/after matrix](DEFAULT.md) covers
+all four required explicit-cache scenarios plus 10k fast/durable write checks.
+Its fast insert/update p50 were 0.736 → 0.736 and 0.864 → 0.848 µs;
+durable 557.056 → 573.440 and 557.056 → 589.824 µs. Ranges overlap,
+with noisy fsync tails; no clear retained write regression is established.
+The final table below is a later contemporary comparison with LMDB, not a
+cross-run baseline comparison. Each write stage has 1,000 calls on a fresh
+10k-record dataset.
+
 Five alternating before/after trials, each followed by its LMDB control. Latencies are median trial p50 / p99 in microseconds. All timed results are checked outside their timer, with full dataset verification before and after the reads. Write trials use fresh copies and verify the final state.
 
 Retained engine: `before`; controls are from the same trial half.
@@ -22,3 +47,14 @@ Retained engine: `before`; controls are from the same trial half.
 | writes-fast | recent-for-agent | 4.480 / 13.568 | 3.456 / 8.192 | 1.296 [0.681, 1.852] |
 | writes-fast | remember | 0.960 / 10.496 | 10.240 / 28.672 | 0.096 [0.064, 0.116] |
 | writes-fast | update | 1.152 / 11.264 | 12.800 / 167.936 | 0.113 [0.072, 0.118] |
+
+Final retained-code gates all passed: workspace debug/release suites,
+Clippy with warnings denied, formatting, readbench tests/checks, both fixed
+crash corpora, loom and site-facts validation. Both release crash/model
+suites passed seeds 0–19,999 each: 40,000 seeds and 160,000 simulated
+crashes. No storage correctness failure was observed.
+[Gate statuses](final-checks/status.json), [source hashes](final-checks/source-hashes.json) and [paired audit](AUDIT.json) preserve the evidence.
+The paired audit checks all completed groups, operation/verification counts,
+zero errors, CPU 3 affinity and frozen binary hashes. Final engine hashes
+match the tested retained source. Nothing was pushed, no PR was opened,
+and no subagents were spawned.

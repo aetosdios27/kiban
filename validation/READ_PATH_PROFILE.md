@@ -1,5 +1,11 @@
 # Read-path profile
 
+> Current round-two result: the adaptive cache budget is retained; point-read
+> and latest-K prototypes were measured and rejected. The LMDB read target
+> remains unmet. The round-one sections below are historical; see the
+> [round-two retained table](read-path-results/round2/FINAL.md) and the
+> round-two sections at the end for current defaults and evidence.
+
 Results on `perf/read-path`, based on main `082858f` (PR #10).
 No push or PR is authorized. The default block cache remains 32 MiB.
 
@@ -572,3 +578,14 @@ All experiments use five alternating trials on CPU 3; builds and storage
 gates use CPUs 2–5. The cache-budget policy is the only retained engine change.
 No public API, on-disk format, or mapping option meaning changed.
 **The target of beating LMDB on 1M point and latest-K reads remains unmet.**
+
+Final retained-code gates all passed: workspace debug/release suites,
+Clippy with warnings denied, formatting, readbench tests/checks, both fixed
+crash corpora, loom and site-facts validation. Both release crash/model
+suites passed seeds 0–19,999 each: 40,000 seeds and 160,000 simulated
+crashes. No storage correctness failure was observed.
+[Gate statuses](read-path-results/round2/final-checks/status.json), [source hashes](read-path-results/round2/final-checks/source-hashes.json) and [paired audit](read-path-results/round2/AUDIT.json) preserve the evidence.
+The paired audit checks all completed groups, operation/verification counts,
+zero errors, CPU 3 affinity and frozen binary hashes. Final engine hashes
+match the tested retained source. Nothing was pushed, no PR was opened,
+and no subagents were spawned.
