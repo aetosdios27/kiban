@@ -1,0 +1,15 @@
+{
+  "backend": "kiban",
+  "n": 1000000,
+  "operations": 100000,
+  "k": 10,
+  "seed": 20261016,
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-7d737093/target/rocksdb/data/1000000-kiban-index1-bulk",
+  "output": "/home/aetos/.t3/worktrees/kiban/t3-7d737093/validation/rocksdb/raw/measure/read-1000000-bulk-None-fast/r1-kiban-index1.jsonl",
+  "action": "read",
+  "layout": "bulk",
+  "cache_mib": null,
+  "point_index": true,
+  "durable": false,
+  "rocks": {}
+}

@@ -1,0 +1,10 @@
+{
+  "accepted_commands": 331,
+  "screens": 270,
+  "primary": 61,
+  "timed_calls": 48650000,
+  "errors": 0,
+  "all_affinities": "10",
+  "excluded_from_final": true,
+  "reason": "Superseded convenience point API; fresh full campaign uses reusable ReadOptions"
+}

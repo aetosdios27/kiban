@@ -1,0 +1,44 @@
+[
+  {
+    "label": "kiban-durable",
+    "fsync": 9,
+    "fdatasync": 2102,
+    "failures": 0
+  },
+  {
+    "label": "kiban-fast",
+    "fsync": 9,
+    "fdatasync": 2,
+    "failures": 0
+  },
+  {
+    "label": "lmdb-durable",
+    "fsync": 0,
+    "fdatasync": 2101,
+    "failures": 0
+  },
+  {
+    "label": "lmdb-fast",
+    "fsync": 0,
+    "fdatasync": 1,
+    "failures": 0
+  },
+  {
+    "label": "rocksdb-durable",
+    "fsync": 6,
+    "fdatasync": 2107,
+    "failures": 0
+  },
+  {
+    "label": "rocksdb-fast",
+    "fsync": 6,
+    "fdatasync": 7,
+    "failures": 0
+  },
+  {
+    "label": "rocksdb-no-wal-fast",
+    "fsync": 6,
+    "fdatasync": 7,
+    "failures": 0
+  }
+]

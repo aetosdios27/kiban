@@ -1,0 +1,6 @@
+# Captured evidence retains native whitespace and exact receipt hashes.
+raw/** -whitespace
+archive-convenience-api/** -whitespace
+*.log -whitespace
+*.stat -whitespace
+*.time.txt -whitespace

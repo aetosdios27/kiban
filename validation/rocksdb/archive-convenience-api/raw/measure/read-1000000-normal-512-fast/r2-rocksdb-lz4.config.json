@@ -1,0 +1,20 @@
+{
+  "backend": "rocksdb",
+  "n": 1000000,
+  "operations": 100000,
+  "k": 10,
+  "seed": 20261016,
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-7d737093/target/rocksdb/data/1000000-rocksdb-bloom-16384-lz4-normal",
+  "output": "/home/aetos/.t3/worktrees/kiban/t3-7d737093/validation/rocksdb/raw/measure/read-1000000-normal-512-fast/r2-rocksdb-lz4.jsonl",
+  "action": "read",
+  "layout": "normal",
+  "cache_mib": 512,
+  "point_index": false,
+  "durable": false,
+  "rocks": {
+    "block_size": 16384,
+    "ribbon": false,
+    "total_order": true,
+    "lz4": true
+  }
+}

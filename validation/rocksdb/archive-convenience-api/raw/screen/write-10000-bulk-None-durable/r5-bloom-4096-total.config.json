@@ -1,0 +1,19 @@
+{
+  "backend": "rocksdb",
+  "n": 10000,
+  "operations": 1000,
+  "k": 10,
+  "seed": 20261016,
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-7d737093/target/rocksdb/data/write-trial",
+  "output": "/home/aetos/.t3/worktrees/kiban/t3-7d737093/validation/rocksdb/raw/screen/write-10000-bulk-None-durable/r5-bloom-4096-total.jsonl",
+  "action": "write",
+  "layout": "bulk",
+  "cache_mib": null,
+  "point_index": false,
+  "durable": true,
+  "rocks": {
+    "block_size": 4096,
+    "ribbon": false,
+    "total_order": true
+  }
+}

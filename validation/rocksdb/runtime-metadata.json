@@ -1,0 +1,5 @@
+{
+  "default_cache_bytes": 449030592,
+  "rocksdb_version": "11.8.1",
+  "rust_rocksdb": "0.25.0"
+}
