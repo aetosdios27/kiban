@@ -210,7 +210,7 @@ impl PointBuilder {
 }
 
 pub(super) struct PointIndex {
-    bytes: Vec<u8>,
+    bytes: crate::cache::ArcBlock,
     data: crate::cache::ArcBlock,
     blocks: Vec<(usize, usize, crate::cache::BlockMeta)>,
     seed: u64,
@@ -221,8 +221,8 @@ pub(super) struct PointIndex {
 }
 impl PointIndex {
     pub(super) fn decode(
-        bytes: Vec<u8>,
-        data: Vec<u8>,
+        bytes: crate::cache::ArcBlock,
+        data: crate::cache::ArcBlock,
         reservation: ResidentReservation,
         blocks: impl IntoIterator<Item = (u64, u64)>,
     ) -> Result<Self, SstError> {
@@ -249,7 +249,7 @@ impl PointIndex {
         }
         let mut result = Self {
             bytes,
-            data: data.into(),
+            data,
             blocks: Vec::new(),
             seed,
             count,
@@ -470,12 +470,32 @@ fn fixture(builder: super::TableBuilder) -> Fixture {
 fn decode_fixture(f: Fixture) -> Result<PointIndex, SstError> {
     let cache = std::sync::Arc::new(crate::cache::BlockCache::new(f.bytes.len() + f.data.len()));
     let reservation = cache.reserve_point(f.bytes.len() + f.data.len()).unwrap();
-    PointIndex::decode(f.bytes, f.data, reservation, f.blocks)
+    PointIndex::decode(f.bytes.into(), f.data.into(), reservation, f.blocks)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn point_decode_retains_shared_allocations_and_accounts_for_both_regions() {
+        let mut builder = super::super::TableBuilder::with_point_index(true);
+        builder.add(Kind::Put, b"key", &[7; 100_000], 1).unwrap();
+        let f = fixture(builder);
+        let bytes: crate::cache::ArcBlock = f.bytes.into();
+        let data: crate::cache::ArcBlock = f.data.into();
+        let resident = bytes.len() + data.len();
+        let cache = std::sync::Arc::new(crate::cache::BlockCache::new(resident));
+        let reservation = cache.reserve_point(resident).unwrap();
+        let point = PointIndex::decode(bytes.clone(), data.clone(), reservation, f.blocks).unwrap();
+        assert!(std::sync::Arc::ptr_eq(&point.bytes, &bytes));
+        assert!(std::sync::Arc::ptr_eq(&point.data, &data));
+        assert_eq!(cache.stats().point_index_bytes, resident);
+        assert!(cache.reserve_point(1).is_none());
+        assert_eq!(point.get(b"key", None).unwrap().value, [7; 100_000]);
+        drop(point);
+        assert_eq!(cache.resident_bytes(), 0);
+    }
+
     #[test]
     fn point_index_roundtrip_versions_and_binary_keys() {
         let mut builder = super::super::TableBuilder::with_point_index(true);
@@ -583,7 +603,13 @@ mod corruption_tests {
             let cache = Arc::new(BlockCache::new(bytes.len() + f.data.len()));
             let reservation = cache.reserve_point(bytes.len() + f.data.len()).unwrap();
             assert!(
-                PointIndex::decode(bytes, f.data.clone(), reservation, f.blocks.clone()).is_err(),
+                PointIndex::decode(
+                    bytes.into(),
+                    f.data.clone().into(),
+                    reservation,
+                    f.blocks.clone()
+                )
+                .is_err(),
                 "accepted invalid field at {at}"
             );
             assert_eq!(cache.resident_bytes(), 0);

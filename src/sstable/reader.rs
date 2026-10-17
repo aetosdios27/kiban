@@ -274,10 +274,10 @@ impl SstTable {
                 .and_then(|n| block_cache.reserve_point(n));
             if let Some(reservation) = resident {
                 let raw = lease
-                    .read_range_at(path, offset, len)
+                    .read_shared_range_at(path, offset, len)
                     .map_err(|e| bad(e.to_string()))?;
                 let data = lease
-                    .read_range_at(path, 0, offset)
+                    .read_shared_range_at(path, 0, offset)
                     .map_err(|e| bad(e.to_string()))?;
                 Some(Box::new(PointIndex::decode(
                     raw,

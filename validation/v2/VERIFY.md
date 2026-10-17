@@ -59,6 +59,21 @@ admission until reopen, and denied tables use the sorted path. Other SST
 metadata and allocator overhead remain outside the raw-byte capacity.
 Whole-SST buffering and MPHF construction need temporary workspace.
 
+For the open-allocation follow-up, freeze the release readbench from
+`6fc0a0a6` as `target/v2-open-memory-bin/before` before editing the engine.
+Build the fixed readbench with the same locked release command and save it
+as `target/v2-open-memory-bin/after`. Use the build CPU set and nice level
+above. Run the full `verify.py` suite into `validation/v2/open-memory/checks`.
+After all builds and tests finish, run
+`taskset -c 2,3,4,5,6,7,10,11 nice -n 10 python3 tools/agentbench/readpath/v2_open_memory.py measure`.
+This script never builds. It copies the locator fixtures into a fresh private
+directory and runs three alternating pairs for bulk and normal layouts with
+512 MiB and default caches. Each process runs on CPU 8 and reports peak RSS
+through `/usr/bin/time`. Bulk/default pairs have adjacent LMDB controls.
+The script checks payload receipts, CPU affinity, and operation counts, then
+writes `open-memory/summary.json`. Use `--data` and `--out` with fresh paths
+for another run, and place its full gates under `OUT/checks` first.
+
 The final format-4 encoding uses feature flag 2 and `KIBANPH2`. The earlier
 unpublished duplicate-value encoding is rejected. Format-3 readers reject
 format 4; rewrite with `point_index=false` before downgrading. The option

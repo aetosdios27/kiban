@@ -1,0 +1,13 @@
+{
+  "backend": "kiban",
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-a7586988/target/v2-open-memory-data/kiban-1000000-bulk",
+  "n": 1000000,
+  "operations": 100000,
+  "k": 10,
+  "seed": 20261016,
+  "output": "/home/aetos/.t3/worktrees/kiban/t3-a7586988/validation/v2/open-memory/bulk-512-r2-before-kiban.jsonl",
+  "action": "read",
+  "layout": "bulk",
+  "cache_mib": 512,
+  "point_index": true
+}

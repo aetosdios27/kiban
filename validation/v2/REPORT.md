@@ -4,7 +4,9 @@ Verdict: HOLD: strict scan gate not cleared. The paired p50 scan gate passes: re
 
 Main is `8bbb4934f8d102ed0285c813a3770831b21c63e5`, extracted with `git archive` and built without engine edits. The final engine uses full-key MPHF records with locators into sorted data. Values appear once on disk. Both builds keep main's RAM-sized default cache. The point-index write option remains opt-in.
 
-All latency tables show microseconds. Entries are medians across five alternating before/after trials. Each read/write candidate has its own following LMDB control. Ratios divide Kiban by that control; lower is better. These are warm, single-thread public operations on CPU 8. Builds and correctness tests run separately on CPUs 2,3,4,5,6,7,10,11 at nice 10. CPU 9 is never assigned. The independent crash sweep on CPUs 12–21 remains untouched.
+The original five-trial read, scan, write and maintenance matrices below precede the allocation fix. The memory section and the three-trial latency follow-up measure that fix separately.
+
+All latency tables show microseconds. Except for the allocation follow-up, entries are medians across five alternating before/after trials. Each read/write candidate has its own following LMDB control. Ratios divide Kiban by that control; lower is better. These are warm, single-thread public operations on CPU 8. Builds and correctness tests run separately on CPUs 2,3,4,5,6,7,10,11 at nice 10. CPU 9 is never assigned. The independent crash sweep on CPUs 12–21 remains untouched.
 
 ## Point reads and latest-K
 
@@ -26,6 +28,17 @@ Each stage has 100,000 timed calls. Every call checks returned payloads after ti
 | normal/default | recent-for-agent | 3.584/6.912 | 3.584/6.656 | 2.688/4.736 | 1.474 → 1.333 | 1.588 → 1.444 |
 
 See [READS.md](READS.md) and [read-summary.json](read-summary.json) for every trial's point and latest-K latency range.
+
+### Allocation-only latency follow-up
+
+Three alternating pre-fix/fixed pairs on the same bulk/default fixture, with one adjacent LMDB control per candidate. Each stage checks 100,000 timed calls and every process verifies all 1M records before and after timing. Times are microseconds. The normalized ratio divides fixed Kiban/LMDB by pre-fix Kiban/LMDB within each pair.
+
+| Operation | Before p50 [range] | Fixed p50 [range] | Before → fixed p99 medians | Paired normalized p50 fixed/before [range] | Paired normalized p99 fixed/before [range] |
+|---|---|---|---|---|---|
+| recall-by-id | 0.976 [0.928, 1.024] | 0.912 [0.912, 0.944] | 1.312 → 1.216 | 0.983 [0.956, 0.991] | 0.984 [0.982, 1.107] |
+| recent-for-agent | 2.688 [2.688, 2.752] | 2.560 [2.560, 2.560] | 4.864 → 4.864 | 1.010 [0.985, 1.039] | 0.989 [0.980, 1.144] |
+
+The quick check shows no consistent latency regression from the allocation fix. Latest-K paired normalized p50 varies from 0.985 to 1.039x before, with a 1.010x median. This three-trial check does not replace the original five-trial scan-tail gate or change the HOLD verdict. All distributions and controls are in [open-memory/summary.json](open-memory/summary.json).
 
 ## Scan gate
 
@@ -86,18 +99,22 @@ Maintenance uses the final engine with the index off and on, five alternating pa
 
 ## Memory and limits
 
-| Layout/cache | Main peak RSS MiB [range] | Final peak RSS MiB [range] |
-|---|---|---|
-| bulk/512 | 433.363 [425.160, 433.480] | 714.570 [714.430, 715.387] |
-| bulk/32 | 63.375 [63.227, 63.430] | 63.258 [63.168, 63.461] |
-| bulk/default | 429.699 [428.480, 432.414] | 713.789 [713.730, 714.375] |
-| normal/512 | 430.770 [427.652, 433.414] | 468.859 [454.539, 479.215] |
-| normal/32 | 65.305 [65.188, 65.445] | 61.512 [61.234, 61.531] |
-| normal/default | 433.262 [433.215, 433.355] | 477.207 [476.926, 477.438] |
+The open-allocation follow-up compares locator v2 at `6fc0a0a6` with the fix, using self-built release readbench binaries. The pre-fix binary is byte-identical to the original validated v2 binary. Entries are median [min, max] peak RSS in MiB from three alternating pairs on CPU 8. `/usr/bin/time` measures the whole process, including open, both full-model verifications and the timed reads. Both binaries read the same private copies of the 1M-record locator fixtures. Builds and tests finished before measurements began.
+
+| Layout/cache | V2 before fix peak RSS MiB [range] | V2 after fix peak RSS MiB [range] | Median reduction MiB |
+|---|---|---|---|
+| bulk/512 | 714.438 [714.383, 714.590] | 422.340 [422.336, 422.355] | 292.098 |
+| bulk/default | 714.387 [713.621, 714.504] | 421.457 [417.930, 421.535] | 292.930 |
+| normal/512 | 470.684 [469.922, 471.344] | 463.590 [462.660, 465.086] | 7.094 |
+| normal/default | 476.762 [476.750, 477.000] | 469.250 [469.160, 469.324] | 7.512 |
+
+Both the point section and the sorted data region now load directly into their final `Arc<[u8]>` allocations through `FileLease::read_shared_range_at`. The reader initializes each allocation in place and fills it through the existing simulated-device or positioned-file read. `PointIndex::decode` retains those allocations without copying. Point-section checksum verification, per-block checksum verification and locator-to-sorted-record validation still run once at load. The combined `offset + len` reservation is acquired before either allocation and continues to charge both resident byte regions. Bulk/512 peak RSS falls from 714.438 to 422.340 MiB, below the original main median of 433.363 MiB.
 
 Point locators and the complete sorted backing region share the existing raw block-cache capacity. Admitted scans reuse verified backing views. Denied tables verify the locator section in bounded chunks and use sorted blocks. Admission is per table and depends on open order and pinned snapshots/compaction inputs. Reopen can change admission; the latency matrix measures reopened, warm databases. It does not measure cold-open latency or concurrent foreground reads during compaction.
 
-The bulk open path currently reads backing bytes into a Vec and converts it into Arc-backed storage, temporarily copying the full data region. Bulk/512 process peak RSS rises from about 433 to 715 MiB. The logical resident-byte reservation does not bound this temporary copy or allocator retention. Arc overhead, saved block metadata and other existing SST metadata remain outside the raw-byte cache budget. Whole-SST builders and MPHF construction need temporary workspace proportional to one output. A bulk SST and oversized key/version groups retain the existing soft-size exceptions. Peak RSS above includes allocator and verification buffers, but does not bound builder workspace or the host page cache.
+Arc overhead, saved block metadata and other SST metadata remain outside the raw-byte cache budget. Whole-SST builders and MPHF construction need temporary workspace proportional to one output. A bulk SST and oversized key/version groups retain the existing soft-size exceptions. Peak RSS includes allocator and verification buffers, but does not bound builder workspace or the host page cache.
+
+The [follow-up summary](open-memory/summary.json) retains every RSS and latency sample. [Build provenance](open-memory/build-provenance.json), [measurement metadata](open-memory/metadata.json) and [command receipts](open-memory/commands.jsonl) record the frozen binaries, engine source hashes and CPU affinity. The 30 commands check 6M timed calls with zero payload errors. Reproduce with `v2_open_memory.py` as described in [VERIFY.md](VERIFY.md).
 
 Format 4 uses locator feature flag 2 and section magic KIBANPH2. It rejects the earlier unpublished duplicate-value encoding. Format-3 readers reject format 4. Rewriting with point_index=false is required before downgrading to an engine that only reads format 3. The final API default remains point_index=false.
 
@@ -107,20 +124,20 @@ The earlier duplicate-value matrix is rejected and retained in [scan-regression-
 
 ## Correctness gates
 
-All gates pass on the exact engine source hashes captured before the timed matrix. The seeded suites each cover 20,000 seeds starting at zero. Seed parity selects the initial write format, and crash reopens flip format policy. Mixed-format reads, acknowledged-prefix recovery, MVCC snapshots, tombstones, full-key comparison despite fingerprint collisions, corruption, and cache accounting have focused tests.
+All 11 gates pass again for the allocation fix. [open-memory/checks](open-memory/checks) captures the exact engine source hashes before and after verification. The original matrix gate receipts remain in `final-checks`. Both seeded suites cover 20,000 seeds starting at zero. Seed parity selects the initial write format, and crash reopens flip format policy. Mixed-format reads, acknowledged-prefix recovery, MVCC snapshots, tombstones, full-key comparison despite fingerprint collisions, corruption, and cache accounting retain their focused tests. New tests check shared positioned reads and short-read errors, retain both supplied allocation addresses through decode, and verify the combined reservation and its release.
 
 | Gate | Status | Seconds |
 |---|---|---|
-| test | PASS | 5.83 |
-| release | PASS | 1.26 |
-| clippy | PASS | 0.08 |
-| fmt | PASS | 0.30 |
-| fixed | PASS | 0.36 |
-| long-20000-each | PASS | 92.30 |
-| loom | PASS | 14.65 |
-| site-facts | PASS | 0.11 |
-| readbench-clippy | PASS | 0.08 |
-| readbench-test | PASS | 0.30 |
+| test | PASS | 9.80 |
+| release | PASS | 18.86 |
+| clippy | PASS | 1.16 |
+| fmt | PASS | 0.31 |
+| fixed | PASS | 0.39 |
+| long-20000-each | PASS | 92.53 |
+| loom | PASS | 18.07 |
+| site-facts | PASS | 0.10 |
+| readbench-clippy | PASS | 0.50 |
+| readbench-test | PASS | 1.70 |
 | readbench-fmt | PASS | 0.06 |
 
 Reproduce with [VERIFY.md](VERIFY.md). Engine source hashes, binary hashes, command receipts and per-trial samples are committed beside this report. [decisions.tsv](decisions.tsv) records the design changes and verdict. No push or PR was made.
