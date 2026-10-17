@@ -12,8 +12,7 @@ hashes=json.loads((OUT/'final-checks/source-hashes.json').read_text())
 assert all(hashlib.sha256((ROOT/name).read_bytes()).hexdigest()==digest for name,digest in hashes.items())
 assert hashlib.sha256(a.before.read_bytes()).hexdigest()==json.loads((OUT/'baseline.json').read_text())['sha256']
 assert a.after.is_file() and a.test_binary.is_file()
-assert Path('/home/aetos/.t3/worktrees/kiban/t3-53ad0f47/target/read-path-tools/root/usr/bin/perf').is_file()
-(OUT/'measurement-provenance.json').write_text(json.dumps(dict(engine_sources=hashes,binaries={label:dict(path=str(path.resolve()),sha256=hashlib.sha256(path.read_bytes()).hexdigest()) for label,path in [('before',a.before),('after',a.after),('maintenance',a.test_binary)]},harness_sources={str(path.relative_to(ROOT)):hashlib.sha256(path.read_bytes()).hexdigest() for path in [*(Path(__file__).parent/'src').rglob('*.rs'),*Path(__file__).parent.glob('*.py'),*[ROOT/'tools/agentbench/src'/name for name in ['embedded.rs','runner.rs','model.rs','api.rs']],ROOT/'examples/scale/metrics.rs',ROOT/'examples/support/random.rs']},cpu=8,driver_cpus='6,7,10,11',nice=os.getpriority(os.PRIO_PROCESS,0),start=time.time()),indent=2)+'\n')
+(OUT/'measurement-provenance.json').write_text(json.dumps(dict(engine_sources=hashes,binaries={label:dict(path=str(path.resolve()),sha256=hashlib.sha256(path.read_bytes()).hexdigest()) for label,path in [('before',a.before),('after',a.after),('maintenance',a.test_binary)]},harness_sources={str(path.relative_to(ROOT)):hashlib.sha256(path.read_bytes()).hexdigest() for path in [*(Path(__file__).parent/'src').rglob('*.rs'),*Path(__file__).parent.glob('*.py'),*[ROOT/'tools/agentbench/src'/name for name in ['embedded.rs','runner.rs','model.rs','api.rs']],ROOT/'examples/scale/metrics.rs',ROOT/'examples/support/random.rs']},cpu=8,driver_cpus='2,3,4,5,6,7,10,11',nice=os.getpriority(os.PRIO_PROCESS,0),start=time.time()),indent=2)+'\n')
 rows=[]
 def stage(name,args,env_changes=None):
  print('START '+name,flush=True);start=time.time()
@@ -26,9 +25,8 @@ def stage(name,args,env_changes=None):
   raise SystemExit(result.returncode)
  print('DONE '+name,flush=True)
 common=['--before',str(a.before.resolve()),'--after',str(a.after.resolve())]
-for action in ['prepare','read','write']:
+for action in ['prepare','read','range','write']:
  stage(action,['python3',str(ROOT/'tools/agentbench/readpath/v2.py'),action,*common])
-stage('profile',['python3',str(ROOT/'tools/agentbench/readpath/v2_profile.py'),*common])
 (ROOT/'target/v2-maintenance').mkdir(exist_ok=True)
 stage('maintenance',['taskset','-c','8',str(a.test_binary.resolve()),'point_index_maintenance_measurement','--ignored','--nocapture','--test-threads=1'],{'TMPDIR':str(ROOT/'target/v2-maintenance')})
 stage('analysis',['python3',str(ROOT/'tools/agentbench/readpath/v2_report.py')])

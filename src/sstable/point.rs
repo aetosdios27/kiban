@@ -1,4 +1,4 @@
-//! Format-1 bucket-displacement MPHF and independently comparable MVCC records.
+//! Bucket-displacement MPHF with full-key MVCC locators into sorted records.
 //! The byte encoding is documented in validation/v2/DESIGN.md.
 
 use super::{Found, Kind, SstError};
@@ -211,7 +211,8 @@ impl PointBuilder {
 
 pub(super) struct PointIndex {
     bytes: Vec<u8>,
-    data: Vec<u8>,
+    data: crate::cache::ArcBlock,
+    blocks: Vec<(usize, usize, crate::cache::BlockMeta)>,
     seed: u64,
     count: usize,
     buckets: usize,
@@ -246,9 +247,10 @@ impl PointIndex {
         {
             return Err(bad("invalid section dimensions"));
         }
-        let result = Self {
+        let mut result = Self {
             bytes,
-            data,
+            data: data.into(),
+            blocks: Vec::new(),
             seed,
             count,
             buckets,
@@ -330,7 +332,7 @@ impl PointIndex {
         Ok(())
     }
     fn validate_backing_records(
-        &self,
+        &mut self,
         blocks: impl IntoIterator<Item = (u64, u64)>,
     ) -> Result<(), SstError> {
         let mut pos = self.arena;
@@ -379,12 +381,26 @@ impl PointIndex {
                     Ok(())
                 },
             )?;
+            self.blocks.push((offset, len, meta));
             data_end = offset + len;
         }
         if data_end != self.data.len() || pos != end || remaining != 0 {
             return Err(bad("point and sorted record coverage differ"));
         }
         Ok(())
+    }
+
+    pub(super) fn block(&self, idx: usize) -> super::block::VerifiedBlock {
+        let (offset, len, meta) = self.blocks[idx];
+        super::block::VerifiedBlock::from_shared(self.data.clone(), offset, len, meta)
+    }
+
+    pub(super) fn block_at(&self, offset: u64) -> super::block::VerifiedBlock {
+        let idx = self
+            .blocks
+            .binary_search_by_key(&offset, |b| b.0 as u64)
+            .expect("validated sorted block offset");
+        self.block(idx)
     }
 
     pub(super) fn get(&self, key: &[u8], limit: Option<u64>) -> Option<Found> {
@@ -543,8 +559,8 @@ mod corruption_tests {
         builder.add(Kind::Put, b"b", b"two", 3).unwrap();
         let f = fixture(builder);
         let original = &f.bytes;
-        let arena = u64_at(&original, 24) as usize;
-        let slots = HEADER + u32_at(&original, 20) as usize * 4;
+        let arena = u64_at(original, 24) as usize;
+        let slots = HEADER + u32_at(original, 20) as usize * 4;
         // Header count/dimensions, singleton index, slot offsets/fingerprint,
         // record lengths, version count, kind, and key ordering.
         for at in [

@@ -5,15 +5,17 @@ Bulk raw MPHF p50 is 465 ns (THP allowed) / 532 ns (disabled), versus
 2,851 / 3,203 ns for binary search in the identical decoded arena. Normal is
 741 / 749 ns versus 3,435 / 3,654 ns. See ablation/REPORT.md for paired controls
 and the limits of separating representation, locator and page-size effects.
-The baseline is main `2a083fa`; the isolated experiment is imported as `71acf68`.
+The final baseline is main `8bbb4934` (RAM-sized cache defaults);
+the original attribution baseline was `2a083fa`; the isolated experiment is imported as `71acf68`.
 No public read API, sequence merge rule, or publication protocol changes.
 
 ## Decision and scope
 
 Use a per-SST minimal perfect hash over distinct byte keys. Preserve sorted,
-prefix-compressed blocks for range/latest-K and compaction input. Add a redundant
-full-key point-record arena so a hit compares the entire key without restart
-reconstruction. A fingerprint is only a rejection filter. Retain Bloom-first
+prefix-compressed blocks for range/latest-K and compaction input. Add a full-key locator arena so a hit compares the entire key without restart
+reconstruction, then copies its value from the original sorted block. Values
+are stored once. The rejected duplicate-value prototype is retained under
+scan-regression-screening/. A fingerprint is only a rejection filter. Retain Bloom-first
 lookup initially: the prior gap-miss experiment favored it, especially on L0.
 The decoded-arena binary-search and THP ablations determine whether this combined
 layout has an attributable advantage; they do not predict integrated timings.
@@ -33,7 +35,7 @@ is persisted. Format 3 is unchanged. Format 4 layout is:
 
 The trailing 44 bytes retain `KIBANSST` and all existing field positions, with
 format=4. A 24-byte extension immediately precedes them: u64 point offset,
-u64 point length, u32 features (=1), u32 footer CRC-32/IEEE. The footer CRC covers
+u64 point length, u32 features (=2), u32 footer CRC-32/IEEE. The footer CRC covers
 the other 20 extension bytes and all 44 trailing bytes. Index/filter placement
 must be exact, not merely in bounds. Thus a single-bit format downgrade cannot
 silently hide the point section. Existing format-3 readers reject format 4.
@@ -47,7 +49,9 @@ file/record offsets are u64 rather than imposing a 4-GiB file limit. The section
 ends with the standard type=0 and CRC-32/IEEE trailer, covering every byte.
 
 Each arena group is u32 key length, u32 version count, full key, then versions
-in descending sequence order: u64 sequence, u8 kind, u32 value length, value.
+in descending sequence order: u64 sequence, u8 kind, u32 value length,
+u64 absolute value offset into the sorted data region. Section magic is
+`KIBANPH2`; the earlier unpublished `KIBANPH1` encoding is rejected.
 Lengths retain the engine's general key/value limits. A tombstone has zero value
 bytes. A snapshot selects the first sequence <= its limit; no visible version
 means no candidate from this SST. A visible tombstone returns Found(Tombstone),
@@ -72,25 +76,30 @@ Check the new footer and entire point section before publishing an SstTable.
 A resident section is structurally validated: bounds, lengths, kind, sequence
 ordering, sorted distinct keys, exact record coverage, and agreement between
 each key's computed slot, stored offset and fingerprint. This proves each
-lookup address is an actual record head. No checksum runs in a point lookup.
+lookup address is an actual record head. Validation also walks every sorted block once, verifies its checksum, reconstructs
+keys, and requires exact key/sequence/kind/length/address and coverage agreement.
+No checksum runs in a point lookup or a resident backing-block scan.
 Ordinary data blocks retain their existing verify-on-load path.
 
-Reserve resident section bytes from the **same global block-cache capacity**.
+Reserve resident section plus sorted backing bytes from the **same global block-cache capacity**.
 An RAII reservation lives with the immutable SstTable and is released on drop,
 including failed opens. Blocks use the remaining capacity; reservations and
 block insertions are serialized by the existing cache lock. Point hits only
-borrow immutable section bytes and acquire no cache lock. Budget pressure
+borrow immutable section/backing bytes and acquire no cache lock. Scans reuse
+Arc-backed views and saved verified block metadata, avoiding duplicate data
+admission. Block metadata and Arc overhead, like existing sorted metadata,
+are outside the raw-byte capacity. Budget pressure
 (including old snapshot/compaction input handles) may deny admission. In that
 case verify the section in bounded chunks, retain no point bytes, and use the
 existing sorted path. A checksum failure is always corruption, including when
 admission is denied. No separate unbounded point-cache budget is introduced.
 
-Full-key/value duplication increases disk bytes and write work. Builder size
+Full-key/locator metadata increases disk bytes and write work; values are not duplicated. Builder size
 estimates include the new section so compaction output targets account for it.
-Existing whole-SST buffering remains: arena and construction vectors are extra
+Existing whole-SST buffering remains: locator arena and construction vectors are extra
 workspace proportional to one output, with the existing soft target-file bound
 and existing oversized-key/version-group exception. This is not a new hard
-bound on total process RSS. Report workspace and duplicated disk space honestly.
+bound on total process RSS. Report workspace and additive disk space honestly.
 Resident admission is table-granular and favors tables opened first; late output
 may fall back while input versions still pin reservations. Reopening can change
 admission. This is an explicit initial policy, to be measured rather than hidden.
@@ -116,6 +125,6 @@ Full-key expansion also changes PLAN's output-file reservation: the old
 input_bytes/target bound is unsound when converting compressed format-3 SSTs.
 Reserve a range of identities using 2*RESTART_INTERVAL+8 as a conservative byte
 expansion bound (both sorted output and arena may contain every reconstructed
-key; values duplicate twice; slack covers slots/headers). A Range avoids an
+key; values stay in sorted blocks; slack covers slots/headers). A Range avoids an
 allocation proportional to this deliberately loose identity bound. A dedicated
 conversion test must exceed the old bound and verify every output value.

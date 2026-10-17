@@ -114,8 +114,32 @@ pub struct Match<'a> {
 /// A data block whose bytes are owned and whose layout was verified.
 #[derive(Debug, Clone)]
 pub struct VerifiedBlock {
-    data: ArcBlock,
+    data: BlockData,
     meta: BlockMeta,
+}
+
+/// A block view can share an admitted SST's backing allocation.
+#[derive(Debug, Clone)]
+struct BlockData {
+    bytes: ArcBlock,
+    start: usize,
+    len: usize,
+}
+impl std::ops::Deref for BlockData {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        &self.bytes[self.start..self.start + self.len]
+    }
+}
+impl From<ArcBlock> for BlockData {
+    fn from(bytes: ArcBlock) -> Self {
+        let len = bytes.len();
+        Self {
+            bytes,
+            start: 0,
+            len,
+        }
+    }
 }
 
 impl VerifiedBlock {
@@ -173,15 +197,22 @@ impl VerifiedBlock {
     pub fn from_raw(raw: Vec<u8>) -> Result<VerifiedBlock, SstError> {
         let meta = Self::verify(&raw)?;
         Ok(VerifiedBlock {
-            data: raw.into(),
+            data: ArcBlock::from(raw).into(),
             meta,
         })
     }
 
     pub fn from_cached(cached: CachedBlock) -> VerifiedBlock {
         VerifiedBlock {
-            data: cached.data,
+            data: cached.data.into(),
             meta: cached.meta,
+        }
+    }
+
+    pub(super) fn from_shared(bytes: ArcBlock, start: usize, len: usize, meta: BlockMeta) -> Self {
+        Self {
+            data: BlockData { bytes, start, len },
+            meta,
         }
     }
 

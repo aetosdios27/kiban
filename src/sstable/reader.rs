@@ -385,6 +385,9 @@ impl SstTable {
     /// (leases a descriptor, or slices the mapping); the rest wait for
     /// its result.
     fn read_block(&self, entry: &IndexEntry) -> Result<VerifiedBlock, SstError> {
+        if let Some(point) = &self.point {
+            return Ok(point.block_at(entry.offset));
+        }
         let key = (self.number, entry.offset);
         let number = self.number;
         let path = &self.path;
@@ -446,6 +449,9 @@ impl SstTable {
         idx: usize,
         state: &mut ReadAhead,
     ) -> Result<VerifiedBlock, SstError> {
+        if let Some(point) = &self.point {
+            return Ok(point.block(idx));
+        }
         let ranges = self.block_cache.range_cache();
         let entry = &self.index[idx];
         if self.mmap.is_some() || !ranges.is_enabled() {

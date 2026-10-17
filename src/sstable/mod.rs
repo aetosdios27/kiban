@@ -54,7 +54,7 @@ fn common_prefix_len(a: &[u8], b: &[u8]) -> usize {
 
 // Both a sorted output and its point arena can store every reconstructed
 // full key. An input restart covers at most RESTART_INTERVAL keys; values
-// are copied at most twice. Extra slack covers per-key headers and slots.
+// stay in sorted blocks. Extra slack covers per-key headers and slots.
 pub(crate) const POINT_OUTPUT_EXPANSION_BOUND: u64 = (2 * block::RESTART_INTERVAL + 8) as u64;
 
 pub use block::{BlockIter, VerifiedBlock};

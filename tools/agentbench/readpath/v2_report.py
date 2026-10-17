@@ -46,7 +46,7 @@ for layout in ['bulk','normal']:
             def pair(label,engine):return f'{med(vals[label,engine,"p50_ns"])/1000:.3f} / {med(vals[label,engine,"p99_ns"])/1000:.3f}'
             lines.append(f'| {layout} | {cache} | {workload} | {pair("before","kiban")} | {pair("after","kiban")} | {pair("after","lmdb")} | {med(ratios["before"]):.3f} → {med(ratios["after"]):.3f} |')
             summary.append(dict(layout=layout,cache=cache,workload=workload,distributions={f'{l}-{e}-{p}':v for (l,e,p),v in vals.items()},ratios=ratios))
-lines+=['','Default is 32 MiB in both builds. The after default case uses KibanOptions::default().block_cache_bytes; the frozen baseline passes the numerically identical 32 MiB to its original harness. Default trials are separate repetitions, not reused 32-MiB observations.','',
+lines+=['','Default uses KibanOptions::default().block_cache_bytes in both builds (cache_mib=null), 512 MiB on this host. Default trials are separate repetitions, not reused 512-MiB observations.','',
         '## Full distributions','', '| Layout/cache/workload | Candidate | p50 µs | p99 µs | Paired p50 ratio |','|---|---|---:|---:|---:|']
 for row in summary:
     for label in ['before','after']:
@@ -55,7 +55,7 @@ for row in summary:
 (OUT/'READS.md').write_text('\n'.join(lines)+'\n')
 (OUT/'read-summary.json').write_text(json.dumps(summary,indent=2)+'\n')
 
-lines=['# Paired 10k write results','', 'Five alternating trials per mode, 1,000 operations per workload. Main 2a083fa versus optional point-index writes. Per-call samples exclude final flush; end_sync_flush_verify_seconds is reported separately and includes verification. Durable mode syncs each mutating call.','', '| Mode | Workload | Before K p50 / p99 µs | After K p50 / p99 µs | LMDB after p50 / p99 µs | Paired K/LMDB p50 before → after | K call ops/s before → after |','|---|---|---:|---:|---:|---:|---:|']
+lines=['# Paired 10k write results','', 'Five alternating trials per mode, 1,000 operations per workload. Main 8bbb4934 versus optional locator-index writes. Per-call samples exclude final flush; end_sync_flush_verify_seconds is reported separately and includes verification. Durable mode syncs each mutating call.','', '| Mode | Workload | Before K p50 / p99 µs | After K p50 / p99 µs | LMDB after p50 / p99 µs | Paired K/LMDB p50 before → after | K call ops/s before → after |','|---|---|---:|---:|---:|---:|---:|']
 for mode in ['fast','durable']:
     rows=get_rows(OUT/'writes'/mode)
     for work,data in sorted(rows.items()):

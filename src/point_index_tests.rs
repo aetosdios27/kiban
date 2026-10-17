@@ -178,6 +178,30 @@ fn point_index_presence_is_independent_of_writer_switch_and_cache_admission() {
     }
 }
 
+#[test]
+fn indexed_scans_share_backing_blocks_without_duplicate_cache_admission() {
+    let dir = TempDir::new("point-shared-blocks");
+    let opts = options(true, 8 * 1024 * 1024);
+    let mut db = Kiban::open_with_options(dir.path(), opts.clone()).unwrap();
+    let expected: Vec<_> = (0..500u64).map(|i| (key(i), vec![i as u8; 300])).collect();
+    for (key, value) in &expected {
+        db.put(key, value).unwrap();
+    }
+    db.flush_without_compaction().unwrap();
+    db.close().unwrap();
+    let db = Kiban::open_with_options(dir.path(), opts).unwrap();
+    let before = db.cache.stats();
+    assert!(before.point_index_bytes > 0);
+    for (key, value) in &expected {
+        assert_eq!(db.get(key).unwrap().as_ref(), Some(value));
+    }
+    assert_eq!(db.iter().collect::<Result<Vec<_>, _>>().unwrap(), expected);
+    let after = db.cache.stats();
+    assert_eq!(after.resident_bytes, before.resident_bytes);
+    assert_eq!(after.resident_entries, 0);
+    assert_eq!(after.misses, before.misses);
+}
+
 /// Run the already-built release test executable under taskset -c 8.
 /// These measurements isolate flush and compaction BUILD from memtable fill.
 #[test]

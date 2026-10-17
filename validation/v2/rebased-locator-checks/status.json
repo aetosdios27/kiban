@@ -1,0 +1,41 @@
+[
+  {
+    "name": "test",
+    "command": [
+      "cargo",
+      "test",
+      "--workspace",
+      "--",
+      "--test-threads=4"
+    ],
+    "code": 0,
+    "seconds": 8.228023767471313
+  },
+  {
+    "name": "release",
+    "command": [
+      "cargo",
+      "test",
+      "--release",
+      "--workspace",
+      "--",
+      "--test-threads=4"
+    ],
+    "code": 0,
+    "seconds": 15.478935241699219
+  },
+  {
+    "name": "clippy",
+    "command": [
+      "cargo",
+      "clippy",
+      "--all-targets",
+      "--workspace",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "code": 101,
+    "seconds": 1.9901156425476074
+  }
+]
