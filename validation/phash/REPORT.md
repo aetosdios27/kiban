@@ -1,0 +1,143 @@
+# Immutable-SST MPHF experiment
+
+**GO for a V2 prototype.** The brief's numeric bulk hit cutoff passes. Raw MPHF median p50 is 472 ns versus LMDB 1585 ns, or 0.298x. The worst paired raw trial is 0.322x and the worst paired end-to-end trial is 0.455x, both below 0.8. End-to-end median p50, including key formatting and JSON decoding, is 826 ns versus 1938 ns. This supports the combined decoded-block + MPHF path; it does not isolate hashing's contribution or promise an integrated-engine result.
+
+The strict idle-sibling requirement was not achieved by the host. Every benchmark process is pinned to CPU 8 and no experiment/build work is assigned to CPU 9, but unrelated browser and Btrfs kernel threads run on that sibling. Across process intervals, CPU9 busy time is median 10.9% [min 1.3%, max 45.9%]. Evidence is in [sibling-activity.json](sibling-activity.json) and [per-run CPU accounting](results/commands.jsonl). No foreign affinity, priority, or process was changed. Start load averages were [25.4306640625, 23.82958984375, 21.12158203125]; end loads were [23.43115234375, 23.52099609375, 22.4169921875]. Thus GO is a prototype decision from contended-host, interleaved measurements, not proof under a quiet sibling or proof that dependent loads alone explain the gain. A quiet-sibling confirmation remains outstanding.
+
+Bulk contains exactly one L0 SST, making table routing degenerate. The normal layout contains one L1, six L2 and 77 L3 SSTs. It preserves actual file membership and block boundaries and probes levels in order. Normal raw MPHF p50 is 666 ns against its LMDB control 1578 ns (0.422x); relative to the bulk LMDB median it is 0.420x. The normal end-to-end medians are 1024 and 1951 ns. The original kill criterion remains bulk; normal is a separate multi-level result.
+
+The start floor's one-load median is 161.4 ns, and the closing floor is 161.6 ns. Bulk MPHF raw p50 is equivalent in elapsed time to 2.93 start-floor loads; normal is 4.13. A pilot, slot and record give the proposed dependency chain, with occasional remap access, but this is not a counted hardware dependency graph. Bulk MPHF records 5.50 LLC misses/op in the raw throughput loop because full-key comparison and copying the value touch more lines. TLB/page-size differences and instruction cost prevent interpreting these quotients as literal miss counts.
+
+Slots cost 12 bytes/key, including a 16-bit fingerprint and two padding bytes; PtrHash costs approximately 2.99 bits/key. bulk: 334.84 MiB decoded data plus locator; 21.26 extra bytes/key net versus the source SSTs. MPHF construction 155.1 ms/1M; total tool construction 417.6 ms/1M. normal: 334.84 MiB decoded data plus locator; 21.25 extra bytes/key net versus the source SSTs. MPHF construction 130.4 ms/1M; total tool construction 401.7 ms/1M. The original compressed SST is decoded to store independently comparable full keys. The measured record format omits sequence and kind and specializes lengths to u16; production visibility metadata and general lengths cost more. Construction timings are single-threaded CPU-8 proxies, include independently repeated builds, and are not additional measured compaction wall time. Peak builder memory was not bounded or measured.
+
+The negative workload is new: 1M..2M IDs use the same reversed-ID key shape and cluster into 64 key-space gaps. Ordered indexes can reuse hot leaves, so these results do not establish uniformly scattered interior-negative cost. Existing Kiban Bloom rejection beats MPHF on bulk misses. There is no global SST maplet or sorted-search control over the same decoded arena. Keep Bloom filters as a design option and add that ablation before attributing gains solely to MPHF.
+
+Correctness checks compare every one of the million existing values to deterministic model output before each process's timing and compare every one of the million timed results afterward; misses must return none. MPHF verifies the full byte key on hits, rejects duplicate build hashes, and checks one-to-one slots. All 100 accepted processes report zero errors and equal cross-variant digests. The analyzer verifies all counter coverage, trial/control counts, ten builds per layout, and unchanged private Kiban files. [Provenance](provenance.json) additionally compares private data with supplied source data. No engine `src/` files changed.
+
+These measurements exclude memtable probes, snapshot/version ownership and ref-counting in the prototype, multi-version/tombstone logic, and per-read checksum verification. Input blocks are checked once during construction; new metadata needs equivalent validation. Range scans and latest-K receive no assumed benefit. LMDB here owns a copy before JSON parsing, whereas the existing readpath parses mapped bytes directly; that biases the end-to-end comparison slightly toward MPHF. Raw ownership is equal across variants. Anonymous huge pages and LMDB's file mapping have different TLB behavior. LMDB itself uses a copy-on-write B+tree, so this does not establish that LMDB could never use a static accelerator. See [methodology](METHODOLOGY.md) for configuration and sources.
+
+[The V2 proposal](V2_PROPOSAL.md) sketches optional checksummed SST sections, independent full-key records, mixed-version support, flush/compaction construction, read/build memory budgets, snapshots/tombstones and installation/crash-safety obligations. It is proposal only. Before integration claims, repeat with a quiet sibling, equalized page-size conditions, a sorted decoded-arena control, and real memtable/version overhead.
+
+## Measurements
+
+All cells are median [minimum, maximum] across completed trials (five in the final report). Each LMDB trial is the median of three bracketing controls. Ratios are medians of paired trial ratios.
+
+| Dependent loads | ns/chain |
+|---|---:|
+| 1 | 161.4 [157.8, 168.0] |
+| 2 | 332.0 [330.7, 348.9] |
+| 3 | 499.8 [473.7, 538.7] |
+| 4 | 661.5 [631.0, 696.6] |
+| 6 | 974.0 [961.1, 1014.7] |
+| 8 | 1317.2 [1287.3, 1338.7] |
+
+End-of-suite floor, five further trials:
+
+| Dependent loads | ns/chain |
+|---|---:|
+| 1 | 161.6 [158.5, 177.3] |
+| 2 | 332.1 [319.7, 351.6] |
+| 3 | 490.1 [480.1, 534.5] |
+| 4 | 654.8 [636.4, 711.2] |
+| 6 | 996.0 [959.0, 1066.1] |
+| 8 | 1334.7 [1275.4, 1369.3] |
+
+### raw latency
+
+| Layout | Workload | Variant | p50 ns | p99 ns | Mean ns | p50 / LMDB |
+|---|---|---|---:|---:|---:|---:|
+| bulk | hit | kiban | 1879.0 [1704.0, 2169.0] | 3149.0 [2565.0, 4572.0] | 2106.8 [1749.0, 3329.2] | 1.131 [1.114, 1.433] |
+| bulk | hit | lmdb | 1585.0 [1507.0, 1686.0] | 2351.0 [2171.0, 2841.0] | 1684.0 [1555.4, 2450.9] | 1.000 [1.000, 1.000] |
+| bulk | hit | mphf | 472.0 [457.0, 543.0] | 734.0 [684.0, 832.0] | 525.2 [465.6, 691.8] | 0.312 [0.293, 0.322] |
+| bulk | miss | kiban | 136.0 [114.0, 153.0] | 579.0 [373.0, 717.0] | 184.7 [138.9, 287.2] | 0.282 [0.218, 0.310] |
+| bulk | miss | lmdb | 483.0 [413.0, 547.0] | 866.0 [669.0, 1025.0] | 516.5 [505.3, 680.3] | 1.000 [1.000, 1.000] |
+| bulk | miss | mphf | 209.0 [195.0, 218.0] | 397.0 [380.0, 454.0] | 254.1 [206.1, 340.6] | 0.420 [0.395, 0.506] |
+| normal | hit | kiban | 2067.0 [1954.0, 2361.0] | 4225.0 [3448.0, 4517.0] | 2700.7 [2355.2, 3215.4] | 1.321 [1.171, 1.532] |
+| normal | hit | lmdb | 1578.0 [1491.0, 1668.0] | 2324.0 [2069.0, 2606.0] | 1979.4 [1778.2, 2224.0] | 1.000 [1.000, 1.000] |
+| normal | hit | mphf | 666.0 [643.0, 683.0] | 1045.0 [1004.0, 1146.0] | 871.4 [757.5, 939.5] | 0.427 [0.399, 0.433] |
+| normal | miss | kiban | 464.0 [374.0, 607.0] | 1839.0 [1495.0, 2857.0] | 582.0 [525.8, 974.0] | 0.917 [0.878, 1.195] |
+| normal | miss | lmdb | 506.0 [425.0, 521.0] | 1073.0 [766.0, 1341.0] | 685.1 [532.4, 770.4] | 1.000 [1.000, 1.000] |
+| normal | miss | mphf | 381.0 [315.0, 405.0] | 682.0 [565.0, 742.0] | 524.5 [423.9, 584.2] | 0.755 [0.731, 0.797] |
+
+### e2e latency
+
+| Layout | Workload | Variant | p50 ns | p99 ns | Mean ns | p50 / LMDB |
+|---|---|---|---:|---:|---:|---:|
+| bulk | hit | kiban | 2325.0 [2085.0, 2447.0] | 4209.0 [3251.0, 4370.0] | 2548.4 [2154.0, 3045.0] | 1.215 [1.111, 1.238] |
+| bulk | hit | lmdb | 1938.0 [1865.0, 2064.0] | 3017.0 [2824.0, 3396.0] | 2068.1 [1955.7, 2752.3] | 1.000 [1.000, 1.000] |
+| bulk | hit | mphf | 826.0 [774.0, 939.0] | 1269.0 [1110.0, 1507.0] | 862.3 [798.9, 1378.9] | 0.419 [0.412, 0.455] |
+| bulk | miss | kiban | 223.0 [198.0, 266.0] | 726.0 [664.0, 804.0] | 282.8 [267.3, 395.4] | 0.402 [0.344, 0.465] |
+| bulk | miss | lmdb | 572.0 [492.0, 648.0] | 1067.0 [897.0, 1177.0] | 617.5 [606.3, 824.1] | 1.000 [1.000, 1.000] |
+| bulk | miss | mphf | 296.0 [289.0, 343.0] | 538.0 [506.0, 733.0] | 354.4 [305.2, 511.7] | 0.529 [0.499, 0.593] |
+| normal | hit | kiban | 2542.0 [2329.0, 2792.0] | 4935.0 [4295.0, 5760.0] | 3298.2 [2809.2, 3660.3] | 1.273 [1.239, 1.496] |
+| normal | hit | lmdb | 1951.0 [1830.0, 2054.0] | 3168.0 [2805.0, 3285.0] | 2354.1 [2347.1, 2585.4] | 1.000 [1.000, 1.000] |
+| normal | hit | mphf | 1024.0 [984.0, 1106.0] | 1703.0 [1526.0, 1967.0] | 1323.0 [1102.7, 1960.4] | 0.538 [0.507, 0.553] |
+| normal | miss | kiban | 574.0 [477.0, 669.0] | 2105.0 [1874.0, 2829.0] | 724.4 [681.9, 1017.1] | 0.968 [0.923, 1.115] |
+| normal | miss | lmdb | 593.0 [507.0, 622.0] | 1175.0 [864.0, 1552.0] | 762.6 [617.9, 943.6] | 1.000 [1.000, 1.000] |
+| normal | miss | mphf | 497.0 [389.0, 535.0] | 862.0 [744.0, 984.0] | 610.2 [524.1, 854.2] | 0.830 [0.767, 0.892] |
+
+### Raw throughput and counters
+
+| Layout | Workload | Variant | Mops/s | cycles/op | instructions/op | LLC misses/op | dTLB misses/op |
+|---|---|---|---:|---:|---:|---:|---:|
+| bulk | hit | kiban | 0.516 [0.416, 0.594] | 5102.3 [4770.8, 5439.3] | 3398.4 [3398.4, 3398.4] | 13.481 [11.825, 13.789] | 0.139 [0.059, 0.182] |
+| bulk | hit | lmdb | 0.600 [0.432, 0.658] | 4442.0 [4205.3, 4583.6] | 3352.7 [3352.7, 3352.7] | 18.111 [17.838, 18.132] | 1.992 [1.980, 2.021] |
+| bulk | hit | mphf | 2.432 [1.910, 2.839] | 1048.5 [985.6, 1162.2] | 472.9 [472.9, 472.9] | 5.497 [5.413, 5.544] | 0.014 [0.006, 0.028] |
+| bulk | miss | kiban | 8.301 [6.087, 9.803] | 296.3 [289.0, 330.6] | 409.2 [409.2, 409.2] | 0.089 [0.027, 0.218] | 0.001 [0.001, 0.002] |
+| bulk | miss | lmdb | 2.000 [1.629, 2.225] | 1230.7 [1185.1, 1298.3] | 3182.8 [3182.8, 3182.8] | 0.014 [0.010, 0.025] | 0.008 [0.005, 0.017] |
+| bulk | miss | mphf | 8.816 [5.673, 9.749] | 271.3 [242.6, 286.6] | 267.3 [267.3, 267.3] | 0.905 [0.881, 1.045] | 0.001 [0.000, 0.004] |
+| normal | hit | kiban | 0.373 [0.308, 0.422] | 5789.7 [5325.5, 5987.8] | 4768.2 [4768.1, 4768.2] | 13.310 [12.620, 15.550] | 0.251 [0.227, 0.257] |
+| normal | hit | lmdb | 0.497 [0.487, 0.540] | 4396.1 [4132.9, 4453.9] | 3352.7 [3352.7, 3352.7] | 18.128 [17.812, 18.303] | 1.999 [1.989, 2.016] |
+| normal | hit | mphf | 1.231 [1.159, 1.302] | 1757.8 [1622.2, 1888.4] | 1067.2 [1067.2, 1067.2] | 5.880 [5.709, 6.010] | 0.109 [0.093, 0.193] |
+| normal | miss | kiban | 1.762 [1.246, 1.932] | 1200.9 [1174.5, 1414.8] | 1973.9 [1973.9, 1973.9] | 0.447 [0.324, 1.052] | 0.060 [0.049, 0.068] |
+| normal | miss | lmdb | 1.531 [1.405, 2.048] | 1221.4 [1172.1, 1290.3] | 3182.8 [3182.8, 3182.8] | 0.044 [0.017, 0.062] | 0.020 [0.012, 0.029] |
+| normal | miss | mphf | 2.485 [1.903, 2.560] | 911.1 [839.6, 944.7] | 882.8 [882.8, 882.8] | 1.414 [1.342, 1.736] | 0.022 [0.010, 0.030] |
+
+### Build and space
+
+Build cells cover ten independently built MPHF instances per layout, including hit and miss processes. Construction is single-threaded on CPU 8.
+
+| Layout | Levels: files | MPHF bits/key | Slot B/key | Decoded MiB | Original SST MiB | MPHF ms/1M | Total build ms/1M |
+|---|---|---:|---:|---:|---:|---:|---:|
+| bulk | {'0': 1} | 2.9899 [2.9899, 2.9899] | 12 [12, 12] | 323.04 [323.04, 323.04] | 314.56 [314.56, 314.56] | 155.07 [122.89, 219.86] | 417.60 [331.23, 579.25] |
+| normal | {'1': 1, '2': 6, '3': 77} | 2.9907 [2.9907, 2.9907] | 12 [12, 12] | 323.04 [323.04, 323.04] | 314.57 [314.57, 314.57] | 130.36 [118.08, 153.15] | 401.67 [378.36, 480.35] |
+
+### Serial-load equivalents
+
+These divide raw p50 by the length-1 floor. They are latency equivalents, not measured dependency counts. The floor likely uses anonymous huge pages, whereas LMDB uses a file-backed mapping; TLB/page-walk overhead is not equalized. Code, copies, cache hits, and timer overhead remain in the numerator.
+
+| Layout | Workload | Variant | Load equivalents |
+|---|---|---|---:|
+| bulk | hit | kiban | 11.65 |
+| bulk | hit | lmdb | 9.82 |
+| bulk | hit | mphf | 2.93 |
+| bulk | miss | kiban | 0.84 |
+| bulk | miss | lmdb | 2.99 |
+| bulk | miss | mphf | 1.30 |
+| normal | hit | kiban | 12.81 |
+| normal | hit | lmdb | 9.78 |
+| normal | hit | mphf | 4.13 |
+| normal | miss | kiban | 2.88 |
+| normal | miss | lmdb | 3.14 |
+| normal | miss | mphf | 2.36 |
+
+### Individual LMDB control variability
+
+These ranges include all 15 controls per layout/workload, before the within-trial median reduction.
+
+| Layout | Workload | Raw p50 ns | E2E p50 ns |
+|---|---|---:|---:|
+| bulk | hit | 1582.0 [1448.0, 1946.0] | 1944.0 [1837.0, 2357.0] |
+| bulk | miss | 479.0 [411.0, 598.0] | 571.0 [491.0, 923.0] |
+| normal | hit | 1578.0 [1451.0, 1738.0] | 1951.0 [1793.0, 2137.0] |
+| normal | miss | 496.0 [410.0, 604.0] | 589.0 [490.0, 674.0] |
+
+## Evidence and reproduction
+
+- [Standalone crate and commands](../../tools/agentbench/phash/README.md), including exact workload and timer boundaries.
+- [Raw results, perf stat counters and metadata](results/metadata.json); `commands.jsonl` names all 100 successful processes.
+- [Machine-readable analysis and gate](summary.json), generated by `analyze.py` without `--partial`.
+- [Decision trail](decisions.tsv), [cross-model review](REVIEW.md), and [responses/self-review](REVIEW_RESPONSE.md).
+- [Build output](build.log), [toolchain](toolchain.txt), and [source/copy/binary provenance](provenance.json).
+
+Accepted measurements use the final recorded binary SHA. Earlier smoke and rejected setup files remain for audit and are excluded from analysis. They caught a native LMDB format-version mismatch and an aborted DBI-opening transaction. The final DBI-open transaction commits before any lookup; all accepted controls then pass full validation.

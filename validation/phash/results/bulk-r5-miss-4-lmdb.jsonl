@@ -1,0 +1,1 @@
+{"batch_mean_ns":613.720427,"counter_operations":1000000,"digest":0,"e2e":{"mean_ns":820.75374,"p50_ns":593,"p99_ns":1161},"errors":0,"missing":true,"operations":100000,"raw":{"mean_ns":680.29771,"p50_ns":494,"p99_ns":866},"throughput_ops_s":1629406.4137448044,"type":"read","variant":"lmdb","verified_all_hits":1000000,"verified_timed_results":1000000}

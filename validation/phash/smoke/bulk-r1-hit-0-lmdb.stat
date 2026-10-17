@@ -1,0 +1,6 @@
+# started on Sat Oct 17 23:47:00 2026
+
+<not counted>;;cpu_core/cycles/u;0;100.00;;
+<not counted>;;cpu_core/instructions/u;0;100.00;;
+<not counted>;;cpu_core/LLC-load-misses/u;0;100.00;;
+<not counted>;;cpu_core/dTLB-load-misses/u;0;100.00;;
