@@ -729,3 +729,63 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod point_reservation_tests {
+    use super::*;
+
+    #[test]
+    fn point_reservations_share_global_capacity_and_release_on_drop() {
+        let cache = Arc::new(BlockCache::new(256));
+        let held = cache.reserve_point(200).unwrap();
+        assert!(cache.reserve_point(57).is_none());
+        let data: Arc<[u8]> = vec![0; 100].into();
+        let block = CachedBlock {
+            data,
+            meta: BlockMeta {
+                entries_end: 0,
+                restart_start: 0,
+                num_restarts: 0,
+            },
+        };
+        cache.insert((1, 0), block.clone());
+        assert_eq!(cache.resident_bytes(), 200);
+        drop(held);
+        cache.insert((1, 0), block);
+        assert_eq!(cache.resident_bytes(), 100);
+        assert!(cache.reserve_point(157).is_none());
+        assert_eq!(cache.stats().point_index_bytes, 0);
+    }
+
+    #[test]
+    fn concurrent_section_admission_and_block_insertion_keep_capacity() {
+        let cache = Arc::new(BlockCache::new(1000));
+        let threads: Vec<_> = (0..8)
+            .map(|thread| {
+                let cache = cache.clone();
+                std::thread::spawn(move || {
+                    for i in 0..200 {
+                        let held = cache.reserve_point(137);
+                        cache.insert(
+                            (thread, i),
+                            CachedBlock {
+                                data: vec![0; 89].into(),
+                                meta: BlockMeta {
+                                    entries_end: 0,
+                                    restart_start: 0,
+                                    num_restarts: 0,
+                                },
+                            },
+                        );
+                        assert!(cache.resident_bytes() <= cache.capacity());
+                        drop(held);
+                    }
+                })
+            })
+            .collect();
+        for thread in threads {
+            thread.join().unwrap();
+        }
+        assert_eq!(cache.stats().point_index_bytes, 0);
+    }
+}

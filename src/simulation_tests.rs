@@ -281,7 +281,8 @@ fn run_seed(seed: u64, mode: EngineMode) -> Result<Vec<DeviceImage>, String> {
         let mut rng = sys::SplitMix64(seed);
         let probe_dir = TempDir::new("seeded-wal");
         wal_creation_probe(probe_dir.path(), &mut rng).map_err(|e| format!("WAL probe: {e}"))?;
-        let options = super::compaction_tests::tiny_options();
+        let mut options = super::compaction_tests::tiny_options();
+        options.point_index = seed & 1 != 0;
         let mut db = mode
             .open(dir.path(), options.clone())
             .map_err(|e| format!("initial open: {e}"))?;
@@ -357,6 +358,8 @@ fn run_seed(seed: u64, mode: EngineMode) -> Result<Vec<DeviceImage>, String> {
                 }
             }
             sys::power_loss_seeded(crash_seed);
+            // Exercise recovery with both write policies and mixed existing SSTs.
+            options.point_index = !options.point_index;
             db = mode
                 .open(dir.path(), options.clone())
                 .map_err(|e| format!("{context}, crash reopen: {e}"))?;

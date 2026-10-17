@@ -9344,3 +9344,7 @@ mod rotation_durability_tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "point_index_tests.rs"]
+mod point_index_tests;

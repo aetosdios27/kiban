@@ -41,11 +41,14 @@ fn hash(key: &[u8], seed: u64) -> u64 {
 fn fingerprint(h: u64) -> u16 {
     (mix(h ^ 0xd6e8_feb8_6659_fd93) >> 48) as u16
 }
+fn bucket(h: u64, count: usize) -> usize {
+    (h % count as u64) as usize
+}
 fn position(h: u64, pilot: u32, n: usize) -> usize {
     (mix(h ^ (pilot as u64).wrapping_mul(STEP)) % n as u64) as usize
 }
 fn index(h: u64, pilots: &[u32], n: usize) -> usize {
-    let pilot = pilots[h as usize % pilots.len()];
+    let pilot = pilots[bucket(h, pilots.len())];
     if pilot & DIRECT != 0 {
         (pilot & !DIRECT) as usize
     } else {
@@ -72,7 +75,7 @@ fn construct(keys: &[&[u8]]) -> Result<(u64, Vec<u32>, Vec<usize>), SstError> {
         drop(sorted);
         let mut members = vec![Vec::new(); buckets];
         for (i, &h) in hashes.iter().enumerate() {
-            members[h as usize % buckets].push(i);
+            members[bucket(h, buckets)].push(i);
         }
         let mut order: Vec<_> = (0..buckets).collect();
         order.sort_unstable_by_key(|&b| std::cmp::Reverse(members[b].len()));
@@ -248,7 +251,7 @@ impl PointIndex {
         Ok(result)
     }
     fn slot(&self, h: u64) -> usize {
-        let pilot = u32_at(&self.bytes, HEADER + h as usize % self.buckets * 4);
+        let pilot = u32_at(&self.bytes, HEADER + bucket(h, self.buckets) * 4);
         let at = if pilot & DIRECT != 0 {
             (pilot & !DIRECT) as usize
         } else {
@@ -380,6 +383,15 @@ mod tests {
         assert!(index.get(b"\0\xff", Some(6)).is_none());
         assert!(index.get(b"missing", None).is_none());
         assert_eq!(index.get(b"long", None).unwrap().value, [3; 100_000]);
+    }
+
+    #[test]
+    fn on_disk_bucket_reduction_uses_all_64_hash_bits() {
+        // Truncating h to usize before reduction would route this to 2 on
+        // 32-bit readers, making files written by 64-bit writers unreadable.
+        assert_eq!(bucket((1u64 << 32) + 42, 10), 8);
+        let pilots: Vec<_> = (0..10).map(|i| DIRECT | i).collect();
+        assert_eq!(index((1u64 << 32) + 42, &pilots, 10), 8);
     }
 
     #[test]
