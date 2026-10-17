@@ -1,0 +1,58 @@
+{
+  "binary": "/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-cost/bin/after",
+  "sha256": "f8df670dc0684fb5c58ce974af1d6853ec243520a2b35e98a8116f639a3ee8d7",
+  "cpu": 8,
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-cost/data/after/kiban-normal",
+  "operations": 3000000,
+  "commands": [
+    {
+      "command": [
+        "taskset",
+        "-c",
+        "8",
+        "/home/aetos/dev/personal/kiban/target/profiler/usr/bin/perf",
+        "stat",
+        "--control",
+        "fifo:/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-latency/tmpe8wabkr7/ctl,/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-latency/tmpe8wabkr7/ack",
+        "-D",
+        "-1",
+        "-e",
+        "cpu_core/cycles/u,cpu_core/instructions/u,cpu_core/branches/u,cpu_core/branch-misses/u,cpu_core/cache-references/u,cpu_core/cache-misses/u",
+        "-o",
+        "target/pointindex-latency/profile-ph3-normal/stat.txt",
+        "--",
+        "/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-cost/bin/after",
+        "/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-latency/tmpe8wabkr7/config.json"
+      ],
+      "code": 0
+    },
+    {
+      "command": [
+        "taskset",
+        "-c",
+        "8",
+        "/home/aetos/dev/personal/kiban/target/profiler/usr/bin/perf",
+        "record",
+        "--control",
+        "fifo:/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-latency/tmpe8wabkr7/ctl,/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-latency/tmpe8wabkr7/ack",
+        "-D",
+        "-1",
+        "-m",
+        "32",
+        "-e",
+        "cpu_core/cycles/u",
+        "-F",
+        "499",
+        "--call-graph",
+        "dwarf,4096",
+        "--user-callchains",
+        "-o",
+        "target/pointindex-latency/profile-ph3-normal/record.data",
+        "--",
+        "/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-cost/bin/after",
+        "/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-latency/tmpe8wabkr7/config.json"
+      ],
+      "code": 0
+    }
+  ]
+}

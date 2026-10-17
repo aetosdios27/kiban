@@ -1,0 +1,6 @@
+Events disabled
+Events enabled
+Events disabled
+{"digest":172447,"errors":0,"ns":2682727714,"operations":3000000,"type":"profile"}
+[ perf record: Woken up 91 times to write data ]
+[ perf record: Captured and wrote 5.462 MB /home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-latency/before-record.data (1319 samples) ]

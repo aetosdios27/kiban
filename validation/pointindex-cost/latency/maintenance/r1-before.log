@@ -1,0 +1,15 @@
+
+running 1 test
+test db::point_index_tests::point_index_maintenance_measurement ... {"type":"profile_phase","phase":"flush","trial":1,"indexed":false,"cpu_ticks":28,"wall_ns":278598848}
+{"type":"profile_phase","phase":"flush","trial":1,"indexed":false,"cpu_ticks":28,"wall_ns":288734014}
+{"type":"profile_phase","phase":"build","trial":1,"indexed":false,"cpu_ticks":36,"wall_ns":376486789}
+{"type":"profile_phase","phase":"commit","trial":1,"indexed":false,"cpu_ticks":2,"wall_ns":21958007}
+{"type":"maintenance","trial":1,"point_index":false,"n":1000000,"flush_ns":567332862,"compaction_build_ns":376486789,"compaction_commit_ns":21958007,"input_bytes":322946108,"output_bytes":322951967,"output_files":77,"point_resident_bytes":0,"verified_records":1000000,"errors":0}
+{"type":"profile_phase","phase":"flush","trial":1,"indexed":true,"cpu_ticks":59,"wall_ns":591369638}
+{"type":"profile_phase","phase":"flush","trial":1,"indexed":true,"cpu_ticks":63,"wall_ns":624404345}
+{"type":"profile_phase","phase":"build","trial":1,"indexed":true,"cpu_ticks":60,"wall_ns":614561959}
+{"type":"profile_phase","phase":"commit","trial":1,"indexed":true,"cpu_ticks":3,"wall_ns":25767189}
+{"type":"maintenance","trial":1,"point_index":true,"n":1000000,"flush_ns":1215773983,"compaction_build_ns":614561959,"compaction_commit_ns":25767189,"input_bytes":349720724,"output_bytes":347833741,"output_files":83,"point_resident_bytes":189225548,"verified_records":1000000,"errors":0}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 351 filtered out; finished in 5.19s

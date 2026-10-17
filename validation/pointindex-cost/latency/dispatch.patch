@@ -1,0 +1,109 @@
+diff --git a/src/sstable/point/compact.rs b/src/sstable/point/compact.rs
+index d3f3de67..8dadfc8b 100644
+--- a/src/sstable/point/compact.rs
++++ b/src/sstable/point/compact.rs
+@@ -167,6 +167,7 @@ pub(in crate::sstable) struct CompactIndex {
+     buckets: usize,
+     arena: usize,
+     encoding: Encoding,
++    lookup: fn(&Self, &[u8], Option<u64>) -> Option<Found>,
+     _reservation: ResidentReservation,
+ }
+ impl CompactIndex {
+@@ -225,6 +226,19 @@ impl CompactIndex {
+             buckets,
+             arena,
+             encoding,
++            lookup: match (
++                encoding.address,
++                encoding.key,
++                encoding.count,
++                encoding.seq,
++                encoding.value,
++            ) {
++                (4, 1, 1, 1, 2) => Self::get_narrow::<1>,
++                (4, 1, 1, 2, 2) => Self::get_narrow::<2>,
++                (4, 1, 1, 4, 2) => Self::get_narrow::<4>,
++                (4, 1, 1, 8, 2) => Self::get_narrow::<8>,
++                _ => Self::get_dynamic,
++            },
+             _reservation: reservation,
+         };
+         result.validate(blocks)?;
+@@ -232,13 +246,17 @@ impl CompactIndex {
+     }
+     #[inline(always)]
+     fn slot(&self, h: u64) -> usize {
++        self.slot_encoded(h, self.encoding.address)
++    }
++    #[inline(always)]
++    fn slot_encoded(&self, h: u64, address: usize) -> usize {
+         let pilot = u32_at(&self.bytes, HEADER + bucket(h, self.buckets) * 4);
+         let at = if pilot & DIRECT != 0 {
+             (pilot & !DIRECT) as usize
+         } else {
+             position(h, pilot, self.count)
+         };
+-        HEADER + self.buckets * 4 + at * (self.encoding.address + 2)
++        HEADER + self.buckets * 4 + at * (address + 2)
+     }
+     fn validate(&mut self, blocks: impl IntoIterator<Item = (u64, u64)>) -> Result<(), SstError> {
+         let e = self.encoding;
+@@ -381,39 +399,28 @@ impl CompactIndex {
+         )
+     }
+     pub(super) fn get(&self, key: &[u8], limit: Option<u64>) -> Option<Found> {
+-        let e = self.encoding;
+-        // Constant widths remove repeated decoder dispatch from the common
+-        // single-version layout. All encodings share the same lookup body.
+-        match (e.address, e.key, e.count, e.seq, e.value) {
+-            (4, 1, 1, 2, 2) => self.get_encoded(
+-                key,
+-                limit,
+-                Encoding {
+-                    address: 4,
+-                    key: 1,
+-                    count: 1,
+-                    seq: 2,
+-                    value: 2,
+-                },
+-            ),
+-            (4, 1, 1, 4, 2) => self.get_encoded(
+-                key,
+-                limit,
+-                Encoding {
+-                    address: 4,
+-                    key: 1,
+-                    count: 1,
+-                    seq: 4,
+-                    value: 2,
+-                },
+-            ),
+-            _ => self.get_encoded(key, limit, e),
+-        }
++        (self.lookup)(self, key, limit)
++    }
++    fn get_dynamic(&self, key: &[u8], limit: Option<u64>) -> Option<Found> {
++        self.get_encoded(key, limit, self.encoding)
++    }
++    fn get_narrow<const S: usize>(&self, key: &[u8], limit: Option<u64>) -> Option<Found> {
++        self.get_encoded(
++            key,
++            limit,
++            Encoding {
++                address: 4,
++                key: 1,
++                count: 1,
++                seq: S,
++                value: 2,
++            },
++        )
+     }
+     #[inline(always)]
+     fn get_encoded(&self, key: &[u8], limit: Option<u64>, e: Encoding) -> Option<Found> {
+         let h = hash(key, self.seed);
+-        let slot = self.slot(h);
++        let slot = self.slot_encoded(h, e.address);
+         if uint(&self.bytes, slot + e.address, 2) != fingerprint(h) as u64 {
+             return None;
+         }

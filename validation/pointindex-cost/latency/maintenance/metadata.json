@@ -1,0 +1,15 @@
+{
+  "cpu": 8,
+  "n": 1000000,
+  "trials": 5,
+  "binaries": {
+    "before": {
+      "path": "/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-latency/ph3-test",
+      "sha256": "71b4f6404c72cf33221dae0d4626147d43da397aea2dcdc48789d733d3f6ffa4"
+    },
+    "after": {
+      "path": "/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-latency/final-test",
+      "sha256": "4559f9e1ef924fdd0c613ba709429e9c47ed55c0dcca8cd59a0f3485dd329c34"
+    }
+  }
+}

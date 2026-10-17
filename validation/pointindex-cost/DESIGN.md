@@ -46,6 +46,10 @@ length, K-byte suffix length, C-byte version count, suffix bytes, and versions.
 Anchor shared length is zero. Keys compare as two byte spans. A point probe does
 not reconstruct or allocate a key or search a sorted block.
 
+An admitted point lookup uses its fingerprint and full-key comparison directly,
+without a preliminary Bloom probe. The Bloom filter remains verified at open and
+rejects misses on the sorted fallback path. This changes no section bytes.
+
 Each version stores an S-byte sequence delta from the header minimum, an L-byte
 tagged value length, and a W-byte absolute value address in the original sorted
 data region. The length high bit marks a tombstone, whose length must be zero.

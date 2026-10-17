@@ -1,0 +1,6 @@
+{
+  "CARGO_TARGET_DIR": "target/pointindex-latency/verified-target",
+  "cpu": "12-21",
+  "nice": 10,
+  "shared_with_clone": false
+}

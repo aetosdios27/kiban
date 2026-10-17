@@ -1,0 +1,10 @@
+{
+  "commit": "97735164",
+  "benchmark_patch": "maintenance-driver.patch",
+  "sources": {
+    "src/sstable/reader.rs": "85554be4203a8a1c97f03727c96d2a10dbb0ffbf7509acc312c21f6927147804",
+    "src/sstable/point.rs": "4103f9c51436f2e0e81dc714ec277279116bffc104fc617ea3743ce8361d70a9",
+    "src/sstable/point/compact.rs": "d1a16ef8c6ec47ce647bdbf6bf99ebfb2b17dbd7d43c49bd4a1f0fee40777f4d",
+    "src/point_index_tests.rs": "4b3a49e9d4185ea144a6d1aae4fe6063132bb7451fc2b4aafb9a26fa538d6da6"
+  }
+}

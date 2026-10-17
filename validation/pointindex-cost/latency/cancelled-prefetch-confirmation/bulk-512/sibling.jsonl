@@ -1,0 +1,5 @@
+{"name": "1000000-bulk-512-r1-before-kiban", "start": {"total": 1548671, "idle": 1377070}, "end": {"total": 1549082, "idle": 1377469}, "busy_fraction": 0.029197080291970767}
+{"name": "1000000-bulk-512-r1-before-lmdb", "start": {"total": 1549083, "idle": 1377470}, "end": {"total": 1549400, "idle": 1377777}, "busy_fraction": 0.03154574132492116}
+{"name": "1000000-bulk-512-r1-after-kiban", "start": {"total": 1549400, "idle": 1377777}, "end": {"total": 1549803, "idle": 1378176}, "busy_fraction": 0.00992555831265507}
+{"name": "1000000-bulk-512-r1-after-lmdb", "start": {"total": 1549803, "idle": 1378176}, "end": {"total": 1550137, "idle": 1378496}, "busy_fraction": 0.041916167664670656}
+{"name": "1000000-bulk-512-r2-after-kiban", "start": {"total": 1550137, "idle": 1378496}, "end": {"total": 1550506, "idle": 1378858}, "busy_fraction": 0.01897018970189701}

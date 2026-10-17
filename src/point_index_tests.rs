@@ -245,6 +245,10 @@ fn point_index_maintenance_measurement() {
     };
     let n: u64 = n.parse().unwrap();
     let profile = std::env::var_os("KIBAN_POINT_BENCH_PROFILE").is_some();
+    let selected_trial = std::env::var("KIBAN_POINT_BENCH_TRIAL")
+        .ok()
+        .map(|trial| trial.parse::<usize>().unwrap());
+    assert!(selected_trial.is_none_or(|trial| (1..=5).contains(&trial)));
     assert!(
         std::fs::read_to_string("/proc/self/status")
             .unwrap()
@@ -252,6 +256,9 @@ fn point_index_maintenance_measurement() {
             .any(|line| line == "Cpus_allowed_list:\t8")
     );
     for trial in 0..5 {
+        if selected_trial.is_some_and(|selected| selected != trial + 1) {
+            continue;
+        }
         for indexed in if trial % 2 == 0 {
             [false, true]
         } else {
