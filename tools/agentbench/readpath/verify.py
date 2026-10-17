@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Run all commit gates on P-cores and preserve the exact exit statuses."""
+import argparse
 import hashlib
 import json
 import os
@@ -9,11 +10,15 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[3]
-folder = Path(sys.argv[1]).resolve()
+parser = argparse.ArgumentParser()
+parser.add_argument('folder', type=Path)
+parser.add_argument('--long', action='store_true')
+args = parser.parse_args()
+folder = args.folder.resolve()
 folder.mkdir(parents=True, exist_ok=True)
 checks = [
-    ('test', ['cargo', 'test', '--', '--test-threads=4']),
-    ('release', ['cargo', 'test', '--release', '--', '--test-threads=4']),
+    ('test', ['cargo', 'test', '--workspace', '--', '--test-threads=4']),
+    ('release', ['cargo', 'test', '--release', '--workspace', '--', '--test-threads=4']),
     ('clippy', ['cargo', 'clippy', '--all-targets', '--workspace', '--', '-D', 'warnings']),
     ('fmt', ['cargo', 'fmt', '--check']),
     ('fixed', ['cargo', 'test', '--release', 'seeded_crash_fixed_corpus', '--', '--test-threads=1']),
@@ -27,6 +32,8 @@ checks = [
 env = {**os.environ, 'KIBAN_SIM_SEED_START': '0', 'KIBAN_SIM_SEEDS': '20000', 'CARGO_BUILD_JOBS': '4'}
 rows = []
 for name, command in checks:
+    if name == 'long-20000-each' and not args.long:
+        continue
     started = time.time()
     print(f'start {name}', flush=True)
     with (folder / (name + '.log')).open('w') as log:

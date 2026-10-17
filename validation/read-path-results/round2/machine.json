@@ -1,0 +1,17 @@
+{
+  "physical_bytes": 33032925184,
+  "cgroup_memory_max": {
+    "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/app-t3code.slice/app-t3code-agents.slice/app-t3code-agents-952060bec3a7.slice": "max",
+    "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/app-t3code.slice/app-t3code-agents.slice": "28737957888",
+    "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/app-t3code.slice": "max",
+    "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice": "max",
+    "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service": "max",
+    "/sys/fs/cgroup/user.slice/user-1000.slice": "max",
+    "/sys/fs/cgroup/user.slice": "max",
+    "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/app-t3code.slice/app-t3code-agents.slice/app-t3code-agents-952060bec3a7.slice/t3code-codex-3be00259.scope": "max"
+  },
+  "default_cache_bytes": 449030592,
+  "build_cpus": "2-5",
+  "timed_cpu": 3,
+  "external_sweep_cpus": "12-21"
+}

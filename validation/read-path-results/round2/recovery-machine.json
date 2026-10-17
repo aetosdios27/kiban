@@ -1,0 +1,23 @@
+{
+  "timestamp": 1792244451.4383688,
+  "load": [
+    22.37353515625,
+    15.22705078125,
+    6.94091796875
+  ],
+  "physical_meminfo": "MemTotal:       32258716 kB",
+  "cgroup_memory_max": {
+    "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/app-t3code.slice/app-t3code-agents.slice/app-t3code-agents-952060bec3a7.slice": "max",
+    "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/app-t3code.slice/app-t3code-agents.slice": "28737957888",
+    "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/app-t3code.slice": "max",
+    "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice": "max",
+    "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service": "max",
+    "/sys/fs/cgroup/user.slice/user-1000.slice": "max",
+    "/sys/fs/cgroup/user.slice": "max",
+    "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/app-t3code.slice/app-t3code-agents.slice/app-t3code-agents-952060bec3a7.slice/t3code-codex-24a4a87b.scope": "max"
+  },
+  "build_cpus": "2-5",
+  "timed_cpu": 3,
+  "resumed_from_shutdown": true,
+  "base": "2a083fa"
+}

@@ -481,3 +481,40 @@ The remaining cache-budget, mapped-read contract, borrowed-API and block-layout
 proposals above require your decision; their gains are estimates where a
 full-path prototype has not been measured. Main is unchanged; nothing was
 pushed and no PR was opened.
+
+## Round 2: recovery and cache budget
+
+Branch `perf/read-path-2` was recovered after host shutdown and rebased onto
+`origin/main` (`2a083fa`), whose round-one source, harness and profile content
+matched the old branch exactly. Nothing from round one was replayed.
+The external crash sweep remains on CPUs 12–21; builds/gates use 2–5 and
+all timed benchmark children use CPU 3. Load and binary hashes are retained
+with every group. The old and recovered machine records are in
+[round2](read-path-results/round2).
+
+The per-database default block cache now uses physical RAM bounded by the
+minimum finite cgroup v2 ancestor `memory.max`, divided by 64, clamped to
+32–512 MiB. Missing information falls back to 32 MiB. Explicit budgets,
+including zero, remain unchanged. Pure-function tests cover the floor, cap,
+missing sources, overflow-sized inputs and smaller/larger cgroup limits.
+On the recorded machine the cgroup limit yielded 449,030,592 bytes.
+
+[Paired cache-budget evidence](read-path-results/round2/DEFAULT.md) contains
+five alternating before/after trials per required 1M bulk/normal × 32/512 MiB
+scenario, each followed by a contemporary LMDB control, and 10k fast/durable
+write checks. All calls passed the payload oracle and complete verification.
+The supplementary bulk-default point median fell 4.992 → 2.176 µs (p99
+8.192 → 3.392); paired K/LMDB p50 ratio fell 2.623 → 1.172. This is a cache
+capacity effect, not a faster hit algorithm. Explicit-cache ranges overlap;
+no speedup is attributed to the budget calculation for explicit overrides.
+The supplementary normal-default group straddled reboot and is excluded
+from aggregate claims, with its raw output and explanation preserved.
+
+Fast insert/update p50 were 0.736 → 0.736 and 0.864 → 0.848 µs; durable
+557.056 → 573.440 and 557.056 → 589.824 µs. All ranges overlap. Durable
+p99 is noisy (update 1146.880 → 1277.952 µs, ranges 835.584–4325.376 and
+720.896–8912.896); these data establish no clear write regression or fsync
+speedup. [Budget gates](read-path-results/round2/default-checks/status.json)
+passed full debug/release workspace tests, Clippy with warnings denied,
+formatting, fixed crash corpora, loom, site-facts and readbench checks.
+The final round-two change will run both 20k-seed crash/model suites.

@@ -83,6 +83,13 @@ trigger, not a hard RSS budget; direct `Kiban` requires explicit flushing.
 
 Compression, range deletes, reverse iterators and transactions are not implemented.
 
+`KibanOptions::block_cache_bytes` defaults to min(physical RAM / 64, 512 MiB),
+with a 32 MiB floor. On Linux, a lower cgroup v2 `memory.max` (including
+ancestor limits) replaces physical RAM in that calculation. If neither memory source
+can be read, the fallback is 32 MiB. This is a per-database budget; opening
+several databases multiplies it. Set `block_cache_bytes` explicitly to override
+it, including zero to disable block admission.
+
 ## Checkpoints, backups and inspection
 
 `checkpoint()` syncs accepted writes and flushes them to SSTs; shared checkpoints

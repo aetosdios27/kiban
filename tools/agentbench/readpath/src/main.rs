@@ -62,7 +62,7 @@ struct Options {
     suite: Config,
     action: String,
     layout: String,
-    cache_mib: usize,
+    cache_mib: Option<usize>,
     #[serde(default)]
     stage: u64,
     #[serde(default)]
@@ -76,7 +76,10 @@ fn open(o: &Options) -> Result<Box<dyn Backend>> {
         "kiban" => Box::new(backend::Embedded::with_options(
             &o.suite.db,
             KibanOptions {
-                block_cache_bytes: o.cache_mib * 1024 * 1024,
+                block_cache_bytes: o.cache_mib.map_or_else(
+                    || KibanOptions::default().block_cache_bytes,
+                    |mib| mib * 1024 * 1024,
+                ),
                 ..KibanOptions::default()
             },
         )?) as Box<dyn Backend>,
@@ -288,7 +291,7 @@ fn run() -> Result<()> {
         || c.operations == 0
         || c.k == 0
         || c.k > (c.n / model::AGENTS) as usize
-        || !matches!(o.cache_mib, 32 | 512)
+        || !matches!(o.cache_mib, None | Some(32 | 512))
         || !matches!(o.layout.as_str(), "bulk" | "normal")
     {
         return Err("invalid readbench options".into());
@@ -339,7 +342,7 @@ mod tests {
                     },
                     action: "read".into(),
                     layout: shape.into(),
-                    cache_mib: 32,
+                    cache_mib: Some(32),
                     stage: 0,
                     durable: false,
                     micro: String::new(),
