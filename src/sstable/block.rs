@@ -353,10 +353,8 @@ impl BlockIter {
 }
 
 impl BlockIter {
-    /// Repositions an unstarted iterator at the restart interval where
-    /// entries >= `target` can begin, skipping earlier intervals without
-    /// decoding them. Entries before `target` may still follow; callers
-    /// filter those as before.
+    /// Positions an unstarted iterator at the first entry >= `target`,
+    /// reconstructing skipped keys without allocating returned entries.
     pub(crate) fn seek_restart(&mut self, target: &[u8]) -> Result<(), SstError> {
         debug_assert!(
             self.pos == 0 && self.key.is_empty(),
@@ -365,6 +363,25 @@ impl BlockIter {
         let start = seek_restart_index(&self.block.data, &self.block.meta, target)?;
         self.pos = restart_offset_of(&self.block.data, self.block.meta.restart_start, start);
         self.key.clear();
+        while self.pos < self.block.meta.entries_end {
+            let (_, _, shared, non_shared, value_len) = self.block.header(self.pos)?;
+            if shared > self.key.len() {
+                return Err(SstError::Corrupt(
+                    "shared length exceeds previous key".to_string(),
+                ));
+            }
+            self.key.truncate(shared);
+            self.key.extend_from_slice(
+                &self.block.data
+                    [self.pos + ENTRY_FIXED_LEN..self.pos + ENTRY_FIXED_LEN + non_shared],
+            );
+            if self.key.as_slice() >= target {
+                // next() can reconstruct this key again: its shared prefix
+                // is also a prefix of the current key. Keep the entry unread.
+                break;
+            }
+            self.pos += ENTRY_FIXED_LEN + non_shared + value_len;
+        }
         Ok(())
     }
 }
@@ -438,6 +455,51 @@ mod tests {
             b.add(Kind::Put, k.as_bytes(), v.as_bytes(), i as u64 + 1);
         }
         b.finish()
+    }
+
+    #[test]
+    fn positioned_iteration_preserves_versions_and_binary_lower_bounds() {
+        let mut builder = BlockBuilder::default();
+        let mut expected = Vec::new();
+        for i in 0..80u8 {
+            let mut key = vec![b'k', i];
+            if i % 7 == 0 {
+                key.push(0);
+            }
+            for seq in (1..=3).rev() {
+                let kind = if seq == 2 && i % 11 == 0 {
+                    Kind::Tombstone
+                } else {
+                    Kind::Put
+                };
+                let value = if kind == Kind::Put {
+                    vec![i; usize::from(i) * 7 + 3]
+                } else {
+                    Vec::new()
+                };
+                builder.add(kind, &key, &value, seq);
+                expected.push((kind, seq, key.clone(), value));
+            }
+        }
+        let block = VerifiedBlock::from_raw(builder.finish()).unwrap();
+        let mut targets = vec![Vec::new(), vec![b'k'], vec![b'k', 255], vec![b'z']];
+        for (_, _, key, _) in &expected {
+            targets.push(key.clone());
+            let mut after = key.clone();
+            after.push(0);
+            targets.push(after);
+        }
+        for target in targets {
+            let mut iter = block.iter();
+            iter.seek_restart(&target).unwrap();
+            let actual = iter.collect::<Result<Vec<_>, _>>().unwrap();
+            let wanted: Vec<_> = expected
+                .iter()
+                .filter(|entry| entry.2 >= target)
+                .cloned()
+                .collect();
+            assert_eq!(actual, wanted, "target={target:?}");
+        }
     }
 
     #[test]

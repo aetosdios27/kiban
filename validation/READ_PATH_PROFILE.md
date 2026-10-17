@@ -254,3 +254,32 @@ is claimed. [All write p50/p99 and throughput ranges, including LMDB controls](r
 [Correctness gates and exact tested source hashes](read-path-results/crc-checks)
 are retained with the change. The fix is retained for its clear cache-miss
 read improvement; Kiban still trails LMDB on reads, so work continues.
+
+### Skip materialization before a range lower bound
+
+The block iterator positions at the first qualifying key while reconstructing
+only skipped keys. It does not allocate returned key/value pairs for discarded
+entries. The first equal-key version remains visible to the existing sequence
+merge. No synchronization, public API, or file bytes changed. A property test
+checks binary bounds, absent targets, duplicate versions, tombstones, and
+restart boundaries against the original input entries.
+
+The [full matrix](read-path-results/SEEK_COMPARISON.md) showed host drift,
+so frozen binaries were additionally interleaved before/LMDB/after/LMDB on
+CPU 3, reversing before/after order each cycle, five cycles per layout.
+At 1M and 512 MiB, bulk W3 p50 improved 4.736 → 4.224 µs and p99
+9.984 → 7.936 µs. Normal W3 p50 improved 5.632 → 5.120 µs and p99
+13.312 → 9.728 µs. Paired K/LMDB scan ratios improved 1.462 → 1.294
+and 1.621 → 1.538. The ranges retain one noisy bulk scan trial. Point-read
+behavior is unchanged and no point speedup is attributed to this fix.
+
+[Paired bulk](read-path-results/SEEK_PAIRED_BULK.md),
+[paired normal](read-path-results/SEEK_PAIRED_NORMAL.md),
+[all write trials](read-path-results/SEEK_WRITE_COMPARISON.md), and
+[paired fast writes](read-path-results/SEEK_PAIRED_WRITES.md) are retained.
+Paired W1/W4 p50 stayed 0.944/1.088 µs; call throughput changed
+646,178 → 636,404 and 679,806 → 699,970 ops/s, within trial variation.
+W1 p99 ranges overlap; no write speedup is claimed.
+
+[All correctness gates](read-path-results/seek-checks) passed, including the
+two 20,000-seed release suites, loom, and the new cursor property test.
