@@ -1,0 +1,13 @@
+{
+  "backend": "kiban",
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-a7586988/target/v2-data/before/kiban-1000000-normal",
+  "n": 1000000,
+  "operations": 1000000,
+  "k": 10,
+  "seed": 20261016,
+  "output": "",
+  "action": "profile",
+  "layout": "normal",
+  "cache_mib": 512,
+  "stage": 2
+}

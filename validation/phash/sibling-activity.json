@@ -1,0 +1,39 @@
+{
+  "time": 1792261677.685884,
+  "interval_s": 1.1143569946289062,
+  "clock_ticks_s": 100,
+  "note": "Last-CPU sampling can miss migrated work; these are examples, not complete CPU9 attribution.",
+  "threads": [
+    {
+      "pid": 4428,
+      "tid": 4428,
+      "ticks": 2,
+      "cpu": 9,
+      "name": "t3code",
+      "affinity": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21
+      ]
+    }
+  ]
+}

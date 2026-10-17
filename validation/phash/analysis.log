@@ -1,0 +1,1292 @@
+{
+  "floor": {
+    "1": {
+      "median": 161.350425,
+      "min": 157.82094,
+      "max": 167.9909
+    },
+    "2": {
+      "median": 332.04337,
+      "min": 330.70723,
+      "max": 348.87203
+    },
+    "3": {
+      "median": 499.771465,
+      "min": 473.683605,
+      "max": 538.659975
+    },
+    "4": {
+      "median": 661.471955,
+      "min": 631.038885,
+      "max": 696.571
+    },
+    "6": {
+      "median": 974.04145,
+      "min": 961.058345,
+      "max": 1014.711815
+    },
+    "8": {
+      "median": 1317.15811,
+      "min": 1287.29152,
+      "max": 1338.710345
+    }
+  },
+  "floor_end": {
+    "1": {
+      "median": 161.60058,
+      "min": 158.50577,
+      "max": 177.278645
+    },
+    "2": {
+      "median": 332.086225,
+      "min": 319.70535,
+      "max": 351.63256
+    },
+    "3": {
+      "median": 490.06652,
+      "min": 480.11898,
+      "max": 534.491765
+    },
+    "4": {
+      "median": 654.84908,
+      "min": 636.41405,
+      "max": 711.17289
+    },
+    "6": {
+      "median": 996.01267,
+      "min": 958.9544,
+      "max": 1066.13445
+    },
+    "8": {
+      "median": 1334.714875,
+      "min": 1275.353665,
+      "max": 1369.26582
+    }
+  },
+  "variants": [
+    {
+      "layout": "bulk",
+      "workload": "hit",
+      "variant": "kiban",
+      "trials": 5,
+      "runs": 5,
+      "raw": {
+        "mean_ns": {
+          "median": 2106.75139,
+          "min": 1748.98076,
+          "max": 3329.21727
+        },
+        "p50_ns": {
+          "median": 1879,
+          "min": 1704,
+          "max": 2169
+        },
+        "p99_ns": {
+          "median": 3149,
+          "min": 2565,
+          "max": 4572
+        }
+      },
+      "e2e": {
+        "mean_ns": {
+          "median": 2548.43103,
+          "min": 2154.0251,
+          "max": 3045.00287
+        },
+        "p50_ns": {
+          "median": 2325,
+          "min": 2085,
+          "max": 2447
+        },
+        "p99_ns": {
+          "median": 4209,
+          "min": 3251,
+          "max": 4370
+        }
+      },
+      "perf": {
+        "cycles": {
+          "median": 5102.32074,
+          "min": 4770.75555,
+          "max": 5439.30979
+        },
+        "instructions": {
+          "median": 3398.396165,
+          "min": 3398.38826,
+          "max": 3398.397632
+        },
+        "LLC-load-misses": {
+          "median": 13.481237,
+          "min": 11.825265,
+          "max": 13.789263
+        },
+        "dTLB-load-misses": {
+          "median": 0.139057,
+          "min": 0.058513,
+          "max": 0.181728
+        }
+      },
+      "throughput_ops_s": {
+        "median": 515715.06278637494,
+        "min": 415665.8900719878,
+        "max": 593866.348810393
+      },
+      "batch_mean_ns": {
+        "median": 1939.05525,
+        "min": 1683.88056,
+        "max": 2405.778352
+      },
+      "raw_ratio_to_lmdb": {
+        "median": 1.130723291307233,
+        "min": 1.1144721233689205,
+        "max": 1.4326287978863936
+      },
+      "e2e_ratio_to_lmdb": {
+        "median": 1.2146542827657378,
+        "min": 1.111407249466951,
+        "max": 1.2383603238866396
+      }
+    },
+    {
+      "layout": "bulk",
+      "workload": "hit",
+      "variant": "lmdb",
+      "trials": 5,
+      "runs": 15,
+      "raw": {
+        "mean_ns": {
+          "median": 1683.95208,
+          "min": 1555.35102,
+          "max": 2450.90019
+        },
+        "p50_ns": {
+          "median": 1585,
+          "min": 1507,
+          "max": 1686
+        },
+        "p99_ns": {
+          "median": 2351,
+          "min": 2171,
+          "max": 2841
+        }
+      },
+      "e2e": {
+        "mean_ns": {
+          "median": 2068.12803,
+          "min": 1955.69715,
+          "max": 2752.29298
+        },
+        "p50_ns": {
+          "median": 1938,
+          "min": 1865,
+          "max": 2064
+        },
+        "p99_ns": {
+          "median": 3017,
+          "min": 2824,
+          "max": 3396
+        }
+      },
+      "perf": {
+        "cycles": {
+          "median": 4441.952984,
+          "min": 4205.306607,
+          "max": 4583.579455
+        },
+        "instructions": {
+          "median": 3352.702806,
+          "min": 3352.702248,
+          "max": 3352.70432
+        },
+        "LLC-load-misses": {
+          "median": 18.111197,
+          "min": 17.83754,
+          "max": 18.132333
+        },
+        "dTLB-load-misses": {
+          "median": 1.991979,
+          "min": 1.980243,
+          "max": 2.021041
+        }
+      },
+      "throughput_ops_s": {
+        "median": 599686.9445847567,
+        "min": 431517.0519978445,
+        "max": 658060.8296637734
+      },
+      "batch_mean_ns": {
+        "median": 1667.536719,
+        "min": 1519.616356,
+        "max": 2317.405524
+      },
+      "raw_ratio_to_lmdb": {
+        "median": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "e2e_ratio_to_lmdb": {
+        "median": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "all_control_runs": {
+        "raw": {
+          "p50_ns": {
+            "median": 1582,
+            "min": 1448,
+            "max": 1946
+          },
+          "p99_ns": {
+            "median": 2338,
+            "min": 2043,
+            "max": 2929
+          },
+          "mean_ns": {
+            "median": 1820.07582,
+            "min": 1486.38348,
+            "max": 2511.48936
+          }
+        },
+        "e2e": {
+          "p50_ns": {
+            "median": 1944,
+            "min": 1837,
+            "max": 2357
+          },
+          "p99_ns": {
+            "median": 3073,
+            "min": 2824,
+            "max": 4103
+          },
+          "mean_ns": {
+            "median": 2068.12803,
+            "min": 1911.33932,
+            "max": 3132.24157
+          }
+        }
+      }
+    },
+    {
+      "layout": "bulk",
+      "workload": "hit",
+      "variant": "mphf",
+      "trials": 5,
+      "runs": 5,
+      "raw": {
+        "mean_ns": {
+          "median": 525.19859,
+          "min": 465.6264,
+          "max": 691.83561
+        },
+        "p50_ns": {
+          "median": 472,
+          "min": 457,
+          "max": 543
+        },
+        "p99_ns": {
+          "median": 734,
+          "min": 684,
+          "max": 832
+        }
+      },
+      "e2e": {
+        "mean_ns": {
+          "median": 862.30169,
+          "min": 798.88137,
+          "max": 1378.89607
+        },
+        "p50_ns": {
+          "median": 826,
+          "min": 774,
+          "max": 939
+        },
+        "p99_ns": {
+          "median": 1269,
+          "min": 1110,
+          "max": 1507
+        }
+      },
+      "perf": {
+        "cycles": {
+          "median": 1048.531301,
+          "min": 985.602132,
+          "max": 1162.228192
+        },
+        "instructions": {
+          "median": 472.901496,
+          "min": 472.899971,
+          "max": 472.902023
+        },
+        "LLC-load-misses": {
+          "median": 5.497277,
+          "min": 5.413399,
+          "max": 5.543744
+        },
+        "dTLB-load-misses": {
+          "median": 0.014234,
+          "min": 0.006038,
+          "max": 0.02783
+        }
+      },
+      "throughput_ops_s": {
+        "median": 2431905.4615234314,
+        "min": 1910405.1834519496,
+        "max": 2839011.6229732037
+      },
+      "batch_mean_ns": {
+        "median": 411.200195,
+        "min": 352.235261,
+        "max": 523.449166
+      },
+      "raw_ratio_to_lmdb": {
+        "median": 0.31175693527080584,
+        "min": 0.29337539432176657,
+        "max": 0.3220640569395018
+      },
+      "e2e_ratio_to_lmdb": {
+        "median": 0.4190283400809717,
+        "min": 0.41228070175438597,
+        "max": 0.45494186046511625
+      }
+    },
+    {
+      "layout": "bulk",
+      "workload": "miss",
+      "variant": "kiban",
+      "trials": 5,
+      "runs": 5,
+      "raw": {
+        "mean_ns": {
+          "median": 184.72835,
+          "min": 138.85788,
+          "max": 287.15656
+        },
+        "p50_ns": {
+          "median": 136,
+          "min": 114,
+          "max": 153
+        },
+        "p99_ns": {
+          "median": 579,
+          "min": 373,
+          "max": 717
+        }
+      },
+      "e2e": {
+        "mean_ns": {
+          "median": 282.78015,
+          "min": 267.29914,
+          "max": 395.35527
+        },
+        "p50_ns": {
+          "median": 223,
+          "min": 198,
+          "max": 266
+        },
+        "p99_ns": {
+          "median": 726,
+          "min": 664,
+          "max": 804
+        }
+      },
+      "perf": {
+        "cycles": {
+          "median": 296.275912,
+          "min": 288.951728,
+          "max": 330.62647
+        },
+        "instructions": {
+          "median": 409.169279,
+          "min": 409.169262,
+          "max": 409.169377
+        },
+        "LLC-load-misses": {
+          "median": 0.089104,
+          "min": 0.026629,
+          "max": 0.217784
+        },
+        "dTLB-load-misses": {
+          "median": 0.001229,
+          "min": 0.000566,
+          "max": 0.001786
+        }
+      },
+      "throughput_ops_s": {
+        "median": 8301365.949090229,
+        "min": 6087266.628274276,
+        "max": 9802670.28659675
+      },
+      "batch_mean_ns": {
+        "median": 120.462103,
+        "min": 102.01302,
+        "max": 164.277345
+      },
+      "raw_ratio_to_lmdb": {
+        "median": 0.2815734989648033,
+        "min": 0.21755027422303475,
+        "max": 0.3097165991902834
+      },
+      "e2e_ratio_to_lmdb": {
+        "median": 0.4024390243902439,
+        "min": 0.3441358024691358,
+        "max": 0.46503496503496505
+      }
+    },
+    {
+      "layout": "bulk",
+      "workload": "miss",
+      "variant": "lmdb",
+      "trials": 5,
+      "runs": 15,
+      "raw": {
+        "mean_ns": {
+          "median": 516.48719,
+          "min": 505.34409,
+          "max": 680.29771
+        },
+        "p50_ns": {
+          "median": 483,
+          "min": 413,
+          "max": 547
+        },
+        "p99_ns": {
+          "median": 866,
+          "min": 669,
+          "max": 1025
+        }
+      },
+      "e2e": {
+        "mean_ns": {
+          "median": 617.51384,
+          "min": 606.25576,
+          "max": 824.06338
+        },
+        "p50_ns": {
+          "median": 572,
+          "min": 492,
+          "max": 648
+        },
+        "p99_ns": {
+          "median": 1067,
+          "min": 897,
+          "max": 1177
+        }
+      },
+      "perf": {
+        "cycles": {
+          "median": 1230.713811,
+          "min": 1185.144575,
+          "max": 1298.281476
+        },
+        "instructions": {
+          "median": 3182.77872,
+          "min": 3182.778588,
+          "max": 3182.779099
+        },
+        "LLC-load-misses": {
+          "median": 0.013715,
+          "min": 0.00959,
+          "max": 0.024555
+        },
+        "dTLB-load-misses": {
+          "median": 0.008236,
+          "min": 0.005156,
+          "max": 0.017475
+        }
+      },
+      "throughput_ops_s": {
+        "median": 2000439.4525380547,
+        "min": 1629406.4137448044,
+        "max": 2225120.961469427
+      },
+      "batch_mean_ns": {
+        "median": 499.890161,
+        "min": 449.41377,
+        "max": 613.720427
+      },
+      "raw_ratio_to_lmdb": {
+        "median": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "e2e_ratio_to_lmdb": {
+        "median": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "all_control_runs": {
+        "raw": {
+          "p50_ns": {
+            "median": 479,
+            "min": 411,
+            "max": 598
+          },
+          "p99_ns": {
+            "median": 863,
+            "min": 631,
+            "max": 1167
+          },
+          "mean_ns": {
+            "median": 534.70985,
+            "min": 465.1858,
+            "max": 815.49085
+          }
+        },
+        "e2e": {
+          "p50_ns": {
+            "median": 571,
+            "min": 491,
+            "max": 923
+          },
+          "p99_ns": {
+            "median": 1067,
+            "min": 890,
+            "max": 1534
+          },
+          "mean_ns": {
+            "median": 653.01782,
+            "min": 561.3327,
+            "max": 1146.31596
+          }
+        }
+      }
+    },
+    {
+      "layout": "bulk",
+      "workload": "miss",
+      "variant": "mphf",
+      "trials": 5,
+      "runs": 5,
+      "raw": {
+        "mean_ns": {
+          "median": 254.09974,
+          "min": 206.11323,
+          "max": 340.6397
+        },
+        "p50_ns": {
+          "median": 209,
+          "min": 195,
+          "max": 218
+        },
+        "p99_ns": {
+          "median": 397,
+          "min": 380,
+          "max": 454
+        }
+      },
+      "e2e": {
+        "mean_ns": {
+          "median": 354.44121,
+          "min": 305.22675,
+          "max": 511.74111
+        },
+        "p50_ns": {
+          "median": 296,
+          "min": 289,
+          "max": 343
+        },
+        "p99_ns": {
+          "median": 538,
+          "min": 506,
+          "max": 733
+        }
+      },
+      "perf": {
+        "cycles": {
+          "median": 271.281241,
+          "min": 242.623541,
+          "max": 286.57306
+        },
+        "instructions": {
+          "median": 267.29202,
+          "min": 267.291954,
+          "max": 267.292309
+        },
+        "LLC-load-misses": {
+          "median": 0.905172,
+          "min": 0.880689,
+          "max": 1.044791
+        },
+        "dTLB-load-misses": {
+          "median": 0.00086,
+          "min": 0.000439,
+          "max": 0.004104
+        }
+      },
+      "throughput_ops_s": {
+        "median": 8816462.00616671,
+        "min": 5673012.988766022,
+        "max": 9749164.145662807
+      },
+      "batch_mean_ns": {
+        "median": 113.424183,
+        "min": 102.572896,
+        "max": 176.273173
+      },
+      "raw_ratio_to_lmdb": {
+        "median": 0.4196242171189979,
+        "min": 0.39473684210526316,
+        "max": 0.5060532687651331
+      },
+      "e2e_ratio_to_lmdb": {
+        "median": 0.529320987654321,
+        "min": 0.4991568296795953,
+        "max": 0.5934959349593496
+      }
+    },
+    {
+      "layout": "normal",
+      "workload": "hit",
+      "variant": "kiban",
+      "trials": 5,
+      "runs": 5,
+      "raw": {
+        "mean_ns": {
+          "median": 2700.69304,
+          "min": 2355.21079,
+          "max": 3215.44399
+        },
+        "p50_ns": {
+          "median": 2067,
+          "min": 1954,
+          "max": 2361
+        },
+        "p99_ns": {
+          "median": 4225,
+          "min": 3448,
+          "max": 4517
+        }
+      },
+      "e2e": {
+        "mean_ns": {
+          "median": 3298.18761,
+          "min": 2809.17607,
+          "max": 3660.30099
+        },
+        "p50_ns": {
+          "median": 2542,
+          "min": 2329,
+          "max": 2792
+        },
+        "p99_ns": {
+          "median": 4935,
+          "min": 4295,
+          "max": 5760
+        }
+      },
+      "perf": {
+        "cycles": {
+          "median": 5789.67178,
+          "min": 5325.458486,
+          "max": 5987.787129
+        },
+        "instructions": {
+          "median": 4768.158705,
+          "min": 4768.145377,
+          "max": 4768.165414
+        },
+        "LLC-load-misses": {
+          "median": 13.30967,
+          "min": 12.619854,
+          "max": 15.550476
+        },
+        "dTLB-load-misses": {
+          "median": 0.251115,
+          "min": 0.226965,
+          "max": 0.256507
+        }
+      },
+      "throughput_ops_s": {
+        "median": 373474.1721566552,
+        "min": 308432.81740043603,
+        "max": 421584.8893358468
+      },
+      "batch_mean_ns": {
+        "median": 2677.561327,
+        "min": 2372.001524,
+        "max": 3242.197145
+      },
+      "raw_ratio_to_lmdb": {
+        "median": 1.3212608987256875,
+        "min": 1.171462829736211,
+        "max": 1.5321219987021415
+      },
+      "e2e_ratio_to_lmdb": {
+        "median": 1.2726775956284153,
+        "min": 1.239,
+        "max": 1.4962486602357985
+      }
+    },
+    {
+      "layout": "normal",
+      "workload": "hit",
+      "variant": "lmdb",
+      "trials": 5,
+      "runs": 15,
+      "raw": {
+        "mean_ns": {
+          "median": 1979.41276,
+          "min": 1778.19743,
+          "max": 2223.956
+        },
+        "p50_ns": {
+          "median": 1578,
+          "min": 1491,
+          "max": 1668
+        },
+        "p99_ns": {
+          "median": 2324,
+          "min": 2069,
+          "max": 2606
+        }
+      },
+      "e2e": {
+        "mean_ns": {
+          "median": 2354.10443,
+          "min": 2347.12049,
+          "max": 2585.38747
+        },
+        "p50_ns": {
+          "median": 1951,
+          "min": 1830,
+          "max": 2054
+        },
+        "p99_ns": {
+          "median": 3168,
+          "min": 2805,
+          "max": 3285
+        }
+      },
+      "perf": {
+        "cycles": {
+          "median": 4396.1075,
+          "min": 4132.885358,
+          "max": 4453.920806
+        },
+        "instructions": {
+          "median": 3352.703681,
+          "min": 3352.703011,
+          "max": 3352.704302
+        },
+        "LLC-load-misses": {
+          "median": 18.128105,
+          "min": 17.811723,
+          "max": 18.303168
+        },
+        "dTLB-load-misses": {
+          "median": 1.99909,
+          "min": 1.988893,
+          "max": 2.015757
+        }
+      },
+      "throughput_ops_s": {
+        "median": 496848.8694494384,
+        "min": 486839.0520648544,
+        "max": 539912.9917903714
+      },
+      "batch_mean_ns": {
+        "median": 2012.684463,
+        "min": 1852.150282,
+        "max": 2054.066936
+      },
+      "raw_ratio_to_lmdb": {
+        "median": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "e2e_ratio_to_lmdb": {
+        "median": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "all_control_runs": {
+        "raw": {
+          "p50_ns": {
+            "median": 1578,
+            "min": 1451,
+            "max": 1738
+          },
+          "p99_ns": {
+            "median": 2316,
+            "min": 2057,
+            "max": 2699
+          },
+          "mean_ns": {
+            "median": 1955.30199,
+            "min": 1770.53447,
+            "max": 2384.10563
+          }
+        },
+        "e2e": {
+          "p50_ns": {
+            "median": 1951,
+            "min": 1793,
+            "max": 2137
+          },
+          "p99_ns": {
+            "median": 3147,
+            "min": 2737,
+            "max": 3739
+          },
+          "mean_ns": {
+            "median": 2424.97738,
+            "min": 2251.40562,
+            "max": 3121.12607
+          }
+        }
+      }
+    },
+    {
+      "layout": "normal",
+      "workload": "hit",
+      "variant": "mphf",
+      "trials": 5,
+      "runs": 5,
+      "raw": {
+        "mean_ns": {
+          "median": 871.3714,
+          "min": 757.48076,
+          "max": 939.49054
+        },
+        "p50_ns": {
+          "median": 666,
+          "min": 643,
+          "max": 683
+        },
+        "p99_ns": {
+          "median": 1045,
+          "min": 1004,
+          "max": 1146
+        }
+      },
+      "e2e": {
+        "mean_ns": {
+          "median": 1322.99678,
+          "min": 1102.69247,
+          "max": 1960.44134
+        },
+        "p50_ns": {
+          "median": 1024,
+          "min": 984,
+          "max": 1106
+        },
+        "p99_ns": {
+          "median": 1703,
+          "min": 1526,
+          "max": 1967
+        }
+      },
+      "perf": {
+        "cycles": {
+          "median": 1757.757541,
+          "min": 1622.193982,
+          "max": 1888.393715
+        },
+        "instructions": {
+          "median": 1067.151634,
+          "min": 1067.151322,
+          "max": 1067.15226
+        },
+        "LLC-load-misses": {
+          "median": 5.879658,
+          "min": 5.708745,
+          "max": 6.009942
+        },
+        "dTLB-load-misses": {
+          "median": 0.108854,
+          "min": 0.09309,
+          "max": 0.193147
+        }
+      },
+      "throughput_ops_s": {
+        "median": 1230755.0206611091,
+        "min": 1158929.0101059664,
+        "max": 1301771.8861045982
+      },
+      "batch_mean_ns": {
+        "median": 812.509381,
+        "min": 768.183743,
+        "max": 862.865621
+      },
+      "raw_ratio_to_lmdb": {
+        "median": 0.426995457495133,
+        "min": 0.39928057553956836,
+        "max": 0.4328263624841572
+      },
+      "e2e_ratio_to_lmdb": {
+        "median": 0.5377049180327869,
+        "min": 0.5074320861096874,
+        "max": 0.553
+      }
+    },
+    {
+      "layout": "normal",
+      "workload": "miss",
+      "variant": "kiban",
+      "trials": 5,
+      "runs": 5,
+      "raw": {
+        "mean_ns": {
+          "median": 581.98016,
+          "min": 525.78589,
+          "max": 974.00253
+        },
+        "p50_ns": {
+          "median": 464,
+          "min": 374,
+          "max": 607
+        },
+        "p99_ns": {
+          "median": 1839,
+          "min": 1495,
+          "max": 2857
+        }
+      },
+      "e2e": {
+        "mean_ns": {
+          "median": 724.38147,
+          "min": 681.88352,
+          "max": 1017.1076
+        },
+        "p50_ns": {
+          "median": 574,
+          "min": 477,
+          "max": 669
+        },
+        "p99_ns": {
+          "median": 2105,
+          "min": 1874,
+          "max": 2829
+        }
+      },
+      "perf": {
+        "cycles": {
+          "median": 1200.866674,
+          "min": 1174.541978,
+          "max": 1414.80776
+        },
+        "instructions": {
+          "median": 1973.938529,
+          "min": 1973.9383,
+          "max": 1973.940575
+        },
+        "LLC-load-misses": {
+          "median": 0.446879,
+          "min": 0.324141,
+          "max": 1.051762
+        },
+        "dTLB-load-misses": {
+          "median": 0.060315,
+          "min": 0.049158,
+          "max": 0.067673
+        }
+      },
+      "throughput_ops_s": {
+        "median": 1762497.6811478946,
+        "min": 1246175.1286969606,
+        "max": 1931727.9400498897
+      },
+      "batch_mean_ns": {
+        "median": 567.376633,
+        "min": 517.671241,
+        "max": 802.455431
+      },
+      "raw_ratio_to_lmdb": {
+        "median": 0.9169960474308301,
+        "min": 0.8779342723004695,
+        "max": 1.1948818897637796
+      },
+      "e2e_ratio_to_lmdb": {
+        "median": 0.9679595278246206,
+        "min": 0.9228295819935691,
+        "max": 1.115
+      }
+    },
+    {
+      "layout": "normal",
+      "workload": "miss",
+      "variant": "lmdb",
+      "trials": 5,
+      "runs": 15,
+      "raw": {
+        "mean_ns": {
+          "median": 685.14312,
+          "min": 532.40814,
+          "max": 770.36312
+        },
+        "p50_ns": {
+          "median": 506,
+          "min": 425,
+          "max": 521
+        },
+        "p99_ns": {
+          "median": 1073,
+          "min": 766,
+          "max": 1341
+        }
+      },
+      "e2e": {
+        "mean_ns": {
+          "median": 762.55472,
+          "min": 617.94425,
+          "max": 943.57043
+        },
+        "p50_ns": {
+          "median": 593,
+          "min": 507,
+          "max": 622
+        },
+        "p99_ns": {
+          "median": 1175,
+          "min": 864,
+          "max": 1552
+        }
+      },
+      "perf": {
+        "cycles": {
+          "median": 1221.425496,
+          "min": 1172.131625,
+          "max": 1290.314154
+        },
+        "instructions": {
+          "median": 3182.779013,
+          "min": 3182.7788,
+          "max": 3182.779103
+        },
+        "LLC-load-misses": {
+          "median": 0.043629,
+          "min": 0.01657,
+          "max": 0.062295
+        },
+        "dTLB-load-misses": {
+          "median": 0.019669,
+          "min": 0.011719,
+          "max": 0.028544
+        }
+      },
+      "throughput_ops_s": {
+        "median": 1530742.7633672813,
+        "min": 1404709.4900005679,
+        "max": 2047775.9983377957
+      },
+      "batch_mean_ns": {
+        "median": 653.277627,
+        "min": 488.334662,
+        "max": 711.890969
+      },
+      "raw_ratio_to_lmdb": {
+        "median": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "e2e_ratio_to_lmdb": {
+        "median": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "all_control_runs": {
+        "raw": {
+          "p50_ns": {
+            "median": 496,
+            "min": 410,
+            "max": 604
+          },
+          "p99_ns": {
+            "median": 952,
+            "min": 711,
+            "max": 1370
+          },
+          "mean_ns": {
+            "median": 630.19539,
+            "min": 523.75505,
+            "max": 936.94953
+          }
+        },
+        "e2e": {
+          "p50_ns": {
+            "median": 589,
+            "min": 490,
+            "max": 674
+          },
+          "p99_ns": {
+            "median": 1175,
+            "min": 851,
+            "max": 1799
+          },
+          "mean_ns": {
+            "median": 776.41105,
+            "min": 598.76033,
+            "max": 1095.94199
+          }
+        }
+      }
+    },
+    {
+      "layout": "normal",
+      "workload": "miss",
+      "variant": "mphf",
+      "trials": 5,
+      "runs": 5,
+      "raw": {
+        "mean_ns": {
+          "median": 524.49057,
+          "min": 423.9263,
+          "max": 584.24109
+        },
+        "p50_ns": {
+          "median": 381,
+          "min": 315,
+          "max": 405
+        },
+        "p99_ns": {
+          "median": 682,
+          "min": 565,
+          "max": 742
+        }
+      },
+      "e2e": {
+        "mean_ns": {
+          "median": 610.22777,
+          "min": 524.08812,
+          "max": 854.23805
+        },
+        "p50_ns": {
+          "median": 497,
+          "min": 389,
+          "max": 535
+        },
+        "p99_ns": {
+          "median": 862,
+          "min": 744,
+          "max": 984
+        }
+      },
+      "perf": {
+        "cycles": {
+          "median": 911.084989,
+          "min": 839.637149,
+          "max": 944.691519
+        },
+        "instructions": {
+          "median": 882.779916,
+          "min": 882.779459,
+          "max": 882.780528
+        },
+        "LLC-load-misses": {
+          "median": 1.414434,
+          "min": 1.341531,
+          "max": 1.736452
+        },
+        "dTLB-load-misses": {
+          "median": 0.021545,
+          "min": 0.009852,
+          "max": 0.030472
+        }
+      },
+      "throughput_ops_s": {
+        "median": 2485086.461848856,
+        "min": 1903241.635221134,
+        "max": 2559734.9408803233
+      },
+      "batch_mean_ns": {
+        "median": 402.400486,
+        "min": 390.665449,
+        "max": 525.419359
+      },
+      "raw_ratio_to_lmdb": {
+        "median": 0.7549407114624506,
+        "min": 0.7312859884836852,
+        "max": 0.797244094488189
+      },
+      "e2e_ratio_to_lmdb": {
+        "median": 0.8303747534516766,
+        "min": 0.7672583826429981,
+        "max": 0.8916666666666667
+      }
+    }
+  ],
+  "overhead": {
+    "bulk": {
+      "mphf_bits_per_key": {
+        "median": 2.989928,
+        "min": 2.989928,
+        "max": 2.989928
+      },
+      "slot_bytes_per_key": {
+        "median": 12.0,
+        "min": 12,
+        "max": 12
+      },
+      "arena_bytes": {
+        "median": 338732640.0,
+        "min": 338732640,
+        "max": 338732640
+      },
+      "original_sst_bytes": {
+        "median": 329843853.0,
+        "min": 329843853,
+        "max": 329843853
+      },
+      "build_ns": {
+        "median": 417604569.5,
+        "min": 331231983,
+        "max": 579246618
+      },
+      "mphf_build_ns": {
+        "median": 155073833.5,
+        "min": 122887664,
+        "max": 219859095
+      },
+      "layout": {
+        "0": 1
+      },
+      "builds": 10
+    },
+    "normal": {
+      "mphf_bits_per_key": {
+        "median": 2.990712,
+        "min": 2.990712,
+        "max": 2.990712
+      },
+      "slot_bytes_per_key": {
+        "median": 12.0,
+        "min": 12,
+        "max": 12
+      },
+      "arena_bytes": {
+        "median": 338732640.0,
+        "min": 338732640,
+        "max": 338732640
+      },
+      "original_sst_bytes": {
+        "median": 329852455.0,
+        "min": 329852455,
+        "max": 329852455
+      },
+      "build_ns": {
+        "median": 401672188.0,
+        "min": 378361755,
+        "max": 480353592
+      },
+      "mphf_build_ns": {
+        "median": 130361897.5,
+        "min": 118083839,
+        "max": 153151526
+      },
+      "layout": {
+        "1": 1,
+        "2": 6,
+        "3": 77
+      },
+      "builds": 10
+    }
+  },
+  "gate": {
+    "verdict": "GO",
+    "criterion": "bulk hit median raw p50 <= 0.8x LMDB median raw p50",
+    "ratio": 0.29779179810725553,
+    "threshold": 0.8,
+    "worst_paired_raw": 0.3220640569395018,
+    "worst_paired_e2e": 0.45494186046511625
+  }
+}

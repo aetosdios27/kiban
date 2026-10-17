@@ -11,6 +11,7 @@ import time
 ROOT = Path(__file__).resolve().parents[3]
 BINARY = ROOT / 'tools/agentbench/readpath/target/release/kiban-readbench'
 DATA = ROOT / 'target/read-path-data'
+CPU = int(os.environ.get('READBENCH_CPU', '3'))
 
 
 def config(engine, n, layout, cache=32):
@@ -26,11 +27,11 @@ def run(c, folder, name):
     path.write_text(json.dumps(c, indent=2) + '\n')
     started = time.time()
     with (folder / (name + '.log')).open('w') as log:
-        subprocess.run(['taskset', '-c', '3', str(BINARY), str(path)],
+        subprocess.run(['taskset', '-c', str(CPU), str(BINARY), str(path)],
                        check=True, stdout=log, stderr=log)
     with (folder / 'commands.jsonl').open('a') as log:
         log.write(json.dumps(dict(config=path.name, started=started, ended=time.time(),
-                                  load=os.getloadavg(), affinity='3')) + '\n')
+                                  load=os.getloadavg(), affinity=str(CPU))) + '\n')
 
 
 def main():
@@ -46,7 +47,7 @@ def main():
     (args.out / 'metadata.json').write_text(json.dumps(dict(
         binary=str(BINARY), sha256=hashlib.sha256(BINARY.read_bytes()).hexdigest(),
         git_head=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
-        affinity='3', load=os.getloadavg(), trials=args.trials), indent=2) + '\n')
+        affinity=str(CPU), load=os.getloadavg(), trials=args.trials), indent=2) + '\n')
     for n in (10000, 1000000):
         for layout in ('bulk', 'normal'):
             if args.action == 'prepare':

@@ -46,7 +46,7 @@ impl BlockBuilder {
         &self.last_key
     }
 
-    pub fn add(&mut self, kind: Kind, key: &[u8], value: &[u8], seq: u64) {
+    pub fn add(&mut self, kind: Kind, key: &[u8], value: &[u8], seq: u64) -> usize {
         // Equal user keys are legal while sequence numbers descend
         // (snapshot history); anything else breaks sorted-order search.
         debug_assert!(
@@ -74,6 +74,7 @@ impl BlockBuilder {
             .extend_from_slice(&(value.len() as u32).to_le_bytes());
         self.buf.extend_from_slice(&seq.to_le_bytes());
         self.buf.extend_from_slice(&key[shared..]);
+        let value_offset = self.buf.len();
         if kind == Kind::Put {
             self.buf.extend_from_slice(value);
         }
@@ -83,6 +84,7 @@ impl BlockBuilder {
         self.last_seq = seq;
         self.counter += 1;
         self.entries += 1;
+        value_offset
     }
 
     fn key_order(prev: &[u8], prev_seq: u64, key: &[u8], seq: u64) -> bool {
@@ -112,8 +114,32 @@ pub struct Match<'a> {
 /// A data block whose bytes are owned and whose layout was verified.
 #[derive(Debug, Clone)]
 pub struct VerifiedBlock {
-    data: ArcBlock,
+    data: BlockData,
     meta: BlockMeta,
+}
+
+/// A block view can share an admitted SST's backing allocation.
+#[derive(Debug, Clone)]
+struct BlockData {
+    bytes: ArcBlock,
+    start: usize,
+    len: usize,
+}
+impl std::ops::Deref for BlockData {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        &self.bytes[self.start..self.start + self.len]
+    }
+}
+impl From<ArcBlock> for BlockData {
+    fn from(bytes: ArcBlock) -> Self {
+        let len = bytes.len();
+        Self {
+            bytes,
+            start: 0,
+            len,
+        }
+    }
 }
 
 impl VerifiedBlock {
@@ -171,15 +197,22 @@ impl VerifiedBlock {
     pub fn from_raw(raw: Vec<u8>) -> Result<VerifiedBlock, SstError> {
         let meta = Self::verify(&raw)?;
         Ok(VerifiedBlock {
-            data: raw.into(),
+            data: ArcBlock::from(raw).into(),
             meta,
         })
     }
 
     pub fn from_cached(cached: CachedBlock) -> VerifiedBlock {
         VerifiedBlock {
-            data: cached.data,
+            data: cached.data.into(),
             meta: cached.meta,
+        }
+    }
+
+    pub(super) fn from_shared(bytes: ArcBlock, start: usize, len: usize, meta: BlockMeta) -> Self {
+        Self {
+            data: BlockData { bytes, start, len },
+            meta,
         }
     }
 
@@ -275,6 +308,33 @@ fn header_at(
         return Err(bad("key/value runs past entries area".to_string()));
     }
     Ok((kind, seq, shared, non_shared, value_len))
+}
+
+/// Walk a verified raw block without allocating values. The caller can bind
+/// full-key side records to exact sorted-record value addresses once at load.
+pub(super) fn visit_records(
+    data: &[u8],
+    meta: &BlockMeta,
+    key: &mut Vec<u8>,
+    mut visit: impl FnMut(Kind, u64, &[u8], usize, usize) -> Result<(), SstError>,
+) -> Result<(), SstError> {
+    key.clear();
+    let mut pos = 0;
+    while pos < meta.entries_end {
+        let (kind, seq, shared, non_shared, len) = header_at(data, meta, pos)?;
+        if shared > key.len() {
+            return Err(SstError::Corrupt(
+                "point backing block: invalid shared key length".into(),
+            ));
+        }
+        key.truncate(shared);
+        let suffix = pos + ENTRY_FIXED_LEN;
+        key.extend_from_slice(&data[suffix..suffix + non_shared]);
+        let value_offset = suffix + non_shared;
+        visit(kind, seq, key, value_offset, len)?;
+        pos = value_offset + len;
+    }
+    Ok(())
 }
 
 fn restart_offset_of(data: &[u8], restart_start: usize, i: usize) -> usize {

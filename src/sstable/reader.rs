@@ -12,7 +12,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use super::block::{BlockIter, VerifiedBlock};
-use super::builder::{FOOTER_LEN, FORMAT_VERSION, MAGIC};
+use super::builder::{FOOTER_LEN, FORMAT_VERSION, MAGIC, POINT_FOOTER_EXTRA, POINT_FORMAT_VERSION};
+use super::point::PointIndex;
 use super::separator::Separator;
 use super::{Kind, SstError};
 use crate::bloom::BloomFilter;
@@ -126,6 +127,7 @@ pub struct SstTable {
     file_len: u64,
     index: Vec<IndexEntry>,
     filter: BloomFilter,
+    point: Option<Box<PointIndex>>,
     first_key: Vec<u8>,
     last_key: Vec<u8>,
     block_cache: Arc<BlockCache>,
@@ -190,20 +192,54 @@ impl SstTable {
             return Err(bad("bad magic number; not a kiban sstable".to_string()));
         }
         let version = u32::from_le_bytes(footer[16..20].try_into().unwrap());
-        if version != FORMAT_VERSION {
+        if version != FORMAT_VERSION && version != POINT_FORMAT_VERSION {
             return Err(bad(format!("unsupported format version {version}")));
         }
         let index_offset = u64::from_le_bytes(footer[0..8].try_into().unwrap());
         let index_len = u64::from_le_bytes(footer[8..16].try_into().unwrap());
         let filter_offset = u64::from_le_bytes(footer[20..28].try_into().unwrap());
         let filter_len = u64::from_le_bytes(footer[28..36].try_into().unwrap());
-        let data_end = file_len - FOOTER_LEN as u64;
+        let point_range = if version == POINT_FORMAT_VERSION {
+            if file_len < (FOOTER_LEN + POINT_FOOTER_EXTRA) as u64 {
+                return Err(bad("truncated point footer".into()));
+            }
+            let lease = file_cache.acquire(number, path).map_err(open_err)?;
+            let extra = lease
+                .read_range_at(
+                    path,
+                    file_len - (FOOTER_LEN + POINT_FOOTER_EXTRA) as u64,
+                    POINT_FOOTER_EXTRA as u64,
+                )
+                .map_err(|e| bad(e.to_string()))?;
+            let state = crc32::update(crc32::INITIAL, &extra[..20]);
+            let checksum = crc32::finalize(crc32::update(state, footer));
+            if checksum != u32::from_le_bytes(extra[20..24].try_into().unwrap())
+                || u32::from_le_bytes(extra[16..20].try_into().unwrap()) != 2
+            {
+                return Err(bad("point footer checksum or feature flags".into()));
+            }
+            let offset = u64::from_le_bytes(extra[..8].try_into().unwrap());
+            let len = u64::from_le_bytes(extra[8..16].try_into().unwrap());
+            if len < 37 || offset.checked_add(len) != Some(filter_offset) {
+                return Err(bad("point section out of bounds".into()));
+            }
+            Some((offset, len))
+        } else {
+            None
+        };
+        let data_end = file_len
+            - FOOTER_LEN as u64
+            - if point_range.is_some() {
+                POINT_FOOTER_EXTRA as u64
+            } else {
+                0
+            };
         if index_len == 0
             || index_len > crate::limits::MAX_RECORD_BYTES as u64
             || filter_len > crate::limits::MAX_RECORD_BYTES as u64
             || index_offset
                 .checked_add(index_len)
-                .is_none_or(|end| end > data_end)
+                .is_none_or(|end| end != data_end)
         {
             return Err(bad("index block out of file bounds".to_string()));
         }
@@ -226,7 +262,62 @@ impl SstTable {
         verify_trailer(&filter_raw, "filter")?;
         let filter = BloomFilter::decode(&filter_raw[..filter_raw.len() - 5])
             .ok_or_else(|| bad("filter block payload is malformed".to_string()))?;
-        let index = parse_index(&index_raw, filter_offset)?;
+        let index = parse_index(
+            &index_raw,
+            point_range.map_or(filter_offset, |(offset, _)| offset),
+        )?;
+        let point = if let Some((offset, len)) = point_range {
+            let lease = file_cache.acquire(number, path).map_err(open_err)?;
+            let resident = offset
+                .checked_add(len)
+                .and_then(|n| usize::try_from(n).ok())
+                .and_then(|n| block_cache.reserve_point(n));
+            if let Some(reservation) = resident {
+                let raw = lease
+                    .read_shared_range_at(path, offset, len)
+                    .map_err(|e| bad(e.to_string()))?;
+                let data = lease
+                    .read_shared_range_at(path, 0, offset)
+                    .map_err(|e| bad(e.to_string()))?;
+                Some(Box::new(PointIndex::decode(
+                    raw,
+                    data,
+                    reservation,
+                    index.iter().map(|entry| (entry.offset, entry.len)),
+                )?))
+            } else {
+                let header = lease
+                    .read_range_at(path, offset, 8)
+                    .map_err(|e| bad(e.to_string()))?;
+                if header != b"KIBANPH2" {
+                    return Err(bad("unsupported point section encoding".into()));
+                }
+                // Even an unused optional section must pass its checksum.
+                // Stream it so a small cache never allocates a whole SST arena.
+                let mut state = crc32::INITIAL;
+                let mut pos = 0;
+                while pos < len - 4 {
+                    let amount = (len - 4 - pos).min(64 * 1024);
+                    let raw = lease
+                        .read_range_at(path, offset + pos, amount)
+                        .map_err(|e| bad(e.to_string()))?;
+                    state = crc32::update(state, &raw);
+                    pos += amount;
+                }
+                let trailer = lease
+                    .read_range_at(path, offset + len - 5, 5)
+                    .map_err(|e| bad(e.to_string()))?;
+                if trailer[0] != 0
+                    || crc32::finalize(state)
+                        != u32::from_le_bytes(trailer[1..].try_into().unwrap())
+                {
+                    return Err(bad("point index checksum mismatch".into()));
+                }
+                None
+            }
+        } else {
+            None
+        };
 
         // Best-effort: a failed mmap degrades silently to the pread
         // path (see `SstTable::mmap`'s doc), never fails the open.
@@ -240,6 +331,7 @@ impl SstTable {
             file_len,
             index,
             filter,
+            point,
             first_key: Vec::new(),
             last_key: Vec::new(),
             block_cache,
@@ -293,6 +385,9 @@ impl SstTable {
     /// (leases a descriptor, or slices the mapping); the rest wait for
     /// its result.
     fn read_block(&self, entry: &IndexEntry) -> Result<VerifiedBlock, SstError> {
+        if let Some(point) = &self.point {
+            return Ok(point.block_at(entry.offset));
+        }
         let key = (self.number, entry.offset);
         let number = self.number;
         let path = &self.path;
@@ -354,6 +449,9 @@ impl SstTable {
         idx: usize,
         state: &mut ReadAhead,
     ) -> Result<VerifiedBlock, SstError> {
+        if let Some(point) = &self.point {
+            return Ok(point.block(idx));
+        }
         let ranges = self.block_cache.range_cache();
         let entry = &self.index[idx];
         if self.mmap.is_some() || !ranges.is_enabled() {
@@ -448,6 +546,9 @@ impl SstTable {
     pub fn get(&self, key: &[u8], limit: Option<u64>) -> Result<Option<Found>, SstError> {
         if !self.filter.may_contain(key) {
             return Ok(None);
+        }
+        if let Some(point) = &self.point {
+            return Ok(point.get(key, limit));
         }
         let idx = self.index.partition_point(|e| e.separator.as_slice() < key);
         if idx == self.index.len() {
@@ -624,7 +725,7 @@ impl Iterator for CompactionIter<'_> {
     }
 }
 
-fn verify_trailer(raw: &[u8], what: &str) -> Result<(), SstError> {
+pub(super) fn verify_trailer(raw: &[u8], what: &str) -> Result<(), SstError> {
     if raw.len() < 6 || raw[raw.len() - 5] != super::block::BLOCK_TYPE_NONE {
         return Err(SstError::Corrupt(format!("unknown {what} block type")));
     }

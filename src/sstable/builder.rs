@@ -6,6 +6,7 @@
 //! magic.
 
 use super::block::{BLOCK_TYPE_NONE, BlockBuilder};
+use super::point::PointBuilder;
 use super::{Kind, SstError};
 use crate::bloom::BloomFilter;
 use crate::crc32;
@@ -13,6 +14,8 @@ use crate::crc32;
 pub const TARGET_BLOCK_SIZE: usize = 4096;
 pub const FOOTER_LEN: usize = 44;
 pub const FORMAT_VERSION: u32 = 3;
+pub const POINT_FORMAT_VERSION: u32 = 4;
+pub const POINT_FOOTER_EXTRA: usize = 24;
 pub const MAGIC: &[u8; 8] = b"KIBANSST";
 
 struct PendingBlock {
@@ -37,6 +40,7 @@ pub struct TableBuilder {
     last_seq: u64,
     has_last: bool,
     key_hashes: Vec<u64>,
+    point: Option<PointBuilder>,
 }
 
 impl TableBuilder {
@@ -44,10 +48,23 @@ impl TableBuilder {
         TableBuilder::default()
     }
 
+    /// Write a format-4 point section alongside the existing sorted blocks.
+    pub fn with_point_index(enabled: bool) -> Self {
+        Self {
+            point: enabled.then(PointBuilder::default),
+            ..Self::default()
+        }
+    }
+
     /// Bytes written to the output so far, including the open block —
     /// a lower bound on the finished file size.
     pub fn approximate_size(&self) -> usize {
-        self.out.len() + self.block.estimated_size()
+        self.out.len()
+            + self.block.estimated_size()
+            + self
+                .point
+                .as_ref()
+                .map_or(0, PointBuilder::approximate_size)
     }
 
     pub fn add(&mut self, kind: Kind, key: &[u8], value: &[u8], seq: u64) -> Result<(), SstError> {
@@ -68,6 +85,18 @@ impl TableBuilder {
                 "tombstone entries must not carry a value".to_string(),
             ));
         }
+
+        let point_patch = if let Some(point) = &mut self.point {
+            Some(point.add(
+                kind,
+                key,
+                value,
+                seq,
+                !self.has_last || key != self.last_key.as_slice(),
+            )?)
+        } else {
+            None
+        };
 
         // Flush first if the current block has met the size target; then,
         // if we are about to write the first entry of a fresh block, the
@@ -93,7 +122,13 @@ impl TableBuilder {
                 len: p.len,
             });
         }
-        self.block.add(kind, key, value, seq);
+        let value_offset = self.block.add(kind, key, value, seq);
+        if let Some(patch) = point_patch {
+            self.point
+                .as_mut()
+                .expect("point builder exists")
+                .set_value_offset(patch, self.out.len() as u64 + value_offset as u64);
+        }
         if !self.has_last || key != self.last_key.as_slice() {
             self.key_hashes.push(crate::bloom::fnv1a_64(key));
         }
@@ -151,6 +186,12 @@ impl TableBuilder {
 
         // Filter block (bloom.md D4): sits directly before the index;
         // carries the standard trailer.
+        let point_offset = self.out.len() as u64;
+        let has_point = self.point.is_some();
+        if let Some(point) = self.point {
+            self.out.extend_from_slice(&point.finish()?);
+        }
+        let point_len = self.out.len() as u64 - point_offset;
         let filter = BloomFilter::build_hashes(&self.key_hashes);
         let mut filter_bytes = filter.encode();
         filter_bytes.push(BLOCK_TYPE_NONE);
@@ -164,16 +205,43 @@ impl TableBuilder {
         let index_len = idx.len() as u64;
         self.out.extend_from_slice(&idx);
 
+        let footer_start = self.out.len();
+        if has_point {
+            self.out.extend_from_slice(&point_offset.to_le_bytes());
+            self.out.extend_from_slice(&point_len.to_le_bytes());
+            self.out.extend_from_slice(&2u32.to_le_bytes());
+            self.out.extend_from_slice(&0u32.to_le_bytes());
+        }
         self.out.extend_from_slice(&index_offset.to_le_bytes());
         self.out.extend_from_slice(&index_len.to_le_bytes());
-        self.out.extend_from_slice(&FORMAT_VERSION.to_le_bytes());
+        let version = if has_point {
+            POINT_FORMAT_VERSION
+        } else {
+            FORMAT_VERSION
+        };
+        self.out.extend_from_slice(&version.to_le_bytes());
         self.out.extend_from_slice(&filter_offset.to_le_bytes());
         self.out.extend_from_slice(&filter_len.to_le_bytes());
         self.out.extend_from_slice(MAGIC);
+        if has_point {
+            let state = crc32::update(crc32::INITIAL, &self.out[footer_start..footer_start + 20]);
+            let checksum = crc32::finalize(crc32::update(
+                state,
+                &self.out[footer_start + POINT_FOOTER_EXTRA..],
+            ));
+            self.out[footer_start + 20..footer_start + 24].copy_from_slice(&checksum.to_le_bytes());
+        }
         debug_assert_eq!(filter_offset + filter_len, index_offset);
         debug_assert_eq!(
             self.out.len() as u64,
-            index_offset + index_len + FOOTER_LEN as u64
+            index_offset
+                + index_len
+                + FOOTER_LEN as u64
+                + if has_point {
+                    POINT_FOOTER_EXTRA as u64
+                } else {
+                    0
+                }
         );
 
         Ok(self.out)

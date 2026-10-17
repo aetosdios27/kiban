@@ -1,0 +1,20 @@
+{
+  "before": {
+    "source": "/home/aetos/.t3/worktrees/kiban/t3-a7586988/target/v2-main-8bbb4934",
+    "binaries": {
+      "before": "acc09f77ff637c28757f3f8324b666fb6bfb06170f5f549aa8003b369e676bdf",
+      "before-range": "350539b3742f4eda1908b8e042ce850276331f907753b63bbef7b7f83662c8cb"
+    },
+    "build_cpus": "2,3,4,5,6,7,10,11",
+    "nice": 10
+  },
+  "after": {
+    "source": "/home/aetos/.t3/worktrees/kiban/t3-a7586988",
+    "binaries": {
+      "after": "0cea2b4f1e4dce399498ebd12b43799a8c2bf4130d61623403820cca311a129b",
+      "after-range": "6385ddc6b53961140080dfbee77387d9ef3e0f1fcdd3ed494fa57c3728b90532"
+    },
+    "build_cpus": "2,3,4,5,6,7,10,11",
+    "nice": 10
+  }
+}

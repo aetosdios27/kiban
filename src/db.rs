@@ -416,6 +416,10 @@ pub struct KibanOptions {
     /// ancestors). If neither can be read, the default is 32 MiB. An explicit
     /// value, including zero to bypass admission, overrides this calculation.
     pub block_cache_bytes: usize,
+    /// Write optional format-4 per-SST perfect-hash point indexes. Readers
+    /// accept both formats regardless of this switch. Section residency shares
+    /// block_cache_bytes; denied admission falls back to sorted blocks.
+    pub point_index: bool,
     /// Hard bound on SST descriptors owned by the shared foreground
     /// `TableFileCache` (11.6), not a target or a soft threshold.
     /// Streaming compaction opens one independent input handle only during
@@ -525,6 +529,7 @@ impl Default for KibanOptions {
             level_multiplier: 10,
             target_file_size: 4 * MIB,
             block_cache_bytes: crate::cache_budget::default_block_cache_bytes(),
+            point_index: false,
             max_open_table_files: 128,
             write_buffer_bytes: 4 * MIB as usize,
             mmap_max_level: None,
@@ -1553,7 +1558,7 @@ impl Kiban {
         let new_wal_number = sst_number + 1;
         let new_next_file_number = sst_number + 2;
 
-        let mut builder = TableBuilder::new();
+        let mut builder = TableBuilder::with_point_index(self.options.point_index);
         // `iter_all_versions` (not `iter`, which is live-only): a
         // snapshot may need an older, superseded version that only
         // exists in this memtable's retained history. Its own ordering
@@ -1796,6 +1801,7 @@ impl Kiban {
             cache: self.cache.clone(),
             file_cache: self.file_cache.clone(),
             mmap_max_level: self.options.mmap_max_level,
+            point_index: self.options.point_index,
         })
     }
 
@@ -2862,12 +2868,13 @@ pub(crate) struct CompactionPlan {
     /// Reserved output file numbers, in the order BUILD may use them.
     /// Reserved generously at PLAN time (a cheap counter bump) so BUILD
     /// never needs the lock to allocate one.
-    output_numbers: Vec<u64>,
+    output_numbers: std::ops::Range<u64>,
     dir: PathBuf,
     cache: StdArc<BlockCache>,
     file_cache: StdArc<TableFileCache>,
     target_file_size: u64,
     mmap_max_level: Option<u32>,
+    point_index: bool,
     /// 11.17-round-3, section 7: when true, this plan moves exactly one
     /// existing table down a level by metadata alone (`build()` reopens
     /// the same file's footer/index — no merge, no bytes rewritten).
@@ -2958,7 +2965,7 @@ impl CompactionPlan {
         }
 
         let mut outputs: Vec<TableEntry> = Vec::new();
-        let mut builder = TableBuilder::new();
+        let mut builder = TableBuilder::with_point_index(self.point_index);
         let mut output_entries = 0usize;
         let mut core = MergeCore {
             sources,
@@ -3019,7 +3026,7 @@ impl CompactionPlan {
             {
                 let number = self.next_output_number(&mut next_output)?;
                 self.emit_output(builder, number, &mut outputs)?;
-                builder = TableBuilder::new();
+                builder = TableBuilder::with_point_index(self.point_index);
                 output_entries = 0;
             }
             builder.add(v.kind, &v.key, &v.value, v.seq)?;
@@ -3036,12 +3043,17 @@ impl CompactionPlan {
     }
 
     fn next_output_number(&self, next_output: &mut usize) -> Result<u64, DbError> {
-        let number = *self.output_numbers.get(*next_output).ok_or_else(|| {
-            DbError::Corrupt(
-                "compaction exhausted its reserved output file numbers (reservation bug)"
-                    .to_string(),
-            )
-        })?;
+        let number = self
+            .output_numbers
+            .start
+            .checked_add(*next_output as u64)
+            .filter(|&number| number < self.output_numbers.end)
+            .ok_or_else(|| {
+                DbError::Corrupt(
+                    "compaction exhausted its reserved output file numbers (reservation bug)"
+                        .into(),
+                )
+            })?;
         *next_output += 1;
         Ok(number)
     }
@@ -3095,6 +3107,7 @@ pub(crate) struct FlushPlan {
     cache: StdArc<BlockCache>,
     file_cache: StdArc<TableFileCache>,
     mmap_max_level: Option<u32>,
+    point_index: bool,
 }
 
 impl FlushPlan {
@@ -3104,7 +3117,7 @@ impl FlushPlan {
     /// version isn't lost, same atomic publication. No engine lock is
     /// held here.
     pub(crate) fn build(&self) -> Result<TableEntry, DbError> {
-        let mut builder = TableBuilder::new();
+        let mut builder = TableBuilder::with_point_index(self.point_index);
         for (key, entry) in self.memtable.iter_all_versions() {
             match entry {
                 MemEntry::Value { value, seq } => builder.add(Kind::Put, key, value, *seq)?,
@@ -3367,12 +3380,13 @@ impl Kiban {
             output_level: level + 1,
             visible_sequence: self.last_sequence,
             gc_allowed: false,
-            output_numbers: Vec::new(),
+            output_numbers: 0..0,
             dir: self.dir.clone(),
             cache: self.cache.clone(),
             file_cache: self.file_cache.clone(),
             target_file_size: self.options.target_file_size,
             mmap_max_level: self.options.mmap_max_level,
+            point_index: self.options.point_index,
             trivial_move: true,
             predicted_output_bytes: None,
         })
@@ -3650,17 +3664,23 @@ impl Kiban {
         // Reserve a generous bound on output file numbers now, so BUILD
         // never needs to allocate one — an atomic `fetch_add`, not the
         // engine gate, does the reserving (11.17-round-3.3: PLAN no
-        // longer holds it at all). Output bytes are bounded by input
-        // bytes (drop rules only remove data); the file count that
-        // produces is bounded by input_bytes/target_file_size, plus
-        // slack for the tail file and rounding.
+        // longer holds it at all). A point arena can expand compressed
+        // keys, especially when converting old tables. Reserve using a
+        // conservative restart-derived expansion bound, with one extra
+        // tail/rounding allowance. Store the reservation as a range so
+        // a generous identity bound does not allocate a huge vector.
         let total_input_bytes: u64 = inputs.iter().map(|t| t.size).sum();
         let target_file_size = self.options.target_file_size.max(1);
-        let max_outputs = (total_input_bytes / target_file_size) + 8;
+        let expansion = if self.options.point_index {
+            crate::sstable::POINT_OUTPUT_EXPANSION_BOUND
+        } else {
+            1
+        };
+        let max_outputs = total_input_bytes.saturating_mul(expansion) / target_file_size + 8;
         let start = self
             .next_file_number
             .fetch_add(max_outputs, Ordering::SeqCst);
-        let output_numbers: Vec<u64> = (start..start + max_outputs).collect();
+        let output_numbers = start..start + max_outputs;
 
         // Captured snapshots own their memtables and old SST topology. They
         // never read this new output, so hidden versions in it need not be
@@ -3679,6 +3699,7 @@ impl Kiban {
             file_cache: self.file_cache.clone(),
             target_file_size: self.options.target_file_size,
             mmap_max_level: self.options.mmap_max_level,
+            point_index: self.options.point_index,
             trivial_move: false,
             predicted_output_bytes: None,
         })
@@ -3893,6 +3914,7 @@ mod compaction_tests {
             base_level_bytes: 300,
             level_multiplier: 4,
             target_file_size: 250,
+            point_index: false,
             block_cache_bytes: 1 << 20,
             // High enough that no existing (pre-11.6) test — none of
             // which exercise the file-cache bound deliberately — ever
@@ -4442,6 +4464,7 @@ mod crash_sweep_tests {
             base_level_bytes: 300,
             level_multiplier: 4,
             target_file_size: 250,
+            point_index: false,
             block_cache_bytes: 1 << 20,
             max_open_table_files: 64,
             write_buffer_bytes: 1 << 20,
@@ -4580,6 +4603,7 @@ mod crash_sweep_tests {
                     base_level_bytes: 300,
                     level_multiplier: 4,
                     target_file_size: 250,
+                    point_index: false,
                     block_cache_bytes: 1 << 20,
                     max_open_table_files: 64,
                     write_buffer_bytes: 1 << 20,
@@ -5886,6 +5910,7 @@ mod cache_scaling_tests {
             base_level_bytes: u64::MAX,
             level_multiplier: 10,
             target_file_size: 64 * 1024,
+            point_index: false,
             block_cache_bytes: 4096,  // tiny: far smaller than the data
             max_open_table_files: 64, // this module tests the block cache, not the file cache
             // Irrelevant here: this module uses direct `Kiban`, which
@@ -9319,3 +9344,7 @@ mod rotation_durability_tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "point_index_tests.rs"]
+mod point_index_tests;

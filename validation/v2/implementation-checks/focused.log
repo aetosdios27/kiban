@@ -1,0 +1,16 @@
+   Compiling kiban v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-a7586988)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.93s
+     Running unittests src/lib.rs (target/debug/deps/kiban-60f9814aeb7cdf24)
+
+running 8 tests
+test db::point_index_tests::point_index_maintenance_measurement ... ignored, CPU-8 maintenance benchmark; KIBAN_POINT_BENCH_N controls population
+test db::point_index_tests::point_index_mixed_tables_resolve_by_sequence_across_overlapping_levels ... ok
+test db::point_index_tests::point_index_presence_is_independent_of_writer_switch_and_cache_admission ... ok
+test sstable::point::tests::point_index_bijection_property ... ok
+test sstable::point::tests::point_index_roundtrip_versions_and_binary_keys ... ok
+test db::point_index_tests::point_index_every_section_and_footer_bit_flip_is_detected_with_or_without_admission ... ok
+test db::point_index_tests::point_index_conversion_reserves_outputs_for_full_key_expansion ... ok
+test db::point_index_tests::point_index_randomized_mixed_formats_snapshots_and_compaction_match_model ... ok
+
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 333 filtered out; finished in 0.92s
+

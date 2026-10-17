@@ -1,0 +1,13 @@
+{
+  "before": {
+    "2.sst": "04c4dd3b7ea01bcf4d5239b4bcee0dfb132016547f34e35f34a465c97f25d227",
+    "3.wal": "83d0380714afbe1eb6b1b60c31850b630d5133602edbb106fa2e1b7b4e38af5b",
+    "MANIFEST": "801f64cb06e044d9006d494c9de8a818a46a14e64fa98a5a48cc53932fda27b7"
+  },
+  "after": {
+    "2.sst": "04c4dd3b7ea01bcf4d5239b4bcee0dfb132016547f34e35f34a465c97f25d227",
+    "3.wal": "83d0380714afbe1eb6b1b60c31850b630d5133602edbb106fa2e1b7b4e38af5b",
+    "MANIFEST": "801f64cb06e044d9006d494c9de8a818a46a14e64fa98a5a48cc53932fda27b7"
+  },
+  "unchanged": true
+}

@@ -46,6 +46,7 @@ struct Inner {
     map: HashMap<CacheKey, Entry>,
     clock: VecDeque<CacheKey>,
     bytes: usize,
+    point_bytes: usize,
 }
 
 /// State of one physical load in flight for a key, shared by every
@@ -109,12 +110,29 @@ pub struct BlockCacheStats {
     pub capacity_bytes: usize,
     pub resident_bytes: usize,
     pub resident_entries: usize,
+    /// Immutable point sections pinned by live SST handles, included in resident_bytes.
+    pub point_index_bytes: usize,
     pub hits: u64,
     pub misses: u64,
     pub evictions: u64,
     /// Concurrent misses on the same key that waited for another
     /// caller's already-running load instead of duplicating it.
     pub coalesced: u64,
+}
+
+/// Releases a section's resident-byte charge when its table version dies.
+/// Owning the cache Arc also keeps accounting alive through all snapshots.
+#[derive(Debug)]
+pub(crate) struct ResidentReservation {
+    cache: Arc<BlockCache>,
+    bytes: usize,
+}
+
+impl Drop for ResidentReservation {
+    fn drop(&mut self) {
+        let mut inner = self.cache.inner.write().expect("block cache lock poisoned");
+        inner.point_bytes -= self.bytes;
+    }
 }
 
 impl BlockCache {
@@ -135,6 +153,7 @@ impl BlockCache {
                 map: HashMap::new(),
                 clock: VecDeque::new(),
                 bytes: 0,
+                point_bytes: 0,
             }),
             capacity: capacity_bytes,
             hits: Counter::default(),
@@ -162,7 +181,8 @@ impl BlockCache {
     }
 
     pub fn resident_bytes(&self) -> usize {
-        self.inner.read().expect("block cache lock poisoned").bytes
+        let inner = self.inner.read().expect("block cache lock poisoned");
+        inner.bytes + inner.point_bytes
     }
 
     pub fn resident_entries(&self) -> usize {
@@ -180,7 +200,8 @@ impl BlockCache {
         let inner = self.inner.read().expect("block cache lock poisoned");
         BlockCacheStats {
             capacity_bytes: self.capacity,
-            resident_bytes: inner.bytes,
+            resident_bytes: inner.bytes + inner.point_bytes,
+            point_index_bytes: inner.point_bytes,
             resident_entries: inner.map.len(),
             hits: self.hits.load(),
             misses: self.misses.load(),
@@ -217,7 +238,10 @@ impl BlockCache {
             entry.referenced.store(true, Ordering::Relaxed);
             return;
         }
-        while inner.bytes + bytes > self.capacity {
+        if bytes > self.capacity - inner.point_bytes {
+            return;
+        }
+        while inner.bytes + inner.point_bytes + bytes > self.capacity {
             let victim = inner
                 .clock
                 .pop_front()
@@ -248,7 +272,23 @@ impl BlockCache {
                 referenced: AtomicBool::new(true),
             },
         );
-        debug_assert!(inner.bytes <= self.capacity);
+        debug_assert!(inner.bytes + inner.point_bytes <= self.capacity);
+    }
+
+    /// Pin immutable point bytes within the same global read budget. Admission
+    /// never displaces blocks: deny it if existing residents use the space.
+    /// The caller then verifies the section and uses sorted reads instead.
+    pub(crate) fn reserve_point(self: &Arc<Self>, bytes: usize) -> Option<ResidentReservation> {
+        let mut inner = self.inner.write().expect("block cache lock poisoned");
+        let free = self.capacity - inner.bytes - inner.point_bytes;
+        if bytes > free {
+            return None;
+        }
+        inner.point_bytes += bytes;
+        Some(ResidentReservation {
+            cache: self.clone(),
+            bytes,
+        })
     }
 
     /// Loads `key` via `load` on a miss, coalescing concurrent misses
@@ -687,5 +727,65 @@ mod tests {
             0,
             "in-flight slot must not leak after a panic"
         );
+    }
+}
+
+#[cfg(test)]
+mod point_reservation_tests {
+    use super::*;
+
+    #[test]
+    fn point_reservations_share_global_capacity_and_release_on_drop() {
+        let cache = Arc::new(BlockCache::new(256));
+        let held = cache.reserve_point(200).unwrap();
+        assert!(cache.reserve_point(57).is_none());
+        let data: Arc<[u8]> = vec![0; 100].into();
+        let block = CachedBlock {
+            data,
+            meta: BlockMeta {
+                entries_end: 0,
+                restart_start: 0,
+                num_restarts: 0,
+            },
+        };
+        cache.insert((1, 0), block.clone());
+        assert_eq!(cache.resident_bytes(), 200);
+        drop(held);
+        cache.insert((1, 0), block);
+        assert_eq!(cache.resident_bytes(), 100);
+        assert!(cache.reserve_point(157).is_none());
+        assert_eq!(cache.stats().point_index_bytes, 0);
+    }
+
+    #[test]
+    fn concurrent_section_admission_and_block_insertion_keep_capacity() {
+        let cache = Arc::new(BlockCache::new(1000));
+        let threads: Vec<_> = (0..8)
+            .map(|thread| {
+                let cache = cache.clone();
+                std::thread::spawn(move || {
+                    for i in 0..200 {
+                        let held = cache.reserve_point(137);
+                        cache.insert(
+                            (thread, i),
+                            CachedBlock {
+                                data: vec![0; 89].into(),
+                                meta: BlockMeta {
+                                    entries_end: 0,
+                                    restart_start: 0,
+                                    num_restarts: 0,
+                                },
+                            },
+                        );
+                        assert!(cache.resident_bytes() <= cache.capacity());
+                        drop(held);
+                    }
+                })
+            })
+            .collect();
+        for thread in threads {
+            thread.join().unwrap();
+        }
+        assert_eq!(cache.stats().point_index_bytes, 0);
     }
 }

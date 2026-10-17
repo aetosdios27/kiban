@@ -24,9 +24,17 @@ impl Embedded {
 
     #[allow(dead_code)] // Optional cache diagnosis binary; original harness keeps defaults.
     pub fn with_options(path: &Path, options: kiban::db::KibanOptions) -> Result<Self> {
+        Self::with_options_and_durability(path, options, false)
+    }
+
+    pub fn with_options_and_durability(
+        path: &Path,
+        options: kiban::db::KibanOptions,
+        durable: bool,
+    ) -> Result<Self> {
         Ok(Self {
             db: Kiban::open_with_options(path, options)?,
-            durable: false,
+            durable,
         })
     }
 }
