@@ -58,39 +58,62 @@ fn index(h: u64, pilots: &[u32], n: usize) -> usize {
 
 /// Exactly N occupied slots. Hash collisions and failed placement retry the
 /// full byte-key hash seed, rather than collapsing distinct user keys.
+#[cfg(test)]
 fn construct(keys: &[&[u8]]) -> Result<(u64, Vec<u32>, Vec<usize>), SstError> {
+    construct_with_bucket_size(keys, 3)
+}
+fn construct_with_bucket_size(
+    keys: &[&[u8]],
+    keys_per_bucket: usize,
+) -> Result<(u64, Vec<u32>, Vec<usize>), SstError> {
     let n = keys.len();
     if n == 0 || n >= DIRECT as usize {
         return Err(SstError::InvalidArgument("point index key count".into()));
     }
-    let buckets = n.div_ceil(3);
+    let buckets = n.div_ceil(keys_per_bucket);
     for attempt in 0..8 {
         let seed = mix(STEP.wrapping_mul(attempt + 1));
         let hashes: Vec<_> = keys.iter().map(|key| hash(key, seed)).collect();
-        let mut sorted = hashes.clone();
-        sorted.sort_unstable();
-        if sorted.windows(2).any(|pair| pair[0] == pair[1]) {
+        let mut ends = vec![0usize; buckets + 1];
+        for &h in &hashes {
+            ends[bucket(h, buckets) + 1] += 1;
+        }
+        for b in 1..=buckets {
+            ends[b] += ends[b - 1];
+        }
+        let mut cursor = ends[..buckets].to_vec();
+        let mut members = vec![0usize; n];
+        for (i, &h) in hashes.iter().enumerate() {
+            let b = bucket(h, buckets);
+            members[cursor[b]] = i;
+            cursor[b] += 1;
+        }
+        // Equal hashes must share a bucket. Check those short slices rather
+        // than sorting a second copy of every hash.
+        if (0..buckets).any(|b| {
+            let group = &members[ends[b]..ends[b + 1]];
+            group.iter().enumerate().any(|(i, &m)| {
+                group[i + 1..]
+                    .iter()
+                    .any(|&other| hashes[m] == hashes[other])
+            })
+        }) {
             continue;
         }
-        drop(sorted);
-        let mut members = vec![Vec::new(); buckets];
-        for (i, &h) in hashes.iter().enumerate() {
-            members[bucket(h, buckets)].push(i);
-        }
         let mut order: Vec<_> = (0..buckets).collect();
-        order.sort_unstable_by_key(|&b| std::cmp::Reverse(members[b].len()));
+        order.sort_unstable_by_key(|&b| std::cmp::Reverse(ends[b + 1] - ends[b]));
         let mut pilots = vec![0; buckets];
         let mut occupied = vec![false; n];
         let mut slots = vec![usize::MAX; n];
         let mut candidates = Vec::new();
         let mut failed = false;
         for &b in &order {
-            if members[b].len() <= 1 {
+            if (ends[b + 1] - ends[b]) <= 1 {
                 continue;
             }
             let found = (0..100_000).find(|&pilot| {
                 candidates.clear();
-                for &member in &members[b] {
+                for &member in &members[ends[b]..ends[b + 1]] {
                     let at = position(hashes[member], pilot, n);
                     if occupied[at] || candidates.contains(&at) {
                         return false;
@@ -104,7 +127,7 @@ fn construct(keys: &[&[u8]]) -> Result<(u64, Vec<u32>, Vec<usize>), SstError> {
                 break;
             };
             pilots[b] = pilot;
-            for (&member, &at) in members[b].iter().zip(&candidates) {
+            for (&member, &at) in members[ends[b]..ends[b + 1]].iter().zip(&candidates) {
                 occupied[at] = true;
                 slots[at] = member;
             }
@@ -114,10 +137,10 @@ fn construct(keys: &[&[u8]]) -> Result<(u64, Vec<u32>, Vec<usize>), SstError> {
         }
         let mut free = (0..n).filter(|&i| !occupied[i]);
         for &b in &order {
-            if members[b].len() == 1 {
+            if (ends[b + 1] - ends[b]) == 1 {
                 let at = free.next().expect("one free slot per singleton");
                 pilots[b] = DIRECT | at as u32;
-                slots[at] = members[b][0];
+                slots[at] = members[ends[b]];
             }
         }
         if slots.contains(&usize::MAX) {
@@ -140,10 +163,20 @@ fn construct(keys: &[&[u8]]) -> Result<(u64, Vec<u32>, Vec<usize>), SstError> {
 pub(super) struct PointBuilder {
     arena: Vec<u8>,
     heads: Vec<usize>,
+    suffix_bytes: usize,
+    versions: usize,
+    min_seq: u64,
+    max_seq: u64,
+    max_value_len: u32,
+    max_key_len: u32,
+    max_versions: u32,
+    last_value_offset: u64,
+    #[cfg(test)]
+    legacy: bool,
 }
 impl PointBuilder {
     pub(super) fn approximate_size(&self) -> usize {
-        HEADER + self.heads.len().div_ceil(3) * 4 + self.heads.len() * SLOT + self.arena.len() + 5
+        compact::Encoding::for_builder(self).section_len(self)
     }
     pub(super) fn add(
         &mut self,
@@ -156,6 +189,16 @@ impl PointBuilder {
         crate::limits::mutation(key, value)
             .map_err(|e| SstError::InvalidArgument(e.to_string()))?;
         if new_key {
+            let shared = if self.heads.len().is_multiple_of(compact::GROUP) {
+                0
+            } else {
+                let anchor = self.heads[self.heads.len() / compact::GROUP * compact::GROUP];
+                let len = u32_at(&self.arena, anchor) as usize;
+                super::common_prefix_len(&self.arena[anchor + 8..anchor + 8 + len], key)
+            };
+            self.suffix_bytes += key.len() - shared;
+            self.max_key_len = self.max_key_len.max(key.len() as u32);
+            self.max_versions = self.max_versions.max(1);
             self.heads.push(self.arena.len());
             self.arena
                 .extend_from_slice(&(key.len() as u32).to_le_bytes());
@@ -167,7 +210,15 @@ impl PointBuilder {
                 .checked_add(1)
                 .ok_or_else(|| SstError::InvalidArgument("too many point versions".into()))?;
             self.arena[at..at + 4].copy_from_slice(&count.to_le_bytes());
+            self.max_versions = self.max_versions.max(count);
         }
+        if self.versions == 0 {
+            self.min_seq = seq;
+        }
+        self.min_seq = self.min_seq.min(seq);
+        self.max_seq = self.max_seq.max(seq);
+        self.max_value_len = self.max_value_len.max(value.len() as u32);
+        self.versions += 1;
         self.arena.extend_from_slice(&seq.to_le_bytes());
         self.arena.push(kind.to_u8());
         self.arena
@@ -177,9 +228,25 @@ impl PointBuilder {
         Ok(patch)
     }
     pub(super) fn set_value_offset(&mut self, patch: usize, value_offset: u64) {
+        self.last_value_offset = value_offset;
         self.arena[patch..patch + 8].copy_from_slice(&value_offset.to_le_bytes());
     }
+    #[cfg(test)]
+    pub(super) fn legacy() -> Self {
+        Self {
+            legacy: true,
+            ..Self::default()
+        }
+    }
     pub(super) fn finish(self) -> Result<Vec<u8>, SstError> {
+        #[cfg(test)]
+        if self.legacy {
+            return self.finish_legacy();
+        }
+        compact::encode(self)
+    }
+    #[cfg(test)]
+    fn finish_legacy(self) -> Result<Vec<u8>, SstError> {
         let keys: Vec<_> = self
             .heads
             .iter()
@@ -209,7 +276,7 @@ impl PointBuilder {
     }
 }
 
-pub(super) struct PointIndex {
+pub(super) struct LegacyIndex {
     bytes: crate::cache::ArcBlock,
     data: crate::cache::ArcBlock,
     blocks: Vec<(usize, usize, crate::cache::BlockMeta)>,
@@ -219,7 +286,7 @@ pub(super) struct PointIndex {
     arena: usize,
     _reservation: ResidentReservation,
 }
-impl PointIndex {
+impl LegacyIndex {
     pub(super) fn decode(
         bytes: crate::cache::ArcBlock,
         data: crate::cache::ArcBlock,
@@ -437,6 +504,45 @@ impl PointIndex {
     }
 }
 
+mod compact;
+
+pub(super) enum PointIndex {
+    Legacy(LegacyIndex),
+    Compact(compact::CompactIndex),
+}
+impl PointIndex {
+    pub(super) fn decode(
+        bytes: crate::cache::ArcBlock,
+        data: crate::cache::ArcBlock,
+        reservation: ResidentReservation,
+        blocks: impl IntoIterator<Item = (u64, u64)>,
+    ) -> Result<Self, SstError> {
+        if bytes.starts_with(compact::MAGIC) {
+            compact::CompactIndex::decode(bytes, data, reservation, blocks).map(Self::Compact)
+        } else {
+            LegacyIndex::decode(bytes, data, reservation, blocks).map(Self::Legacy)
+        }
+    }
+    pub(super) fn block(&self, idx: usize) -> super::block::VerifiedBlock {
+        match self {
+            Self::Legacy(p) => p.block(idx),
+            Self::Compact(p) => p.block(idx),
+        }
+    }
+    pub(super) fn block_at(&self, offset: u64) -> super::block::VerifiedBlock {
+        match self {
+            Self::Legacy(p) => p.block_at(offset),
+            Self::Compact(p) => p.block_at(offset),
+        }
+    }
+    pub(super) fn get(&self, key: &[u8], limit: Option<u64>) -> Option<Found> {
+        match self {
+            Self::Legacy(p) => p.get(key, limit),
+            Self::Compact(p) => p.get(key, limit),
+        }
+    }
+}
+
 #[cfg(test)]
 struct Fixture {
     bytes: Vec<u8>,
@@ -467,10 +573,10 @@ fn fixture(builder: super::TableBuilder) -> Fixture {
     }
 }
 #[cfg(test)]
-fn decode_fixture(f: Fixture) -> Result<PointIndex, SstError> {
+fn decode_fixture(f: Fixture) -> Result<LegacyIndex, SstError> {
     let cache = std::sync::Arc::new(crate::cache::BlockCache::new(f.bytes.len() + f.data.len()));
     let reservation = cache.reserve_point(f.bytes.len() + f.data.len()).unwrap();
-    PointIndex::decode(f.bytes.into(), f.data.into(), reservation, f.blocks)
+    LegacyIndex::decode(f.bytes.into(), f.data.into(), reservation, f.blocks)
 }
 
 #[cfg(test)]
@@ -478,7 +584,7 @@ mod tests {
     use super::*;
     #[test]
     fn point_decode_retains_shared_allocations_and_accounts_for_both_regions() {
-        let mut builder = super::super::TableBuilder::with_point_index(true);
+        let mut builder = super::super::TableBuilder::with_legacy_point_index();
         builder.add(Kind::Put, b"key", &[7; 100_000], 1).unwrap();
         let f = fixture(builder);
         let bytes: crate::cache::ArcBlock = f.bytes.into();
@@ -486,7 +592,8 @@ mod tests {
         let resident = bytes.len() + data.len();
         let cache = std::sync::Arc::new(crate::cache::BlockCache::new(resident));
         let reservation = cache.reserve_point(resident).unwrap();
-        let point = PointIndex::decode(bytes.clone(), data.clone(), reservation, f.blocks).unwrap();
+        let point =
+            LegacyIndex::decode(bytes.clone(), data.clone(), reservation, f.blocks).unwrap();
         assert!(std::sync::Arc::ptr_eq(&point.bytes, &bytes));
         assert!(std::sync::Arc::ptr_eq(&point.data, &data));
         assert_eq!(cache.stats().point_index_bytes, resident);
@@ -498,7 +605,7 @@ mod tests {
 
     #[test]
     fn point_index_roundtrip_versions_and_binary_keys() {
-        let mut builder = super::super::TableBuilder::with_point_index(true);
+        let mut builder = super::super::TableBuilder::with_legacy_point_index();
         builder.add(Kind::Put, b"", b"empty", 1).unwrap();
         builder.add(Kind::Tombstone, b"\0\xff", b"", 9).unwrap();
         builder.add(Kind::Put, b"\0\xff", b"old", 7).unwrap();
@@ -553,7 +660,7 @@ mod corruption_tests {
 
     #[test]
     fn matching_fingerprint_for_absent_key_requires_full_key_comparison() {
-        let mut builder = super::super::TableBuilder::with_point_index(true);
+        let mut builder = super::super::TableBuilder::with_legacy_point_index();
         builder.add(Kind::Put, b"present", b"secret", 1).unwrap();
         let point = decode_fixture(fixture(builder)).unwrap();
         let wanted = fingerprint(hash(b"present", point.seed));
@@ -574,7 +681,7 @@ mod corruption_tests {
 
     #[test]
     fn malformed_checksummed_point_records_are_rejected_and_release_budget() {
-        let mut builder = super::super::TableBuilder::with_point_index(true);
+        let mut builder = super::super::TableBuilder::with_legacy_point_index();
         builder.add(Kind::Put, b"a", b"one", 4).unwrap();
         builder.add(Kind::Put, b"b", b"two", 3).unwrap();
         let f = fixture(builder);
@@ -603,7 +710,7 @@ mod corruption_tests {
             let cache = Arc::new(BlockCache::new(bytes.len() + f.data.len()));
             let reservation = cache.reserve_point(bytes.len() + f.data.len()).unwrap();
             assert!(
-                PointIndex::decode(
+                LegacyIndex::decode(
                     bytes.into(),
                     f.data.clone().into(),
                     reservation,
@@ -617,7 +724,7 @@ mod corruption_tests {
     }
     #[test]
     fn in_range_wrong_value_locator_and_backing_bit_flip_are_rejected() {
-        let mut builder = super::super::TableBuilder::with_point_index(true);
+        let mut builder = super::super::TableBuilder::with_legacy_point_index();
         builder.add(Kind::Put, b"a", b"one", 4).unwrap();
         let mut f = fixture(builder);
         let arena = u64_at(&f.bytes, 24) as usize;
@@ -626,7 +733,7 @@ mod corruption_tests {
         let crc = crate::crc32::crc32(&f.bytes[..end]);
         f.bytes[end..].copy_from_slice(&crc.to_le_bytes());
         assert!(decode_fixture(f).is_err());
-        let mut builder = super::super::TableBuilder::with_point_index(true);
+        let mut builder = super::super::TableBuilder::with_legacy_point_index();
         builder.add(Kind::Put, b"a", b"one", 4).unwrap();
         let mut f = fixture(builder);
         f.data[22] ^= 1;

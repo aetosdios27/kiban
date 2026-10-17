@@ -90,6 +90,14 @@ can be read, the fallback is 32 MiB. This is a per-database budget; opening
 several databases multiplies it. Set `block_cache_bytes` explicitly to override
 it, including zero to disable block admission.
 
+`KibanOptions::point_index` is opt-in (`false` by default). It writes compact
+`KIBANPH3` perfect-hash sections in format-4 SSTs. Readers also accept existing
+`KIBANPH2` sections and format-3 tables. Section and sorted backing residency
+share the block-cache budget; denied admission uses sorted blocks. PH2-only
+engines reject PH3, so rewrite with the option off before downgrading. See the
+[encoding](validation/pointindex-cost/DESIGN.md) and
+[cost validation](validation/pointindex-cost/REPORT.md).
+
 ## Checkpoints, backups and inspection
 
 `checkpoint()` syncs accepted writes and flushes them to SSTs; shared checkpoints

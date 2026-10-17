@@ -289,7 +289,7 @@ impl SstTable {
                 let header = lease
                     .read_range_at(path, offset, 8)
                     .map_err(|e| bad(e.to_string()))?;
-                if header != b"KIBANPH2" {
+                if header != b"KIBANPH2" && header != b"KIBANPH3" {
                     return Err(bad("unsupported point section encoding".into()));
                 }
                 // Even an unused optional section must pass its checksum.

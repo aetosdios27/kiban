@@ -12,6 +12,7 @@ import time
 ROOT = Path(__file__).resolve().parents[3]
 parser = argparse.ArgumentParser()
 parser.add_argument('folder', type=Path)
+parser.add_argument('--cpus', default='2,3,4,5,6,7,10,11', help='build/test affinity')
 parser.add_argument('--quick', action='store_true', help='omit long seeded suites during iteration')
 args = parser.parse_args()
 folder = args.folder.resolve()
@@ -35,7 +36,7 @@ def source_hashes():
 
 (folder / 'metadata.json').write_text(json.dumps(dict(
     head=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
-    cpu='2,3,4,5,6,7,10,11', nice=10, quick=args.quick,
+    cpu=args.cpus, nice=10, quick=args.quick,
     seeds_per_suite=20000, seed_start=0, started=time.time()), indent=2)+'\n')
 initial_hashes = source_hashes()
 (folder / 'initial-source-hashes.json').write_text(json.dumps(initial_hashes, indent=2)+'\n')
@@ -47,7 +48,7 @@ for name, command in checks:
     started = time.time()
     print(f'start {name}', flush=True)
     with (folder / (name + '.log')).open('w') as log:
-        result = subprocess.run(['taskset', '-c', '2,3,4,5,6,7,10,11', 'nice', '-n', '10', *command], cwd=ROOT, env=env, stdout=log, stderr=log)
+        result = subprocess.run(['taskset', '-c', args.cpus, 'nice', '-n', '10', *command], cwd=ROOT, env=env, stdout=log, stderr=log)
     rows.append(dict(name=name, command=command, code=result.returncode, seconds=time.time()-started))
     (folder / 'status.json').write_text(json.dumps(rows, indent=2)+'\n')
     print(f'end {name}: {result.returncode} ({rows[-1]["seconds"]:.1f}s)', flush=True)

@@ -1,5 +1,8 @@
 # Optional SST point index (format 4)
 
+Historical PH2 design. Current compact PH3 encoding and mixed-reader compatibility
+are specified in [pointindex-cost/DESIGN.md](../pointindex-cost/DESIGN.md).
+
 Status: locator redesign implemented and correctness gates pass. The final paired
 p50 scan gate passes; strict tail non-regression remains on hold. See REPORT.md.
 The initial hashing design followed the completed five-trial attribution ablation.
