@@ -202,21 +202,24 @@ fn indexed_scans_share_backing_blocks_without_duplicate_cache_admission() {
     assert_eq!(after.misses, before.misses);
 }
 
-/// Run the already-built release test executable under taskset -c 8.
-/// These measurements isolate flush and compaction BUILD from memtable fill.
+/// Run the already-built release test executable under taskset -c 8 with
+/// KIBAN_POINT_BENCH_N set. These measurements isolate flush and compaction
+/// BUILD from memtable fill. CI's `--ignored` stress job runs without the
+/// variable, so the benchmark is skipped there.
 #[test]
-#[ignore = "CPU-8 maintenance benchmark; KIBAN_POINT_BENCH_N controls population"]
+#[ignore = "CPU-8 maintenance benchmark; set KIBAN_POINT_BENCH_N to run"]
 fn point_index_maintenance_measurement() {
+    let Ok(n) = std::env::var("KIBAN_POINT_BENCH_N") else {
+        eprintln!("skipping: KIBAN_POINT_BENCH_N is unset");
+        return;
+    };
+    let n: u64 = n.parse().unwrap();
     assert!(
         std::fs::read_to_string("/proc/self/status")
             .unwrap()
             .lines()
             .any(|line| line == "Cpus_allowed_list:\t8")
     );
-    let n: u64 = std::env::var("KIBAN_POINT_BENCH_N")
-        .unwrap_or_else(|_| "1000000".into())
-        .parse()
-        .unwrap();
     for trial in 0..5 {
         for indexed in if trial % 2 == 0 {
             [false, true]

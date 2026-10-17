@@ -28,7 +28,7 @@ common=['--before',str(a.before.resolve()),'--after',str(a.after.resolve())]
 for action in ['prepare','read','range','write']:
  stage(action,['python3',str(ROOT/'tools/agentbench/readpath/v2.py'),action,*common])
 (ROOT/'target/v2-maintenance').mkdir(exist_ok=True)
-stage('maintenance',['taskset','-c','8',str(a.test_binary.resolve()),'point_index_maintenance_measurement','--ignored','--nocapture','--test-threads=1'],{'TMPDIR':str(ROOT/'target/v2-maintenance')})
+stage('maintenance',['taskset','-c','8',str(a.test_binary.resolve()),'point_index_maintenance_measurement','--ignored','--nocapture','--test-threads=1'],{'TMPDIR':str(ROOT/'target/v2-maintenance'),'KIBAN_POINT_BENCH_N':'1000000'})
 stage('analysis',['python3',str(ROOT/'tools/agentbench/readpath/v2_report.py')])
 
 assert all(hashlib.sha256((ROOT/name).read_bytes()).hexdigest()==digest for name,digest in hashes.items()), "engine sources changed during measurement"
