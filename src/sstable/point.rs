@@ -7,7 +7,7 @@ use crate::cache::ResidentReservation;
 const HEADER: usize = 32;
 const SLOT: usize = 12;
 const DIRECT: u32 = 1 << 31;
-const MAGIC: &[u8; 8] = b"KIBANPH1";
+const MAGIC: &[u8; 8] = b"KIBANPH2";
 const STEP: u64 = 0x9e37_79b9_7f4a_7c15;
 
 fn bad(message: &str) -> SstError {
@@ -152,7 +152,7 @@ impl PointBuilder {
         value: &[u8],
         seq: u64,
         new_key: bool,
-    ) -> Result<(), SstError> {
+    ) -> Result<usize, SstError> {
         crate::limits::mutation(key, value)
             .map_err(|e| SstError::InvalidArgument(e.to_string()))?;
         if new_key {
@@ -172,8 +172,12 @@ impl PointBuilder {
         self.arena.push(kind.to_u8());
         self.arena
             .extend_from_slice(&(value.len() as u32).to_le_bytes());
-        self.arena.extend_from_slice(value);
-        Ok(())
+        let patch = self.arena.len();
+        self.arena.extend_from_slice(&0u64.to_le_bytes());
+        Ok(patch)
+    }
+    pub(super) fn set_value_offset(&mut self, patch: usize, value_offset: u64) {
+        self.arena[patch..patch + 8].copy_from_slice(&value_offset.to_le_bytes());
     }
     pub(super) fn finish(self) -> Result<Vec<u8>, SstError> {
         let keys: Vec<_> = self
@@ -207,6 +211,7 @@ impl PointBuilder {
 
 pub(super) struct PointIndex {
     bytes: Vec<u8>,
+    data: Vec<u8>,
     seed: u64,
     count: usize,
     buckets: usize,
@@ -216,7 +221,9 @@ pub(super) struct PointIndex {
 impl PointIndex {
     pub(super) fn decode(
         bytes: Vec<u8>,
+        data: Vec<u8>,
         reservation: ResidentReservation,
+        blocks: impl IntoIterator<Item = (u64, u64)>,
     ) -> Result<Self, SstError> {
         super::reader::verify_trailer(&bytes, "point index")?;
         if bytes.len() < HEADER + 5 || &bytes[..8] != MAGIC {
@@ -241,6 +248,7 @@ impl PointIndex {
         }
         let result = Self {
             bytes,
+            data,
             seed,
             count,
             buckets,
@@ -248,6 +256,7 @@ impl PointIndex {
             _reservation: reservation,
         };
         result.validate()?;
+        result.validate_backing_records(blocks)?;
         Ok(result)
     }
     fn slot(&self, h: u64) -> usize {
@@ -295,21 +304,23 @@ impl PointIndex {
             }
             let mut last_seq = None;
             for _ in 0..versions {
-                if raw.len().saturating_sub(p) < 13 {
+                if raw.len().saturating_sub(p) < 21 {
                     return Err(bad("truncated version header"));
                 }
                 let seq = u64_at(raw, p);
                 let kind = Kind::from_u8(raw[p + 8]).ok_or_else(|| bad("invalid record kind"))?;
                 let vl = u32_at(raw, p + 9) as usize;
-                p += 13;
+                let offset = u64_at(raw, p + 13);
+                p += 21;
                 if vl > crate::limits::MAX_VALUE_BYTES
-                    || vl > raw.len() - p
+                    || offset
+                        .checked_add(vl as u64)
+                        .is_none_or(|end| end > self.data.len() as u64)
                     || (kind == Kind::Tombstone && vl != 0)
                     || last_seq.is_some_and(|last| last <= seq)
                 {
                     return Err(bad("invalid value length or version ordering"));
                 }
-                p += vl;
                 last_seq = Some(seq);
             }
         }
@@ -318,6 +329,64 @@ impl PointIndex {
         }
         Ok(())
     }
+    fn validate_backing_records(
+        &self,
+        blocks: impl IntoIterator<Item = (u64, u64)>,
+    ) -> Result<(), SstError> {
+        let mut pos = self.arena;
+        let end = self.bytes.len() - 5;
+        let mut remaining = 0u32;
+        let mut point_key: &[u8] = &[];
+        let mut key = Vec::new();
+        let mut data_end = 0;
+        for (offset, len) in blocks {
+            let offset = usize::try_from(offset).map_err(|_| bad("data offset overflow"))?;
+            let len = usize::try_from(len).map_err(|_| bad("data length overflow"))?;
+            if offset != data_end
+                || offset
+                    .checked_add(len)
+                    .is_none_or(|end| end > self.data.len())
+            {
+                return Err(bad("invalid backing block bounds"));
+            }
+            let raw = &self.data[offset..offset + len];
+            let meta = super::block::VerifiedBlock::verify(raw)?;
+            super::block::visit_records(
+                raw,
+                &meta,
+                &mut key,
+                |kind, seq, key, value_offset, value_len| {
+                    if remaining == 0 {
+                        if pos == end {
+                            return Err(bad("sorted record missing from point index"));
+                        }
+                        let kl = u32_at(&self.bytes, pos) as usize;
+                        remaining = u32_at(&self.bytes, pos + 4);
+                        pos += 8;
+                        point_key = &self.bytes[pos..pos + kl];
+                        pos += kl;
+                    }
+                    if point_key != key
+                        || u64_at(&self.bytes, pos) != seq
+                        || self.bytes[pos + 8] != kind.to_u8()
+                        || u32_at(&self.bytes, pos + 9) as usize != value_len
+                        || u64_at(&self.bytes, pos + 13) != (offset + value_offset) as u64
+                    {
+                        return Err(bad("point locator disagrees with sorted record"));
+                    }
+                    pos += 21;
+                    remaining -= 1;
+                    Ok(())
+                },
+            )?;
+            data_end = offset + len;
+        }
+        if data_end != self.data.len() || pos != end || remaining != 0 {
+            return Err(bad("point and sorted record coverage differ"));
+        }
+        Ok(())
+    }
+
     pub(super) fn get(&self, key: &[u8], limit: Option<u64>) -> Option<Found> {
         let h = hash(key, self.seed);
         let s = self.slot(h);
@@ -338,45 +407,67 @@ impl PointIndex {
             let seq = u64_at(&self.bytes, p);
             let kind = Kind::from_u8(self.bytes[p + 8]).expect("validated kind");
             let vl = u32_at(&self.bytes, p + 9) as usize;
-            p += 13;
+            let offset = u64_at(&self.bytes, p + 13) as usize;
+            p += 21;
             if limit.is_none_or(|lim| seq <= lim) {
                 return Some(Found {
                     kind,
                     seq,
-                    value: self.bytes[p..p + vl].to_vec(),
+                    value: self.data[offset..offset + vl].to_vec(),
                 });
             }
-            p += vl;
         }
         None
     }
 }
 
 #[cfg(test)]
+struct Fixture {
+    bytes: Vec<u8>,
+    data: Vec<u8>,
+    blocks: Vec<(u64, u64)>,
+}
+#[cfg(test)]
+fn fixture(builder: super::TableBuilder) -> Fixture {
+    let raw = builder.finish().unwrap();
+    let footer = raw.len() - super::builder::FOOTER_LEN;
+    let extra = footer - super::builder::POINT_FOOTER_EXTRA;
+    let point = u64_at(&raw, extra) as usize;
+    let len = u64_at(&raw, extra + 8) as usize;
+    let mut pos = u64_at(&raw, footer) as usize;
+    let count = u32_at(&raw, pos);
+    pos += 4;
+    let mut blocks = Vec::new();
+    for _ in 0..count {
+        let kl = u32_at(&raw, pos) as usize;
+        pos += 4 + kl;
+        blocks.push((u64_at(&raw, pos), u64_at(&raw, pos + 8)));
+        pos += 16;
+    }
+    Fixture {
+        bytes: raw[point..point + len].to_vec(),
+        data: raw[..point].to_vec(),
+        blocks,
+    }
+}
+#[cfg(test)]
+fn decode_fixture(f: Fixture) -> Result<PointIndex, SstError> {
+    let cache = std::sync::Arc::new(crate::cache::BlockCache::new(f.bytes.len() + f.data.len()));
+    let reservation = cache.reserve_point(f.bytes.len() + f.data.len()).unwrap();
+    PointIndex::decode(f.bytes, f.data, reservation, f.blocks)
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cache::BlockCache;
-    use std::sync::Arc;
-
-    fn decode(builder: PointBuilder) -> PointIndex {
-        let bytes = builder.finish().unwrap();
-        let cache = Arc::new(BlockCache::new(bytes.len()));
-        let reservation = cache.reserve_point(bytes.len()).unwrap();
-        PointIndex::decode(bytes, reservation).unwrap()
-    }
-
     #[test]
     fn point_index_roundtrip_versions_and_binary_keys() {
-        let mut builder = PointBuilder::default();
-        builder.add(Kind::Put, b"", b"empty", 1, true).unwrap();
-        builder
-            .add(Kind::Tombstone, b"\0\xff", b"", 9, true)
-            .unwrap();
-        builder.add(Kind::Put, b"\0\xff", b"old", 7, false).unwrap();
-        builder
-            .add(Kind::Put, b"long", &[3; 100_000], 2, true)
-            .unwrap();
-        let index = decode(builder);
+        let mut builder = super::super::TableBuilder::with_point_index(true);
+        builder.add(Kind::Put, b"", b"empty", 1).unwrap();
+        builder.add(Kind::Tombstone, b"\0\xff", b"", 9).unwrap();
+        builder.add(Kind::Put, b"\0\xff", b"old", 7).unwrap();
+        builder.add(Kind::Put, b"long", &[3; 100_000], 2).unwrap();
+        let index = decode_fixture(fixture(builder)).unwrap();
         assert_eq!(index.get(b"", None).unwrap().value, b"empty");
         assert_eq!(index.get(b"\0\xff", None).unwrap().kind, Kind::Tombstone);
         assert_eq!(index.get(b"\0\xff", Some(8)).unwrap().value, b"old");
@@ -426,14 +517,9 @@ mod corruption_tests {
 
     #[test]
     fn matching_fingerprint_for_absent_key_requires_full_key_comparison() {
-        let mut builder = PointBuilder::default();
-        builder
-            .add(Kind::Put, b"present", b"secret", 1, true)
-            .unwrap();
-        let bytes = builder.finish().unwrap();
-        let cache = Arc::new(BlockCache::new(bytes.len()));
-        let reservation = cache.reserve_point(bytes.len()).unwrap();
-        let point = PointIndex::decode(bytes, reservation).unwrap();
+        let mut builder = super::super::TableBuilder::with_point_index(true);
+        builder.add(Kind::Put, b"present", b"secret", 1).unwrap();
+        let point = decode_fixture(fixture(builder)).unwrap();
         let wanted = fingerprint(hash(b"present", point.seed));
         let absent = (0u64..2_000_000)
             .find_map(|i| {
@@ -452,10 +538,11 @@ mod corruption_tests {
 
     #[test]
     fn malformed_checksummed_point_records_are_rejected_and_release_budget() {
-        let mut builder = PointBuilder::default();
-        builder.add(Kind::Put, b"a", b"one", 4, true).unwrap();
-        builder.add(Kind::Put, b"b", b"two", 3, true).unwrap();
-        let original = builder.finish().unwrap();
+        let mut builder = super::super::TableBuilder::with_point_index(true);
+        builder.add(Kind::Put, b"a", b"one", 4).unwrap();
+        builder.add(Kind::Put, b"b", b"two", 3).unwrap();
+        let f = fixture(builder);
+        let original = &f.bytes;
         let arena = u64_at(&original, 24) as usize;
         let slots = HEADER + u32_at(&original, 20) as usize * 4;
         // Header count/dimensions, singleton index, slot offsets/fingerprint,
@@ -472,18 +559,35 @@ mod corruption_tests {
             arena + 8,
             arena + 17,
         ] {
-            let mut bytes = original.clone();
+            let mut bytes = original.to_vec();
             bytes[at..at + 4].copy_from_slice(&u32::MAX.to_le_bytes());
             let end = bytes.len() - 4;
             let crc = crate::crc32::crc32(&bytes[..end]);
             bytes[end..].copy_from_slice(&crc.to_le_bytes());
-            let cache = Arc::new(BlockCache::new(bytes.len()));
-            let reservation = cache.reserve_point(bytes.len()).unwrap();
+            let cache = Arc::new(BlockCache::new(bytes.len() + f.data.len()));
+            let reservation = cache.reserve_point(bytes.len() + f.data.len()).unwrap();
             assert!(
-                PointIndex::decode(bytes, reservation).is_err(),
+                PointIndex::decode(bytes, f.data.clone(), reservation, f.blocks.clone()).is_err(),
                 "accepted invalid field at {at}"
             );
             assert_eq!(cache.resident_bytes(), 0);
         }
+    }
+    #[test]
+    fn in_range_wrong_value_locator_and_backing_bit_flip_are_rejected() {
+        let mut builder = super::super::TableBuilder::with_point_index(true);
+        builder.add(Kind::Put, b"a", b"one", 4).unwrap();
+        let mut f = fixture(builder);
+        let arena = u64_at(&f.bytes, 24) as usize;
+        f.bytes[arena + 22..arena + 30].copy_from_slice(&0u64.to_le_bytes());
+        let end = f.bytes.len() - 4;
+        let crc = crate::crc32::crc32(&f.bytes[..end]);
+        f.bytes[end..].copy_from_slice(&crc.to_le_bytes());
+        assert!(decode_fixture(f).is_err());
+        let mut builder = super::super::TableBuilder::with_point_index(true);
+        builder.add(Kind::Put, b"a", b"one", 4).unwrap();
+        let mut f = fixture(builder);
+        f.data[22] ^= 1;
+        assert!(decode_fixture(f).is_err());
     }
 }

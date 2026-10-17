@@ -127,7 +127,7 @@ pub struct SstTable {
     file_len: u64,
     index: Vec<IndexEntry>,
     filter: BloomFilter,
-    point: Option<PointIndex>,
+    point: Option<Box<PointIndex>>,
     first_key: Vec<u8>,
     last_key: Vec<u8>,
     block_cache: Arc<BlockCache>,
@@ -214,7 +214,7 @@ impl SstTable {
             let state = crc32::update(crc32::INITIAL, &extra[..20]);
             let checksum = crc32::finalize(crc32::update(state, footer));
             if checksum != u32::from_le_bytes(extra[20..24].try_into().unwrap())
-                || u32::from_le_bytes(extra[16..20].try_into().unwrap()) != 1
+                || u32::from_le_bytes(extra[16..20].try_into().unwrap()) != 2
             {
                 return Err(bad("point footer checksum or feature flags".into()));
             }
@@ -268,19 +268,28 @@ impl SstTable {
         )?;
         let point = if let Some((offset, len)) = point_range {
             let lease = file_cache.acquire(number, path).map_err(open_err)?;
-            let resident = usize::try_from(len)
-                .ok()
+            let resident = offset
+                .checked_add(len)
+                .and_then(|n| usize::try_from(n).ok())
                 .and_then(|n| block_cache.reserve_point(n));
             if let Some(reservation) = resident {
                 let raw = lease
                     .read_range_at(path, offset, len)
                     .map_err(|e| bad(e.to_string()))?;
-                Some(PointIndex::decode(raw, reservation)?)
+                let data = lease
+                    .read_range_at(path, 0, offset)
+                    .map_err(|e| bad(e.to_string()))?;
+                Some(Box::new(PointIndex::decode(
+                    raw,
+                    data,
+                    reservation,
+                    index.iter().map(|entry| (entry.offset, entry.len)),
+                )?))
             } else {
                 let header = lease
                     .read_range_at(path, offset, 8)
                     .map_err(|e| bad(e.to_string()))?;
-                if header != b"KIBANPH1" {
+                if header != b"KIBANPH2" {
                     return Err(bad("unsupported point section encoding".into()));
                 }
                 // Even an unused optional section must pass its checksum.

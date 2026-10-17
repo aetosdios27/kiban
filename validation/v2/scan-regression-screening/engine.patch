@@ -1,0 +1,1501 @@
+diff --git a/src/cache.rs b/src/cache.rs
+index b7991394..49712e79 100644
+--- a/src/cache.rs
++++ b/src/cache.rs
+@@ -46,6 +46,7 @@ struct Inner {
+     map: HashMap<CacheKey, Entry>,
+     clock: VecDeque<CacheKey>,
+     bytes: usize,
++    point_bytes: usize,
+ }
+ 
+ /// State of one physical load in flight for a key, shared by every
+@@ -109,6 +110,8 @@ pub struct BlockCacheStats {
+     pub capacity_bytes: usize,
+     pub resident_bytes: usize,
+     pub resident_entries: usize,
++    /// Immutable point sections pinned by live SST handles, included in resident_bytes.
++    pub point_index_bytes: usize,
+     pub hits: u64,
+     pub misses: u64,
+     pub evictions: u64,
+@@ -117,6 +120,21 @@ pub struct BlockCacheStats {
+     pub coalesced: u64,
+ }
+ 
++/// Releases a section's resident-byte charge when its table version dies.
++/// Owning the cache Arc also keeps accounting alive through all snapshots.
++#[derive(Debug)]
++pub(crate) struct ResidentReservation {
++    cache: Arc<BlockCache>,
++    bytes: usize,
++}
++
++impl Drop for ResidentReservation {
++    fn drop(&mut self) {
++        let mut inner = self.cache.inner.write().expect("block cache lock poisoned");
++        inner.point_bytes -= self.bytes;
++    }
++}
++
+ impl BlockCache {
+     pub fn new(capacity_bytes: usize) -> BlockCache {
+         BlockCache::with_range_cache(capacity_bytes, 0, 0)
+@@ -135,6 +153,7 @@ impl BlockCache {
+                 map: HashMap::new(),
+                 clock: VecDeque::new(),
+                 bytes: 0,
++                point_bytes: 0,
+             }),
+             capacity: capacity_bytes,
+             hits: Counter::default(),
+@@ -162,7 +181,8 @@ impl BlockCache {
+     }
+ 
+     pub fn resident_bytes(&self) -> usize {
+-        self.inner.read().expect("block cache lock poisoned").bytes
++        let inner = self.inner.read().expect("block cache lock poisoned");
++        inner.bytes + inner.point_bytes
+     }
+ 
+     pub fn resident_entries(&self) -> usize {
+@@ -180,7 +200,8 @@ impl BlockCache {
+         let inner = self.inner.read().expect("block cache lock poisoned");
+         BlockCacheStats {
+             capacity_bytes: self.capacity,
+-            resident_bytes: inner.bytes,
++            resident_bytes: inner.bytes + inner.point_bytes,
++            point_index_bytes: inner.point_bytes,
+             resident_entries: inner.map.len(),
+             hits: self.hits.load(),
+             misses: self.misses.load(),
+@@ -217,7 +238,10 @@ impl BlockCache {
+             entry.referenced.store(true, Ordering::Relaxed);
+             return;
+         }
+-        while inner.bytes + bytes > self.capacity {
++        if bytes > self.capacity - inner.point_bytes {
++            return;
++        }
++        while inner.bytes + inner.point_bytes + bytes > self.capacity {
+             let victim = inner
+                 .clock
+                 .pop_front()
+@@ -248,7 +272,23 @@ impl BlockCache {
+                 referenced: AtomicBool::new(true),
+             },
+         );
+-        debug_assert!(inner.bytes <= self.capacity);
++        debug_assert!(inner.bytes + inner.point_bytes <= self.capacity);
++    }
++
++    /// Pin immutable point bytes within the same global read budget. Admission
++    /// never displaces blocks: deny it if existing residents use the space.
++    /// The caller then verifies the section and uses sorted reads instead.
++    pub(crate) fn reserve_point(self: &Arc<Self>, bytes: usize) -> Option<ResidentReservation> {
++        let mut inner = self.inner.write().expect("block cache lock poisoned");
++        let free = self.capacity - inner.bytes - inner.point_bytes;
++        if bytes > free {
++            return None;
++        }
++        inner.point_bytes += bytes;
++        Some(ResidentReservation {
++            cache: self.clone(),
++            bytes,
++        })
+     }
+ 
+     /// Loads `key` via `load` on a miss, coalescing concurrent misses
+@@ -689,3 +729,63 @@ mod tests {
+         );
+     }
+ }
++
++#[cfg(test)]
++mod point_reservation_tests {
++    use super::*;
++
++    #[test]
++    fn point_reservations_share_global_capacity_and_release_on_drop() {
++        let cache = Arc::new(BlockCache::new(256));
++        let held = cache.reserve_point(200).unwrap();
++        assert!(cache.reserve_point(57).is_none());
++        let data: Arc<[u8]> = vec![0; 100].into();
++        let block = CachedBlock {
++            data,
++            meta: BlockMeta {
++                entries_end: 0,
++                restart_start: 0,
++                num_restarts: 0,
++            },
++        };
++        cache.insert((1, 0), block.clone());
++        assert_eq!(cache.resident_bytes(), 200);
++        drop(held);
++        cache.insert((1, 0), block);
++        assert_eq!(cache.resident_bytes(), 100);
++        assert!(cache.reserve_point(157).is_none());
++        assert_eq!(cache.stats().point_index_bytes, 0);
++    }
++
++    #[test]
++    fn concurrent_section_admission_and_block_insertion_keep_capacity() {
++        let cache = Arc::new(BlockCache::new(1000));
++        let threads: Vec<_> = (0..8)
++            .map(|thread| {
++                let cache = cache.clone();
++                std::thread::spawn(move || {
++                    for i in 0..200 {
++                        let held = cache.reserve_point(137);
++                        cache.insert(
++                            (thread, i),
++                            CachedBlock {
++                                data: vec![0; 89].into(),
++                                meta: BlockMeta {
++                                    entries_end: 0,
++                                    restart_start: 0,
++                                    num_restarts: 0,
++                                },
++                            },
++                        );
++                        assert!(cache.resident_bytes() <= cache.capacity());
++                        drop(held);
++                    }
++                })
++            })
++            .collect();
++        for thread in threads {
++            thread.join().unwrap();
++        }
++        assert_eq!(cache.stats().point_index_bytes, 0);
++    }
++}
+diff --git a/src/db.rs b/src/db.rs
+index 45153583..47dd5fe4 100644
+--- a/src/db.rs
++++ b/src/db.rs
+@@ -411,6 +411,10 @@ pub struct KibanOptions {
+     pub level_multiplier: u64,
+     pub target_file_size: u64,
+     pub block_cache_bytes: usize,
++    /// Write optional format-4 per-SST perfect-hash point indexes. Readers
++    /// accept both formats regardless of this switch. Section residency shares
++    /// block_cache_bytes; denied admission falls back to sorted blocks.
++    pub point_index: bool,
+     /// Hard bound on SST descriptors owned by the shared foreground
+     /// `TableFileCache` (11.6), not a target or a soft threshold.
+     /// Streaming compaction opens one independent input handle only during
+@@ -520,6 +524,7 @@ impl Default for KibanOptions {
+             level_multiplier: 10,
+             target_file_size: 4 * MIB,
+             block_cache_bytes: 32 * MIB as usize,
++            point_index: false,
+             max_open_table_files: 128,
+             write_buffer_bytes: 4 * MIB as usize,
+             mmap_max_level: None,
+@@ -1548,7 +1553,7 @@ impl Kiban {
+         let new_wal_number = sst_number + 1;
+         let new_next_file_number = sst_number + 2;
+ 
+-        let mut builder = TableBuilder::new();
++        let mut builder = TableBuilder::with_point_index(self.options.point_index);
+         // `iter_all_versions` (not `iter`, which is live-only): a
+         // snapshot may need an older, superseded version that only
+         // exists in this memtable's retained history. Its own ordering
+@@ -1791,6 +1796,7 @@ impl Kiban {
+             cache: self.cache.clone(),
+             file_cache: self.file_cache.clone(),
+             mmap_max_level: self.options.mmap_max_level,
++            point_index: self.options.point_index,
+         })
+     }
+ 
+@@ -2857,12 +2863,13 @@ pub(crate) struct CompactionPlan {
+     /// Reserved output file numbers, in the order BUILD may use them.
+     /// Reserved generously at PLAN time (a cheap counter bump) so BUILD
+     /// never needs the lock to allocate one.
+-    output_numbers: Vec<u64>,
++    output_numbers: std::ops::Range<u64>,
+     dir: PathBuf,
+     cache: StdArc<BlockCache>,
+     file_cache: StdArc<TableFileCache>,
+     target_file_size: u64,
+     mmap_max_level: Option<u32>,
++    point_index: bool,
+     /// 11.17-round-3, section 7: when true, this plan moves exactly one
+     /// existing table down a level by metadata alone (`build()` reopens
+     /// the same file's footer/index — no merge, no bytes rewritten).
+@@ -2953,7 +2960,7 @@ impl CompactionPlan {
+         }
+ 
+         let mut outputs: Vec<TableEntry> = Vec::new();
+-        let mut builder = TableBuilder::new();
++        let mut builder = TableBuilder::with_point_index(self.point_index);
+         let mut output_entries = 0usize;
+         let mut core = MergeCore {
+             sources,
+@@ -3014,7 +3021,7 @@ impl CompactionPlan {
+             {
+                 let number = self.next_output_number(&mut next_output)?;
+                 self.emit_output(builder, number, &mut outputs)?;
+-                builder = TableBuilder::new();
++                builder = TableBuilder::with_point_index(self.point_index);
+                 output_entries = 0;
+             }
+             builder.add(v.kind, &v.key, &v.value, v.seq)?;
+@@ -3031,12 +3038,17 @@ impl CompactionPlan {
+     }
+ 
+     fn next_output_number(&self, next_output: &mut usize) -> Result<u64, DbError> {
+-        let number = *self.output_numbers.get(*next_output).ok_or_else(|| {
+-            DbError::Corrupt(
+-                "compaction exhausted its reserved output file numbers (reservation bug)"
+-                    .to_string(),
+-            )
+-        })?;
++        let number = self
++            .output_numbers
++            .start
++            .checked_add(*next_output as u64)
++            .filter(|&number| number < self.output_numbers.end)
++            .ok_or_else(|| {
++                DbError::Corrupt(
++                    "compaction exhausted its reserved output file numbers (reservation bug)"
++                        .into(),
++                )
++            })?;
+         *next_output += 1;
+         Ok(number)
+     }
+@@ -3090,6 +3102,7 @@ pub(crate) struct FlushPlan {
+     cache: StdArc<BlockCache>,
+     file_cache: StdArc<TableFileCache>,
+     mmap_max_level: Option<u32>,
++    point_index: bool,
+ }
+ 
+ impl FlushPlan {
+@@ -3099,7 +3112,7 @@ impl FlushPlan {
+     /// version isn't lost, same atomic publication. No engine lock is
+     /// held here.
+     pub(crate) fn build(&self) -> Result<TableEntry, DbError> {
+-        let mut builder = TableBuilder::new();
++        let mut builder = TableBuilder::with_point_index(self.point_index);
+         for (key, entry) in self.memtable.iter_all_versions() {
+             match entry {
+                 MemEntry::Value { value, seq } => builder.add(Kind::Put, key, value, *seq)?,
+@@ -3362,12 +3375,13 @@ impl Kiban {
+             output_level: level + 1,
+             visible_sequence: self.last_sequence,
+             gc_allowed: false,
+-            output_numbers: Vec::new(),
++            output_numbers: 0..0,
+             dir: self.dir.clone(),
+             cache: self.cache.clone(),
+             file_cache: self.file_cache.clone(),
+             target_file_size: self.options.target_file_size,
+             mmap_max_level: self.options.mmap_max_level,
++            point_index: self.options.point_index,
+             trivial_move: true,
+             predicted_output_bytes: None,
+         })
+@@ -3645,17 +3659,23 @@ impl Kiban {
+         // Reserve a generous bound on output file numbers now, so BUILD
+         // never needs to allocate one — an atomic `fetch_add`, not the
+         // engine gate, does the reserving (11.17-round-3.3: PLAN no
+-        // longer holds it at all). Output bytes are bounded by input
+-        // bytes (drop rules only remove data); the file count that
+-        // produces is bounded by input_bytes/target_file_size, plus
+-        // slack for the tail file and rounding.
++        // longer holds it at all). A point arena can expand compressed
++        // keys, especially when converting old tables. Reserve using a
++        // conservative restart-derived expansion bound, with one extra
++        // tail/rounding allowance. Store the reservation as a range so
++        // a generous identity bound does not allocate a huge vector.
+         let total_input_bytes: u64 = inputs.iter().map(|t| t.size).sum();
+         let target_file_size = self.options.target_file_size.max(1);
+-        let max_outputs = (total_input_bytes / target_file_size) + 8;
++        let expansion = if self.options.point_index {
++            crate::sstable::POINT_OUTPUT_EXPANSION_BOUND
++        } else {
++            1
++        };
++        let max_outputs = total_input_bytes.saturating_mul(expansion) / target_file_size + 8;
+         let start = self
+             .next_file_number
+             .fetch_add(max_outputs, Ordering::SeqCst);
+-        let output_numbers: Vec<u64> = (start..start + max_outputs).collect();
++        let output_numbers = start..start + max_outputs;
+ 
+         // Captured snapshots own their memtables and old SST topology. They
+         // never read this new output, so hidden versions in it need not be
+@@ -3674,6 +3694,7 @@ impl Kiban {
+             file_cache: self.file_cache.clone(),
+             target_file_size: self.options.target_file_size,
+             mmap_max_level: self.options.mmap_max_level,
++            point_index: self.options.point_index,
+             trivial_move: false,
+             predicted_output_bytes: None,
+         })
+@@ -3888,6 +3909,7 @@ mod compaction_tests {
+             base_level_bytes: 300,
+             level_multiplier: 4,
+             target_file_size: 250,
++            point_index: false,
+             block_cache_bytes: 1 << 20,
+             // High enough that no existing (pre-11.6) test — none of
+             // which exercise the file-cache bound deliberately — ever
+@@ -4437,6 +4459,7 @@ mod crash_sweep_tests {
+             base_level_bytes: 300,
+             level_multiplier: 4,
+             target_file_size: 250,
++            point_index: false,
+             block_cache_bytes: 1 << 20,
+             max_open_table_files: 64,
+             write_buffer_bytes: 1 << 20,
+@@ -4575,6 +4598,7 @@ mod crash_sweep_tests {
+                     base_level_bytes: 300,
+                     level_multiplier: 4,
+                     target_file_size: 250,
++                    point_index: false,
+                     block_cache_bytes: 1 << 20,
+                     max_open_table_files: 64,
+                     write_buffer_bytes: 1 << 20,
+@@ -5881,6 +5905,7 @@ mod cache_scaling_tests {
+             base_level_bytes: u64::MAX,
+             level_multiplier: 10,
+             target_file_size: 64 * 1024,
++            point_index: false,
+             block_cache_bytes: 4096,  // tiny: far smaller than the data
+             max_open_table_files: 64, // this module tests the block cache, not the file cache
+             // Irrelevant here: this module uses direct `Kiban`, which
+@@ -9314,3 +9339,7 @@ mod rotation_durability_tests {
+         }
+     }
+ }
++
++#[cfg(test)]
++#[path = "point_index_tests.rs"]
++mod point_index_tests;
+diff --git a/src/point_index_tests.rs b/src/point_index_tests.rs
+new file mode 100644
+index 00000000..7896a370
+--- /dev/null
++++ b/src/point_index_tests.rs
+@@ -0,0 +1,282 @@
++//! Real-engine tests of mixed SST formats, visibility and corruption handling.
++use super::*;
++use crate::sstable::builder::{FOOTER_LEN, POINT_FOOTER_EXTRA};
++use crate::testutil::TempDir;
++use std::collections::BTreeMap;
++
++fn options(point_index: bool, cache: usize) -> KibanOptions {
++    KibanOptions {
++        point_index,
++        block_cache_bytes: cache,
++        target_file_size: 16 * 1024,
++        base_level_bytes: 32 * 1024,
++        level_multiplier: 3,
++        l0_compaction_trigger: 2,
++        l0_write_stall_trigger: 20,
++        ..KibanOptions::default()
++    }
++}
++
++fn key(id: u64) -> Vec<u8> {
++    if id == 0 {
++        Vec::new()
++    } else {
++        [b"\0binary/".as_slice(), &id.to_be_bytes(), b"\xff"].concat()
++    }
++}
++
++#[test]
++fn point_index_randomized_mixed_formats_snapshots_and_compaction_match_model() {
++    for cache in [0, 8 * 1024, 8 * 1024 * 1024] {
++        let dir = TempDir::new("point-model");
++        let mut model = BTreeMap::<Vec<u8>, Vec<u8>>::new();
++        for phase in 0..6u64 {
++            let mut db =
++                Kiban::open_with_options(dir.path(), options(phase % 2 == 1, cache)).unwrap();
++            let mut pinned = None;
++            for op in 0..600u64 {
++                let h = crate::sys::SplitMix64(phase * 600 + op).next();
++                let k = key(h % 200);
++                if h.is_multiple_of(7) {
++                    db.delete(&k).unwrap();
++                    model.remove(&k);
++                } else {
++                    let value = vec![op as u8; 20 + (h % 180) as usize];
++                    db.put(&k, &value).unwrap();
++                    model.insert(k, value);
++                }
++                if op % 73 == 0 {
++                    db.flush().unwrap();
++                }
++                if op == 301 {
++                    pinned = Some((db.snapshot(), model.clone()));
++                }
++            }
++            db.flush().unwrap();
++            for id in 0..250 {
++                let k = key(id);
++                assert_eq!(db.get(&k).unwrap(), model.get(&k).cloned());
++            }
++            assert_eq!(
++                db.iter().map(Result::unwrap).collect::<Vec<_>>(),
++                model.clone().into_iter().collect::<Vec<_>>()
++            );
++            let (snap, old) = pinned.take().unwrap();
++            for id in 0..250 {
++                let k = key(id);
++                assert_eq!(db.get_at(&snap, &k).unwrap(), old.get(&k).cloned());
++            }
++            assert_eq!(
++                db.scan_at(&snap).unwrap(),
++                old.into_iter().collect::<Vec<_>>()
++            );
++            assert!(db.cache.resident_bytes() <= cache);
++            drop(snap);
++            db.close().unwrap();
++        }
++    }
++}
++
++#[test]
++fn point_index_mixed_tables_resolve_by_sequence_across_overlapping_levels() {
++    let dir = TempDir::new("point-levels");
++    let mut db = Kiban::open_with_options(dir.path(), options(true, 1024 * 1024)).unwrap();
++    let mut tables = Vec::new();
++    for (number, level, indexed, seq, kind, value) in [
++        (10, 0, true, 5, Kind::Put, b"stale".as_slice()),
++        (11, 1, false, 8, Kind::Put, b"middle".as_slice()),
++        (12, 1, true, 10, Kind::Tombstone, b"".as_slice()),
++        (13, 2, true, 12, Kind::Put, b"newest".as_slice()),
++    ] {
++        let mut builder = TableBuilder::with_point_index(indexed);
++        builder.add(kind, b"key", value, seq).unwrap();
++        let path = dir.path().join(format!("{number}.sst"));
++        atomic::commit_file(&path, &builder.finish().unwrap()).unwrap();
++        let table = SstTable::open(
++            number,
++            &path,
++            db.cache.clone(),
++            db.file_cache.clone(),
++            false,
++        )
++        .unwrap();
++        tables.push(StdArc::new(TableEntry {
++            file_lifetime: StdArc::new(()),
++            level,
++            number,
++            size: table.size_on_disk(),
++            first_key: table.smallest_key().to_vec(),
++            last_key: table.largest_key().to_vec(),
++            table,
++        }));
++    }
++    db.version = StdArc::new(Version::new(1, tables));
++    for (sequence, expected) in [
++        (4, None),
++        (5, Some(b"stale".as_slice())),
++        (8, Some(b"middle".as_slice())),
++        (10, None),
++        (12, Some(b"newest".as_slice())),
++    ] {
++        assert_eq!(
++            get_from_version_at(&db.version, b"key", sequence, &db.read_amp).unwrap(),
++            expected.map(<[u8]>::to_vec)
++        );
++    }
++}
++
++#[test]
++fn point_index_every_section_and_footer_bit_flip_is_detected_with_or_without_admission() {
++    let dir = TempDir::new("point-bit-flips");
++    let mut builder = TableBuilder::with_point_index(true);
++    builder.add(Kind::Put, b"a", b"one", 5).unwrap();
++    builder.add(Kind::Tombstone, b"b", b"", 4).unwrap();
++    let original = builder.finish().unwrap();
++    let extra = original.len() - FOOTER_LEN - POINT_FOOTER_EXTRA;
++    let start = u64::from_le_bytes(original[extra..extra + 8].try_into().unwrap()) as usize;
++    let len = u64::from_le_bytes(original[extra + 8..extra + 16].try_into().unwrap()) as usize;
++    let path = dir.path().join("1.sst");
++    for capacity in [0, 1024 * 1024] {
++        for at in (start..start + len).chain(extra..original.len()) {
++            for bit in 0..8 {
++                let mut bytes = original.clone();
++                bytes[at] ^= 1 << bit;
++                std::fs::write(&path, bytes).unwrap();
++                let cache = StdArc::new(BlockCache::new(capacity));
++                let result = SstTable::open(
++                    1,
++                    &path,
++                    cache.clone(),
++                    StdArc::new(TableFileCache::new(1)),
++                    false,
++                );
++                assert!(
++                    matches!(result, Err(crate::sstable::SstError::Corrupt(_))),
++                    "accepted bit {at}/{bit}, capacity {capacity}"
++                );
++                assert_eq!(cache.stats().point_index_bytes, 0);
++            }
++        }
++    }
++}
++
++#[test]
++fn point_index_presence_is_independent_of_writer_switch_and_cache_admission() {
++    let dir = TempDir::new("point-switch");
++    for indexed in [false, true] {
++        let mut db = Kiban::open_with_options(dir.path(), options(indexed, 1024 * 1024)).unwrap();
++        db.put(if indexed { b"new" } else { b"old" }, b"value")
++            .unwrap();
++        db.flush_without_compaction().unwrap();
++        db.close().unwrap();
++    }
++    for cache in [0, 1024 * 1024] {
++        let db = Kiban::open_with_options(dir.path(), options(false, cache)).unwrap();
++        assert_eq!(db.get(b"old").unwrap(), Some(b"value".to_vec()));
++        assert_eq!(db.get(b"new").unwrap(), Some(b"value".to_vec()));
++        assert_eq!(db.cache.stats().point_index_bytes > 0, cache > 0);
++    }
++}
++
++/// Run the already-built release test executable under taskset -c 8.
++/// These measurements isolate flush and compaction BUILD from memtable fill.
++#[test]
++#[ignore = "CPU-8 maintenance benchmark; KIBAN_POINT_BENCH_N controls population"]
++fn point_index_maintenance_measurement() {
++    assert!(
++        std::fs::read_to_string("/proc/self/status")
++            .unwrap()
++            .lines()
++            .any(|line| line == "Cpus_allowed_list:\t8")
++    );
++    let n: u64 = std::env::var("KIBAN_POINT_BENCH_N")
++        .unwrap_or_else(|_| "1000000".into())
++        .parse()
++        .unwrap();
++    for trial in 0..5 {
++        for indexed in if trial % 2 == 0 {
++            [false, true]
++        } else {
++            [true, false]
++        } {
++            let dir = TempDir::new("point-maintenance");
++            let mut opts = options(indexed, 512 * 1024 * 1024);
++            opts.l0_compaction_trigger = 100;
++            opts.l0_write_stall_trigger = 200;
++            opts.target_file_size = 4 * 1024 * 1024;
++            let mut db = Kiban::open_with_options(dir.path(), opts).unwrap();
++            let mut flush_ns = 0;
++            for part in 0..2 {
++                for id in part * (n / 2)..(part + 1) * (n / 2) {
++                    db.put(id.to_be_bytes(), vec![id as u8; 296]).unwrap();
++                }
++                let tick = std::time::Instant::now();
++                db.flush_without_compaction().unwrap();
++                flush_ns += tick.elapsed().as_nanos();
++            }
++            let input_bytes: u64 = db.version.tables.iter().map(|t| t.size).sum();
++            let plan = db.plan_compaction_at_level(0).unwrap();
++            let tick = std::time::Instant::now();
++            let outputs = plan.build().unwrap();
++            let build_ns = tick.elapsed().as_nanos();
++            let output_bytes: u64 = outputs.iter().map(|t| t.size).sum();
++            let output_files = outputs.len();
++            let tick = std::time::Instant::now();
++            db.commit_compaction(plan, outputs).unwrap();
++            let commit_ns = tick.elapsed().as_nanos();
++            for id in 0..n {
++                assert_eq!(
++                    db.get(id.to_be_bytes()).unwrap().unwrap(),
++                    vec![id as u8; 296]
++                );
++            }
++            println!(
++                "{{\"type\":\"maintenance\",\"trial\":{},\"point_index\":{},\"n\":{},\"flush_ns\":{},\"compaction_build_ns\":{},\"compaction_commit_ns\":{},\"input_bytes\":{},\"output_bytes\":{},\"output_files\":{},\"point_resident_bytes\":{},\"verified_records\":{},\"errors\":0}}",
++                trial + 1,
++                indexed,
++                n,
++                flush_ns,
++                build_ns,
++                commit_ns,
++                input_bytes,
++                output_bytes,
++                output_files,
++                db.cache.stats().point_index_bytes,
++                n
++            );
++        }
++    }
++}
++
++#[test]
++fn point_index_conversion_reserves_outputs_for_full_key_expansion() {
++    let dir = TempDir::new("point-expansion");
++    let mut opts = options(false, 8 * 1024 * 1024);
++    opts.l0_compaction_trigger = 100;
++    opts.l0_write_stall_trigger = 200;
++    let mut db = Kiban::open_with_options(dir.path(), opts.clone()).unwrap();
++    for id in 0u64..2048 {
++        let mut key = vec![b'a'; 512];
++        key.extend_from_slice(&id.to_be_bytes());
++        db.put(key, id.to_be_bytes()).unwrap();
++    }
++    db.flush_without_compaction().unwrap();
++    let old_bound =
++        db.version.tables.iter().map(|t| t.size).sum::<u64>() / opts.target_file_size + 8;
++    db.close().unwrap();
++    opts.point_index = true;
++    let mut db = Kiban::open_with_options(dir.path(), opts).unwrap();
++    let plan = db.plan_compaction_at_level(0).unwrap();
++    let outputs = plan.build().unwrap();
++    assert!(
++        outputs.len() as u64 > old_bound,
++        "fixture must exceed the old format-preserving bound"
++    );
++    db.commit_compaction(plan, outputs).unwrap();
++    for id in 0u64..2048 {
++        let mut key = vec![b'a'; 512];
++        key.extend_from_slice(&id.to_be_bytes());
++        assert_eq!(db.get(key).unwrap().unwrap(), id.to_be_bytes());
++    }
++    assert_eq!(db.iter().count(), 2048);
++}
+diff --git a/src/simulation_tests.rs b/src/simulation_tests.rs
+index 51ddcd41..9651a29a 100644
+--- a/src/simulation_tests.rs
++++ b/src/simulation_tests.rs
+@@ -281,7 +281,8 @@ fn run_seed(seed: u64, mode: EngineMode) -> Result<Vec<DeviceImage>, String> {
+         let mut rng = sys::SplitMix64(seed);
+         let probe_dir = TempDir::new("seeded-wal");
+         wal_creation_probe(probe_dir.path(), &mut rng).map_err(|e| format!("WAL probe: {e}"))?;
+-        let options = super::compaction_tests::tiny_options();
++        let mut options = super::compaction_tests::tiny_options();
++        options.point_index = seed & 1 != 0;
+         let mut db = mode
+             .open(dir.path(), options.clone())
+             .map_err(|e| format!("initial open: {e}"))?;
+@@ -357,6 +358,8 @@ fn run_seed(seed: u64, mode: EngineMode) -> Result<Vec<DeviceImage>, String> {
+                 }
+             }
+             sys::power_loss_seeded(crash_seed);
++            // Exercise recovery with both write policies and mixed existing SSTs.
++            options.point_index = !options.point_index;
+             db = mode
+                 .open(dir.path(), options.clone())
+                 .map_err(|e| format!("{context}, crash reopen: {e}"))?;
+diff --git a/src/sstable/builder.rs b/src/sstable/builder.rs
+index da194347..bf8f0e1b 100644
+--- a/src/sstable/builder.rs
++++ b/src/sstable/builder.rs
+@@ -6,6 +6,7 @@
+ //! magic.
+ 
+ use super::block::{BLOCK_TYPE_NONE, BlockBuilder};
++use super::point::PointBuilder;
+ use super::{Kind, SstError};
+ use crate::bloom::BloomFilter;
+ use crate::crc32;
+@@ -13,6 +14,8 @@ use crate::crc32;
+ pub const TARGET_BLOCK_SIZE: usize = 4096;
+ pub const FOOTER_LEN: usize = 44;
+ pub const FORMAT_VERSION: u32 = 3;
++pub const POINT_FORMAT_VERSION: u32 = 4;
++pub const POINT_FOOTER_EXTRA: usize = 24;
+ pub const MAGIC: &[u8; 8] = b"KIBANSST";
+ 
+ struct PendingBlock {
+@@ -37,6 +40,7 @@ pub struct TableBuilder {
+     last_seq: u64,
+     has_last: bool,
+     key_hashes: Vec<u64>,
++    point: Option<PointBuilder>,
+ }
+ 
+ impl TableBuilder {
+@@ -44,10 +48,23 @@ impl TableBuilder {
+         TableBuilder::default()
+     }
+ 
++    /// Write a format-4 point section alongside the existing sorted blocks.
++    pub fn with_point_index(enabled: bool) -> Self {
++        Self {
++            point: enabled.then(PointBuilder::default),
++            ..Self::default()
++        }
++    }
++
+     /// Bytes written to the output so far, including the open block —
+     /// a lower bound on the finished file size.
+     pub fn approximate_size(&self) -> usize {
+-        self.out.len() + self.block.estimated_size()
++        self.out.len()
++            + self.block.estimated_size()
++            + self
++                .point
++                .as_ref()
++                .map_or(0, PointBuilder::approximate_size)
+     }
+ 
+     pub fn add(&mut self, kind: Kind, key: &[u8], value: &[u8], seq: u64) -> Result<(), SstError> {
+@@ -69,6 +86,16 @@ impl TableBuilder {
+             ));
+         }
+ 
++        if let Some(point) = &mut self.point {
++            point.add(
++                kind,
++                key,
++                value,
++                seq,
++                !self.has_last || key != self.last_key.as_slice(),
++            )?;
++        }
++
+         // Flush first if the current block has met the size target; then,
+         // if we are about to write the first entry of a fresh block, the
+         // incoming key IS that block's first key and completes the pending
+@@ -151,6 +178,12 @@ impl TableBuilder {
+ 
+         // Filter block (bloom.md D4): sits directly before the index;
+         // carries the standard trailer.
++        let point_offset = self.out.len() as u64;
++        let has_point = self.point.is_some();
++        if let Some(point) = self.point {
++            self.out.extend_from_slice(&point.finish()?);
++        }
++        let point_len = self.out.len() as u64 - point_offset;
+         let filter = BloomFilter::build_hashes(&self.key_hashes);
+         let mut filter_bytes = filter.encode();
+         filter_bytes.push(BLOCK_TYPE_NONE);
+@@ -164,16 +197,43 @@ impl TableBuilder {
+         let index_len = idx.len() as u64;
+         self.out.extend_from_slice(&idx);
+ 
++        let footer_start = self.out.len();
++        if has_point {
++            self.out.extend_from_slice(&point_offset.to_le_bytes());
++            self.out.extend_from_slice(&point_len.to_le_bytes());
++            self.out.extend_from_slice(&1u32.to_le_bytes());
++            self.out.extend_from_slice(&0u32.to_le_bytes());
++        }
+         self.out.extend_from_slice(&index_offset.to_le_bytes());
+         self.out.extend_from_slice(&index_len.to_le_bytes());
+-        self.out.extend_from_slice(&FORMAT_VERSION.to_le_bytes());
++        let version = if has_point {
++            POINT_FORMAT_VERSION
++        } else {
++            FORMAT_VERSION
++        };
++        self.out.extend_from_slice(&version.to_le_bytes());
+         self.out.extend_from_slice(&filter_offset.to_le_bytes());
+         self.out.extend_from_slice(&filter_len.to_le_bytes());
+         self.out.extend_from_slice(MAGIC);
++        if has_point {
++            let state = crc32::update(crc32::INITIAL, &self.out[footer_start..footer_start + 20]);
++            let checksum = crc32::finalize(crc32::update(
++                state,
++                &self.out[footer_start + POINT_FOOTER_EXTRA..],
++            ));
++            self.out[footer_start + 20..footer_start + 24].copy_from_slice(&checksum.to_le_bytes());
++        }
+         debug_assert_eq!(filter_offset + filter_len, index_offset);
+         debug_assert_eq!(
+             self.out.len() as u64,
+-            index_offset + index_len + FOOTER_LEN as u64
++            index_offset
++                + index_len
++                + FOOTER_LEN as u64
++                + if has_point {
++                    POINT_FOOTER_EXTRA as u64
++                } else {
++                    0
++                }
+         );
+ 
+         Ok(self.out)
+diff --git a/src/sstable/mod.rs b/src/sstable/mod.rs
+index b39e5892..d7db9cf1 100644
+--- a/src/sstable/mod.rs
++++ b/src/sstable/mod.rs
+@@ -4,6 +4,7 @@
+ 
+ mod block;
+ pub mod builder;
++mod point;
+ pub mod reader;
+ mod separator;
+ 
+@@ -51,6 +52,11 @@ fn common_prefix_len(a: &[u8], b: &[u8]) -> usize {
+     a.iter().zip(b.iter()).take_while(|(x, y)| x == y).count()
+ }
+ 
++// Both a sorted output and its point arena can store every reconstructed
++// full key. An input restart covers at most RESTART_INTERVAL keys; values
++// are copied at most twice. Extra slack covers per-key headers and slots.
++pub(crate) const POINT_OUTPUT_EXPANSION_BOUND: u64 = (2 * block::RESTART_INTERVAL + 8) as u64;
++
+ pub use block::{BlockIter, VerifiedBlock};
+ pub use builder::TableBuilder;
+ pub use reader::{Found, Iter, SstTable};
+diff --git a/src/sstable/point.rs b/src/sstable/point.rs
+new file mode 100644
+index 00000000..b4433516
+--- /dev/null
++++ b/src/sstable/point.rs
+@@ -0,0 +1,489 @@
++//! Format-1 bucket-displacement MPHF and independently comparable MVCC records.
++//! The byte encoding is documented in validation/v2/DESIGN.md.
++
++use super::{Found, Kind, SstError};
++use crate::cache::ResidentReservation;
++
++const HEADER: usize = 32;
++const SLOT: usize = 12;
++const DIRECT: u32 = 1 << 31;
++const MAGIC: &[u8; 8] = b"KIBANPH1";
++const STEP: u64 = 0x9e37_79b9_7f4a_7c15;
++
++fn bad(message: &str) -> SstError {
++    SstError::Corrupt(format!("point index: {message}"))
++}
++fn u32_at(raw: &[u8], at: usize) -> u32 {
++    u32::from_le_bytes(raw[at..at + 4].try_into().unwrap())
++}
++fn u64_at(raw: &[u8], at: usize) -> u64 {
++    u64::from_le_bytes(raw[at..at + 8].try_into().unwrap())
++}
++fn mix(mut h: u64) -> u64 {
++    h ^= h >> 30;
++    h = h.wrapping_mul(0xbf58_476d_1ce4_e5b9);
++    h ^= h >> 27;
++    h = h.wrapping_mul(0x94d0_49bb_1331_11eb);
++    h ^ (h >> 31)
++}
++fn hash(key: &[u8], seed: u64) -> u64 {
++    let mut h = mix(seed ^ key.len() as u64);
++    let (chunks, remainder) = key.as_chunks::<8>();
++    for &chunk in chunks {
++        h = (h ^ u64::from_le_bytes(chunk))
++            .rotate_left(27)
++            .wrapping_mul(STEP);
++    }
++    let mut tail = [0; 8];
++    tail[..remainder.len()].copy_from_slice(remainder);
++    mix(h ^ u64::from_le_bytes(tail))
++}
++fn fingerprint(h: u64) -> u16 {
++    (mix(h ^ 0xd6e8_feb8_6659_fd93) >> 48) as u16
++}
++fn bucket(h: u64, count: usize) -> usize {
++    (h % count as u64) as usize
++}
++fn position(h: u64, pilot: u32, n: usize) -> usize {
++    (mix(h ^ (pilot as u64).wrapping_mul(STEP)) % n as u64) as usize
++}
++fn index(h: u64, pilots: &[u32], n: usize) -> usize {
++    let pilot = pilots[bucket(h, pilots.len())];
++    if pilot & DIRECT != 0 {
++        (pilot & !DIRECT) as usize
++    } else {
++        position(h, pilot, n)
++    }
++}
++
++/// Exactly N occupied slots. Hash collisions and failed placement retry the
++/// full byte-key hash seed, rather than collapsing distinct user keys.
++fn construct(keys: &[&[u8]]) -> Result<(u64, Vec<u32>, Vec<usize>), SstError> {
++    let n = keys.len();
++    if n == 0 || n >= DIRECT as usize {
++        return Err(SstError::InvalidArgument("point index key count".into()));
++    }
++    let buckets = n.div_ceil(3);
++    for attempt in 0..8 {
++        let seed = mix(STEP.wrapping_mul(attempt + 1));
++        let hashes: Vec<_> = keys.iter().map(|key| hash(key, seed)).collect();
++        let mut sorted = hashes.clone();
++        sorted.sort_unstable();
++        if sorted.windows(2).any(|pair| pair[0] == pair[1]) {
++            continue;
++        }
++        drop(sorted);
++        let mut members = vec![Vec::new(); buckets];
++        for (i, &h) in hashes.iter().enumerate() {
++            members[bucket(h, buckets)].push(i);
++        }
++        let mut order: Vec<_> = (0..buckets).collect();
++        order.sort_unstable_by_key(|&b| std::cmp::Reverse(members[b].len()));
++        let mut pilots = vec![0; buckets];
++        let mut occupied = vec![false; n];
++        let mut slots = vec![usize::MAX; n];
++        let mut candidates = Vec::new();
++        let mut failed = false;
++        for &b in &order {
++            if members[b].len() <= 1 {
++                continue;
++            }
++            let found = (0..100_000).find(|&pilot| {
++                candidates.clear();
++                for &member in &members[b] {
++                    let at = position(hashes[member], pilot, n);
++                    if occupied[at] || candidates.contains(&at) {
++                        return false;
++                    }
++                    candidates.push(at);
++                }
++                true
++            });
++            let Some(pilot) = found else {
++                failed = true;
++                break;
++            };
++            pilots[b] = pilot;
++            for (&member, &at) in members[b].iter().zip(&candidates) {
++                occupied[at] = true;
++                slots[at] = member;
++            }
++        }
++        if failed {
++            continue;
++        }
++        let mut free = (0..n).filter(|&i| !occupied[i]);
++        for &b in &order {
++            if members[b].len() == 1 {
++                let at = free.next().expect("one free slot per singleton");
++                pilots[b] = DIRECT | at as u32;
++                slots[at] = members[b][0];
++            }
++        }
++        if slots.contains(&usize::MAX) {
++            return Err(bad("construction did not fill every slot"));
++        }
++        // Validate bijection before any bytes can be published.
++        for (at, &member) in slots.iter().enumerate() {
++            if index(hashes[member], &pilots, n) != at {
++                return Err(bad("construction slot mismatch"));
++            }
++        }
++        return Ok((seed, pilots, slots));
++    }
++    Err(SstError::InvalidArgument(
++        "point index construction exhausted seed retries".into(),
++    ))
++}
++
++#[derive(Default)]
++pub(super) struct PointBuilder {
++    arena: Vec<u8>,
++    heads: Vec<usize>,
++}
++impl PointBuilder {
++    pub(super) fn approximate_size(&self) -> usize {
++        HEADER + self.heads.len().div_ceil(3) * 4 + self.heads.len() * SLOT + self.arena.len() + 5
++    }
++    pub(super) fn add(
++        &mut self,
++        kind: Kind,
++        key: &[u8],
++        value: &[u8],
++        seq: u64,
++        new_key: bool,
++    ) -> Result<(), SstError> {
++        crate::limits::mutation(key, value)
++            .map_err(|e| SstError::InvalidArgument(e.to_string()))?;
++        if new_key {
++            self.heads.push(self.arena.len());
++            self.arena
++                .extend_from_slice(&(key.len() as u32).to_le_bytes());
++            self.arena.extend_from_slice(&1u32.to_le_bytes());
++            self.arena.extend_from_slice(key);
++        } else {
++            let at = self.heads.last().expect("a previous key") + 4;
++            let count = u32_at(&self.arena, at)
++                .checked_add(1)
++                .ok_or_else(|| SstError::InvalidArgument("too many point versions".into()))?;
++            self.arena[at..at + 4].copy_from_slice(&count.to_le_bytes());
++        }
++        self.arena.extend_from_slice(&seq.to_le_bytes());
++        self.arena.push(kind.to_u8());
++        self.arena
++            .extend_from_slice(&(value.len() as u32).to_le_bytes());
++        self.arena.extend_from_slice(value);
++        Ok(())
++    }
++    pub(super) fn finish(self) -> Result<Vec<u8>, SstError> {
++        let keys: Vec<_> = self
++            .heads
++            .iter()
++            .map(|&p| &self.arena[p + 8..p + 8 + u32_at(&self.arena, p) as usize])
++            .collect();
++        let (seed, pilots, slots) = construct(&keys)?;
++        let arena_start = HEADER + pilots.len() * 4 + slots.len() * SLOT;
++        let mut bytes = Vec::with_capacity(arena_start + self.arena.len() + 5);
++        bytes.extend_from_slice(MAGIC);
++        bytes.extend_from_slice(&seed.to_le_bytes());
++        bytes.extend_from_slice(&(slots.len() as u32).to_le_bytes());
++        bytes.extend_from_slice(&(pilots.len() as u32).to_le_bytes());
++        bytes.extend_from_slice(&(arena_start as u64).to_le_bytes());
++        for pilot in pilots {
++            bytes.extend_from_slice(&pilot.to_le_bytes());
++        }
++        for member in slots {
++            bytes.extend_from_slice(&(self.heads[member] as u64).to_le_bytes());
++            bytes.extend_from_slice(&fingerprint(hash(keys[member], seed)).to_le_bytes());
++            bytes.extend_from_slice(&0u16.to_le_bytes());
++        }
++        bytes.extend_from_slice(&self.arena);
++        bytes.push(0);
++        let crc = crate::crc32::crc32(&bytes);
++        bytes.extend_from_slice(&crc.to_le_bytes());
++        Ok(bytes)
++    }
++}
++
++pub(super) struct PointIndex {
++    bytes: Vec<u8>,
++    seed: u64,
++    count: usize,
++    buckets: usize,
++    arena: usize,
++    _reservation: ResidentReservation,
++}
++impl PointIndex {
++    pub(super) fn decode(
++        bytes: Vec<u8>,
++        reservation: ResidentReservation,
++    ) -> Result<Self, SstError> {
++        super::reader::verify_trailer(&bytes, "point index")?;
++        if bytes.len() < HEADER + 5 || &bytes[..8] != MAGIC {
++            return Err(bad("unsupported header"));
++        }
++        let seed = u64_at(&bytes, 8);
++        let count = u32_at(&bytes, 16) as usize;
++        let buckets = u32_at(&bytes, 20) as usize;
++        let arena =
++            usize::try_from(u64_at(&bytes, 24)).map_err(|_| bad("arena offset overflow"))?;
++        if count == 0
++            || count >= DIRECT as usize
++            || buckets != count.div_ceil(3)
++            || buckets
++                .checked_mul(4)
++                .and_then(|n| HEADER.checked_add(n))
++                .and_then(|n| count.checked_mul(SLOT).and_then(|size| n.checked_add(size)))
++                != Some(arena)
++            || arena >= bytes.len() - 5
++        {
++            return Err(bad("invalid section dimensions"));
++        }
++        let result = Self {
++            bytes,
++            seed,
++            count,
++            buckets,
++            arena,
++            _reservation: reservation,
++        };
++        result.validate()?;
++        Ok(result)
++    }
++    fn slot(&self, h: u64) -> usize {
++        let pilot = u32_at(&self.bytes, HEADER + bucket(h, self.buckets) * 4);
++        let at = if pilot & DIRECT != 0 {
++            (pilot & !DIRECT) as usize
++        } else {
++            position(h, pilot, self.count)
++        };
++        HEADER + self.buckets * 4 + at * SLOT
++    }
++    fn validate(&self) -> Result<(), SstError> {
++        let raw = &self.bytes[..self.bytes.len() - 5];
++        for b in 0..self.buckets {
++            let pilot = u32_at(raw, HEADER + b * 4);
++            if pilot & DIRECT != 0 && (pilot & !DIRECT) as usize >= self.count {
++                return Err(bad("singleton slot out of bounds"));
++            }
++        }
++        let mut p = self.arena;
++        let mut previous: Option<&[u8]> = None;
++        for _ in 0..self.count {
++            let start = p;
++            if raw.len().saturating_sub(p) < 8 {
++                return Err(bad("truncated key header"));
++            }
++            let kl = u32_at(raw, p) as usize;
++            let versions = u32_at(raw, p + 4) as usize;
++            p += 8;
++            if kl > crate::limits::MAX_KEY_BYTES || kl > raw.len() - p || versions == 0 {
++                return Err(bad("invalid key length or version count"));
++            }
++            let key = &raw[p..p + kl];
++            p += kl;
++            if previous.is_some_and(|prev| prev >= key) {
++                return Err(bad("keys are not strictly increasing"));
++            }
++            previous = Some(key);
++            let h = hash(key, self.seed);
++            let s = self.slot(h);
++            if u64_at(raw, s) != (start - self.arena) as u64
++                || u32_at(raw, s + 8) != fingerprint(h) as u32
++            {
++                return Err(bad("slot does not identify its full-key record"));
++            }
++            let mut last_seq = None;
++            for _ in 0..versions {
++                if raw.len().saturating_sub(p) < 13 {
++                    return Err(bad("truncated version header"));
++                }
++                let seq = u64_at(raw, p);
++                let kind = Kind::from_u8(raw[p + 8]).ok_or_else(|| bad("invalid record kind"))?;
++                let vl = u32_at(raw, p + 9) as usize;
++                p += 13;
++                if vl > crate::limits::MAX_VALUE_BYTES
++                    || vl > raw.len() - p
++                    || (kind == Kind::Tombstone && vl != 0)
++                    || last_seq.is_some_and(|last| last <= seq)
++                {
++                    return Err(bad("invalid value length or version ordering"));
++                }
++                p += vl;
++                last_seq = Some(seq);
++            }
++        }
++        if p != raw.len() {
++            return Err(bad("record arena has trailing bytes"));
++        }
++        Ok(())
++    }
++    pub(super) fn get(&self, key: &[u8], limit: Option<u64>) -> Option<Found> {
++        let h = hash(key, self.seed);
++        let s = self.slot(h);
++        if u32_at(&self.bytes, s + 8) as u16 != fingerprint(h) {
++            return None;
++        }
++        // Decode validated addresses only. The complete key comparison is
++        // mandatory even when the fingerprint matches an absent key.
++        let mut p = self.arena + u64_at(&self.bytes, s) as usize;
++        let kl = u32_at(&self.bytes, p) as usize;
++        let versions = u32_at(&self.bytes, p + 4);
++        p += 8;
++        if &self.bytes[p..p + kl] != key {
++            return None;
++        }
++        p += kl;
++        for _ in 0..versions {
++            let seq = u64_at(&self.bytes, p);
++            let kind = Kind::from_u8(self.bytes[p + 8]).expect("validated kind");
++            let vl = u32_at(&self.bytes, p + 9) as usize;
++            p += 13;
++            if limit.is_none_or(|lim| seq <= lim) {
++                return Some(Found {
++                    kind,
++                    seq,
++                    value: self.bytes[p..p + vl].to_vec(),
++                });
++            }
++            p += vl;
++        }
++        None
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::cache::BlockCache;
++    use std::sync::Arc;
++
++    fn decode(builder: PointBuilder) -> PointIndex {
++        let bytes = builder.finish().unwrap();
++        let cache = Arc::new(BlockCache::new(bytes.len()));
++        let reservation = cache.reserve_point(bytes.len()).unwrap();
++        PointIndex::decode(bytes, reservation).unwrap()
++    }
++
++    #[test]
++    fn point_index_roundtrip_versions_and_binary_keys() {
++        let mut builder = PointBuilder::default();
++        builder.add(Kind::Put, b"", b"empty", 1, true).unwrap();
++        builder
++            .add(Kind::Tombstone, b"\0\xff", b"", 9, true)
++            .unwrap();
++        builder.add(Kind::Put, b"\0\xff", b"old", 7, false).unwrap();
++        builder
++            .add(Kind::Put, b"long", &[3; 100_000], 2, true)
++            .unwrap();
++        let index = decode(builder);
++        assert_eq!(index.get(b"", None).unwrap().value, b"empty");
++        assert_eq!(index.get(b"\0\xff", None).unwrap().kind, Kind::Tombstone);
++        assert_eq!(index.get(b"\0\xff", Some(8)).unwrap().value, b"old");
++        assert!(index.get(b"\0\xff", Some(6)).is_none());
++        assert!(index.get(b"missing", None).is_none());
++        assert_eq!(index.get(b"long", None).unwrap().value, [3; 100_000]);
++    }
++
++    #[test]
++    fn on_disk_bucket_reduction_uses_all_64_hash_bits() {
++        // Truncating h to usize before reduction would route this to 2 on
++        // 32-bit readers, making files written by 64-bit writers unreadable.
++        assert_eq!(bucket((1u64 << 32) + 42, 10), 8);
++        let pilots: Vec<_> = (0..10).map(|i| DIRECT | i).collect();
++        assert_eq!(index((1u64 << 32) + 42, &pilots, 10), 8);
++    }
++
++    #[test]
++    fn point_index_bijection_property() {
++        for n in [1, 2, 3, 8, 17, 64, 511, 4096] {
++            let keys: Vec<_> = (0..n as u64)
++                .map(|i| {
++                    let mut key = vec![0; i as usize % 127];
++                    key.extend_from_slice(&i.to_be_bytes());
++                    key
++                })
++                .collect();
++            let refs: Vec<_> = keys.iter().map(Vec::as_slice).collect();
++            let (seed, pilots, slots) = construct(&refs).unwrap();
++            let mut occupied = vec![false; n];
++            for (member, key) in keys.iter().enumerate() {
++                let at = index(hash(key, seed), &pilots, n);
++                assert!(!occupied[at]);
++                occupied[at] = true;
++                assert_eq!(slots[at], member);
++            }
++            assert!(occupied.into_iter().all(|v| v));
++        }
++    }
++}
++
++#[cfg(test)]
++mod corruption_tests {
++    use super::*;
++    use crate::cache::BlockCache;
++    use std::sync::Arc;
++
++    #[test]
++    fn matching_fingerprint_for_absent_key_requires_full_key_comparison() {
++        let mut builder = PointBuilder::default();
++        builder
++            .add(Kind::Put, b"present", b"secret", 1, true)
++            .unwrap();
++        let bytes = builder.finish().unwrap();
++        let cache = Arc::new(BlockCache::new(bytes.len()));
++        let reservation = cache.reserve_point(bytes.len()).unwrap();
++        let point = PointIndex::decode(bytes, reservation).unwrap();
++        let wanted = fingerprint(hash(b"present", point.seed));
++        let absent = (0u64..2_000_000)
++            .find_map(|i| {
++                let key = i.to_be_bytes();
++                (fingerprint(hash(&key, point.seed)) == wanted).then_some(key)
++            })
++            .expect("a colliding fingerprint");
++        // Singleton MPHF routes every byte string to its one slot.
++        assert_eq!(
++            point.slot(hash(&absent, point.seed)),
++            point.slot(hash(b"present", point.seed))
++        );
++        assert!(point.get(&absent, None).is_none());
++        assert_eq!(point.get(b"present", None).unwrap().value, b"secret");
++    }
++
++    #[test]
++    fn malformed_checksummed_point_records_are_rejected_and_release_budget() {
++        let mut builder = PointBuilder::default();
++        builder.add(Kind::Put, b"a", b"one", 4, true).unwrap();
++        builder.add(Kind::Put, b"b", b"two", 3, true).unwrap();
++        let original = builder.finish().unwrap();
++        let arena = u64_at(&original, 24) as usize;
++        let slots = HEADER + u32_at(&original, 20) as usize * 4;
++        // Header count/dimensions, singleton index, slot offsets/fingerprint,
++        // record lengths, version count, kind, and key ordering.
++        for at in [
++            16,
++            20,
++            24,
++            HEADER,
++            slots,
++            slots + 8,
++            arena,
++            arena + 4,
++            arena + 8,
++            arena + 17,
++        ] {
++            let mut bytes = original.clone();
++            bytes[at..at + 4].copy_from_slice(&u32::MAX.to_le_bytes());
++            let end = bytes.len() - 4;
++            let crc = crate::crc32::crc32(&bytes[..end]);
++            bytes[end..].copy_from_slice(&crc.to_le_bytes());
++            let cache = Arc::new(BlockCache::new(bytes.len()));
++            let reservation = cache.reserve_point(bytes.len()).unwrap();
++            assert!(
++                PointIndex::decode(bytes, reservation).is_err(),
++                "accepted invalid field at {at}"
++            );
++            assert_eq!(cache.resident_bytes(), 0);
++        }
++    }
++}
+diff --git a/src/sstable/reader.rs b/src/sstable/reader.rs
+index de093f8b..4b837fc5 100644
+--- a/src/sstable/reader.rs
++++ b/src/sstable/reader.rs
+@@ -12,7 +12,8 @@ use std::path::{Path, PathBuf};
+ use std::sync::Arc;
+ 
+ use super::block::{BlockIter, VerifiedBlock};
+-use super::builder::{FOOTER_LEN, FORMAT_VERSION, MAGIC};
++use super::builder::{FOOTER_LEN, FORMAT_VERSION, MAGIC, POINT_FOOTER_EXTRA, POINT_FORMAT_VERSION};
++use super::point::PointIndex;
+ use super::separator::Separator;
+ use super::{Kind, SstError};
+ use crate::bloom::BloomFilter;
+@@ -126,6 +127,7 @@ pub struct SstTable {
+     file_len: u64,
+     index: Vec<IndexEntry>,
+     filter: BloomFilter,
++    point: Option<PointIndex>,
+     first_key: Vec<u8>,
+     last_key: Vec<u8>,
+     block_cache: Arc<BlockCache>,
+@@ -190,20 +192,54 @@ impl SstTable {
+             return Err(bad("bad magic number; not a kiban sstable".to_string()));
+         }
+         let version = u32::from_le_bytes(footer[16..20].try_into().unwrap());
+-        if version != FORMAT_VERSION {
++        if version != FORMAT_VERSION && version != POINT_FORMAT_VERSION {
+             return Err(bad(format!("unsupported format version {version}")));
+         }
+         let index_offset = u64::from_le_bytes(footer[0..8].try_into().unwrap());
+         let index_len = u64::from_le_bytes(footer[8..16].try_into().unwrap());
+         let filter_offset = u64::from_le_bytes(footer[20..28].try_into().unwrap());
+         let filter_len = u64::from_le_bytes(footer[28..36].try_into().unwrap());
+-        let data_end = file_len - FOOTER_LEN as u64;
++        let point_range = if version == POINT_FORMAT_VERSION {
++            if file_len < (FOOTER_LEN + POINT_FOOTER_EXTRA) as u64 {
++                return Err(bad("truncated point footer".into()));
++            }
++            let lease = file_cache.acquire(number, path).map_err(open_err)?;
++            let extra = lease
++                .read_range_at(
++                    path,
++                    file_len - (FOOTER_LEN + POINT_FOOTER_EXTRA) as u64,
++                    POINT_FOOTER_EXTRA as u64,
++                )
++                .map_err(|e| bad(e.to_string()))?;
++            let state = crc32::update(crc32::INITIAL, &extra[..20]);
++            let checksum = crc32::finalize(crc32::update(state, footer));
++            if checksum != u32::from_le_bytes(extra[20..24].try_into().unwrap())
++                || u32::from_le_bytes(extra[16..20].try_into().unwrap()) != 1
++            {
++                return Err(bad("point footer checksum or feature flags".into()));
++            }
++            let offset = u64::from_le_bytes(extra[..8].try_into().unwrap());
++            let len = u64::from_le_bytes(extra[8..16].try_into().unwrap());
++            if len < 37 || offset.checked_add(len) != Some(filter_offset) {
++                return Err(bad("point section out of bounds".into()));
++            }
++            Some((offset, len))
++        } else {
++            None
++        };
++        let data_end = file_len
++            - FOOTER_LEN as u64
++            - if point_range.is_some() {
++                POINT_FOOTER_EXTRA as u64
++            } else {
++                0
++            };
+         if index_len == 0
+             || index_len > crate::limits::MAX_RECORD_BYTES as u64
+             || filter_len > crate::limits::MAX_RECORD_BYTES as u64
+             || index_offset
+                 .checked_add(index_len)
+-                .is_none_or(|end| end > data_end)
++                .is_none_or(|end| end != data_end)
+         {
+             return Err(bad("index block out of file bounds".to_string()));
+         }
+@@ -226,7 +262,53 @@ impl SstTable {
+         verify_trailer(&filter_raw, "filter")?;
+         let filter = BloomFilter::decode(&filter_raw[..filter_raw.len() - 5])
+             .ok_or_else(|| bad("filter block payload is malformed".to_string()))?;
+-        let index = parse_index(&index_raw, filter_offset)?;
++        let index = parse_index(
++            &index_raw,
++            point_range.map_or(filter_offset, |(offset, _)| offset),
++        )?;
++        let point = if let Some((offset, len)) = point_range {
++            let lease = file_cache.acquire(number, path).map_err(open_err)?;
++            let resident = usize::try_from(len)
++                .ok()
++                .and_then(|n| block_cache.reserve_point(n));
++            if let Some(reservation) = resident {
++                let raw = lease
++                    .read_range_at(path, offset, len)
++                    .map_err(|e| bad(e.to_string()))?;
++                Some(PointIndex::decode(raw, reservation)?)
++            } else {
++                let header = lease
++                    .read_range_at(path, offset, 8)
++                    .map_err(|e| bad(e.to_string()))?;
++                if header != b"KIBANPH1" {
++                    return Err(bad("unsupported point section encoding".into()));
++                }
++                // Even an unused optional section must pass its checksum.
++                // Stream it so a small cache never allocates a whole SST arena.
++                let mut state = crc32::INITIAL;
++                let mut pos = 0;
++                while pos < len - 4 {
++                    let amount = (len - 4 - pos).min(64 * 1024);
++                    let raw = lease
++                        .read_range_at(path, offset + pos, amount)
++                        .map_err(|e| bad(e.to_string()))?;
++                    state = crc32::update(state, &raw);
++                    pos += amount;
++                }
++                let trailer = lease
++                    .read_range_at(path, offset + len - 5, 5)
++                    .map_err(|e| bad(e.to_string()))?;
++                if trailer[0] != 0
++                    || crc32::finalize(state)
++                        != u32::from_le_bytes(trailer[1..].try_into().unwrap())
++                {
++                    return Err(bad("point index checksum mismatch".into()));
++                }
++                None
++            }
++        } else {
++            None
++        };
+ 
+         // Best-effort: a failed mmap degrades silently to the pread
+         // path (see `SstTable::mmap`'s doc), never fails the open.
+@@ -240,6 +322,7 @@ impl SstTable {
+             file_len,
+             index,
+             filter,
++            point,
+             first_key: Vec::new(),
+             last_key: Vec::new(),
+             block_cache,
+@@ -449,6 +532,9 @@ impl SstTable {
+         if !self.filter.may_contain(key) {
+             return Ok(None);
+         }
++        if let Some(point) = &self.point {
++            return Ok(point.get(key, limit));
++        }
+         let idx = self.index.partition_point(|e| e.separator.as_slice() < key);
+         if idx == self.index.len() {
+             return Ok(None);
+@@ -624,7 +710,7 @@ impl Iterator for CompactionIter<'_> {
+     }
+ }
+ 
+-fn verify_trailer(raw: &[u8], what: &str) -> Result<(), SstError> {
++pub(super) fn verify_trailer(raw: &[u8], what: &str) -> Result<(), SstError> {
+     if raw.len() < 6 || raw[raw.len() - 5] != super::block::BLOCK_TYPE_NONE {
+         return Err(SstError::Corrupt(format!("unknown {what} block type")));
+     }

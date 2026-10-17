@@ -69,6 +69,8 @@ struct Options {
     #[serde(default = "one_reader")]
     readers: usize,
     #[serde(default)]
+    point_index: bool,
+    #[serde(default)]
     stage: u64,
     #[serde(default)]
     durable: bool,
@@ -85,6 +87,7 @@ fn open(o: &Options) -> Result<Box<dyn Backend>> {
         "kiban" => Box::new(backend::Embedded::with_options(
             &o.suite.db,
             KibanOptions {
+                point_index: o.point_index,
                 block_cache_bytes: o.cache_mib.map_or_else(
                     || KibanOptions::default().block_cache_bytes,
                     |mib| mib * 1024 * 1024,
@@ -118,7 +121,13 @@ fn prepare(o: &Options) -> Result<()> {
     if c.backend == "kiban" && o.layout == "normal" {
         // Direct Kiban leaves flush policy to its caller. Flush at its default
         // write-buffer budget and let flush run the normal compaction picker.
-        let mut db = Kiban::open(&c.db)?;
+        let mut db = Kiban::open_with_options(
+            &c.db,
+            KibanOptions {
+                point_index: o.point_index,
+                ..KibanOptions::default()
+            },
+        )?;
         let mut bytes = 0;
         for id in 0..c.n {
             let memory = model::Memory::new(id, 0, c.seed);
@@ -268,7 +277,14 @@ fn reads(o: &Options) -> Result<()> {
 fn writes(o: &Options) -> Result<()> {
     let c = &o.suite;
     let mut b: Box<dyn Backend> = if c.backend == "kiban" {
-        Box::new(backend::Embedded::with_durability(&c.db, o.durable)?)
+        Box::new(backend::Embedded::with_options_and_durability(
+            &c.db,
+            KibanOptions {
+                point_index: o.point_index,
+                ..KibanOptions::default()
+            },
+            o.durable,
+        )?)
     } else {
         Box::new(backend::Lmdb::open(&c.db, if o.durable { Mode::Durable } else { Mode::Fast })?.0)
     };
@@ -353,6 +369,7 @@ mod tests {
                     },
                     action: "read".into(),
                     layout: shape.into(),
+                    point_index: true,
                     cache_mib: Some(32),
                     mmap_max_level: None,
                     readers: 1,

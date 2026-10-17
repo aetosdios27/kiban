@@ -86,15 +86,17 @@ impl TableBuilder {
             ));
         }
 
-        if let Some(point) = &mut self.point {
-            point.add(
+        let point_patch = if let Some(point) = &mut self.point {
+            Some(point.add(
                 kind,
                 key,
                 value,
                 seq,
                 !self.has_last || key != self.last_key.as_slice(),
-            )?;
-        }
+            )?)
+        } else {
+            None
+        };
 
         // Flush first if the current block has met the size target; then,
         // if we are about to write the first entry of a fresh block, the
@@ -120,7 +122,13 @@ impl TableBuilder {
                 len: p.len,
             });
         }
-        self.block.add(kind, key, value, seq);
+        let value_offset = self.block.add(kind, key, value, seq);
+        if let Some(patch) = point_patch {
+            self.point
+                .as_mut()
+                .expect("point builder exists")
+                .set_value_offset(patch, self.out.len() as u64 + value_offset as u64);
+        }
         if !self.has_last || key != self.last_key.as_slice() {
             self.key_hashes.push(crate::bloom::fnv1a_64(key));
         }
@@ -201,7 +209,7 @@ impl TableBuilder {
         if has_point {
             self.out.extend_from_slice(&point_offset.to_le_bytes());
             self.out.extend_from_slice(&point_len.to_le_bytes());
-            self.out.extend_from_slice(&1u32.to_le_bytes());
+            self.out.extend_from_slice(&2u32.to_le_bytes());
             self.out.extend_from_slice(&0u32.to_le_bytes());
         }
         self.out.extend_from_slice(&index_offset.to_le_bytes());
