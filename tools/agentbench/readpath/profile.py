@@ -12,6 +12,9 @@ from fold import restore_ips
 from run import ROOT, BINARY, config
 import json
 
+# Offline stack decoding and SVG generation also stay off the E-core sweep.
+os.sched_setaffinity(0, {2, 3, 4, 5})
+
 PERF = ROOT / 'target/read-path-tools/root/usr/bin/perf'
 INFERNO = ROOT / 'target/read-path-tools/inferno/bin'
 EVENTS = ','.join('cpu_core/' + name + '/u' for name in (

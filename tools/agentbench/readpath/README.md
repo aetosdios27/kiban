@@ -82,3 +82,9 @@ under `validation/read-path-results/indexed-prototype-source`, based on
 `1a685d1`. Apply each independently in a disposable worktree; the packed
 variant uses `inline-search.patch` with its block-index module replaced by
 `packed-block-index.rs.txt`. Neither cache prototype is part of the engine.
+
+`profile_pair.py --before <frozen-binary> --after <frozen-binary> --out <folder>
+alternates full W2 profiles with LMDB controls; use `--stage 2` for W3 and
+`--stacks` for complete sampled-IP flame graphs. Offline perf decoding and
+SVG generation inherit the profiler coordinator's P-core affinity (2–5);
+the timed children remain pinned to CPU 3.

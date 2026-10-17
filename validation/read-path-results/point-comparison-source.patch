@@ -1,0 +1,125 @@
+diff --git a/src/sstable/block.rs b/src/sstable/block.rs
+index 22b87b5..02b0859 100644
+--- a/src/sstable/block.rs
++++ b/src/sstable/block.rs
+@@ -192,38 +192,43 @@ impl VerifiedBlock {
+     }
+ 
+     pub fn get(&self, target: &[u8], limit: Option<u64>) -> Result<Option<Match<'_>>, SstError> {
++        use std::cmp::Ordering;
+         let start = seek_restart_index(&self.data, &self.meta, target)?;
+-        let mut key: Vec<u8> = Vec::new();
+         let mut pos = self.restart_offset(start);
+-
+-        loop {
+-            if pos >= self.meta.entries_end {
+-                return Ok(None);
+-            }
++        let mut previous_len = 0;
++        let mut matched = 0;
++        let mut ordering = Ordering::Equal;
++        while pos < self.meta.entries_end {
+             let (kind, seq, shared, non_shared, value_len) = self.header(pos)?;
+-            if shared > key.len() {
++            if shared > previous_len {
+                 return Err(SstError::Corrupt(
+                     "shared length exceeds previous key".to_string(),
+                 ));
+             }
+-            key.truncate(shared);
+-            key.extend_from_slice(
+-                &self.data[pos + ENTRY_FIXED_LEN..pos + ENTRY_FIXED_LEN + non_shared],
+-            );
+-            let value = entry_value(&self.data, pos, kind, non_shared, value_len);
+-            if key.as_slice() == target {
+-                // visibility limit: skip versions newer than the snapshot
+-                // bound; entries for one key are seq-descending, so the
+-                // first qualifying match is the newest visible version
+-                if limit.is_none_or(|lim| seq <= lim) {
+-                    return Ok(Some(Match { kind, seq, value }));
+-                }
++            // A shared prefix extending beyond the previous mismatch preserves
++            // its ordering. Otherwise only the newly encoded suffix can differ.
++            if shared <= matched {
++                let suffix = &self.data[pos + ENTRY_FIXED_LEN..pos + ENTRY_FIXED_LEN + non_shared];
++                let remaining = &target[shared..];
++                let common = suffix
++                    .iter()
++                    .zip(remaining)
++                    .take_while(|(a, b)| a == b)
++                    .count();
++                ordering = suffix.get(common).cmp(&remaining.get(common));
++                matched = shared + common;
+             }
+-            if key.as_slice() > target {
++            previous_len = shared + non_shared;
++            if ordering == Ordering::Greater {
+                 return Ok(None);
+             }
++            if ordering == Ordering::Equal && limit.is_none_or(|limit| seq <= limit) {
++                let value = entry_value(&self.data, pos, kind, non_shared, value_len);
++                return Ok(Some(Match { kind, seq, value }));
++            }
+             pos += ENTRY_FIXED_LEN + non_shared + value_len;
+         }
++        Ok(None)
+     }
+ 
+     /// First entry in the block.
+@@ -502,6 +507,56 @@ mod tests {
+         }
+     }
+ 
++    #[test]
++    fn prefix_comparison_preserves_binary_keys_history_and_tombstones() {
++        let keys = [
++            vec![],
++            vec![0],
++            vec![0, 0],
++            vec![0, 255],
++            vec![1],
++            vec![1, 0],
++            vec![1, 0, 255],
++            vec![255; 80],
++            vec![255; 81],
++        ];
++        let mut builder = BlockBuilder::default();
++        let mut entries = Vec::new();
++        for key in &keys {
++            for seq in (1..=40u64).rev() {
++                let kind = if seq % 7 == 0 {
++                    Kind::Tombstone
++                } else {
++                    Kind::Put
++                };
++                let value = if kind == Kind::Put {
++                    seq.to_le_bytes().to_vec()
++                } else {
++                    Vec::new()
++                };
++                builder.add(kind, key, &value, seq);
++                entries.push((key.clone(), kind, seq, value));
++            }
++        }
++        let block = VerifiedBlock::from_raw(builder.finish()).unwrap();
++        for key in keys
++            .into_iter()
++            .chain([vec![0, 0, 0], vec![0, 1], vec![1, 0, 0], vec![255; 82]])
++        {
++            for limit in (0..=41).map(Some).chain([None]) {
++                let expected = entries
++                    .iter()
++                    .find(|entry| entry.0 == key && limit.is_none_or(|limit| entry.2 <= limit))
++                    .map(|entry| (entry.1, entry.2, entry.3.as_slice()));
++                let actual = block
++                    .get(&key, limit)
++                    .unwrap()
++                    .map(|entry| (entry.kind, entry.seq, entry.value));
++                assert_eq!(actual, expected, "key={key:?}, limit={limit:?}");
++            }
++        }
++    }
++
+     #[test]
+     fn empty_block_builder_produces_nothing() {
+         assert!(BlockBuilder::default().is_empty());

@@ -1,0 +1,140 @@
+[
+  {
+    "name": "test",
+    "command": [
+      "cargo",
+      "test",
+      "--",
+      "--test-threads=4"
+    ],
+    "code": 0,
+    "seconds": 11.711284637451172
+  },
+  {
+    "name": "release",
+    "command": [
+      "cargo",
+      "test",
+      "--release",
+      "--",
+      "--test-threads=4"
+    ],
+    "code": 0,
+    "seconds": 30.729501724243164
+  },
+  {
+    "name": "clippy",
+    "command": [
+      "cargo",
+      "clippy",
+      "--all-targets",
+      "--workspace",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "code": 0,
+    "seconds": 1.0492658615112305
+  },
+  {
+    "name": "fmt",
+    "command": [
+      "cargo",
+      "fmt",
+      "--check"
+    ],
+    "code": 0,
+    "seconds": 0.38728880882263184
+  },
+  {
+    "name": "fixed",
+    "command": [
+      "cargo",
+      "test",
+      "--release",
+      "seeded_crash_fixed_corpus",
+      "--",
+      "--test-threads=1"
+    ],
+    "code": 0,
+    "seconds": 0.5197765827178955
+  },
+  {
+    "name": "long-20000-each",
+    "command": [
+      "cargo",
+      "test",
+      "--release",
+      "--lib",
+      "seeded_crash_long",
+      "--",
+      "--ignored",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "code": 0,
+    "seconds": 142.46962976455688
+  },
+  {
+    "name": "loom",
+    "command": [
+      "cargo",
+      "test",
+      "--features",
+      "loom",
+      "--",
+      "--test-threads=1",
+      "loom_"
+    ],
+    "code": 0,
+    "seconds": 31.06336808204651
+  },
+  {
+    "name": "site-facts",
+    "command": [
+      "python3",
+      "tools/site_facts.py",
+      "validate"
+    ],
+    "code": 0,
+    "seconds": 0.14741182327270508
+  },
+  {
+    "name": "readbench-clippy",
+    "command": [
+      "cargo",
+      "clippy",
+      "--manifest-path",
+      "tools/agentbench/readpath/Cargo.toml",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "code": 0,
+    "seconds": 0.4601871967315674
+  },
+  {
+    "name": "readbench-test",
+    "command": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "tools/agentbench/readpath/Cargo.toml"
+    ],
+    "code": 0,
+    "seconds": 1.039247989654541
+  },
+  {
+    "name": "readbench-fmt",
+    "command": [
+      "cargo",
+      "fmt",
+      "--manifest-path",
+      "tools/agentbench/readpath/Cargo.toml",
+      "--check"
+    ],
+    "code": 0,
+    "seconds": 0.0788424015045166
+  }
+]

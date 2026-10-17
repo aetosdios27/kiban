@@ -1,7 +1,17 @@
 # Read-path profile
 
-Work is continuing on `perf/read-path`, based on main `082858f` (PR #10).
+Results on `perf/read-path`, based on main `082858f` (PR #10).
 No push or PR is authorized. The default block cache remains 32 MiB.
+
+## Outcome
+
+**The read target is not met.** Four performance fixes are retained; the
+cache/index and allocation-free point-seek experiments that failed full-read
+comparisons are reverted. Kiban's 10k point medians are near LMDB, while its
+point tails, 1M reads, and latest-ten scans still trail LMDB. The tables below
+preserve that result rather than claiming a win from an isolated component or
+a favorable mean. No public API, decoder, SST format, or default cache size
+changed. All retained commits passed the required correctness gates.
 
 ## Codec prerequisite
 
@@ -400,3 +410,74 @@ level slices borrow the same immutable Version already pinned by the caller,
 and Rust's iterator lifetime prevents them outliving that Version. No shared
 mutation or publication protocol changes; existing loom models cover the
 unchanged publication and locking paths and passed again.
+
+### Reject allocation-free point-key comparison
+
+The suffix-comparison prototype avoided reconstructing a temporary key.
+Its isolated median improved 826.3 → 775.9 ns and instructions/op
+1689 → 1121, but branch misses increased 1.44 → 4.10. Full reads did not
+confirm a win: bulk W2 p50 was 2.304 → 2.496 µs with overlapping control
+ratios; normal was 2.432 → 2.752 µs, with the paired K/LMDB ratio worsening
+1.267 → 1.357. The engine change is reverted.
+
+A separate full W2 counter experiment executed the actual API loop, alternating
+both frozen builds with raw LMDB. Kiban instructions fell 8253 → 7702/op,
+but branch misses increased 2.81 → 5.19 and median user cycles were
+6214 → 6232. LLC misses improved only 12.69 → 12.22/op. Cycle and wall-time
+ranges overlap, and the LMDB controls also moved. The instruction saving does
+not establish a latency saving. The before stack sample still spends 18.62%
+self in BlockCache::get, 12.60% in header_at, and 9.25% in memcmp; the
+candidate retains these memory accesses and adds comparisons/branches.
+These exclusive samples are not summed with inclusive parent percentages.
+
+[Isolated counters](read-path-results/BLOCK_COMPARE_PROTOTYPE.md),
+[bulk distributions](read-path-results/POINT_COMPARE_PAIRED_BULK.md),
+[normal distributions](read-path-results/POINT_COMPARE_PAIRED_NORMAL.md), and
+[full-operation counters](read-path-results/POINT_COMPARE_COUNTERS.md) retain
+the evidence. Complete sampled-IP graphs are preserved for
+[retained Kiban](read-path-results/profile-point-compare/r1-before-kiban-stacks.svg),
+[the rejected candidate](read-path-results/profile-point-compare/r1-after-kiban-stacks.svg),
+and their
+[LMDB control](read-path-results/profile-point-compare/r1-before-lmdb-stacks.svg).
+The [source patch](read-path-results/point-comparison-source.patch) includes
+an independent regression test for empty/binary keys, long shared prefixes,
+versions across restart points, and tombstones. Its unit run passed; it is
+retained as evidence, not as an engine fix.
+
+## Current standing against raw LMDB
+
+Microseconds, median of five alternating trials. Each cell is Kiban / LMDB.
+These are complete W2/W3 harness latency measurements, including value
+materialization and JSON decoding. Both engines use the same payload and
+oracle. All 80 read commands and all 16 million timed calls completed without
+errors or topology changes.
+
+| N | Layout | Cache MiB | W2 p50 K / LMDB | W2 p99 K / LMDB | W3 p50 K / LMDB | W3 p99 K / LMDB |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| 10000 | bulk | 32 | 1.056 / 1.088 | 2.112 / 1.856 | 3.904 / 3.200 | 8.192 / 6.528 |
+| 10000 | bulk | 512 | 0.992 / 0.992 | 1.984 / 1.792 | 3.904 / 3.264 | 8.448 / 6.784 |
+| 10000 | normal | 32 | 0.976 / 0.992 | 1.888 / 1.696 | 3.968 / 3.264 | 8.192 / 6.528 |
+| 10000 | normal | 512 | 0.976 / 1.120 | 1.824 / 1.888 | 3.968 / 3.328 | 8.704 / 7.040 |
+| 1000000 | bulk | 32 | 5.248 / 1.856 | 8.704 / 3.072 | 4.352 / 3.328 | 9.216 / 7.168 |
+| 1000000 | bulk | 512 | 2.240 / 1.856 | 3.456 / 2.880 | 4.224 / 3.264 | 9.216 / 6.784 |
+| 1000000 | normal | 32 | 5.376 / 1.824 | 9.984 / 2.752 | 4.992 / 3.328 | 11.776 / 7.040 |
+| 1000000 | normal | 512 | 2.496 / 1.792 | 4.096 / 2.752 | 4.864 / 3.264 | 9.216 / 6.656 |
+
+[Complete baseline-to-final comparison](read-path-results/FINAL_COMPARISON.md)
+and [final trial ranges](read-path-results/AFTER_RANGE_ALLOC.md) include the
+contemporary LMDB controls. Bulk 1M/32 MiB W2 p50 fell 8.448 → 5.248 µs;
+normal fell 9.216 → 5.376 µs. At 512 MiB, bulk fell 3.072 → 2.240 µs
+and normal 3.136 → 2.496 µs. These improvements do not reach LMDB's
+1.8–1.9 µs large-N point medians. Normal 1M W3 remains about 1.5× LMDB.
+
+The retained changes preserve Kiban's write lead. Each fix links its W1/W4
+p50/p99 and throughput check; the final range change also has an interleaved
+durable comparison. Fsync ranges overlap and no durable speedup is claimed.
+The final commit's [complete gates](read-path-results/final-checks) rerun
+both 20,000-seed release suites, both fixed corpora, debug/release tests,
+Clippy, formatting, loom, site-facts validation, and the benchmark tests.
+All engine source hashes match the retained range-allocation commit.
+The remaining cache-budget, mapped-read contract, borrowed-API and block-layout
+proposals above require your decision; their gains are estimates where a
+full-path prototype has not been measured. Main is unchanged; nothing was
+pushed and no PR was opened.
