@@ -312,6 +312,7 @@ mod tests {
                     sqlite_layout: layout,
                     sqlite_sync: sync,
                     sqlite_mmap_bytes: 1024 * 1024 * 1024,
+                    rocks: crate::rocks::Tuning::default(),
                 };
                 prepare(&o)?;
                 reads(&o)?;
