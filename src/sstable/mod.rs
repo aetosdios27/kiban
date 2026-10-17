@@ -5,6 +5,7 @@
 mod block;
 pub mod builder;
 pub mod reader;
+mod separator;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {

@@ -283,3 +283,23 @@ W1 p99 ranges overlap; no write speedup is claimed.
 
 [All correctness gates](read-path-results/seek-checks) passed, including the
 two 20,000-seed release suites, loom, and the new cursor property test.
+
+### Keep short separators in one index cache line
+
+Parsed separators up to 46 bytes now reside directly in a 64-byte index
+entry. Longer binary keys use an owned Vec fallback. Parsing compares borrowed
+input slices, avoiding temporary separator clones. The writer, file encoding,
+public API and cache capacity are unchanged. Tests cover binary keys and both
+sides of the inline-length boundary. No concurrency behavior changed.
+
+At 1M with 512 MiB, bulk W2 p50 improved 3.072 → 2.304 µs and p99
+4.736 → 3.520 µs; normal p50 improved 3.392 → 2.432 µs and p99
+5.632 → 3.904 µs. Paired K/LMDB p50 ratios improved 1.508 → 1.302
+and 1.767 → 1.242. The component prototype used 38 inline bytes; production
+uses the remaining cache-line room for up to 46 without enlarging the entry.
+
+[Full before/after matrix](read-path-results/INLINE_COMPARISON.md),
+[write latency and throughput ranges](read-path-results/INLINE_WRITE_COMPARISON.md),
+and [all correctness gates](read-path-results/inline-checks) are retained.
+Writes show no regression outside the observed trial variation. Scan control
+ranges largely overlap; the retained benefit is point-read search.
