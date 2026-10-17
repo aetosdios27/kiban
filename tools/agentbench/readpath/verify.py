@@ -37,5 +37,5 @@ for name, command in checks:
     if result.returncode:
         print((folder / (name + '.log')).read_text()[-5000:], flush=True)
         sys.exit(result.returncode)
-sources = subprocess.check_output(['git', 'ls-files', 'src', 'Cargo.toml', 'Cargo.lock'], cwd=ROOT, text=True).splitlines()
+sources = sorted(set(subprocess.check_output(['git', 'ls-files', '--cached', '--others', '--exclude-standard', 'src', 'Cargo.toml', 'Cargo.lock'], cwd=ROOT, text=True).splitlines()))
 (folder / 'source-hashes.json').write_text(json.dumps({p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in sources}, indent=2)+'\n')

@@ -217,5 +217,40 @@ No performance implementation is included in the profile commit.
 
 ## Implementation results
 
-Pending. Each retained fix will have its own commit, complete before/after
-read matrix, write check, and correctness gates.
+### Accelerate IEEE checksums with PCLMUL
+
+The checksum update now dispatches inputs of at least 128 bytes to an
+x86_64 PCLMULQDQ/SSE4.1 implementation. Short inputs and other CPUs retain
+slicing-by-eight. The optimized implementation is adapted from crc32fast
+1.5.0, with its MIT notice retained under licenses. The engine adds no runtime
+dependency. Public functions, unfinalized streaming state, polynomial,
+checksums, SST format, and default cache size are unchanged.
+
+The independent bitwise tests still pass across lengths, alignments and
+streaming states. A new dispatched-versus-scalar test covers offsets 0–63,
+every length 112–272, larger fold boundaries, and three initial states.
+Existing SSTs written before this change were verified by every read trial.
+No engine synchronization or shared state changed; the standard library CPU
+feature detector supplies the dispatch guard. Existing loom models remain
+applicable to the unchanged engine publication and locking paths.
+
+At 1M and 32 MiB, W2 p50 bulk improved 8.448 → 5.120 µs and normal
+9.216 → 5.504 µs. W2 p99 improved 13.824 → 7.552 µs and 16.128 →
+9.216 µs. Paired Kiban/LMDB p50 ratios improved 4.784 → 3.154 bulk and
+5.053 → 3.510 normal, with non-overlapping bulk trial ratio ranges.
+Cache-hit and scan trial ranges overlap, so their raw decreases are not
+attributed to CRC acceleration. LMDB's own timings also shifted.
+
+[Complete before/after p50/p99 matrix, all populations/layouts/cache budgets,
+and paired control ranges](read-path-results/CRC_COMPARISON.md).
+[After distributions](read-path-results/AFTER_CRC.md) preserve all five trials.
+
+The write check found no regression. Fast W1 p50 was 1.152 → 0.816 µs
+and W4 1.856 → 0.928 µs; call throughput 536,892 → 693,545 and
+378,534 → 815,254 ops/s. Durable W1/W4 p50 was 589.824 → 557.056 µs.
+Durable throughput ranges overlap, as expected for fsync. No durable speedup
+is claimed. [All write p50/p99 and throughput ranges, including LMDB controls](read-path-results/CRC_WRITE_COMPARISON.md).
+
+[Correctness gates and exact tested source hashes](read-path-results/crc-checks)
+are retained with the change. The fix is retained for its clear cache-miss
+read improvement; Kiban still trails LMDB on reads, so work continues.
