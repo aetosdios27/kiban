@@ -1,0 +1,333 @@
+diff --git a/src/cache.rs b/src/cache.rs
+index b799139..6ece9ac 100644
+--- a/src/cache.rs
++++ b/src/cache.rs
+@@ -39,6 +39,15 @@ struct Entry {
+     /// Eviction-policy metadata only. Relaxed is sufficient: map
+     /// membership and block ownership remain protected by `inner`.
+     referenced: AtomicBool,
++    handle: Option<Arc<BlockHandle>>,
++}
++
++/// One slot per SST block. The cache clears a bound slot before evicting
++/// its resident, so only active readers can retain bytes outside the budget.
++#[derive(Debug, Default)]
++pub(crate) struct BlockHandle {
++    block: RwLock<Option<CachedBlock>>,
++    referenced: AtomicBool,
+ }
+ 
+ #[derive(Debug)]
+@@ -222,12 +231,12 @@ impl BlockCache {
+                 .clock
+                 .pop_front()
+                 .expect("clock tracks every resident entry");
+-            let referenced = inner
+-                .map
+-                .get(&victim)
+-                .expect("clock key must be resident")
+-                .referenced
+-                .swap(false, Ordering::Relaxed);
++            let entry = inner.map.get(&victim).expect("clock key must be resident");
++            let referenced = entry.referenced.swap(false, Ordering::Relaxed)
++                | entry
++                    .handle
++                    .as_ref()
++                    .is_some_and(|handle| handle.referenced.swap(false, Ordering::Relaxed));
+             if referenced {
+                 inner.clock.push_back(victim);
+                 continue;
+@@ -236,6 +245,13 @@ impl BlockCache {
+                 .map
+                 .remove(&victim)
+                 .expect("clock key must be resident");
++            if let Some(handle) = removed.handle {
++                handle
++                    .block
++                    .write()
++                    .expect("block handle lock poisoned")
++                    .take();
++            }
+             inner.bytes -= removed.block.data.len();
+             self.evictions.increment();
+         }
+@@ -246,11 +262,54 @@ impl BlockCache {
+             Entry {
+                 block,
+                 referenced: AtomicBool::new(true),
++                handle: None,
+             },
+         );
+         debug_assert!(inner.bytes <= self.capacity);
+     }
+ 
++    /// Slots avoid hashing and entry indirection on a point hit. Mutation
++    /// always locks the cache before a slot; the hit path releases the slot
++    /// read guard before it can enter the cache's miss path.
++    pub(crate) fn get_or_load_with_handle<E, F>(
++        &self,
++        key: CacheKey,
++        handle: &Arc<BlockHandle>,
++        load: F,
++    ) -> Result<CachedBlock, String>
++    where
++        F: FnOnce() -> Result<CachedBlock, E>,
++        E: std::fmt::Display,
++    {
++        let hit = handle
++            .block
++            .read()
++            .expect("block handle lock poisoned")
++            .clone();
++        if let Some(block) = hit {
++            handle.referenced.store(true, Ordering::Relaxed);
++            self.hits.increment();
++            return Ok(block);
++        }
++        let block = self.get_or_load(key, load)?;
++        let mut resident = self.inner.write().expect("block cache lock poisoned");
++        if let Some(entry) = resident.map.get_mut(&key) {
++            // A trivial move can reopen a table with another set of slots.
++            // Keep at most one bound slot per resident and invalidate the old
++            // one while admission/eviction is excluded by the cache lock.
++            if let Some(old) = entry.handle.replace(handle.clone())
++                && !Arc::ptr_eq(&old, handle)
++            {
++                old.block
++                    .write()
++                    .expect("block handle lock poisoned")
++                    .take();
++            }
++            *handle.block.write().expect("block handle lock poisoned") = Some(entry.block.clone());
++        }
++        Ok(block)
++    }
++
+     /// Loads `key` via `load` on a miss, coalescing concurrent misses
+     /// for the SAME key into one physical load (11.17-F): the first
+     /// caller to miss becomes the leader and runs `load`; any other
+@@ -412,6 +471,96 @@ mod tests {
+         }
+     }
+ 
++    #[test]
++    fn point_handles_do_not_keep_evicted_or_bypassed_blocks_alive() {
++        let cache = BlockCache::new(100);
++        let handle = Arc::new(BlockHandle::default());
++        let data = cache
++            .get_or_load_with_handle((1, 0), &handle, || Ok::<_, String>(block(100, 7)))
++            .unwrap();
++        let weak_data = Arc::downgrade(&data.data);
++        drop(data);
++        cache.insert((2, 0), block(100, 9));
++        assert!(handle.block.read().unwrap().is_none());
++        assert!(weak_data.upgrade().is_none());
++        assert_eq!(cache.resident_bytes(), 100);
++        let data = cache
++            .get_or_load_with_handle((1, 0), &handle, || Ok::<_, String>(block(200, 3)))
++            .unwrap();
++        assert_eq!(data.data.as_ref(), &[3; 200]);
++        assert!(handle.block.read().unwrap().is_none());
++        assert_eq!(cache.resident_bytes(), 100);
++        assert!(
++            cache
++                .get_or_load_with_handle((1, 0), &handle, || Err::<CachedBlock, _>("bad checksum"))
++                .is_err()
++        );
++        assert!(handle.block.read().unwrap().is_none());
++    }
++
++    #[test]
++    fn point_handle_rebinding_invalidates_the_previous_slot() {
++        let cache = BlockCache::new(100);
++        let first = Arc::new(BlockHandle::default());
++        let second = Arc::new(BlockHandle::default());
++        for handle in [&first, &second] {
++            let block = cache
++                .get_or_load_with_handle((1, 0), handle, || Ok::<_, String>(block(100, 7)))
++                .unwrap();
++            assert_eq!(block.data.as_ref(), &[7; 100]);
++        }
++        assert!(first.block.read().unwrap().is_none());
++        assert!(second.block.read().unwrap().is_some());
++        cache.insert((2, 0), block(100, 9));
++        assert!(second.block.read().unwrap().is_none());
++        assert_eq!(cache.resident_bytes(), 100);
++    }
++
++    #[test]
++    fn point_handles_race_eviction_without_stale_values_or_budget_growth() {
++        let cache = Arc::new(BlockCache::new(4 * 256));
++        let handles: Arc<Vec<_>> =
++            Arc::new((0..64).map(|_| Arc::new(BlockHandle::default())).collect());
++        let barrier = Arc::new(Barrier::new(8));
++        let threads: Vec<_> = (0..8)
++            .map(|thread| {
++                let cache = cache.clone();
++                let handles = handles.clone();
++                let barrier = barrier.clone();
++                std::thread::spawn(move || {
++                    barrier.wait();
++                    for i in 0..20_000 {
++                        let index = (i * 17 + thread * 7) % handles.len();
++                        let found = cache
++                            .get_or_load_with_handle((1, index as u64), &handles[index], || {
++                                Ok::<_, String>(block(256, index as u8))
++                            })
++                            .unwrap();
++                        assert_eq!(found.data.as_ref(), &[index as u8; 256]);
++                        assert!(cache.resident_bytes() <= cache.capacity());
++                        if i % 101 == 0 {
++                            std::thread::yield_now();
++                        }
++                    }
++                })
++            })
++            .collect();
++        for thread in threads {
++            thread.join().unwrap();
++        }
++        assert!(cache.stats().evictions > 1000);
++        assert_eq!(cache.in_flight_len(), 0);
++        assert_eq!(cache.resident_entries(), cache.clock_entries());
++        // One insertion can evict all remaining handled entries. There are
++        // no reader-owned residents after joining the threads.
++        cache.insert((2, 0), block(cache.capacity(), 0));
++        assert!(
++            handles
++                .iter()
++                .all(|slot| slot.block.read().unwrap().is_none())
++        );
++    }
++
+     #[test]
+     fn basic_hit_and_miss_track_exactly() {
+         let cache = BlockCache::new(300);
+diff --git a/src/sstable/reader.rs b/src/sstable/reader.rs
+index de093f8..de30972 100644
+--- a/src/sstable/reader.rs
++++ b/src/sstable/reader.rs
+@@ -16,7 +16,7 @@ use super::builder::{FOOTER_LEN, FORMAT_VERSION, MAGIC};
+ use super::separator::Separator;
+ use super::{Kind, SstError};
+ use crate::bloom::BloomFilter;
+-use crate::cache::{BlockCache, CachedBlock};
++use crate::cache::{BlockCache, BlockHandle, CachedBlock};
+ use crate::crc32;
+ use crate::file_cache::TableFileCache;
+ use crate::range_cache::Window;
+@@ -125,6 +125,8 @@ pub struct SstTable {
+     path: PathBuf,
+     file_len: u64,
+     index: Vec<IndexEntry>,
++    // Kept out of IndexEntry so separators retain their 64-byte stride.
++    point_handles: Vec<Arc<BlockHandle>>,
+     filter: BloomFilter,
+     first_key: Vec<u8>,
+     last_key: Vec<u8>,
+@@ -238,6 +240,9 @@ impl SstTable {
+             number,
+             path: path.to_path_buf(),
+             file_len,
++            point_handles: (0..index.len())
++                .map(|_| Arc::new(BlockHandle::default()))
++                .collect(),
+             index,
+             filter,
+             first_key: Vec::new(),
+@@ -293,45 +298,52 @@ impl SstTable {
+     /// (leases a descriptor, or slices the mapping); the rest wait for
+     /// its result.
+     fn read_block(&self, entry: &IndexEntry) -> Result<VerifiedBlock, SstError> {
++        self.read_block_with_handle(entry, None)
++    }
++
++    fn read_block_with_handle(
++        &self,
++        entry: &IndexEntry,
++        handle: Option<&Arc<BlockHandle>>,
++    ) -> Result<VerifiedBlock, SstError> {
+         let key = (self.number, entry.offset);
+         let number = self.number;
+         let path = &self.path;
+         let file_cache = &self.file_cache;
+         let mmap = self.mmap.as_ref();
+-        let cached = self
+-            .block_cache
+-            .get_or_load(key, || -> Result<CachedBlock, SstError> {
+-                let data = if let Some(m) = mmap {
+-                    let start = entry.offset as usize;
+-                    let end = start + entry.len as usize;
+-                    let slice = m.as_slice();
+-                    if end > slice.len() {
+-                        return Err(SstError::Corrupt(format!(
+-                            "mmap read past end of file at offset {}",
+-                            entry.offset
+-                        )));
+-                    }
+-                    slice[start..end].to_vec()
+-                } else {
+-                    let lease = file_cache.acquire(number, path).map_err(|e| {
+-                        SstError::Corrupt(format!("table {number} cannot be opened: {e}"))
+-                    })?;
+-                    lease
+-                        .read_range_at(path, entry.offset, entry.len)
+-                        .map_err(|e| {
+-                            SstError::Corrupt(format!(
+-                                "read failed at offset {}: {e}",
+-                                entry.offset
+-                            ))
+-                        })?
+-                };
+-                let meta = VerifiedBlock::verify(&data)?;
+-                Ok(CachedBlock {
+-                    data: Arc::from(data),
+-                    meta,
+-                })
++        let load = || -> Result<CachedBlock, SstError> {
++            let data = if let Some(m) = mmap {
++                let start = entry.offset as usize;
++                let end = start + entry.len as usize;
++                let slice = m.as_slice();
++                if end > slice.len() {
++                    return Err(SstError::Corrupt(format!(
++                        "mmap read past end of file at offset {}",
++                        entry.offset
++                    )));
++                }
++                slice[start..end].to_vec()
++            } else {
++                let lease = file_cache.acquire(number, path).map_err(|e| {
++                    SstError::Corrupt(format!("table {number} cannot be opened: {e}"))
++                })?;
++                lease
++                    .read_range_at(path, entry.offset, entry.len)
++                    .map_err(|e| {
++                        SstError::Corrupt(format!("read failed at offset {}: {e}", entry.offset))
++                    })?
++            };
++            let meta = VerifiedBlock::verify(&data)?;
++            Ok(CachedBlock {
++                data: Arc::from(data),
++                meta,
+             })
+-            .map_err(SstError::Corrupt)?;
++        };
++        let cached = match handle {
++            Some(handle) => self.block_cache.get_or_load_with_handle(key, handle, load),
++            None => self.block_cache.get_or_load(key, load),
++        }
++        .map_err(SstError::Corrupt)?;
+         Ok(VerifiedBlock::from_cached(cached))
+     }
+ 
+@@ -453,7 +465,8 @@ impl SstTable {
+         if idx == self.index.len() {
+             return Ok(None);
+         }
+-        let block = self.read_block(&self.index[idx])?;
++        let block =
++            self.read_block_with_handle(&self.index[idx], Some(&self.point_handles[idx]))?;
+         Ok(block.get(key, limit)?.map(|m| Found {
+             kind: m.kind,
+             seq: m.seq,

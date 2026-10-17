@@ -6,6 +6,7 @@ mod api;
 mod backend;
 mod block_compare;
 mod block_index;
+mod cold;
 #[path = "../../src/embedded.rs"]
 #[allow(dead_code)]
 mod embedded;
@@ -62,7 +63,11 @@ struct Options {
     suite: Config,
     action: String,
     layout: String,
-    cache_mib: usize,
+    cache_mib: Option<usize>,
+    #[serde(default)]
+    mmap_max_level: Option<u32>,
+    #[serde(default = "one_reader")]
+    readers: usize,
     #[serde(default)]
     stage: u64,
     #[serde(default)]
@@ -71,12 +76,20 @@ struct Options {
     micro: String,
 }
 
+fn one_reader() -> usize {
+    1
+}
+
 fn open(o: &Options) -> Result<Box<dyn Backend>> {
     Ok(match o.suite.backend.as_str() {
         "kiban" => Box::new(backend::Embedded::with_options(
             &o.suite.db,
             KibanOptions {
-                block_cache_bytes: o.cache_mib * 1024 * 1024,
+                block_cache_bytes: o.cache_mib.map_or_else(
+                    || KibanOptions::default().block_cache_bytes,
+                    |mib| mib * 1024 * 1024,
+                ),
+                mmap_max_level: o.mmap_max_level,
                 ..KibanOptions::default()
             },
         )?) as Box<dyn Backend>,
@@ -288,7 +301,7 @@ fn run() -> Result<()> {
         || c.operations == 0
         || c.k == 0
         || c.k > (c.n / model::AGENTS) as usize
-        || !matches!(o.cache_mib, 32 | 512)
+        || !matches!(o.cache_mib, None | Some(32 | 512))
         || !matches!(o.layout.as_str(), "bulk" | "normal")
     {
         return Err("invalid readbench options".into());
@@ -297,6 +310,7 @@ fn run() -> Result<()> {
         "prepare" => prepare(&o),
         "read" | "profile" => reads(&o),
         "write" => writes(&o),
+        "cold" => cold::run(&o),
         "micro" => micro::run(&o),
         _ => Err("unknown action".into()),
     }
@@ -339,7 +353,9 @@ mod tests {
                     },
                     action: "read".into(),
                     layout: shape.into(),
-                    cache_mib: 32,
+                    cache_mib: Some(32),
+                    mmap_max_level: None,
+                    readers: 1,
                     stage: 0,
                     durable: false,
                     micro: String::new(),

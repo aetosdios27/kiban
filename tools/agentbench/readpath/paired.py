@@ -14,25 +14,51 @@ parser.add_argument('--after',type=Path,required=True)
 parser.add_argument('--out',type=Path,required=True)
 parser.add_argument('--n',type=int,default=1000000)
 parser.add_argument('--layout',choices=['bulk','normal'],default='bulk')
-parser.add_argument('--cache',type=int,default=512)
+parser.add_argument('--cache',type=lambda value: None if value == 'default' else int(value),default=512)
 parser.add_argument('--trials',type=int,default=5)
 parser.add_argument('--write',action='store_true')
 parser.add_argument('--durable',action='store_true')
+parser.add_argument('--resume',action='store_true')
+parser.add_argument('--mmap-max-level',type=int)
 args=parser.parse_args()
 binaries={'before':args.before.resolve(),'after':args.after.resolve()}
 args.out.mkdir(parents=True,exist_ok=True)
-(args.out/'metadata.json').write_text(json.dumps(dict(binaries={k:dict(path=str(p),sha256=hashlib.sha256(p.read_bytes()).hexdigest()) for k,p in binaries.items()},trials=args.trials),indent=2)+'\n')
+metadata=dict(binaries={k:dict(path=str(p),sha256=hashlib.sha256(p.read_bytes()).hexdigest()) for k,p in binaries.items()},trials=args.trials)
+metadata_path=args.out/'metadata.json'
+completed=set()
+if args.resume and metadata_path.exists():
+    assert json.loads(metadata_path.read_text())==metadata, 'resume binaries changed'
+    commands_path=args.out/'commands.jsonl'
+    for line in commands_path.read_text().splitlines() if commands_path.exists() else []:
+        command=json.loads(line)
+        rows=[json.loads(line) for line in (args.out/command['config'].replace('.config.json','.jsonl')).read_text().splitlines()]
+        assert rows[-1]['type']=='complete' and all(r.get('errors',0)==0 for r in rows), 'invalid saved trial'
+        completed.add(command['config'])
+else:
+    assert not (args.out/'commands.jsonl').exists(), 'use --resume or a fresh output folder'
+metadata_path.write_text(json.dumps(metadata,indent=2)+'\n')
 for trial in range(args.trials):
     for label in ('before','after') if trial%2==0 else ('after','before'):
         run.BINARY=binaries[label]
         for engine in ('kiban','lmdb'):
             c=run.config(engine,args.n,args.layout,args.cache)
+            if args.mmap_max_level is not None:
+                c['mmap_max_level']=args.mmap_max_level
+            name=f'{args.n}-{args.layout}-{args.cache}-r{trial+1}-{label}-{engine}'
+            if name+'.config.json' in completed:
+                continue
+            # An interrupted command is absent from commands.jsonl; discard only
+            # its incomplete output before rerunning the identical configuration.
+            if args.resume:
+                (args.out/(name+'.jsonl')).unlink(missing_ok=True)
             if args.write:
                 source=Path(c['db']);dest=source.with_name(source.name+'-paired-write')
-                if dest.exists():raise RuntimeError(f'existing trial {dest}')
+                if dest.exists():
+                    if not args.resume:
+                        raise RuntimeError(f'existing trial {dest}')
+                    shutil.rmtree(dest)
                 subprocess.run(['cp','-a','--reflink=auto',str(source),str(dest)],check=True)
                 c.update(db=str(dest),action='write',operations=1000,durable=args.durable)
-            name=f'{args.n}-{args.layout}-{args.cache}-r{trial+1}-{label}-{engine}'
             print(name,flush=True)
             run.run(c,args.out,name)
             if args.write:shutil.rmtree(dest)

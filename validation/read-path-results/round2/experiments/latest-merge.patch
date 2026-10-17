@@ -1,0 +1,248 @@
+diff --git a/src/db.rs b/src/db.rs
+index 8428d79..ab21f78 100644
+--- a/src/db.rs
++++ b/src/db.rs
+@@ -272,7 +272,7 @@ impl Version {
+                 && end.is_none_or(|end| table.first_key.as_slice() < end)
+         };
+         let head = |feed: TableFeed<'a>| SourceHead {
+-            feed: SourceFeed::Table(feed),
++            feed: SourceFeed::Table(Box::new(feed)),
+             head: None,
+             exhausted: false,
+         };
+@@ -281,7 +281,7 @@ impl Version {
+             .rev()
+             .filter(|table| overlaps(table))
+         {
+-            sources.push(head(Box::new(table.table.iter_from(start))));
++            sources.push(head(TableFeed::Sst(table.table.iter_from(start))));
+         }
+         for level in &self.levels {
+             if level.disjoint {
+@@ -294,7 +294,7 @@ impl Version {
+                         .partition_point(|&i| self.tables[i].first_key.as_slice() < end)
+                 });
+                 if from < to {
+-                    sources.push(head(Box::new(LevelIter::new(
++                    sources.push(head(TableFeed::Level(LevelIter::new(
+                         self,
+                         &level.by_key[from..to],
+                         start,
+@@ -303,7 +303,7 @@ impl Version {
+             } else {
+                 for &i in &level.by_key {
+                     if overlaps(&self.tables[i]) {
+-                        sources.push(head(Box::new(self.tables[i].table.iter_from(start))));
++                        sources.push(head(TableFeed::Sst(self.tables[i].table.iter_from(start))));
+                     }
+                 }
+             }
+@@ -1472,6 +1472,7 @@ impl Kiban {
+             failed: false,
+             snap_limit: Some(snap.seq),
+             done_key: None,
++            heads: HeadState::Unfilled,
+         };
+         let mut out = Vec::new();
+         while let Some(item) = core.next_scanned() {
+@@ -1924,6 +1925,7 @@ impl Kiban {
+             failed: false,
+             snap_limit: None,
+             done_key: None,
++            heads: HeadState::Unfilled,
+         };
+         DbIter { core }.take_while(move |item| match item {
+             Ok((k, _)) => k.as_slice() < end,
+@@ -1948,6 +1950,7 @@ impl Kiban {
+             failed: false,
+             snap_limit: None,
+             done_key: None,
++            heads: HeadState::Unfilled,
+         }
+     }
+ 
+@@ -1982,6 +1985,7 @@ impl Kiban {
+                 failed: false,
+                 snap_limit: None,
+                 done_key: None,
++                heads: HeadState::Unfilled,
+             },
+         }
+     }
+@@ -2429,16 +2433,30 @@ struct HeadEntry {
+ 
+ /// A table-entry iterator item: (kind, sequence, key, value).
+ type TableItem = Result<(Kind, u64, Vec<u8>, Vec<u8>), SstError>;
+-/// Boxed rather than the concrete `sstable::Iter` so compaction's BUILD
+-/// phase (11.17-C) can feed a `MergeCore` from its own cache-bypassing,
+-/// shared-file-cache-bypassing `CompactionIter` through the exact same
+-/// merge path scans and snapshots use, without `MergeCore`/`SourceFeed`
+-/// needing to know two table iterator types exist.
+-type TableFeed<'a> = Box<dyn Iterator<Item = TableItem> + 'a>;
++/// Concrete table feeds let the hot merge loop inline foreground iteration.
++/// Boxing the enum keeps memtable sources compact without a vtable dispatch
++/// for every returned table entry.
++enum TableFeed<'a> {
++    Sst(crate::sstable::Iter<'a>),
++    Level(LevelIter<'a>),
++    Bulk(crate::sstable::reader::CompactionIter<'a>),
++}
++
++impl Iterator for TableFeed<'_> {
++    type Item = TableItem;
++
++    fn next(&mut self) -> Option<Self::Item> {
++        match self {
++            Self::Sst(iter) => iter.next(),
++            Self::Level(iter) => iter.next(),
++            Self::Bulk(iter) => iter.next(),
++        }
++    }
++}
+ 
+ enum SourceFeed<'a> {
+     Mem(Box<dyn DoubleEndedIterator<Item = (&'a [u8], &'a MemEntry)> + 'a>),
+-    Table(TableFeed<'a>),
++    Table(Box<TableFeed<'a>>),
+ }
+ 
+ struct SourceHead<'a> {
+@@ -2530,8 +2548,22 @@ impl Iterator for LevelIter<'_> {
+     }
+ }
+ 
++#[derive(Clone, Copy)]
++enum HeadState {
++    Unfilled,
++    Refill {
++        index: usize,
++        runner: Option<usize>,
++    },
++    Ready {
++        previous: Option<usize>,
++        runner: Option<usize>,
++    },
++}
++
+ struct MergeCore<'a> {
+     sources: Vec<SourceHead<'a>>,
++    heads: HeadState,
+     user_mode: bool,
+     failed: bool,
+     /// When set, entries with seq > limit are invisible.
+@@ -2543,35 +2575,67 @@ struct MergeCore<'a> {
+ impl<'a> MergeCore<'a> {
+     /// Newest-wins merge over all sources (db-iterator.md D2). In user
+     /// mode tombstones are skipped; in raw mode they are emitted.
+-    /// Fills every source head. Errors surface once, then fail-stick.
++    /// Initializes all heads, then refills only the previous winner.
++    /// Errors surface once, then fail-stick.
+     fn fill_heads(&mut self) -> Result<(), SstError> {
+-        for source in &mut self.sources {
+-            source.fill()?;
+-        }
++        let ready = match self.heads {
++            HeadState::Unfilled => {
++                for source in &mut self.sources {
++                    source.fill()?;
++                }
++                HeadState::Ready {
++                    previous: None,
++                    runner: None,
++                }
++            }
++            HeadState::Refill { index, runner } => {
++                self.sources[index].fill()?;
++                HeadState::Ready {
++                    previous: Some(index),
++                    runner,
++                }
++            }
++            ready @ HeadState::Ready { .. } => ready,
++        };
++        self.heads = ready;
+         Ok(())
+     }
+ 
+-    /// Removes and returns the globally-first entry in internal-key
+-    /// order: (user key asc, seqno desc). Duplicate user keys therefore
+-    /// always emerge adjacently, newest first — the invariant compaction
+-    /// and snapshot filtering both rely on.
++    /// Only the previous winner has changed. Its runner-up is still the
++    /// minimum of all other heads, so a consecutive run from one source
++    /// needs one comparison per entry rather than another full source scan.
+     fn pop_best(&mut self) -> Option<HeadEntry> {
+-        let mut best: Option<usize> = None;
+-        for i in 0..self.sources.len() {
+-            match (best, self.sources[i].head.as_ref()) {
+-                (_, None) => {}
+-                (None, Some(_)) => best = Some(i),
+-                (Some(b), Some(h)) => {
+-                    let bh = self.sources[b].head.as_ref().unwrap();
+-                    let h_ord = (h.key.as_slice(), std::cmp::Reverse(h.seq));
+-                    let b_ord = (bh.key.as_slice(), std::cmp::Reverse(bh.seq));
+-                    if h_ord < b_ord {
+-                        best = Some(i);
+-                    }
+-                }
++        let HeadState::Ready { previous, runner } = self.heads else {
++            unreachable!("source heads must be filled before selection");
++        };
++        let order = |index: usize| {
++            let head = self.sources[index].head.as_ref().unwrap();
++            (head.key.as_slice(), std::cmp::Reverse(head.seq), index)
++        };
++        if let Some(index) = previous
++            && self.sources[index].head.is_some()
++            && runner.is_none_or(|other| order(index) < order(other))
++        {
++            self.heads = HeadState::Refill { index, runner };
++            return self.sources[index].head.take();
++        }
++        let mut best = None;
++        let mut runner = None;
++        for (index, source) in self.sources.iter().enumerate() {
++            if source.head.is_none() {
++                continue;
++            }
++            if best.is_none_or(|other| order(index) < order(other)) {
++                runner = best;
++                best = Some(index);
++            } else if runner.is_none_or(|other| order(index) < order(other)) {
++                runner = Some(index);
+             }
+         }
+-        best.and_then(|i| self.sources[i].head.take())
++        best.and_then(|index| {
++            self.heads = HeadState::Refill { index, runner };
++            self.sources[index].head.take()
++        })
+     }
+ 
+     /// Single-entry stream in internal-key order (compaction's input).
+@@ -2951,7 +3015,7 @@ impl CompactionPlan {
+             // `iter_from` path every other MergeCore caller (scans,
+             // snapshots) uses.
+             sources.push(SourceHead {
+-                feed: SourceFeed::Table(Box::new(entry.table.compaction_iter()?)),
++                feed: SourceFeed::Table(Box::new(TableFeed::Bulk(entry.table.compaction_iter()?))),
+                 head: None,
+                 exhausted: false,
+             });
+@@ -2966,6 +3030,7 @@ impl CompactionPlan {
+             failed: false,
+             snap_limit: None,
+             done_key: None,
++            heads: HeadState::Unfilled,
+         };
+ 
+         // Resolve newest-visible siblings for the current live topology.
+@@ -4930,6 +4995,7 @@ impl SharedSnapshot {
+             failed: false,
+             snap_limit: Some(self.seq),
+             done_key: None,
++            heads: HeadState::Unfilled,
+         };
+         DbIter { core }
+     }

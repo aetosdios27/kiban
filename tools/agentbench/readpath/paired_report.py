@@ -18,11 +18,11 @@ for command in commands:
             assert r['errors']==0
             rows[r['workload']][label,engine,trial]=r
 
-print('| Workload | K p50 µs before → after | K p99 before → after | LMDB p50 before → after | Paired K/LMDB p50 before → after | K call ops/s before → after |')
-print('| --- | ---: | ---: | ---: | ---: | ---: |')
+print('| Workload | K p50 µs before → after | K p99 before → after | LMDB p50 before → after | LMDB p99 before → after | Paired K/LMDB p50 before → after | K call ops/s before → after |')
+print('| --- | ---: | ---: | ---: | ---: | ---: | ---: |')
 for work,data in sorted(rows.items()):
     cells=[]
-    for engine,field in [('kiban','p50_ns'),('kiban','p99_ns'),('lmdb','p50_ns')]:
+    for engine,field in [('kiban','p50_ns'),('kiban','p99_ns'),('lmdb','p50_ns'),('lmdb','p99_ns')]:
         parts=[]
         for label in ('before','after'):
             values=[data[label,engine,'r'+str(i)]['latency'][field]/1000 for i in range(1,6)]

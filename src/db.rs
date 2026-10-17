@@ -410,6 +410,11 @@ pub struct KibanOptions {
     pub base_level_bytes: u64,
     pub level_multiplier: u64,
     pub target_file_size: u64,
+    /// Verified block cache byte budget per database. The default is
+    /// min(available memory / 64, 512 MiB), with a 32 MiB floor. Available
+    /// memory is physical RAM limited by cgroup v2 memory.max (including
+    /// ancestors). If neither can be read, the default is 32 MiB. An explicit
+    /// value, including zero to bypass admission, overrides this calculation.
     pub block_cache_bytes: usize,
     /// Hard bound on SST descriptors owned by the shared foreground
     /// `TableFileCache` (11.6), not a target or a soft threshold.
@@ -519,7 +524,7 @@ impl Default for KibanOptions {
             base_level_bytes: 4 * MIB,
             level_multiplier: 10,
             target_file_size: 4 * MIB,
-            block_cache_bytes: 32 * MIB as usize,
+            block_cache_bytes: crate::cache_budget::default_block_cache_bytes(),
             max_open_table_files: 128,
             write_buffer_bytes: 4 * MIB as usize,
             mmap_max_level: None,

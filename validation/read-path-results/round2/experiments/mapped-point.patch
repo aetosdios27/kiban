@@ -1,0 +1,285 @@
+diff --git a/src/sstable/block.rs b/src/sstable/block.rs
+index 22b87b5..3598967 100644
+--- a/src/sstable/block.rs
++++ b/src/sstable/block.rs
+@@ -183,47 +183,12 @@ impl VerifiedBlock {
+         }
+     }
+ 
+-    fn restart_offset(&self, i: usize) -> usize {
+-        restart_offset_of(&self.data, self.meta.restart_start, i)
+-    }
+-
+     fn header(&self, pos: usize) -> Result<(Kind, u64, usize, usize, usize), SstError> {
+         header_at(&self.data, &self.meta, pos)
+     }
+ 
+     pub fn get(&self, target: &[u8], limit: Option<u64>) -> Result<Option<Match<'_>>, SstError> {
+-        let start = seek_restart_index(&self.data, &self.meta, target)?;
+-        let mut key: Vec<u8> = Vec::new();
+-        let mut pos = self.restart_offset(start);
+-
+-        loop {
+-            if pos >= self.meta.entries_end {
+-                return Ok(None);
+-            }
+-            let (kind, seq, shared, non_shared, value_len) = self.header(pos)?;
+-            if shared > key.len() {
+-                return Err(SstError::Corrupt(
+-                    "shared length exceeds previous key".to_string(),
+-                ));
+-            }
+-            key.truncate(shared);
+-            key.extend_from_slice(
+-                &self.data[pos + ENTRY_FIXED_LEN..pos + ENTRY_FIXED_LEN + non_shared],
+-            );
+-            let value = entry_value(&self.data, pos, kind, non_shared, value_len);
+-            if key.as_slice() == target {
+-                // visibility limit: skip versions newer than the snapshot
+-                // bound; entries for one key are seq-descending, so the
+-                // first qualifying match is the newest visible version
+-                if limit.is_none_or(|lim| seq <= lim) {
+-                    return Ok(Some(Match { kind, seq, value }));
+-                }
+-            }
+-            if key.as_slice() > target {
+-                return Ok(None);
+-            }
+-            pos += ENTRY_FIXED_LEN + non_shared + value_len;
+-        }
++        get_verified(&self.data, &self.meta, target, limit)
+     }
+ 
+     /// First entry in the block.
+@@ -247,6 +212,46 @@ impl VerifiedBlock {
+     }
+ }
+ 
++/// Search immutable bytes after their checksum and restart layout have been
++/// verified. A mapped caller borrows its table; owned blocks use the same decoder.
++pub(crate) fn get_verified<'a>(
++    data: &'a [u8],
++    meta: &BlockMeta,
++    target: &[u8],
++    limit: Option<u64>,
++) -> Result<Option<Match<'a>>, SstError> {
++    let start = seek_restart_index(data, meta, target)?;
++    let mut key: Vec<u8> = Vec::new();
++    let mut pos = restart_offset_of(data, meta.restart_start, start);
++
++    loop {
++        if pos >= meta.entries_end {
++            return Ok(None);
++        }
++        let (kind, seq, shared, non_shared, value_len) = header_at(data, meta, pos)?;
++        if shared > key.len() {
++            return Err(SstError::Corrupt(
++                "shared length exceeds previous key".to_string(),
++            ));
++        }
++        key.truncate(shared);
++        key.extend_from_slice(&data[pos + ENTRY_FIXED_LEN..pos + ENTRY_FIXED_LEN + non_shared]);
++        let value = entry_value(data, pos, kind, non_shared, value_len);
++        if key.as_slice() == target {
++            // visibility limit: skip versions newer than the snapshot
++            // bound; entries for one key are seq-descending, so the
++            // first qualifying match is the newest visible version
++            if limit.is_none_or(|lim| seq <= lim) {
++                return Ok(Some(Match { kind, seq, value }));
++            }
++        }
++        if key.as_slice() > target {
++            return Ok(None);
++        }
++        pos += ENTRY_FIXED_LEN + non_shared + value_len;
++    }
++}
++
+ fn header_at(
+     data: &[u8],
+     meta: &BlockMeta,
+diff --git a/src/sstable/reader.rs b/src/sstable/reader.rs
+index de093f8..f5bc816 100644
+--- a/src/sstable/reader.rs
++++ b/src/sstable/reader.rs
+@@ -9,14 +9,14 @@
+ //! for just the duration of that read — see `read_block`.
+ 
+ use std::path::{Path, PathBuf};
+-use std::sync::Arc;
++use std::sync::{Arc, OnceLock};
+ 
+ use super::block::{BlockIter, VerifiedBlock};
+ use super::builder::{FOOTER_LEN, FORMAT_VERSION, MAGIC};
+ use super::separator::Separator;
+ use super::{Kind, SstError};
+ use crate::bloom::BloomFilter;
+-use crate::cache::{BlockCache, CachedBlock};
++use crate::cache::{BlockCache, BlockMeta, CachedBlock};
+ use crate::crc32;
+ use crate::file_cache::TableFileCache;
+ use crate::range_cache::Window;
+@@ -136,6 +136,12 @@ pub struct SstTable {
+     /// existing `file_cache`-leased pread path, never fails the whole
+     /// table open, since this is a pure performance opt-in.
+     mmap: Option<MappedFile>,
++    // Allocated only for the existing mmap opt-in. Each cell publishes the
++    // checksum/layout result once; the table owns the mapping until all reads
++    // borrowing it finish, including after compaction unlinks the file.
++    mapped_meta: Vec<OnceLock<Result<BlockMeta, SstError>>>,
++    #[cfg(test)]
++    mapped_verifications: std::sync::atomic::AtomicUsize,
+ }
+ 
+ impl std::fmt::Debug for SstTable {
+@@ -234,6 +240,11 @@ impl SstTable {
+             .then(|| MappedFile::open(path, file_len).ok())
+             .flatten();
+ 
++        let mapped_meta = if mmap.is_some() {
++            (0..index.len()).map(|_| OnceLock::new()).collect()
++        } else {
++            Vec::new()
++        };
+         let mut table = SstTable {
+             number,
+             path: path.to_path_buf(),
+@@ -245,6 +256,9 @@ impl SstTable {
+             block_cache,
+             file_cache,
+             mmap,
++            mapped_meta,
++            #[cfg(test)]
++            mapped_verifications: std::sync::atomic::AtomicUsize::new(0),
+         };
+ 
+         // Boundary keys come from the boundary blocks (two cached
+@@ -453,6 +467,34 @@ impl SstTable {
+         if idx == self.index.len() {
+             return Ok(None);
+         }
++        if let Some(mapping) = &self.mmap {
++            let entry = &self.index[idx];
++            let data = mapping
++                .as_slice()
++                .get(entry.offset as usize..(entry.offset + entry.len) as usize)
++                .ok_or_else(|| SstError::Corrupt("mapped block outside file".to_string()))?;
++            let meta = self.mapped_meta[idx]
++                .get_or_init(|| {
++                    #[cfg(test)]
++                    self.mapped_verifications
++                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
++                    VerifiedBlock::verify(data)
++                })
++                .as_ref()
++                .map_err(|error| match error {
++                    SstError::Corrupt(message) => SstError::Corrupt(message.clone()),
++                    SstError::InvalidArgument(message) => {
++                        SstError::InvalidArgument(message.clone())
++                    }
++                })?;
++            return Ok(
++                super::block::get_verified(data, meta, key, limit)?.map(|m| Found {
++                    kind: m.kind,
++                    seq: m.seq,
++                    value: m.value.to_vec(),
++                }),
++            );
++        }
+         let block = self.read_block(&self.index[idx])?;
+         Ok(block.get(key, limit)?.map(|m| Found {
+             kind: m.kind,
+@@ -1115,6 +1157,54 @@ mod mmap_tests {
+         }
+     }
+ 
++    #[test]
++    fn mapped_point_verification_errors_are_stable_without_cache_admission() {
++        let td = TempDir::new("mapped-corrupt");
++        let table = build_table_with_mmap(
++            td.path(),
++            1,
++            1000,
++            96,
++            Arc::new(BlockCache::new(0)),
++            Arc::new(TableFileCache::new(8)),
++            false,
++        );
++        assert!(table.index.len() > 2);
++        let middle = table.index.len() / 2;
++        let offset = table.index[middle].offset as usize;
++        let key = table.index[middle].separator.as_slice().to_vec();
++        drop(table);
++        // Prepare corruption before creating any mapping of this inode.
++        let path = td.path().join("1.sst");
++        let mut bytes = std::fs::read(&path).unwrap();
++        bytes[offset + 21] ^= 1;
++        std::fs::write(&path, bytes).unwrap();
++        let table = SstTable::open(
++            1,
++            &path,
++            Arc::new(BlockCache::new(0)),
++            Arc::new(TableFileCache::new(8)),
++            true,
++        )
++        .unwrap();
++        assert!(table.mmap.is_some());
++        let first = match table.get(&key, None) {
++            Err(error) => error.to_string(),
++            Ok(_) => panic!("corrupt mapped block was accepted"),
++        };
++        assert!(first.contains("checksum mismatch"));
++        for _ in 0..20 {
++            assert_eq!(table.get(&key, None).err().unwrap().to_string(), first);
++        }
++        assert_eq!(
++            table
++                .mapped_verifications
++                .load(std::sync::atomic::Ordering::Relaxed),
++            1
++        );
++        assert_eq!(table.block_cache.resident_bytes(), 0);
++    }
++
+     /// Many threads reading through the SAME mapping concurrently:
+     /// proves `MappedFile`'s `Send + Sync` is actually sound in
+     /// practice, not just type-checked.
+@@ -1130,6 +1220,7 @@ mod mmap_tests {
+             Arc::new(TableFileCache::new(8)),
+             true,
+         ));
++        let before = table.block_cache.stats();
+         let handles: Vec<_> = (0..8)
+             .map(|t| {
+                 let table = table.clone();
+@@ -1138,7 +1229,9 @@ mod mmap_tests {
+                         let i = (t * 137 + round * 31) % 500;
+                         let key = format!("k{i:06}");
+                         let found = table.get(key.as_bytes(), None).unwrap();
+-                        assert!(found.is_some(), "key {key} must be found");
++                        let found = found.expect("mapped key must be found");
++                        assert_eq!(found.value, vec![(i % 256) as u8; 64]);
++                        assert_eq!(found.seq, (i + 1) as u64);
+                     }
+                 })
+             })
+@@ -1146,5 +1239,19 @@ mod mmap_tests {
+         for h in handles {
+             h.join().unwrap();
+         }
++        let after = table.block_cache.stats();
++        assert_eq!((after.hits, after.misses), (before.hits, before.misses));
++        let initialized = table
++            .mapped_meta
++            .iter()
++            .filter(|cell| cell.get().is_some())
++            .count();
++        assert_eq!(initialized, table.index.len());
++        assert_eq!(
++            table
++                .mapped_verifications
++                .load(std::sync::atomic::Ordering::Relaxed),
++            initialized
++        );
+     }
+ }

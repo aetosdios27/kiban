@@ -1,5 +1,11 @@
 # Read-path profile
 
+> Current round-two result: the adaptive cache budget is retained; point-read
+> and latest-K prototypes were measured and rejected. The LMDB read target
+> remains unmet. The round-one sections below are historical; see the
+> [round-two retained table](read-path-results/round2/FINAL.md) and the
+> round-two sections at the end for current defaults and evidence.
+
 Results on `perf/read-path`, based on main `082858f` (PR #10).
 No push or PR is authorized. The default block cache remains 32 MiB.
 
@@ -481,3 +487,105 @@ The remaining cache-budget, mapped-read contract, borrowed-API and block-layout
 proposals above require your decision; their gains are estimates where a
 full-path prototype has not been measured. Main is unchanged; nothing was
 pushed and no PR was opened.
+
+## Round 2: recovery and cache budget
+
+Branch `perf/read-path-2` was recovered after host shutdown and rebased onto
+`origin/main` (`2a083fa`), whose round-one source, harness and profile content
+matched the old branch exactly. Nothing from round one was replayed.
+The external crash sweep remains on CPUs 12–21; builds/gates use 2–5 and
+all timed benchmark children use CPU 3. Load and binary hashes are retained
+with every group. The old and recovered machine records are in
+[round2](read-path-results/round2).
+
+The per-database default block cache now uses physical RAM bounded by the
+minimum finite cgroup v2 ancestor `memory.max`, divided by 64, clamped to
+32–512 MiB. Missing information falls back to 32 MiB. Explicit budgets,
+including zero, remain unchanged. Pure-function tests cover the floor, cap,
+missing sources, overflow-sized inputs and smaller/larger cgroup limits.
+On the recorded machine the cgroup limit yielded 449,030,592 bytes.
+
+[Paired cache-budget evidence](read-path-results/round2/DEFAULT.md) contains
+five alternating before/after trials per required 1M bulk/normal × 32/512 MiB
+scenario, each followed by a contemporary LMDB control, and 10k fast/durable
+write checks. All calls passed the payload oracle and complete verification.
+The supplementary bulk-default point median fell 4.992 → 2.176 µs (p99
+8.192 → 3.392); paired K/LMDB p50 ratio fell 2.623 → 1.172. This is a cache
+capacity effect, not a faster hit algorithm. Explicit-cache ranges overlap;
+no speedup is attributed to the budget calculation for explicit overrides.
+The supplementary normal-default group straddled reboot and is excluded
+from aggregate claims, with its raw output and explanation preserved.
+
+Fast insert/update p50 were 0.736 → 0.736 and 0.864 → 0.848 µs; durable
+557.056 → 573.440 and 557.056 → 589.824 µs. All ranges overlap. Durable
+p99 is noisy (update 1146.880 → 1277.952 µs, ranges 835.584–4325.376 and
+720.896–8912.896); these data establish no clear write regression or fsync
+speedup. [Budget gates](read-path-results/round2/default-checks/status.json)
+passed full debug/release workspace tests, Clippy with warnings denied,
+formatting, fixed crash corpora, loom, site-facts and readbench checks.
+The final round-two change will run both 20k-seed crash/model suites.
+
+## Round 2: point-read experiments
+
+No point-cache handle or mapped-read prototype is retained. Five alternating
+trials rejected weak handles (bulk/512 point p50 1.696 → 1.792 µs) and
+invalidated slots (1.696 → 1.824). Aligned inline slots reduced bulk/512
+2.112 → 1.984 but regressed bulk/32 4.736 → 5.120 and normal/32
+4.992 → 5.248. Each handle design passed eviction/read race stress and the
+full gates before rejection. Fresh profiling isolated only 36 ns of hashing
+inside a 174 ns complete cache hit; removing hashing left ownership, locking
+and cold metadata accesses. These isolated diagnostics overlap and are not
+additive performance estimates.
+
+The checksum-once mapped prototype preserved the existing level-based,
+off-by-default mapping option and pinned bytes through the owning table.
+It skipped cache lookup for mapped points. Its complete paired matrix improved
+bulk/32 point p50/p99 3.840/6.528 → 2.432/3.584 µs but normal/512 rose
+2.368/3.904 → 2.688/4.352; it still lost to LMDB in every scenario.
+Cold-start probes performed actual storage I/O after post-open mapping/page
+eviction and checked all 300k values. Four readers sharing CPU 3 had mapped
+p99/p999 2949/8651 µs versus pread 590/999 µs. These compare configurations,
+not old/new mapped implementations. The initial invalid cold setup is excluded
+with its raw evidence.
+
+[Rejected designs and source patches](read-path-results/round2/REJECTED.md),
+[inline full matrix](read-path-results/round2/INLINE_SLOTS.md),
+[mapped full matrix](read-path-results/round2/MAPPED.md), and
+[cold probes](read-path-results/round2/COLD.md) preserve both the wins and
+regressions. All prototypes passed their payload oracles and storage gates;
+no storage correctness bug was found. The point-read objective remains unmet.
+
+## Round 2: latest-K and retained result
+
+The concrete table-feed enum and cached merge runner were also rejected.
+Bulk/32 latest-K p50/p99 changed 4.032/8.064 → 4.096/8.960 µs;
+bulk/512 3.968/7.936 → 4.224/8.704; normal/32
+4.736/9.728 → 4.992/10.240; normal/512 stayed 4.864/11.264.
+LMDB controls also drifted. The lower normal/512 paired ratio, 1.520 → 1.407,
+therefore does not establish a Kiban speedup. The entire implementation is
+preserved as an independent source patch and reverted.
+
+[Latest-K paired matrix](read-path-results/round2/LATEST.md) includes all
+four read scenarios and fresh-copy 10k fast/durable write trials. Each stage
+has 1,000 timed calls in write trials. Workspace debug/release tests, Clippy,
+formatting, fixed corpora, loom and benchmark tests passed for the prototype.
+The restored engine's source hashes match its earlier passing baseline gates.
+
+[Final retained-engine table](read-path-results/round2/FINAL.md) selects the
+latest matrix's **before** binary and the LMDB controls from those same trial
+halves; it does not combine baseline Kiban with candidate-side LMDB.
+All experiments use five alternating trials on CPU 3; builds and storage
+gates use CPUs 2–5. The cache-budget policy is the only retained engine change.
+No public API, on-disk format, or mapping option meaning changed.
+**The target of beating LMDB on 1M point and latest-K reads remains unmet.**
+
+Final retained-code gates all passed: workspace debug/release suites,
+Clippy with warnings denied, formatting, readbench tests/checks, both fixed
+crash corpora, loom and site-facts validation. Both release crash/model
+suites passed seeds 0–19,999 each: 40,000 seeds and 160,000 simulated
+crashes. No storage correctness failure was observed.
+[Gate statuses](read-path-results/round2/final-checks/status.json), [source hashes](read-path-results/round2/final-checks/source-hashes.json) and [paired audit](read-path-results/round2/AUDIT.json) preserve the evidence.
+The paired audit checks all completed groups, operation/verification counts,
+zero errors, CPU 3 affinity and frozen binary hashes. Final engine hashes
+match the tested retained source. Nothing was pushed, no PR was opened,
+and no subagents were spawned.

@@ -1,0 +1,6 @@
+Events disabled
+Events enabled
+Events disabled
+{"digest":353027,"errors":0,"ns":1774703903,"operations":1000000,"type":"profile"}
+[ perf record: Woken up 270 times to write data ]
+[ perf record: Captured and wrote 66.729 MB validation/read-path-results/round2/profile-slots/after.data (8305 samples) ]

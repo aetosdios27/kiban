@@ -52,6 +52,16 @@ impl Lmdb {
         let details = configure(&env, mode)?;
         Ok((Self { env, records }, details))
     }
+    pub(crate) fn point(&self, id: u64) -> Result<Memory> {
+        let txn = self.env.read_txn()?;
+        let bytes = self
+            .records
+            .get(&txn, key(id).as_bytes())?
+            .ok_or("missing LMDB memory")?;
+        let result = serde_json::from_slice(bytes)?;
+        txn.commit()?;
+        Ok(result)
+    }
 }
 
 impl Backend for Lmdb {
@@ -81,14 +91,7 @@ impl Backend for Lmdb {
     }
 
     fn get(&mut self, id: u64) -> Result<Memory> {
-        let txn = self.env.read_txn()?;
-        let bytes = self
-            .records
-            .get(&txn, key(id).as_bytes())?
-            .ok_or("missing LMDB memory")?;
-        let result = serde_json::from_slice(bytes)?;
-        txn.commit()?;
-        Ok(result)
+        self.point(id)
     }
 
     fn recent(&mut self, agent: u32, k: usize) -> Result<Vec<Memory>> {

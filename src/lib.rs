@@ -28,6 +28,7 @@ pub mod atomic;
 pub mod background;
 pub mod bloom;
 pub mod cache;
+mod cache_budget;
 mod counter;
 pub mod crc32;
 pub mod db;
