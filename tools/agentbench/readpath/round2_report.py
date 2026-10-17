@@ -28,6 +28,10 @@ for folder in sorted(args.folder.iterdir()):
         _, _, _, trial, label, engine = name.split('-')
         records = [json.loads(line) for line in (folder/(name+'.jsonl')).read_text().splitlines()]
         assert records[-1]['type'] == 'complete', (folder, name)
+        config=json.loads((folder/command['config']).read_text())
+        expected=config['n'] + (config['operations'] if config['action']=='write' else 0)
+        assert records[-1]['verified_records'] == expected, (folder, name, 'verification count')
+        assert all(row['latency']['count'] == config['operations'] for row in records if row['type']=='stage'), (folder, name, 'operation count')
         assert all(row.get('errors', 0) == 0 for row in records)
         assert command['affinity'] == '3'
         for row in records:

@@ -1,0 +1,86 @@
+{
+  "samples": 1150,
+  "top": [
+    [
+      "__memcmp_avx2_movbe",
+      601
+    ],
+    [
+      "__memmove_avx_unaligned_erms",
+      308
+    ],
+    [
+      "<kiban::sstable::separator::Separator>::as_slice",
+      68
+    ],
+    [
+      "kiban::sstable::block::header_at",
+      29
+    ],
+    [
+      "<kiban::bloom::BloomFilter>::get_bit",
+      24
+    ],
+    [
+      "std::sys::sync::rwlock::futex::is_read_lockable",
+      18
+    ],
+    [
+      "<alloc::sync::Arc<[u8]> as core::clone::Clone>::clone",
+      15
+    ],
+    [
+      "<kiban::cache::BlockCache>::get_or_load_with_handle::<kiban::sstable::SstError, <kiban::sstable::reader::SstTable>::read_block_with_handle::{closure#0}>",
+      14
+    ],
+    [
+      "<core::result::Result<&[u8; 4], core::array::TryFromSliceError>>::copied",
+      11
+    ],
+    [
+      "core::str::validations::run_utf8_validation",
+      6
+    ],
+    [
+      "<u8 as core::slice::cmp::SliceOrd>::compare",
+      4
+    ],
+    [
+      "<core::result::Result<kiban_readbench::model::Memory, serde_json::error::Error> as core::ops::try_trait::Try>::branch",
+      3
+    ],
+    [
+      "<serde_json::read::SliceRead>::skip_to_escape",
+      3
+    ],
+    [
+      "<serde_json::read::SliceRead as serde_json::read::Read>::peek",
+      3
+    ],
+    [
+      "<serde_json::de::Deserializer<serde_json::read::SliceRead>>::parse_integer",
+      3
+    ],
+    [
+      "kiban::bloom::fnv1a_64",
+      3
+    ],
+    [
+      "_mi_page_malloc_zero",
+      2
+    ],
+    [
+      "kiban::sstable::block::entry_value",
+      2
+    ],
+    [
+      "<std::sys::sync::rwlock::futex::RwLock>::read_unlock",
+      2
+    ],
+    [
+      "<serde_json::de::MapAccess<_> as serde_core::de::MapAccess>::next_key_seed::has_next_key::<serde_json::read::SliceRead>",
+      2
+    ]
+  ],
+  "warning": "Only decoded DWARF top frames; empty chains are absent. Do not interpret these counts as full-profile percentages. The perf .report includes every sampled IP."
+}

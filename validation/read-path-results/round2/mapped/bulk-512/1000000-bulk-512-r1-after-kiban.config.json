@@ -1,0 +1,13 @@
+{
+  "backend": "kiban",
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-c878dd21/target/read-path-data/kiban-1000000-bulk",
+  "n": 1000000,
+  "operations": 100000,
+  "k": 10,
+  "seed": 20261016,
+  "output": "/home/aetos/.t3/worktrees/kiban/t3-c878dd21/validation/read-path-results/round2/mapped/bulk-512/1000000-bulk-512-r1-after-kiban.jsonl",
+  "action": "read",
+  "layout": "bulk",
+  "cache_mib": 512,
+  "mmap_max_level": 4294967295
+}

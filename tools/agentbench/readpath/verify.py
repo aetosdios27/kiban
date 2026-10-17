@@ -17,18 +17,19 @@ args = parser.parse_args()
 folder = args.folder.resolve()
 folder.mkdir(parents=True, exist_ok=True)
 checks = [
+    ('fmt', ['cargo', 'fmt', '--all', '--check']),
+    ('clippy', ['cargo', 'clippy', '--all-targets', '--workspace', '--', '-D', 'warnings']),
+    ('readbench-fmt', ['cargo', 'fmt', '--manifest-path', 'tools/agentbench/readpath/Cargo.toml', '--check']),
+    ('readbench-clippy', ['cargo', 'clippy', '--manifest-path', 'tools/agentbench/readpath/Cargo.toml', '--all-targets', '--', '-D', 'warnings']),
     ('test', ['cargo', 'test', '--workspace', '--', '--test-threads=4']),
     ('release', ['cargo', 'test', '--release', '--workspace', '--', '--test-threads=4']),
-    ('clippy', ['cargo', 'clippy', '--all-targets', '--workspace', '--', '-D', 'warnings']),
-    ('fmt', ['cargo', 'fmt', '--check']),
+    ('readbench-test', ['cargo', 'test', '--manifest-path', 'tools/agentbench/readpath/Cargo.toml']),
     ('fixed', ['cargo', 'test', '--release', 'seeded_crash_fixed_corpus', '--', '--test-threads=1']),
-    ('long-20000-each', ['cargo', 'test', '--release', '--lib', 'seeded_crash_long', '--', '--ignored', '--test-threads=1', '--nocapture']),
     ('loom', ['cargo', 'test', '--features', 'loom', '--', '--test-threads=1', 'loom_']),
     ('site-facts', ['python3', 'tools/site_facts.py', 'validate']),
-    ('readbench-clippy', ['cargo', 'clippy', '--manifest-path', 'tools/agentbench/readpath/Cargo.toml', '--all-targets', '--', '-D', 'warnings']),
-    ('readbench-test', ['cargo', 'test', '--manifest-path', 'tools/agentbench/readpath/Cargo.toml']),
-    ('readbench-fmt', ['cargo', 'fmt', '--manifest-path', 'tools/agentbench/readpath/Cargo.toml', '--check']),
+    ('long-20000-each', ['cargo', 'test', '--release', '--lib', 'seeded_crash_long', '--', '--ignored', '--test-threads=1', '--nocapture']),
 ]
+
 env = {**os.environ, 'KIBAN_SIM_SEED_START': '0', 'KIBAN_SIM_SEEDS': '20000', 'CARGO_BUILD_JOBS': '4'}
 rows = []
 for name, command in checks:

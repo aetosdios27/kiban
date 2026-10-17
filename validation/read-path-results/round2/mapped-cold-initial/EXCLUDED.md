@@ -1,0 +1,1 @@
+Excluded from cold claims: mapped calls performed zero storage reads and major faults. Database open had warmed the file pages before the measured interval. The post-open PTE/file eviction fix and rerun are in ../mapped-cold. Payload verification passed; this was a measurement setup failure.

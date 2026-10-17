@@ -1,0 +1,13 @@
+{
+  "binaries": {
+    "before": {
+      "path": "/home/aetos/.t3/worktrees/kiban/t3-c878dd21/target/read-path-tools/round2-default",
+      "sha256": "6d0e847003aac7335c46b55df122f2aee9a7428f3208b3d29a799317513ba15c"
+    },
+    "after": {
+      "path": "/home/aetos/.t3/worktrees/kiban/t3-c878dd21/target/read-path-tools/round2-slots",
+      "sha256": "3e26eb183e65fdd620337219709466417517edf4018d1fbe4d5a31a841512d56"
+    }
+  },
+  "trials": 5
+}

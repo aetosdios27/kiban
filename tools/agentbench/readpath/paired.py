@@ -19,6 +19,7 @@ parser.add_argument('--trials',type=int,default=5)
 parser.add_argument('--write',action='store_true')
 parser.add_argument('--durable',action='store_true')
 parser.add_argument('--resume',action='store_true')
+parser.add_argument('--mmap-max-level',type=int)
 args=parser.parse_args()
 binaries={'before':args.before.resolve(),'after':args.after.resolve()}
 args.out.mkdir(parents=True,exist_ok=True)
@@ -27,7 +28,8 @@ metadata_path=args.out/'metadata.json'
 completed=set()
 if args.resume and metadata_path.exists():
     assert json.loads(metadata_path.read_text())==metadata, 'resume binaries changed'
-    for line in (args.out/'commands.jsonl').read_text().splitlines():
+    commands_path=args.out/'commands.jsonl'
+    for line in commands_path.read_text().splitlines() if commands_path.exists() else []:
         command=json.loads(line)
         rows=[json.loads(line) for line in (args.out/command['config'].replace('.config.json','.jsonl')).read_text().splitlines()]
         assert rows[-1]['type']=='complete' and all(r.get('errors',0)==0 for r in rows), 'invalid saved trial'
@@ -40,6 +42,8 @@ for trial in range(args.trials):
         run.BINARY=binaries[label]
         for engine in ('kiban','lmdb'):
             c=run.config(engine,args.n,args.layout,args.cache)
+            if args.mmap_max_level is not None:
+                c['mmap_max_level']=args.mmap_max_level
             name=f'{args.n}-{args.layout}-{args.cache}-r{trial+1}-{label}-{engine}'
             if name+'.config.json' in completed:
                 continue
@@ -49,7 +53,10 @@ for trial in range(args.trials):
                 (args.out/(name+'.jsonl')).unlink(missing_ok=True)
             if args.write:
                 source=Path(c['db']);dest=source.with_name(source.name+'-paired-write')
-                if dest.exists():raise RuntimeError(f'existing trial {dest}')
+                if dest.exists():
+                    if not args.resume:
+                        raise RuntimeError(f'existing trial {dest}')
+                    shutil.rmtree(dest)
                 subprocess.run(['cp','-a','--reflink=auto',str(source),str(dest)],check=True)
                 c.update(db=str(dest),action='write',operations=1000,durable=args.durable)
             print(name,flush=True)

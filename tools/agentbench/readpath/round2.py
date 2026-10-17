@@ -12,11 +12,14 @@ parser.add_argument('--after', type=Path, required=True)
 parser.add_argument('--out', type=Path, required=True)
 parser.add_argument('--defaults', action='store_true')
 parser.add_argument('--resume', action='store_true')
+parser.add_argument('--mmap-max-level', type=int)
 args = parser.parse_args()
 for layout in ('bulk', 'normal'):
     for cache in ('32', '512', *(['default'] if args.defaults else [])):
         folder = args.out / f'{layout}-{cache}'
         command = [sys.executable, str(HERE / 'paired.py'), '--before', str(args.before), '--after', str(args.after), '--out', str(folder), '--layout', layout, '--cache', cache]
+        if args.mmap_max_level is not None:
+            command.extend(['--mmap-max-level', str(args.mmap_max_level)])
         if args.resume:
             command.append('--resume')
         subprocess.run(command, check=True)

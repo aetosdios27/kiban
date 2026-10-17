@@ -1,0 +1,110 @@
+kiban::db::get_from_version_at::{closure#0}
+kiban_readbench.d703b0259d74d5e1-cgu.0:?
+<kiban::bloom::BloomFilter>::get_bit
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/bloom.rs:71
+<kiban::bloom::BloomFilter>::may_contain::{closure#0}
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/bloom.rs:62
+core::iter::traits::iterator::Iterator::all::check::<u32, <kiban::bloom::BloomFilter>::may_contain::{closure#0}>::{closure#0}
+/home/aetos/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/iter/traits/iterator.rs:2839
+<core::ops::range::Range<u32> as core::iter::traits::iterator::Iterator>::try_fold::<(), core::iter::traits::iterator::Iterator::all::check<u32, <kiban::bloom::BloomFilter>::may_contain::{closure#0}>::{closure#0}, core::ops::control_flow::ControlFlow<()>>
+/home/aetos/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/iter/traits/iterator.rs:2494
+<core::ops::range::Range<u32> as core::iter::traits::iterator::Iterator>::all::<<kiban::bloom::BloomFilter>::may_contain::{closure#0}>
+/home/aetos/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/iter/traits/iterator.rs:2842
+<kiban::bloom::BloomFilter>::may_contain
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/bloom.rs:62
+<kiban::sstable::reader::SstTable>::get
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/sstable/reader.rs:461
+kiban::db::get_from_version_at::{closure#0}
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/db.rs:349
+std::sys::sync::rwlock::futex::is_read_lockable
+/home/aetos/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/sys/sync/rwlock/futex.rs:54
+<std::sys::sync::rwlock::futex::RwLock>::read
+/home/aetos/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/sys/sync/rwlock/futex.rs:96
+<std::sync::poison::rwlock::RwLock<core::option::Option<kiban::cache::CachedBlock>>>::read
+/home/aetos/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/sync/poison/rwlock.rs:410
+<kiban::cache::BlockCache>::get_or_load_with_handle::<kiban::sstable::SstError, <kiban::sstable::reader::SstTable>::read_block_with_handle::{closure#0}>
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/cache.rs:286
+<kiban::sstable::reader::SstTable>::read_block_with_handle
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/sstable/reader.rs:343
+<kiban::sstable::reader::SstTable>::get
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/sstable/reader.rs:469
+kiban::db::get_from_version_at::{closure#0}
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/db.rs:349
+<alloc::sync::Arc<[u8]> as core::clone::Clone>::clone
+/home/aetos/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2428
+<kiban::cache::CachedBlock as core::clone::Clone>::clone
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/cache.rs:26
+<core::option::Option<kiban::cache::CachedBlock> as core::clone::Clone>::clone
+/home/aetos/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:2278
+<kiban::cache::BlockCache>::get_or_load_with_handle::<kiban::sstable::SstError, <kiban::sstable::reader::SstTable>::read_block_with_handle::{closure#0}>
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/cache.rs:288
+<kiban::sstable::reader::SstTable>::read_block_with_handle
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/sstable/reader.rs:343
+<kiban::sstable::reader::SstTable>::get
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/sstable/reader.rs:469
+kiban::db::get_from_version_at::{closure#0}
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/db.rs:349
+<kiban::cache::BlockCache>::get_or_load_with_handle::<kiban::sstable::SstError, <kiban::sstable::reader::SstTable>::read_block_with_handle::{closure#0}>
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/cache.rs:284
+<kiban::sstable::reader::SstTable>::read_block_with_handle
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/sstable/reader.rs:343
+<kiban::sstable::reader::SstTable>::get
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/sstable/reader.rs:469
+kiban::db::get_from_version_at::{closure#0}
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/db.rs:349
+<std::sys::sync::rwlock::futex::RwLock>::read_unlock
+/home/aetos/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/sys/sync/rwlock/futex.rs:111
+<std::sync::poison::rwlock::RwLockReadGuard<core::option::Option<kiban::cache::CachedBlock>> as core::ops::drop::Drop>::drop
+/home/aetos/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/sync/poison/rwlock.rs:1122
+core::ptr::drop_glue::<std::sync::poison::rwlock::RwLockReadGuard<core::option::Option<kiban::cache::CachedBlock>>>
+/home/aetos/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ptr/mod.rs:823
+<kiban::cache::BlockCache>::get_or_load_with_handle::<kiban::sstable::SstError, <kiban::sstable::reader::SstTable>::read_block_with_handle::{closure#0}>
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/cache.rs:288
+<kiban::sstable::reader::SstTable>::read_block_with_handle
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/sstable/reader.rs:343
+<kiban::sstable::reader::SstTable>::get
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/sstable/reader.rs:469
+kiban::db::get_from_version_at::{closure#0}
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/db.rs:349
+kiban::bloom::fnv1a_64
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/bloom.rs:15
+<kiban::bloom::BloomFilter>::may_contain
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/bloom.rs:60
+<kiban::sstable::reader::SstTable>::get
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/sstable/reader.rs:461
+kiban::db::get_from_version_at::{closure#0}
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/db.rs:349
+<alloc::vec::Vec<alloc::sync::Arc<kiban::cache::BlockHandle>>>::as_slice
+/home/aetos/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/vec/mod.rs:1873
+<alloc::vec::Vec<alloc::sync::Arc<kiban::cache::BlockHandle>> as core::ops::deref::Deref>::deref
+/home/aetos/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/vec/mod.rs:3797
+<alloc::vec::Vec<alloc::sync::Arc<kiban::cache::BlockHandle>> as core::ops::index::Index<usize>>::index
+/home/aetos/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/vec/mod.rs:3879
+<kiban::sstable::reader::SstTable>::get
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/sstable/reader.rs:469
+kiban::db::get_from_version_at::{closure#0}
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/db.rs:349
+<kiban::bloom::BloomFilter>::get_bit
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/bloom.rs:71
+<kiban::bloom::BloomFilter>::may_contain::{closure#0}
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/bloom.rs:62
+core::iter::traits::iterator::Iterator::all::check::<u32, <kiban::bloom::BloomFilter>::may_contain::{closure#0}>::{closure#0}
+/home/aetos/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/iter/traits/iterator.rs:2839
+<core::ops::range::Range<u32> as core::iter::traits::iterator::Iterator>::try_fold::<(), core::iter::traits::iterator::Iterator::all::check<u32, <kiban::bloom::BloomFilter>::may_contain::{closure#0}>::{closure#0}, core::ops::control_flow::ControlFlow<()>>
+/home/aetos/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/iter/traits/iterator.rs:2494
+<core::ops::range::Range<u32> as core::iter::traits::iterator::Iterator>::all::<<kiban::bloom::BloomFilter>::may_contain::{closure#0}>
+/home/aetos/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/iter/traits/iterator.rs:2842
+<kiban::bloom::BloomFilter>::may_contain
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/bloom.rs:62
+<kiban::sstable::reader::SstTable>::get
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/sstable/reader.rs:461
+kiban::db::get_from_version_at::{closure#0}
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/db.rs:349
+kiban::bloom::fnv1a_64
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/bloom.rs:15
+<kiban::bloom::BloomFilter>::may_contain
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/bloom.rs:60
+<kiban::sstable::reader::SstTable>::get
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/sstable/reader.rs:461
+kiban::db::get_from_version_at::{closure#0}
+/home/aetos/.t3/worktrees/kiban/t3-c878dd21/src/db.rs:349

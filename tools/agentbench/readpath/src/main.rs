@@ -6,6 +6,7 @@ mod api;
 mod backend;
 mod block_compare;
 mod block_index;
+mod cold;
 #[path = "../../src/embedded.rs"]
 #[allow(dead_code)]
 mod embedded;
@@ -64,11 +65,19 @@ struct Options {
     layout: String,
     cache_mib: Option<usize>,
     #[serde(default)]
+    mmap_max_level: Option<u32>,
+    #[serde(default = "one_reader")]
+    readers: usize,
+    #[serde(default)]
     stage: u64,
     #[serde(default)]
     durable: bool,
     #[serde(default)]
     micro: String,
+}
+
+fn one_reader() -> usize {
+    1
 }
 
 fn open(o: &Options) -> Result<Box<dyn Backend>> {
@@ -80,6 +89,7 @@ fn open(o: &Options) -> Result<Box<dyn Backend>> {
                     || KibanOptions::default().block_cache_bytes,
                     |mib| mib * 1024 * 1024,
                 ),
+                mmap_max_level: o.mmap_max_level,
                 ..KibanOptions::default()
             },
         )?) as Box<dyn Backend>,
@@ -300,6 +310,7 @@ fn run() -> Result<()> {
         "prepare" => prepare(&o),
         "read" | "profile" => reads(&o),
         "write" => writes(&o),
+        "cold" => cold::run(&o),
         "micro" => micro::run(&o),
         _ => Err("unknown action".into()),
     }
@@ -343,6 +354,8 @@ mod tests {
                     action: "read".into(),
                     layout: shape.into(),
                     cache_mib: Some(32),
+                    mmap_max_level: None,
+                    readers: 1,
                     stage: 0,
                     durable: false,
                     micro: String::new(),

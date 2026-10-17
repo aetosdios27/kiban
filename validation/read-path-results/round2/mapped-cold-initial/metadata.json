@@ -1,0 +1,9 @@
+{
+  "binary": "/home/aetos/.t3/worktrees/kiban/t3-c878dd21/target/read-path-tools/round2-mapped-cold",
+  "sha256": "d4258bc0a8717e3fc3c6834c39c688f25aff171c7b7a14becdfd01ebd1fe8699",
+  "affinity": "3",
+  "trials": 5,
+  "operations": 10000,
+  "cache_mib": 32,
+  "cold": "posix_fadvise DONTNEED on only this closed prepared dataset before open"
+}

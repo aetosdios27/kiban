@@ -22,7 +22,7 @@ EVENTS = ','.join('cpu_core/' + name + '/u' for name in (
     'branch-misses', 'dTLB-load-misses'))
 
 
-def collect(c, folder, name, record=False):
+def collect(c, folder, name, record=False, flamegraph=True):
     path = (folder / (name + '.config.json')).resolve()
     path.write_text(json.dumps(c, indent=2)+'\n')
     with tempfile.TemporaryDirectory(prefix='kiban-perf-') as tmp:
@@ -46,11 +46,12 @@ def collect(c, folder, name, record=False):
         with (folder/(name+'.ips')).open('w') as out:
             subprocess.run([str(PERF), 'script', '-G', '-i', str(folder/(name+'.data'))], check=True, stdout=out)
         periods=restore_ips(folder/(name+'.perf'),folder/(name+'.ips'),folder/(name+'.merged'),folder/(name+'.coverage.json'))
-        with (folder/(name+'.merged')).open() as src, (folder/(name+'.folded')).open('w') as out:
-            subprocess.run([str(INFERNO/'inferno-collapse-perf')], stdin=src, stdout=out, check=True)
-        assert sum(int(line.rsplit(' ',1)[1]) for line in (folder/(name+'.folded')).read_text().splitlines())==periods
-        with (folder/(name+'.folded')).open() as src, (folder/(name+'.svg')).open('w') as out:
-            subprocess.run([str(INFERNO/'inferno-flamegraph'), '--title', name], stdin=src, stdout=out, check=True)
+        if flamegraph:
+            with (folder/(name+'.merged')).open() as src, (folder/(name+'.folded')).open('w') as out:
+                subprocess.run([str(INFERNO/'inferno-collapse-perf')], stdin=src, stdout=out, check=True)
+            assert sum(int(line.rsplit(' ',1)[1]) for line in (folder/(name+'.folded')).read_text().splitlines())==periods
+            with (folder/(name+'.folded')).open() as src, (folder/(name+'.svg')).open('w') as out:
+                subprocess.run([str(INFERNO/'inferno-flamegraph'), '--title', name], stdin=src, stdout=out, check=True)
         with (folder/(name+'.report')).open('w') as out:
             subprocess.run([str(PERF), 'report', '--stdio', '--no-children', '-i', str(folder/(name+'.data'))], check=True, stdout=out)
         (folder/(name+'.data')).unlink()

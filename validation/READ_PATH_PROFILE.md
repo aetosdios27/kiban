@@ -518,3 +518,33 @@ speedup. [Budget gates](read-path-results/round2/default-checks/status.json)
 passed full debug/release workspace tests, Clippy with warnings denied,
 formatting, fixed crash corpora, loom, site-facts and readbench checks.
 The final round-two change will run both 20k-seed crash/model suites.
+
+## Round 2: point-read experiments
+
+No point-cache handle or mapped-read prototype is retained. Five alternating
+trials rejected weak handles (bulk/512 point p50 1.696 → 1.792 µs) and
+invalidated slots (1.696 → 1.824). Aligned inline slots reduced bulk/512
+2.112 → 1.984 but regressed bulk/32 4.736 → 5.120 and normal/32
+4.992 → 5.248. Each handle design passed eviction/read race stress and the
+full gates before rejection. Fresh profiling isolated only 36 ns of hashing
+inside a 174 ns complete cache hit; removing hashing left ownership, locking
+and cold metadata accesses. These isolated diagnostics overlap and are not
+additive performance estimates.
+
+The checksum-once mapped prototype preserved the existing level-based,
+off-by-default mapping option and pinned bytes through the owning table.
+It skipped cache lookup for mapped points. Its complete paired matrix improved
+bulk/32 point p50/p99 3.840/6.528 → 2.432/3.584 µs but normal/512 rose
+2.368/3.904 → 2.688/4.352; it still lost to LMDB in every scenario.
+Cold-start probes performed actual storage I/O after post-open mapping/page
+eviction and checked all 300k values. Four readers sharing CPU 3 had mapped
+p99/p999 2949/8651 µs versus pread 590/999 µs. These compare configurations,
+not old/new mapped implementations. The initial invalid cold setup is excluded
+with its raw evidence.
+
+[Rejected designs and source patches](read-path-results/round2/REJECTED.md),
+[inline full matrix](read-path-results/round2/INLINE_SLOTS.md),
+[mapped full matrix](read-path-results/round2/MAPPED.md), and
+[cold probes](read-path-results/round2/COLD.md) preserve both the wins and
+regressions. All prototypes passed their payload oracles and storage gates;
+no storage correctness bug was found. The point-read objective remains unmet.
