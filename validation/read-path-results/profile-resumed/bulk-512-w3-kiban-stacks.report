@@ -1,0 +1,108 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 29K of event 'cpu_core/cycles/u'
+# Event count (approx.): 14931000000
+#
+# Overhead  Command          Shared Object     Symbol                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      
+# ........  ...............  ................  ............................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+#
+    13.96%  kiban-readbench  kiban-readbench   [.] <serde_json::read::SliceRead>::skip_to_escape
+     8.70%  kiban-readbench  libc.so.6         [.] __memcmp_avx2_movbe
+            |
+            ---__memcmp_avx2_movbe
+
+     8.41%  kiban-readbench  kiban-readbench   [.] core::str::converts::from_utf8
+     7.43%  kiban-readbench  kiban-readbench   [.] serde_json::de::from_trait::<serde_json::read::SliceRead, kiban_readbench::model::Memory>
+     6.61%  kiban-readbench  kiban-readbench   [.] <serde_json::read::SliceRead as serde_json::read::Read>::parse_str
+     5.75%  kiban-readbench  libc.so.6         [.] __memmove_avx_unaligned_erms
+            |
+            ---__memmove_avx_unaligned_erms
+
+     4.41%  kiban-readbench  kiban-readbench   [.] <serde_json::de::MapAccess<_> as serde_core::de::MapAccess>::next_key_seed::has_next_key::<serde_json::read::SliceRead>
+     3.65%  kiban-readbench  kiban-readbench   [.] mi_heap_malloc_aligned_at
+     3.35%  kiban-readbench  kiban-readbench   [.] <serde_json::de::Deserializer<serde_json::read::SliceRead>>::parse_integer
+     3.25%  kiban-readbench  kiban-readbench   [.] <core::iter::adapters::GenericShunt<core::iter::adapters::map::Map<core::iter::adapters::take::Take<core::iter::adapters::take_while::TakeWhile<kiban::db::DbIter, <kiban::db::Kiban>::range::{closure#0}>>, <kiban_readbench::embedded::Embedded as kiban_readbench::api::Backend>::recent::{closure#0}>, core::result::Result<core::convert::Infallible, alloc::boxed::Box<dyn core::error::Error>>> as core::iter::traits::iterator::Iterator>::next
+     3.22%  kiban-readbench  kiban-readbench   [.] <kiban::sstable::reader::SstTable>::iter_from
+     3.17%  kiban-readbench  kiban-readbench   [.] mi_free
+     3.12%  kiban-readbench  kiban-readbench   [.] _mi_page_malloc
+     2.74%  kiban-readbench  kiban-readbench   [.] <kiban::sstable::block::BlockIter as core::iter::traits::iterator::Iterator>::next
+     2.19%  kiban-readbench  kiban-readbench   [.] <kiban::cache::BlockCache>::get
+     1.93%  kiban-readbench  kiban-readbench   [.] <kiban::db::DbIter as core::iter::traits::iterator::Iterator>::next
+     1.86%  kiban-readbench  kiban-readbench   [.] <kiban::db::MergeCore>::pop_best
+     1.70%  kiban-readbench  kiban-readbench   [.] <kiban::sstable::reader::Iter as core::iter::traits::iterator::Iterator>::next
+     1.47%  kiban-readbench  kiban-readbench   [.] <kiban_readbench::embedded::Embedded as kiban_readbench::api::Backend>::recent
+     1.41%  kiban-readbench  kiban-readbench   [.] <core::marker::PhantomData<alloc::string::String> as serde_core::de::DeserializeSeed>::deserialize::<&mut serde_json::de::Deserializer<serde_json::read::SliceRead>>
+     1.12%  kiban-readbench  kiban-readbench   [.] <core::marker::PhantomData<u64> as serde_core::de::DeserializeSeed>::deserialize::<&mut serde_json::de::Deserializer<serde_json::read::SliceRead>>
+     0.94%  kiban-readbench  kiban-readbench   [.] <kiban::db::MergeCore>::fill_heads
+     0.87%  kiban-readbench  kiban-readbench   [.] mi_malloc_aligned
+     0.61%  kiban-readbench  kiban-readbench   [.] <core::marker::PhantomData<u32> as serde_core::de::DeserializeSeed>::deserialize::<&mut serde_json::de::Deserializer<serde_json::read::SliceRead>>
+     0.61%  kiban-readbench  kiban-readbench   [.] mi_find_page
+     0.60%  kiban-readbench  kiban-readbench   [.] _mi_page_free_collect
+     0.57%  kiban-readbench  kiban-readbench   [.] mi_heap_malloc_zero_aligned_at_generic
+     0.43%  kiban-readbench  kiban-readbench   [.] <kiban::db::Kiban>::range
+     0.39%  kiban-readbench  kiban-readbench   [.] _mi_malloc_generic
+     0.36%  kiban-readbench  kiban-readbench   [.] alloc::fmt::format::format_inner
+     0.35%  kiban-readbench  kiban-readbench   [.] mi_heap_collect_ex
+     0.34%  kiban-readbench  kiban-readbench   [.] _mi_heap_realloc_zero
+     0.31%  kiban-readbench  kiban-readbench   [.] <core::fmt::Formatter>::pad_integral
+     0.31%  kiban-readbench  kiban-readbench   [.] core::fmt::write
+     0.29%  kiban-readbench  kiban-readbench   [.] <serde_json::de::Deserializer<serde_json::read::SliceRead>>::end_map
+     0.25%  kiban-readbench  kiban-readbench   [.] <alloc::string::String as core::fmt::Write>::write_str.14
+     0.24%  kiban-readbench  kiban-readbench   [.] core::ptr::drop_glue::<kiban::sstable::reader::Iter>
+     0.24%  kiban-readbench  kiban-readbench   [.] kiban_readbench::profile
+     0.24%  kiban-readbench  kiban-readbench   [.] <std::hash::random::DefaultHasher as core::hash::Hasher>::write.225
+     0.23%  kiban-readbench  kiban-readbench   [.] <u32 as core::fmt::Display>::fmt
+     0.21%  kiban-readbench  kiban-readbench   [.] <std::hash::random::RandomState as core::hash::BuildHasher>::hash_one::<&(u64, u64)>
+     0.21%  kiban-readbench  kiban-readbench   [.] _mi_bin
+     0.19%  kiban-readbench  kiban-readbench   [.] _mi_page_retire
+     0.18%  kiban-readbench  kiban-readbench   [.] <alloc::raw_vec::RawVecInner<_>>::reserve::do_reserve_and_handle::<alloc::alloc::Global>
+     0.17%  kiban-readbench  kiban-readbench   [.] core::ptr::drop_glue::<core::iter::adapters::take_while::TakeWhile<kiban::db::DbIter, <kiban::db::Kiban>::range::{closure#0}>>
+     0.15%  kiban-readbench  kiban-readbench   [.] <alloc::string::String as core::fmt::Write>::write_char.15
+     0.15%  kiban-readbench  kiban-readbench   [.] <alloc::raw_vec::RawVecInner>::finish_grow
+     0.15%  kiban-readbench  kiban-readbench   [.] kiban::sstable::block::seek_restart_index
+     0.12%  kiban-readbench  kiban-readbench   [.] <alloc::raw_vec::RawVecInner>::finish_grow
+     0.12%  kiban-readbench  kiban-readbench   [.] _mi_page_bin
+     0.11%  kiban-readbench  kiban-readbench   [.] <kiban::sstable::reader::SstTable>::read_block
+     0.09%  kiban-readbench  kiban-readbench   [.] <alloc::raw_vec::RawVecInner<_>>::reserve::do_reserve_and_handle::<alloc::alloc::Global>
+     0.07%  kiban-readbench  kiban-readbench   [.] <core::fmt::Formatter>::pad_integral::write_prefix
+     0.05%  kiban-readbench  kiban-readbench   [.] <core::iter::adapters::flatten::FlatMap<alloc::collections::btree::map::Range<alloc::vec::Vec<u8>, kiban::memtable::KeyVersions>, core::iter::adapters::map::Map<core::iter::adapters::chain::Chain<core::iter::sources::once::Once<&kiban::memtable::Entry>, core::iter::adapters::rev::Rev<core::slice::iter::Iter<kiban::memtable::Entry>>>, <kiban::memtable::Memtable>::iter_from::{closure#0}::{closure#0}>, <kiban::memtable::Memtable>::iter_from::{closure#0}> as core::iter::traits::iterator::Iterator>::next
+     0.05%  kiban-readbench  kiban-readbench   [.] <kiban::memtable::Memtable>::iter_from
+     0.05%  kiban-readbench  kiban-readbench   [.] kiban::sstable::block::header_at
+     0.05%  kiban-readbench  kiban-readbench   [.] <alloc::collections::btree::map::Range<alloc::vec::Vec<u8>, kiban::memtable::KeyVersions> as core::iter::traits::iterator::Iterator>::next
+     0.04%  kiban-readbench  [unknown]         [k] 0xffffffff830015f0
+     0.04%  kiban-readbench  kiban-readbench   [.] mi_realloc_aligned
+     0.02%  kiban-readbench  kiban-readbench   [.] mi_heap_malloc_aligned
+     0.01%  kiban-readbench  kiban-readbench   [.] memcpy@plt
+     0.01%  kiban-readbench  kiban-readbench   [.] mi_heap_realloc_aligned
+     0.01%  kiban-readbench  libc.so.6         [.] __GI___pthread_mutex_unlock_usercnt
+     0.01%  kiban-readbench  kiban-readbench   [.] _mi_deferred_free
+     0.01%  kiban-readbench  kiban-readbench   [.] _mi_is_main_thread
+     0.01%  kiban-readbench  kiban-readbench   [.] mi_option_get
+     0.01%  kiban-readbench  kiban-readbench   [.] mi_option_get_clamp
+     0.01%  kiban-readbench  kiban-readbench   [.] mi_segment_span_allocate
+     0.01%  kiban-readbench  kiban-readbench   [.] mi_segment_span_free
+     0.01%  kiban-readbench  kiban-readbench   [.] mi_segments_page_alloc.isra.0
+     0.01%  kiban-readbench  kiban-readbench   [.] mi_stat_count_add_mt.part.0
+     0.01%  kiban-readbench  kiban-readbench   [.] mi_stat_update
+     0.01%  kiban-readbench  kiban-readbench   [.] mi_stats_add.constprop.0
+     0.00%  kiban-readbench  kiban-readbench   [.] _mi_arena_field_cursor_done
+     0.00%  kiban-readbench  kiban-readbench   [.] _mi_arena_segment_clear_abandoned_next
+     0.00%  kiban-readbench  kiban-readbench   [.] _mi_commit_mask_next_run
+     0.00%  kiban-readbench  kiban-readbench   [.] _mi_heap_delayed_free_partial
+     0.00%  kiban-readbench  kiban-readbench   [.] _mi_os_page_size
+     0.00%  kiban-readbench  kiban-readbench   [.] _mi_page_free
+     0.00%  kiban-readbench  kiban-readbench   [.] _mi_stat_decrease
+     0.00%  kiban-readbench  kiban-readbench   [.] mi_page_free_list_extend.isra.0
+     0.00%  kiban-readbench  kiban-readbench   [.] mi_segment_commit_mask.constprop.0
+     0.00%  kiban-readbench  kiban-readbench   [.] mi_segment_page_clear
+     0.00%  kiban-readbench  kiban-readbench   [.] mi_segment_try_purge
+     0.00%  kiban-readbench  libc.so.6         [.] clock_gettime@@GLIBC_2.17
+     0.00%  kiban-readbench  libc.so.6         [.] pthread_mutex_unlock@@GLIBC_2.2.5
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

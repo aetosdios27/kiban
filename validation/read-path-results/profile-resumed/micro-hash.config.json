@@ -1,0 +1,13 @@
+{
+  "backend": "kiban",
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-53ad0f47/target/read-path-data/kiban-1000000-bulk",
+  "n": 1000000,
+  "operations": 1000000,
+  "k": 10,
+  "seed": 20261016,
+  "output": "",
+  "action": "micro",
+  "layout": "bulk",
+  "cache_mib": 512,
+  "micro": "hash"
+}

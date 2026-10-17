@@ -1,0 +1,14 @@
+   Compiling kiban v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-53ad0f47)
+   Compiling kiban-readbench v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-53ad0f47/tools/agentbench/readpath)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.94s
+     Running unittests src/main.rs (tools/agentbench/readpath/target/debug/deps/kiban_readbench-b1f241131306cefc)
+
+running 5 tests
+test model::tests::recent_order_and_payload_identity ... ok
+test random::tests::keyed_values_are_stable_distinct_and_prefix_consistent ... ok
+test metrics::tests::bounds_and_merge ... ok
+test runner::tests::verifies_real_database_across_reopen_and_rejects_corruption ... ok
+test tests::read_suite_checks_payloads_after_reopen_and_rejects_wrong_revisions ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+

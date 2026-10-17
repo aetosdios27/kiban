@@ -1,0 +1,8 @@
+# started on Sat Oct 17 12:35:55 2026
+
+5334951805;;cpu_core/cycles/u;1798688265;100.00;;
+7889380632;;cpu_core/instructions/u;1798688265;100.00;;
+45747212;;cpu_core/L1-dcache-load-misses/u;1798688265;100.00;;
+15251465;;cpu_core/LLC-load-misses/u;1798688265;100.00;;
+11204392;;cpu_core/branch-misses/u;1798688265;100.00;;
+1972931;;cpu_core/dTLB-load-misses/u;1798688265;100.00;;
