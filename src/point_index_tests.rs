@@ -86,10 +86,13 @@ fn point_index_mixed_tables_resolve_by_sequence_across_overlapping_levels() {
         (10, 0, true, 5, Kind::Put, b"stale".as_slice()),
         (11, 1, false, 8, Kind::Put, b"middle".as_slice()),
         (14, 1, true, 9, Kind::Put, b"legacy".as_slice()),
+        (15, 2, true, 11, Kind::Put, b"flag-zero".as_slice()),
         (12, 1, true, 10, Kind::Tombstone, b"".as_slice()),
         (13, 2, true, 12, Kind::Put, b"newest".as_slice()),
     ] {
-        let mut builder = if number == 14 {
+        let mut builder = if number == 15 {
+            TableBuilder::with_point_index_without_value_crc()
+        } else if number == 14 {
             TableBuilder::with_legacy_point_index()
         } else {
             TableBuilder::with_point_index(indexed)
@@ -122,6 +125,7 @@ fn point_index_mixed_tables_resolve_by_sequence_across_overlapping_levels() {
         (8, Some(b"middle".as_slice())),
         (9, Some(b"legacy".as_slice())),
         (10, None),
+        (11, Some(b"flag-zero".as_slice())),
         (12, Some(b"newest".as_slice())),
     ] {
         assert_eq!(
@@ -136,6 +140,7 @@ fn point_index_every_section_and_footer_bit_flip_is_detected_with_or_without_adm
     let dir = TempDir::new("point-bit-flips");
     for mut builder in [
         TableBuilder::with_legacy_point_index(),
+        TableBuilder::with_point_index_without_value_crc(),
         TableBuilder::with_point_index(true),
         TableBuilder::with_scan_index(true, 2),
     ] {

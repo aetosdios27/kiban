@@ -17,7 +17,7 @@ def main():
     folder = campaign.OUT/'final-components'
     folder.mkdir(parents=True, exist_ok=True)
     assert not (folder/'metadata.json').exists()
-    profiler.BINARY = campaign.BINS/'before'
+    profiler.BINARY = campaign.BINS/'ph3'
     profiler.CPU = 6
     (folder/'metadata.json').write_text(json.dumps(dict(
         binary=str(profiler.BINARY), sha256=hashlib.sha256(profiler.BINARY.read_bytes()).hexdigest(),
@@ -25,7 +25,7 @@ def main():
         note='Isolated component costs overlap; do not add them or call them full-read speedups.'
     ), indent=2)+'\n')
     rows = []
-    for case in ['index', 'verify-block', 'cache', 'hash', 'block-seek']:
+    for case in ['bloom', 'index', 'verify-block', 'cache', 'hash', 'block-seek', 'copy', 'crc-value']:
         c = campaign.config('kiban', 'bulk', False, 32)
         c.update(action='micro', micro=case, operations=1000000)
         print(case, flush=True)

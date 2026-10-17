@@ -231,6 +231,9 @@ pub(super) fn run(o: &Options) -> Result<()> {
                 let e = &index[i];
                 black_box(VerifiedBlock::verify(&table[e.offset..e.offset + e.len])?);
             }
+            "crc-value" => {
+                black_box(kiban::crc32::crc32(black_box(&values[at])));
+            }
             "crc-scalar" | "crc-hardware" => {
                 let e = &index[i];
                 let data = &table[e.offset..e.offset + e.len - 4];

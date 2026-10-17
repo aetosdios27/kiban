@@ -1,9 +1,19 @@
 //! KIBANPH3: anchored key suffixes and compact MVCC locators.
 use super::*;
 use crate::cache::{ArcBlock, BlockMeta};
+use std::sync::Arc;
+
+pub(in crate::sstable) struct ValueLocator {
+    pub kind: Kind,
+    pub seq: u64,
+    pub offset: usize,
+    pub len: usize,
+    pub checksum: u32,
+}
 
 pub(super) const MAGIC: &[u8; 8] = b"KIBANPH3";
 const HEADER: usize = 64;
+const CHECKSUM_FLAG: u32 = 1;
 const SCAN_FLAG: u32 = 2;
 const SCAN_MAGIC: &[u8; 8] = b"KIBANSC1";
 const SCAN_HEADER: usize = 24;
@@ -41,11 +51,13 @@ pub(super) struct Encoding {
     count: usize,
     seq: usize,
     value: usize,
+    checksum: bool,
 }
 impl Encoding {
     pub(super) fn for_builder(b: &PointBuilder) -> Self {
         let mut result = Self {
             address: 4,
+            checksum: true,
             key: width(b.max_key_len as u64),
             count: width(b.max_versions as u64),
             seq: width(b.max_seq - b.min_seq),
@@ -60,7 +72,7 @@ impl Encoding {
         self.address + 2 * self.key + self.count
     }
     fn version(self) -> usize {
-        self.seq + self.value + self.address
+        self.seq + self.value + self.address + usize::from(self.checksum) * 4
     }
     fn arena_len(self, b: &PointBuilder) -> usize {
         b.heads.len() * self.key_header() + b.suffix_bytes + b.versions * self.version()
@@ -91,6 +103,12 @@ pub(super) fn encode(builder: PointBuilder) -> Result<Vec<u8>, SstError> {
     let encoding = Encoding::for_builder(&builder);
     encode_with(builder, encoding)
 }
+#[cfg(test)]
+pub(super) fn encode_without_crc(builder: PointBuilder) -> Result<Vec<u8>, SstError> {
+    let mut encoding = Encoding::for_builder(&builder);
+    encoding.checksum = false;
+    encode_with(builder, encoding)
+}
 fn encode_with(builder: PointBuilder, encoding: Encoding) -> Result<Vec<u8>, SstError> {
     let keys: Vec<_> = builder
         .heads
@@ -101,6 +119,7 @@ fn encode_with(builder: PointBuilder, encoding: Encoding) -> Result<Vec<u8>, Sst
     let mut arena = Vec::with_capacity(encoding.arena_len(&builder));
     let mut heads = Vec::with_capacity(keys.len());
     let mut anchor = 0;
+    let mut checksums = builder.checksums.iter();
     for (i, &key) in keys.iter().enumerate() {
         let shared = if i.is_multiple_of(GROUP) {
             0
@@ -135,6 +154,10 @@ fn encode_with(builder: PointBuilder, encoding: Encoding) -> Result<Vec<u8>, Sst
                 u64_at(&builder.arena, pos + 13),
                 encoding.address,
             );
+            let checksum = *checksums.next().expect("one CRC per version");
+            if encoding.checksum {
+                arena.extend_from_slice(&checksum.to_le_bytes());
+            }
             pos += 21;
         }
     }
@@ -151,11 +174,12 @@ fn encode_with(builder: PointBuilder, encoding: Encoding) -> Result<Vec<u8>, Sst
         encoding.count,
         encoding.seq,
         encoding.value,
-        if builder.scan_prefix_len > 0 {
-            SCAN_FLAG as usize
-        } else {
-            0
-        },
+        (if encoding.checksum { CHECKSUM_FLAG as usize } else { 0 })
+            | if builder.scan_prefix_len > 0 {
+                SCAN_FLAG as usize
+            } else {
+                0
+            },
     ] {
         bytes.extend_from_slice(&(w as u32).to_le_bytes());
     }
@@ -206,6 +230,7 @@ pub(crate) struct CompactIndex {
     arena: usize,
     encoding: Encoding,
     scan: usize,
+    packed: bool,
     _reservation: ResidentReservation,
 }
 impl CompactIndex {
@@ -214,6 +239,18 @@ impl CompactIndex {
         data: ArcBlock,
         reservation: ResidentReservation,
         blocks: impl IntoIterator<Item = (u64, u64)>,
+    ) -> Result<Self, SstError> {
+        let mut result = Self::header(bytes, data, reservation)?;
+        let data = result.data.clone();
+        result.validate(blocks, data.len(), |offset, len| {
+            Ok(std::borrow::Cow::Borrowed(&data[offset..offset + len]))
+        })?;
+        Ok(result)
+    }
+    fn header(
+        bytes: ArcBlock,
+        data: ArcBlock,
+        reservation: ResidentReservation,
     ) -> Result<Self, SstError> {
         super::super::reader::verify_trailer(&bytes, "point index")?;
         if bytes.len() < HEADER + 5 || &bytes[..8] != MAGIC {
@@ -230,6 +267,7 @@ impl CompactIndex {
             count: u32_at(&bytes, 40) as usize,
             seq: u32_at(&bytes, 44) as usize,
             value: u32_at(&bytes, 48) as usize,
+            checksum: u32_at(&bytes, 52) & CHECKSUM_FLAG != 0,
         };
         let min_seq = u64_at(&bytes, 56);
         if count == 0
@@ -240,7 +278,7 @@ impl CompactIndex {
             || !matches!(encoding.count, 1 | 2 | 4)
             || !matches!(encoding.seq, 1 | 2 | 4 | 8)
             || !matches!(encoding.value, 2 | 4)
-            || u32_at(&bytes, 52) & !SCAN_FLAG != 0
+            || u32_at(&bytes, 52) & !(CHECKSUM_FLAG | SCAN_FLAG) != 0
             || buckets
                 .checked_mul(4)
                 .and_then(|n| HEADER.checked_add(n))
@@ -284,8 +322,7 @@ impl CompactIndex {
         } else {
             0
         };
-        let arena_end = if scan == 0 { arena_end } else { scan };
-        let mut result = Self {
+        Ok(Self {
             bytes,
             data,
             blocks: Vec::new(),
@@ -296,27 +333,114 @@ impl CompactIndex {
             arena,
             encoding,
             scan,
+            packed: false,
             _reservation: reservation,
+        })
+    }
+    // PH3's disk encoding is unchanged. Only its validated in-memory hash tables
+    // omit fingerprints (full key equality remains mandatory) and use u24 pilots.
+    pub(in crate::sstable) fn locator_bytes(
+        header: &[u8],
+        len: u64,
+        data_len: u64,
+    ) -> Option<usize> {
+        if header.len() < HEADER
+            || &header[..8] != MAGIC
+            || u32_at(header, 52) & CHECKSUM_FLAG == 0
+            || u32_at(header, 52) & !(CHECKSUM_FLAG | SCAN_FLAG) != 0
+            || usize::try_from(data_len).is_err()
+        {
+            return None;
+        }
+        let n = u32_at(header, 16) as u64;
+        let b = u32_at(header, 20) as u64;
+        if n >= 1 << 23 || b != n.div_ceil(2) {
+            return None;
+        }
+        let scan = if u32_at(header, 52) & SCAN_FLAG != 0 {
+            SCAN_HEADER as u64 + 8 + n * u32_at(header, 32) as u64
+        } else {
+            0
         };
-        result.validate(blocks, arena_end)?;
-        Ok(result)
+        usize::try_from(len.checked_sub(b + 2 * n + scan)?).ok()
+    }
+    pub(in crate::sstable) fn decode_locators<'a>(
+        bytes: ArcBlock,
+        data_len: usize,
+        reservation: ResidentReservation,
+        blocks: impl IntoIterator<Item = (u64, u64)>,
+        read: impl FnMut(usize, usize) -> Result<std::borrow::Cow<'a, [u8]>, SstError>,
+    ) -> Result<Option<Self>, SstError> {
+        let mut result = Self::header(bytes, Arc::from([]), reservation)?;
+        if !result.encoding.checksum || result.count >= 1 << 23 {
+            return Err(bad("unsupported locator admission"));
+        }
+        if (0..result.buckets).any(|b| u32_at(&result.bytes, HEADER + b * 4) & !DIRECT >= 1 << 23) {
+            return Ok(None);
+        }
+        result.validate(blocks, data_len, read)?;
+        let mut packed = Vec::with_capacity(result.bytes.len() - result.buckets - 2 * result.count);
+        packed.extend_from_slice(&result.bytes[..HEADER]);
+        for b in 0..result.buckets {
+            let p = u32_at(&result.bytes, HEADER + b * 4);
+            let p = (p & !DIRECT) | ((p & DIRECT) >> 8);
+            packed.extend_from_slice(&p.to_le_bytes()[..3]);
+        }
+        let slots = HEADER + result.buckets * 4;
+        for i in 0..result.count {
+            let at = slots + i * (result.encoding.address + 2);
+            packed.extend_from_slice(&result.bytes[at..at + result.encoding.address]);
+        }
+        let arena = packed.len();
+        // Locator mode never iterates keys, so the scan extension is dropped.
+        let arena_end = if result.scan == 0 {
+            result.bytes.len() - 5
+        } else {
+            result.scan
+        };
+        packed.extend_from_slice(&result.bytes[result.arena..arena_end]);
+        packed.extend_from_slice(&result.bytes[result.bytes.len() - 5..]);
+        result.scan = 0;
+        result.arena = arena;
+        result.bytes = packed.into();
+        result.blocks.clear();
+        result.blocks.shrink_to_fit();
+        result.packed = true;
+        Ok(Some(result))
     }
     #[inline(always)]
     fn slot(&self, h: u64) -> usize {
-        let pilot = u32_at(&self.bytes, HEADER + bucket(h, self.buckets) * 4);
+        let pilot = if self.packed {
+            let at = HEADER + bucket(h, self.buckets) * 3;
+            let p = u32::from_le_bytes([self.bytes[at], self.bytes[at + 1], self.bytes[at + 2], 0]);
+            (p & 0x7f_ffff) | ((p & 0x80_0000) << 8)
+        } else {
+            u32_at(&self.bytes, HEADER + bucket(h, self.buckets) * 4)
+        };
         let at = if pilot & DIRECT != 0 {
             (pilot & !DIRECT) as usize
         } else {
             position(h, pilot, self.count)
         };
-        HEADER + self.buckets * 4 + at * (self.encoding.address + 2)
+        if self.packed {
+            HEADER + self.buckets * 3 + at * self.encoding.address
+        } else {
+            HEADER + self.buckets * 4 + at * (self.encoding.address + 2)
+        }
     }
-    fn validate(
+
+    fn validate<'a>(
         &mut self,
         blocks: impl IntoIterator<Item = (u64, u64)>,
-        end: usize,
+        data_len: usize,
+        mut read: impl FnMut(usize, usize) -> Result<std::borrow::Cow<'a, [u8]>, SstError>,
     ) -> Result<(), SstError> {
         let e = self.encoding;
+        let end = if self.scan == 0 {
+            self.bytes.len() - 5
+        } else {
+            self.scan
+        };
         for b in 0..self.buckets {
             let pilot = u32_at(&self.bytes, HEADER + b * 4);
             if pilot & DIRECT != 0 && (pilot & !DIRECT) as usize >= self.count {
@@ -339,17 +463,16 @@ impl CompactIndex {
         for (offset, len) in blocks {
             let offset = usize::try_from(offset).map_err(|_| bad("data offset overflow"))?;
             let len = usize::try_from(len).map_err(|_| bad("data length overflow"))?;
-            if offset != data_end
-                || offset
-                    .checked_add(len)
-                    .is_none_or(|end| end > self.data.len())
-            {
+            if offset != data_end || offset.checked_add(len).is_none_or(|end| end > data_len) {
                 return Err(bad("invalid compact backing bounds"));
             }
-            let raw = &self.data[offset..offset + len];
-            let meta = super::super::block::VerifiedBlock::verify(raw)?;
+            let raw = read(offset, len)?;
+            if raw.len() != len {
+                return Err(bad("short backing read"));
+            }
+            let meta = super::super::block::VerifiedBlock::verify(&raw)?;
             super::super::block::visit_records(
-                raw,
+                &raw,
                 &meta,
                 &mut key,
                 |kind, seq, key, value_offset, value_len| {
@@ -446,6 +569,12 @@ impl CompactIndex {
                     {
                         return Err(bad("compact locator disagrees with sorted record"));
                     }
+                    if e.checksum
+                        && u32_at(&self.bytes, pos + e.seq + e.value + e.address)
+                            != crate::crc32::crc32(&raw[value_offset..value_offset + value_len])
+                    {
+                        return Err(bad("value checksum disagrees with sorted record"));
+                    }
                     pos += e.version();
                     remaining -= 1;
                     last_seq = Some(seq);
@@ -455,7 +584,7 @@ impl CompactIndex {
             verified_blocks.push((offset, len, meta));
             data_end = offset + len;
         }
-        if data_end != self.data.len() || pos != end || remaining != 0 || groups != self.count {
+        if data_end != data_len || pos != end || remaining != 0 || groups != self.count {
             return Err(bad("compact and sorted coverage differ"));
         }
         if self.scan != 0 && u64_at(&self.bytes, self.scan + 16) as usize != scan_prefixes {
@@ -476,6 +605,17 @@ impl CompactIndex {
         )
     }
     pub(super) fn get(&self, key: &[u8], limit: Option<u64>) -> Option<Found> {
+        self.locate(key, limit).map(|v| Found {
+            kind: v.kind,
+            seq: v.seq,
+            value: self.data[v.offset..v.offset + v.len].to_vec(),
+        })
+    }
+    pub(in crate::sstable) fn locate(
+        &self,
+        key: &[u8],
+        limit: Option<u64>,
+    ) -> Option<ValueLocator> {
         let e = self.encoding;
         // Constant widths remove repeated decoder dispatch from the common
         // single-version layout. All encodings share the same lookup body.
@@ -489,6 +629,7 @@ impl CompactIndex {
                     count: 1,
                     seq: 2,
                     value: 2,
+                    checksum: e.checksum,
                 },
             ),
             (4, 1, 1, 4, 2) => self.get_encoded(
@@ -500,16 +641,17 @@ impl CompactIndex {
                     count: 1,
                     seq: 4,
                     value: 2,
+                    checksum: e.checksum,
                 },
             ),
             _ => self.get_encoded(key, limit, e),
         }
     }
     #[inline(always)]
-    fn get_encoded(&self, key: &[u8], limit: Option<u64>, e: Encoding) -> Option<Found> {
+    fn get_encoded(&self, key: &[u8], limit: Option<u64>, e: Encoding) -> Option<ValueLocator> {
         let h = hash(key, self.seed);
         let slot = self.slot(h);
-        if uint(&self.bytes, slot + e.address, 2) != fingerprint(h) as u64 {
+        if !self.packed && uint(&self.bytes, slot + e.address, 2) != fingerprint(h) as u64 {
             return None;
         }
         let mut pos = self.arena + uint(&self.bytes, slot, e.address) as usize;
@@ -536,10 +678,16 @@ impl CompactIndex {
                 };
                 let offset = uint(&self.bytes, pos + e.seq + e.value, e.address) as usize;
                 let len = (value & !e.tombstone()) as usize;
-                return Some(Found {
+                return Some(ValueLocator {
                     kind,
                     seq,
-                    value: self.data[offset..offset + len].to_vec(),
+                    offset,
+                    len,
+                    checksum: if e.checksum {
+                        u32_at(&self.bytes, pos + e.seq + e.value + e.address)
+                    } else {
+                        0
+                    },
                 });
             }
             pos += e.version();
@@ -626,6 +774,7 @@ impl CompactIndex {
                     count: 1,
                     seq: 2,
                     value: 2,
+                    checksum: e.checksum,
                 },
             ),
             (1, 1, 4, 2) => self.scan_value_encoded(
@@ -637,6 +786,7 @@ impl CompactIndex {
                     count: 1,
                     seq: 4,
                     value: 2,
+                    checksum: e.checksum,
                 },
             ),
             _ => self.scan_value_encoded(offset, limit, e),
@@ -662,6 +812,7 @@ impl CompactIndex {
                     count: 1,
                     seq: 2,
                     value: 2,
+                    checksum: e.checksum,
                 },
                 map,
                 out,
@@ -676,6 +827,7 @@ impl CompactIndex {
                     count: 1,
                     seq: 4,
                     value: 2,
+                    checksum: e.checksum,
                 },
                 map,
                 out,
@@ -873,6 +1025,7 @@ mod tests {
                 count: u32_at(&f.bytes, 40) as usize,
                 seq: u32_at(&f.bytes, 44) as usize,
                 value: u32_at(&f.bytes, 48) as usize,
+                checksum: true,
             };
             for at in [
                 16,
@@ -928,6 +1081,73 @@ mod tests {
             wrong.data[25] ^= 1;
             assert!(decode(wrong).is_err());
         }
+    }
+    #[test]
+    fn locator_crc_fields_and_budget_are_validated_before_admission() {
+        for width in [4, 8] {
+            for corrupt in [false, true] {
+                let mut f = compact_fixture(width);
+                if corrupt {
+                    let arena = u64_at(&f.bytes, 24) as usize;
+                    let e = Encoding {
+                        address: width,
+                        key: 2,
+                        count: 1,
+                        seq: 1,
+                        value: 2,
+                        checksum: true,
+                    };
+                    // The first key is empty; corrupt its first value CRC and
+                    // recompute the section CRC to exercise semantic validation.
+                    let crc_at = arena + e.key_header() + e.seq + e.value + e.address;
+                    f.bytes[crc_at] ^= 1;
+                    let end = f.bytes.len() - 4;
+                    let crc = crate::crc32::crc32(&f.bytes[..end]);
+                    f.bytes[end..].copy_from_slice(&crc.to_le_bytes());
+                }
+                let charge = CompactIndex::locator_bytes(
+                    &f.bytes,
+                    f.bytes.len() as u64,
+                    f.data.len() as u64,
+                )
+                .unwrap();
+                let cache = Arc::new(BlockCache::new(charge));
+                let reservation = cache.reserve_point(charge).unwrap();
+                let point = CompactIndex::decode_locators(
+                    f.bytes.into(),
+                    f.data.len(),
+                    reservation,
+                    f.blocks,
+                    |offset, len| Ok(std::borrow::Cow::Borrowed(&f.data[offset..offset + len])),
+                );
+                if corrupt {
+                    assert!(point.is_err());
+                    assert_eq!(cache.stats().point_index_bytes, 0);
+                } else {
+                    let point = point.unwrap().unwrap();
+                    assert_eq!(point.bytes.len(), charge);
+                    let v = point.locate(b"", Some(7)).unwrap();
+                    assert_eq!(
+                        v.checksum,
+                        crate::crc32::crc32(&f.data[v.offset..v.offset + v.len])
+                    );
+                    assert_eq!(cache.stats().point_index_bytes, charge);
+                    drop(point);
+                    assert_eq!(cache.stats().point_index_bytes, 0);
+                }
+            }
+        }
+    }
+    #[test]
+    fn locator_admission_respects_address_space_and_legacy_verification() {
+        let mut f = compact_fixture(4);
+        f.bytes[52..56].copy_from_slice(&0u32.to_le_bytes());
+        assert!(CompactIndex::locator_bytes(&f.bytes, f.bytes.len() as u64, 1).is_none());
+        f.bytes[52..56].copy_from_slice(&1u32.to_le_bytes());
+        assert_eq!(
+            CompactIndex::locator_bytes(&f.bytes, f.bytes.len() as u64, u64::MAX).is_some(),
+            usize::try_from(u64::MAX).is_ok()
+        );
     }
     #[test]
     fn compact_point_fingerprint_collision_still_compares_complete_key() {

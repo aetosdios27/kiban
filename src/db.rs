@@ -240,6 +240,7 @@ pub(crate) struct Version {
     levels: Vec<LevelIndex>,
     scan: std::sync::OnceLock<Option<crate::remix::Remix>>,
     scan_requested: AtomicBool,
+    l0_end: usize,
 }
 
 /// Key-ordered view of one level >= 1 of a `Version`.
@@ -271,12 +272,14 @@ impl Version {
             }
             i = end;
         }
+        let l0_end = tables.partition_point(|table| table.level == 0);
         Version {
             id,
             tables,
             levels,
             scan: std::sync::OnceLock::new(),
             scan_requested: AtomicBool::new(false),
+            l0_end,
         }
     }
 
@@ -310,7 +313,7 @@ impl Version {
     /// Merge only overlapping tables. Disjoint levels borrow their index
     /// slices instead of allocating a temporary table list for each range.
     fn table_sources<'a>(&'a self, start: &[u8], end: Option<&[u8]>) -> Vec<SourceHead<'a>> {
-        let l0_end = self.tables.partition_point(|table| table.level == 0);
+        let l0_end = self.l0_end;
         let mut sources = Vec::with_capacity(l0_end + self.levels.len());
         let overlaps = |table: &TableEntry| {
             table.last_key.as_slice() >= start
@@ -357,7 +360,7 @@ impl Version {
     }
 
     pub(crate) fn l0_count(&self) -> usize {
-        self.tables.iter().filter(|t| t.level == 0).count()
+        self.l0_end
     }
 
     #[allow(dead_code)]
@@ -399,7 +402,7 @@ fn get_from_version_at(
         Ok(())
     };
     let contains = |t: &TableEntry| key >= t.first_key.as_slice() && key <= t.last_key.as_slice();
-    for entry in version.tables.iter().rev().filter(|t| t.level == 0) {
+    for entry in version.tables[..version.l0_end].iter().rev() {
         read_amp.l0_tables_probed.increment();
         probe(entry)?;
     }
@@ -1068,6 +1071,17 @@ impl Kiban {
             wal_number = consolidated_number;
         }
 
+        let mut point_working_set = 0u64;
+        for tref in &manifest.tables {
+            let path = dir.join(file_name(tref.number, SST_EXTENSION));
+            let lease = file_cache.acquire(tref.number, &path).map_err(|e| {
+                DbError::Corrupt(format!("table {} cannot be opened: {e}", tref.number))
+            })?;
+            point_working_set = point_working_set.saturating_add(lease.len().map_err(|e| {
+                DbError::Corrupt(format!("table {} length cannot be read: {e}", tref.number))
+            })?);
+        }
+        cache.set_point_working_set(point_working_set);
         let mut tables = Vec::with_capacity(manifest.tables.len());
         for tref in &manifest.tables {
             let path = dir.join(file_name(tref.number, SST_EXTENSION));

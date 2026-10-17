@@ -1,0 +1,22 @@
+start test
+end test: 0 (14.1s)
+start release
+end release: 0 (19.3s)
+start clippy
+end clippy: 0 (2.7s)
+start fmt
+end fmt: 0 (0.5s)
+start fixed
+end fixed: 0 (0.6s)
+start long-20000-each
+end long-20000-each: 0 (153.0s)
+start loom
+end loom: 0 (31.4s)
+start site-facts
+end site-facts: 0 (0.2s)
+start readbench-clippy
+end readbench-clippy: 0 (1.7s)
+start readbench-test
+end readbench-test: 0 (4.3s)
+start readbench-fmt
+end readbench-fmt: 0 (0.1s)

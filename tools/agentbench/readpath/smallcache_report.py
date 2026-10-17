@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 import statistics
 
-PATTERN = re.compile(r'(bulk|normal)-index([01])-cache(32|None)-readers([14])-durable([01])-r([1-5])-([^-]+)-(kiban|lmdb)')
+PATTERN = re.compile(r'(bulk|normal)-index([01])-cache(32|512|None)-readers([14])-durable([01])-r([1-5])-(.+)-(kiban|lmdb)')
 
 
 def main():
@@ -32,7 +32,7 @@ def main():
             assert len(rows) == 1
             row = rows[0]
             assert row['operations'] == row['verified_calls'] == 10000
-            retained = engine == 'kiban' and indexed == '1' and cache == 'None'
+            retained = engine == 'kiban' and indexed == '1' and cache in ['None', '512']
             if not retained:
                 assert row['storage_read_bytes'] > 0, ('file pages were not cold', path)
             stages = [('point', row)]

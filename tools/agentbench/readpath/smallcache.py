@@ -38,13 +38,15 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument('action', choices=['prepare', 'profile', 'read', 'cold', 'write'])
     p.add_argument('--after', default='after')
+    p.add_argument('--candidate-data', type=Path)
+    p.add_argument('--mmap-mode', choices=['none','all'], default='none')
     p.add_argument('--out', type=Path)
     p.add_argument('--pilot', action='store_true')
     p.add_argument('--indexed', action='store_true', help='Profile indexed fixtures')
     p.add_argument('--mapped', action='store_true', help='Compare final pread versus final mapped access')
     p.add_argument('--syscalls', action='store_true', help='Diagnostic preload; never latency trials')
     p.add_argument('--layouts', nargs='+', choices=['bulk', 'normal'])
-    p.add_argument('--caches', nargs='+', choices=['32', 'default'])
+    p.add_argument('--caches', nargs='+', choices=['32', 'default', '512'])
     p.add_argument('--indexes', type=int, nargs='+', choices=[0, 1])
     a = p.parse_args()
     if a.syscalls and a.action != 'profile':
@@ -88,7 +90,9 @@ def main():
             for layout in ['bulk', 'normal']:
                 for engine in ['kiban', 'lmdb']:
                     c = config(engine, layout, a.indexed, 32)
-                    c.update(action='profile', stage=1, operations=1000000)
+                    c.update(action='profile', stage=1, operations=1000000, mmap_max_level=4294967295 if a.mmap_mode == 'all' else None)
+                    if a.candidate_data and label != 'before' and engine == 'kiban' and a.indexed:
+                        c['db'] = str(a.candidate_data / Path(c['db']).name)
                     if a.syscalls:
                         os.environ['LD_PRELOAD'] = str(ROOT/'target/smallcache/syscall_probe.so')
                     name = f'{label}-{layout}-{engine}'
@@ -99,7 +103,7 @@ def main():
     else:
         layouts = a.layouts or (['bulk'] if a.pilot else ['bulk', 'normal'])
         indexes = [bool(i) for i in a.indexes] if a.indexes else ([True] if a.pilot else [False, True])
-        caches = [32 if c == '32' else None for c in a.caches] if a.caches else ([32] if a.pilot else [32, None])
+        caches = [None if c == 'default' else int(c) for c in a.caches] if a.caches else ([32] if a.pilot else [32, None])
         for layout in layouts:
             for indexed in indexes:
                 for cache in caches:
@@ -114,6 +118,9 @@ def main():
                                         n = 10000 if a.action == 'write' else 1000000
                                         c = config(engine, layout, indexed, cache, n)
                                         c.update(action=a.action, readers=readers, durable=durable)
+                                        c['mmap_max_level'] = 4294967295 if a.mmap_mode == 'all' else None
+                                        if a.candidate_data and label != 'before' and engine == 'kiban' and indexed:
+                                            c['db'] = str(a.candidate_data / Path(c['db']).name)
                                         if a.mapped:
                                             c['mmap_max_level'] = 4294967295 if label == a.after else None
                                         if a.action == 'cold':
