@@ -1,0 +1,19 @@
+before-bulk-kiban
+Traceback (most recent call last):
+  File "/home/aetos/.t3/worktrees/kiban/t3-9b9cb0e0/tools/agentbench/readpath/smallcache.py", line 116, in <module>
+    main()
+    ~~~~^^
+  File "/home/aetos/.t3/worktrees/kiban/t3-9b9cb0e0/tools/agentbench/readpath/smallcache.py", line 84, in main
+    profiler.collect(c, folder, name+'-stacks', record=True, flamegraph=False)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/aetos/.t3/worktrees/kiban/t3-9b9cb0e0/tools/agentbench/readpath/profile.py", line 40, in collect
+    subprocess.run(['taskset','-c',str(CPU), str(PERF), *command,
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                    '--control', f'fifo:{ctl},{ack}', '-D', '-1', '--', str(BINARY), str(path)],
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                   check=True, env=env, stdout=log, stderr=log)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.14/subprocess.py", line 578, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['taskset', '-c', '6', '/home/aetos/.t3/worktrees/kiban/t3-9b9cb0e0/target/read-path-tools/root/usr/bin/perf', 'record', '-e', 'cpu_core/cycles/u', '--no-inherit', '--user-callchains', '-m', '128', '-c', '1000000', '-g', '--call-graph', 'dwarf,8192', '-o', '/home/aetos/.t3/worktrees/kiban/t3-9b9cb0e0/validation/smallcache/profile/before-bulk-kiban-stacks.data', '--control', 'fifo:/tmp/kiban-perf-210akt89/ctl,/tmp/kiban-perf-210akt89/ack', '-D', '-1', '--', '/home/aetos/.t3/worktrees/kiban/t3-9b9cb0e0/target/smallcache/bin/before', '/home/aetos/.t3/worktrees/kiban/t3-9b9cb0e0/validation/smallcache/profile/before-bulk-kiban-stacks.config.json']' returned non-zero exit status 255.

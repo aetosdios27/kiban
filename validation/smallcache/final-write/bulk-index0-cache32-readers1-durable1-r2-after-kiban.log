@@ -1,0 +1,5 @@
+kiban: remember 10000 verified calls
+kiban: recall-by-id 10000 verified calls
+kiban: recent-for-agent 10000 verified calls
+kiban: update 10000 verified calls
+kiban: mixed-90-10 10000 verified calls

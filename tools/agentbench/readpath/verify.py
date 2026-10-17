@@ -12,7 +12,7 @@ import time
 ROOT = Path(__file__).resolve().parents[3]
 parser = argparse.ArgumentParser()
 parser.add_argument('folder', type=Path)
-parser.add_argument('--cpus', default='12-21', help='build/test affinity')
+parser.add_argument('--cpus', default=os.environ.get('READBENCH_BUILD_CPUS', '12-21'), help='build/test affinity')
 parser.add_argument('--resume', action='store_true', help='reuse successful engine gates only if engine hashes and commands are identical; rerun benchmark gates')
 parser.add_argument('--quick', action='store_true', help='omit long seeded suites during iteration')
 args = parser.parse_args()
