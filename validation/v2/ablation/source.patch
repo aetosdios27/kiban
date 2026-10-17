@@ -1,0 +1,85 @@
+diff --git a/tools/agentbench/phash/src/main.rs b/tools/agentbench/phash/src/main.rs
+index 2ee71a0..a69d1da 100644
+--- a/tools/agentbench/phash/src/main.rs
++++ b/tools/agentbench/phash/src/main.rs
+@@ -51,12 +51,14 @@ struct Table {
+     first: Vec<u8>,
+     last: Vec<u8>,
+     level: u32,
++    sorted: Vec<Slot>,
++    use_sorted: bool,
+ }
+ struct Phash {
+     levels: Vec<Vec<Table>>,
+ }
+ impl Phash {
+-    fn open(path: &Path) -> Result<Self> {
++    fn open(path: &Path, use_sorted: bool) -> Result<Self> {
+         let manifest = Manifest::load(path)?.ok_or("no manifest")?;
+         let mut levels = BTreeMap::<u32, Vec<Table>>::new();
+         let (
+@@ -122,7 +124,7 @@ impl Phash {
+             mphf_ns += tick.elapsed().as_nanos();
+             let mut slots = vec![Slot::default(); keys.len()];
+             let mut occupied = vec![false; keys.len()];
+-            for (h, slot) in keys.iter().zip(pending) {
++            for (h, slot) in keys.iter().zip(pending.iter().copied()) {
+                 let i = mphf.index(h);
+                 assert!(!occupied[i]);
+                 occupied[i] = true;
+@@ -142,6 +144,8 @@ impl Phash {
+                 first,
+                 last,
+                 level: tr.level,
++                sorted: pending,
++                use_sorted,
+             });
+         }
+         assert_eq!(total, N as usize, "expected disjoint initial records");
+@@ -177,7 +181,17 @@ impl Phash {
+                 if key < t.first.as_slice() || key > t.last.as_slice() {
+                     continue;
+                 }
+-                let s = &t.slots[t.mphf.index(&h)];
++                let s = if t.use_sorted {
++                    let at = t.sorted.partition_point(|s| {
++                        let p = s.block as usize + s.entry as usize;
++                        let kl = u16::from_le_bytes(t.arena[p..p + 2].try_into().unwrap()) as usize;
++                        &t.arena[p + 4..p + 4 + kl] < key
++                    });
++                    let Some(s) = t.sorted.get(at) else { continue };
++                    s
++                } else {
++                    &t.slots[t.mphf.index(&h)]
++                };
+                 if s.fingerprint != fp {
+                     continue;
+                 }
+@@ -271,7 +285,7 @@ fn reads(variant: &str, path: &Path, miss: bool, ops: usize) -> Result<()> {
+                 ..KibanOptions::default()
+             },
+         )?),
+-        "mphf" => Backend::Mphf(Phash::open(path)?),
++        "mphf" | "sorted" => Backend::Mphf(Phash::open(path, variant == "sorted")?),
+         _ => return Err("unknown variant".into()),
+     };
+     verify(&b, miss, ops)?;
+@@ -387,6 +401,18 @@ fn floor(ops: usize) {
+     }
+ }
+ fn main() -> Result<()> {
++    let thp_disabled = std::env::var_os("PHASH_NO_THP").is_some();
++    if thp_disabled {
++        assert_eq!(
++            unsafe { libc::prctl(libc::PR_SET_THP_DISABLE, 1, 0, 0, 0) },
++            0
++        );
++    }
++    assert_eq!(
++        unsafe { libc::prctl(libc::PR_GET_THP_DISABLE, 0, 0, 0, 0) },
++        i32::from(thp_disabled)
++    );
++    eprintln!("THP disabled: {thp_disabled}");
+     assert_eq!(
+         unsafe { libc::sched_getcpu() },
+         8,
