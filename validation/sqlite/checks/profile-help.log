@@ -1,0 +1,7 @@
+usage: Untimed diagnostic counters, never concurrent with sqlite_bench.py.
+       [-h] [--raw RAW] [--out OUT]
+
+options:
+  -h, --help  show this help message and exit
+  --raw RAW
+  --out OUT

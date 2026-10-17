@@ -1,0 +1,9 @@
+usage: Five rotated durable trials: compare bundled default versus Linux fdatasync.
+Build the alternate binary first, with no timed run active:
+LIBSQLITE3_FLAGS=-DHAVE_FDATASYNC=1 CARGO_TARGET_DIR=target/sqlite/fdatasync-target   taskset -c 12-21 nice -n 10 cargo build --release --locked   --manifest-path tools/agentbench/readpath/Cargo.toml
+
+       [-h] [--raw RAW]
+
+options:
+  -h, --help  show this help message and exit
+  --raw RAW
