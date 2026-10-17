@@ -1,0 +1,1258 @@
+{
+  "maintenance": {
+    "before": [
+      {
+        "type": "maintenance",
+        "trial": 1,
+        "point_index": false,
+        "n": 1000000,
+        "flush_ns": 839611702,
+        "compaction_build_ns": 572721869,
+        "compaction_commit_ns": 2564514,
+        "input_bytes": 322946108,
+        "output_bytes": 322951967,
+        "output_files": 77,
+        "point_resident_bytes": 0,
+        "verified_records": 1000000,
+        "errors": 0
+      },
+      {
+        "type": "maintenance",
+        "trial": 1,
+        "point_index": true,
+        "n": 1000000,
+        "flush_ns": 2611956969,
+        "compaction_build_ns": 948458420,
+        "compaction_commit_ns": 20963511,
+        "input_bytes": 373279566,
+        "output_bytes": 373293666,
+        "output_files": 89,
+        "point_resident_bytes": 164352463,
+        "verified_records": 1000000,
+        "errors": 0
+      },
+      {
+        "type": "maintenance",
+        "trial": 2,
+        "point_index": true,
+        "n": 1000000,
+        "flush_ns": 1424061486,
+        "compaction_build_ns": 793192533,
+        "compaction_commit_ns": 15939828,
+        "input_bytes": 373279566,
+        "output_bytes": 373293666,
+        "output_files": 89,
+        "point_resident_bytes": 164352463,
+        "verified_records": 1000000,
+        "errors": 0
+      },
+      {
+        "type": "maintenance",
+        "trial": 2,
+        "point_index": false,
+        "n": 1000000,
+        "flush_ns": 3052086133,
+        "compaction_build_ns": 739817376,
+        "compaction_commit_ns": 3126809,
+        "input_bytes": 322946108,
+        "output_bytes": 322951967,
+        "output_files": 77,
+        "point_resident_bytes": 0,
+        "verified_records": 1000000,
+        "errors": 0
+      },
+      {
+        "type": "maintenance",
+        "trial": 3,
+        "point_index": false,
+        "n": 1000000,
+        "flush_ns": 2722642387,
+        "compaction_build_ns": 729020995,
+        "compaction_commit_ns": 10901918,
+        "input_bytes": 322946108,
+        "output_bytes": 322951967,
+        "output_files": 77,
+        "point_resident_bytes": 0,
+        "verified_records": 1000000,
+        "errors": 0
+      },
+      {
+        "type": "maintenance",
+        "trial": 3,
+        "point_index": true,
+        "n": 1000000,
+        "flush_ns": 1680996689,
+        "compaction_build_ns": 1117137764,
+        "compaction_commit_ns": 23761007,
+        "input_bytes": 373279566,
+        "output_bytes": 373293666,
+        "output_files": 89,
+        "point_resident_bytes": 164352463,
+        "verified_records": 1000000,
+        "errors": 0
+      },
+      {
+        "type": "maintenance",
+        "trial": 4,
+        "point_index": true,
+        "n": 1000000,
+        "flush_ns": 1727495176,
+        "compaction_build_ns": 927925383,
+        "compaction_commit_ns": 20349252,
+        "input_bytes": 373279566,
+        "output_bytes": 373293666,
+        "output_files": 89,
+        "point_resident_bytes": 164352463,
+        "verified_records": 1000000,
+        "errors": 0
+      },
+      {
+        "type": "maintenance",
+        "trial": 4,
+        "point_index": false,
+        "n": 1000000,
+        "flush_ns": 805146692,
+        "compaction_build_ns": 713815307,
+        "compaction_commit_ns": 2579978,
+        "input_bytes": 322946108,
+        "output_bytes": 322951967,
+        "output_files": 77,
+        "point_resident_bytes": 0,
+        "verified_records": 1000000,
+        "errors": 0
+      },
+      {
+        "type": "maintenance",
+        "trial": 5,
+        "point_index": false,
+        "n": 1000000,
+        "flush_ns": 948089417,
+        "compaction_build_ns": 1023572220,
+        "compaction_commit_ns": 3211882,
+        "input_bytes": 322946108,
+        "output_bytes": 322951967,
+        "output_files": 77,
+        "point_resident_bytes": 0,
+        "verified_records": 1000000,
+        "errors": 0
+      },
+      {
+        "type": "maintenance",
+        "trial": 5,
+        "point_index": true,
+        "n": 1000000,
+        "flush_ns": 3172270670,
+        "compaction_build_ns": 4500521380,
+        "compaction_commit_ns": 34783332,
+        "input_bytes": 373279566,
+        "output_bytes": 373293666,
+        "output_files": 89,
+        "point_resident_bytes": 164352463,
+        "verified_records": 1000000,
+        "errors": 0
+      }
+    ],
+    "after": [
+      {
+        "type": "maintenance",
+        "trial": 1,
+        "point_index": false,
+        "n": 1000000,
+        "flush_ns": 2869599429,
+        "compaction_build_ns": 2406635210,
+        "compaction_commit_ns": 17138455,
+        "input_bytes": 322946108,
+        "output_bytes": 322951967,
+        "output_files": 77,
+        "point_resident_bytes": 0,
+        "verified_records": 1000000,
+        "errors": 0
+      },
+      {
+        "type": "maintenance",
+        "trial": 1,
+        "point_index": true,
+        "n": 1000000,
+        "flush_ns": 3908169276,
+        "compaction_build_ns": 1347847619,
+        "compaction_commit_ns": 24924603,
+        "input_bytes": 349720724,
+        "output_bytes": 347833741,
+        "output_files": 83,
+        "point_resident_bytes": 189225548,
+        "verified_records": 1000000,
+        "errors": 0
+      },
+      {
+        "type": "maintenance",
+        "trial": 2,
+        "point_index": true,
+        "n": 1000000,
+        "flush_ns": 3033142693,
+        "compaction_build_ns": 2921853159,
+        "compaction_commit_ns": 35545602,
+        "input_bytes": 349720724,
+        "output_bytes": 347833741,
+        "output_files": 83,
+        "point_resident_bytes": 189225548,
+        "verified_records": 1000000,
+        "errors": 0
+      },
+      {
+        "type": "maintenance",
+        "trial": 2,
+        "point_index": false,
+        "n": 1000000,
+        "flush_ns": 1700337749,
+        "compaction_build_ns": 1193664649,
+        "compaction_commit_ns": 7535840,
+        "input_bytes": 322946108,
+        "output_bytes": 322951967,
+        "output_files": 77,
+        "point_resident_bytes": 0,
+        "verified_records": 1000000,
+        "errors": 0
+      },
+      {
+        "type": "maintenance",
+        "trial": 3,
+        "point_index": false,
+        "n": 1000000,
+        "flush_ns": 3907662932,
+        "compaction_build_ns": 1646455248,
+        "compaction_commit_ns": 4626842,
+        "input_bytes": 322946108,
+        "output_bytes": 322951967,
+        "output_files": 77,
+        "point_resident_bytes": 0,
+        "verified_records": 1000000,
+        "errors": 0
+      },
+      {
+        "type": "maintenance",
+        "trial": 3,
+        "point_index": true,
+        "n": 1000000,
+        "flush_ns": 2290989052,
+        "compaction_build_ns": 2318748449,
+        "compaction_commit_ns": 23846801,
+        "input_bytes": 349720724,
+        "output_bytes": 347833741,
+        "output_files": 83,
+        "point_resident_bytes": 189225548,
+        "verified_records": 1000000,
+        "errors": 0
+      },
+      {
+        "type": "maintenance",
+        "trial": 4,
+        "point_index": true,
+        "n": 1000000,
+        "flush_ns": 4447082842,
+        "compaction_build_ns": 1303636564,
+        "compaction_commit_ns": 22538220,
+        "input_bytes": 349720724,
+        "output_bytes": 347833741,
+        "output_files": 83,
+        "point_resident_bytes": 189225548,
+        "verified_records": 1000000,
+        "errors": 0
+      },
+      {
+        "type": "maintenance",
+        "trial": 4,
+        "point_index": false,
+        "n": 1000000,
+        "flush_ns": 1289545556,
+        "compaction_build_ns": 1032205207,
+        "compaction_commit_ns": 4491673,
+        "input_bytes": 322946108,
+        "output_bytes": 322951967,
+        "output_files": 77,
+        "point_resident_bytes": 0,
+        "verified_records": 1000000,
+        "errors": 0
+      },
+      {
+        "type": "maintenance",
+        "trial": 5,
+        "point_index": false,
+        "n": 1000000,
+        "flush_ns": 1527866415,
+        "compaction_build_ns": 1066674908,
+        "compaction_commit_ns": 14082049,
+        "input_bytes": 322946108,
+        "output_bytes": 322951967,
+        "output_files": 77,
+        "point_resident_bytes": 0,
+        "verified_records": 1000000,
+        "errors": 0
+      },
+      {
+        "type": "maintenance",
+        "trial": 5,
+        "point_index": true,
+        "n": 1000000,
+        "flush_ns": 2010863705,
+        "compaction_build_ns": 1291745160,
+        "compaction_commit_ns": 22769138,
+        "input_bytes": 349720724,
+        "output_bytes": 347833741,
+        "output_files": 83,
+        "point_resident_bytes": 189225548,
+        "verified_records": 1000000,
+        "errors": 0
+      }
+    ]
+  },
+  "reads": [
+    {
+      "layout": "bulk",
+      "cache": "512",
+      "workload": "recall-by-id",
+      "raw": {
+        "before-p50_ns": [
+          976,
+          960,
+          1152,
+          1248,
+          1184
+        ],
+        "before-lmdb-p50_ns": [
+          1440,
+          1568,
+          1536,
+          1504,
+          1664
+        ],
+        "after-p50_ns": [
+          1008,
+          976,
+          1120,
+          1312,
+          1312
+        ],
+        "after-lmdb-p50_ns": [
+          1440,
+          1440,
+          1760,
+          1600,
+          1440
+        ],
+        "before-p99_ns": [
+          1280,
+          1280,
+          1632,
+          1728,
+          1760
+        ],
+        "before-lmdb-p99_ns": [
+          1952,
+          2240,
+          2304,
+          2304,
+          2880
+        ],
+        "after-p99_ns": [
+          1312,
+          1280,
+          1536,
+          2112,
+          1952
+        ],
+        "after-lmdb-p99_ns": [
+          2048,
+          1920,
+          3008,
+          2304,
+          1952
+        ]
+      },
+      "normalized": {
+        "p50_ns": [
+          1.0327868852459015,
+          1.107037037037037,
+          0.8484848484848485,
+          0.9882051282051282,
+          1.2804804804804804
+        ],
+        "p99_ns": [
+          0.9769531250000001,
+          1.1666666666666667,
+          0.72090112640801,
+          1.222222222222222,
+          1.6363636363636362
+        ]
+      }
+    },
+    {
+      "layout": "bulk",
+      "cache": "512",
+      "workload": "recent-for-agent",
+      "raw": {
+        "before-p50_ns": [
+          3008,
+          3008,
+          3264,
+          3520,
+          3072
+        ],
+        "before-lmdb-p50_ns": [
+          2496,
+          2560,
+          2432,
+          2560,
+          2880
+        ],
+        "after-p50_ns": [
+          3264,
+          3200,
+          3328,
+          3392,
+          3456
+        ],
+        "after-lmdb-p50_ns": [
+          2560,
+          2560,
+          3200,
+          2752,
+          2688
+        ],
+        "before-p99_ns": [
+          5120,
+          4992,
+          7680,
+          8064,
+          6400
+        ],
+        "before-lmdb-p99_ns": [
+          4032,
+          5504,
+          4480,
+          5888,
+          7424
+        ],
+        "after-p99_ns": [
+          5376,
+          5120,
+          6912,
+          6912,
+          7296
+        ],
+        "after-lmdb-p99_ns": [
+          3968,
+          4096,
+          7808,
+          5632,
+          6016
+        ]
+      },
+      "normalized": {
+        "p50_ns": [
+          1.0579787234042553,
+          1.0638297872340425,
+          0.7749019607843137,
+          0.8964059196617336,
+          1.205357142857143
+        ],
+        "p99_ns": [
+          1.0669354838709677,
+          1.3782051282051282,
+          0.5163934426229508,
+          0.8961038961038961,
+          1.4068085106382981
+        ]
+      }
+    },
+    {
+      "layout": "bulk",
+      "cache": "32",
+      "workload": "recall-by-id",
+      "raw": {
+        "before-p50_ns": [
+          4032,
+          5120,
+          5120,
+          5376,
+          4480
+        ],
+        "before-lmdb-p50_ns": [
+          1568,
+          1888,
+          2016,
+          1792,
+          1760
+        ],
+        "after-p50_ns": [
+          4224,
+          4864,
+          4864,
+          4224,
+          4224
+        ],
+        "after-lmdb-p50_ns": [
+          1632,
+          1792,
+          1632,
+          1728,
+          1632
+        ],
+        "before-p99_ns": [
+          6912,
+          9728,
+          12032,
+          10240,
+          7168
+        ],
+        "before-lmdb-p99_ns": [
+          3072,
+          3136,
+          3648,
+          3328,
+          3200
+        ],
+        "after-p99_ns": [
+          7936,
+          9216,
+          11520,
+          6784,
+          6784
+        ],
+        "after-lmdb-p99_ns": [
+          2688,
+          2944,
+          2496,
+          3072,
+          2624
+        ]
+      },
+      "normalized": {
+        "p50_ns": [
+          1.0065359477124183,
+          1.0008928571428573,
+          1.173529411764706,
+          0.8148148148148149,
+          1.0168067226890758
+        ],
+        "p99_ns": [
+          1.3121693121693123,
+          1.0091533180778032,
+          1.399345335515548,
+          0.7177083333333334,
+          1.1541811846689896
+        ]
+      }
+    },
+    {
+      "layout": "bulk",
+      "cache": "32",
+      "workload": "recent-for-agent",
+      "raw": {
+        "before-p50_ns": [
+          3392,
+          3904,
+          3776,
+          3904,
+          3456
+        ],
+        "before-lmdb-p50_ns": [
+          2688,
+          3008,
+          2944,
+          3008,
+          2688
+        ],
+        "after-p50_ns": [
+          3392,
+          3840,
+          4096,
+          3712,
+          3456
+        ],
+        "after-lmdb-p50_ns": [
+          2944,
+          3072,
+          2880,
+          2880,
+          2816
+        ],
+        "before-p99_ns": [
+          7424,
+          9728,
+          11008,
+          9472,
+          7552
+        ],
+        "before-lmdb-p99_ns": [
+          6400,
+          7296,
+          9472,
+          7168,
+          6016
+        ],
+        "after-p99_ns": [
+          6528,
+          8960,
+          8448,
+          8192,
+          7424
+        ],
+        "after-lmdb-p99_ns": [
+          7040,
+          7040,
+          6400,
+          6272,
+          6016
+        ]
+      },
+      "normalized": {
+        "p50_ns": [
+          0.9130434782608696,
+          0.9631147540983607,
+          1.1088512241054616,
+          0.9930783242258653,
+          0.9545454545454545
+        ],
+        "p99_ns": [
+          0.7993730407523512,
+          0.9545454545454546,
+          1.1358139534883722,
+          0.9884169884169883,
+          0.9830508474576272
+        ]
+      }
+    },
+    {
+      "layout": "bulk",
+      "cache": "default",
+      "workload": "recall-by-id",
+      "raw": {
+        "before-p50_ns": [
+          1280,
+          1008,
+          1248,
+          1120,
+          960
+        ],
+        "before-lmdb-p50_ns": [
+          1664,
+          1600,
+          1696,
+          1440,
+          1504
+        ],
+        "after-p50_ns": [
+          1024,
+          1024,
+          1248,
+          1216,
+          1120
+        ],
+        "after-lmdb-p50_ns": [
+          1504,
+          1568,
+          1728,
+          1856,
+          1472
+        ],
+        "before-p99_ns": [
+          1984,
+          1568,
+          1824,
+          1536,
+          1312
+        ],
+        "before-lmdb-p99_ns": [
+          2880,
+          2944,
+          3136,
+          1920,
+          2560
+        ],
+        "after-p99_ns": [
+          1408,
+          1504,
+          2048,
+          1824,
+          1728
+        ],
+        "after-lmdb-p99_ns": [
+          2496,
+          2560,
+          2880,
+          3328,
+          2176
+        ]
+      },
+      "normalized": {
+        "p50_ns": [
+          0.8851063829787233,
+          1.0366051182377711,
+          0.9814814814814815,
+          0.8423645320197044,
+          1.1920289855072463
+        ],
+        "p99_ns": [
+          0.8188585607940446,
+          1.103061224489796,
+          1.2226120857699807,
+          0.6850961538461539,
+          1.5494978479196557
+        ]
+      }
+    },
+    {
+      "layout": "bulk",
+      "cache": "default",
+      "workload": "recent-for-agent",
+      "raw": {
+        "before-p50_ns": [
+          3648,
+          2944,
+          3392,
+          3328,
+          2816
+        ],
+        "before-lmdb-p50_ns": [
+          2816,
+          2688,
+          2880,
+          2496,
+          2432
+        ],
+        "after-p50_ns": [
+          3456,
+          3136,
+          3776,
+          3584,
+          3200
+        ],
+        "after-lmdb-p50_ns": [
+          2560,
+          2624,
+          3008,
+          3072,
+          2560
+        ],
+        "before-p99_ns": [
+          8704,
+          6400,
+          7552,
+          6784,
+          5760
+        ],
+        "before-lmdb-p99_ns": [
+          6528,
+          6400,
+          6656,
+          5120,
+          5504
+        ],
+        "after-p99_ns": [
+          7424,
+          6656,
+          8192,
+          7808,
+          7040
+        ],
+        "after-lmdb-p99_ns": [
+          5504,
+          5632,
+          6400,
+          6784,
+          5632
+        ]
+      },
+      "normalized": {
+        "p50_ns": [
+          1.0421052631578949,
+          1.0911983032873807,
+          1.0658370132476915,
+          0.8750000000000001,
+          1.0795454545454546
+        ],
+        "p99_ns": [
+          1.0116279069767442,
+          1.1818181818181819,
+          1.128135593220339,
+          0.8686365254538981,
+          1.1944444444444444
+        ]
+      }
+    },
+    {
+      "layout": "normal",
+      "cache": "512",
+      "workload": "recall-by-id",
+      "raw": {
+        "before-p50_ns": [
+          1344,
+          1376,
+          1216,
+          1216,
+          1248
+        ],
+        "before-lmdb-p50_ns": [
+          1504,
+          1504,
+          1312,
+          1440,
+          1440
+        ],
+        "after-p50_ns": [
+          1408,
+          1504,
+          1184,
+          1216,
+          1280
+        ],
+        "after-lmdb-p50_ns": [
+          1568,
+          1536,
+          1472,
+          1472,
+          1472
+        ],
+        "before-p99_ns": [
+          1984,
+          2240,
+          1952,
+          1888,
+          1856
+        ],
+        "before-lmdb-p99_ns": [
+          2240,
+          2240,
+          1920,
+          2112,
+          2176
+        ],
+        "after-p99_ns": [
+          2048,
+          2368,
+          1664,
+          1792,
+          2016
+        ],
+        "after-lmdb-p99_ns": [
+          2432,
+          2240,
+          2304,
+          2368,
+          2496
+        ]
+      },
+      "normalized": {
+        "p50_ns": [
+          1.0048590864917395,
+          1.0702519379844961,
+          0.8678489702517163,
+          0.9782608695652174,
+          1.0033444816053512
+        ],
+        "p99_ns": [
+          0.9507640067911715,
+          1.0571428571428572,
+          0.7103825136612022,
+          0.8465414567109483,
+          0.946949602122016
+        ]
+      }
+    },
+    {
+      "layout": "normal",
+      "cache": "512",
+      "workload": "recent-for-agent",
+      "raw": {
+        "before-p50_ns": [
+          3584,
+          3648,
+          3200,
+          3200,
+          3328
+        ],
+        "before-lmdb-p50_ns": [
+          2816,
+          2496,
+          2112,
+          2368,
+          2240
+        ],
+        "after-p50_ns": [
+          4096,
+          4032,
+          3264,
+          3328,
+          3456
+        ],
+        "after-lmdb-p50_ns": [
+          2752,
+          2880,
+          2432,
+          2432,
+          2496
+        ],
+        "before-p99_ns": [
+          7680,
+          7680,
+          7296,
+          6656,
+          7168
+        ],
+        "before-lmdb-p99_ns": [
+          6400,
+          5504,
+          4864,
+          4864,
+          4992
+        ],
+        "after-p99_ns": [
+          8448,
+          8064,
+          6528,
+          6784,
+          7168
+        ],
+        "after-lmdb-p99_ns": [
+          5376,
+          6272,
+          5248,
+          5376,
+          5504
+        ]
+      },
+      "normalized": {
+        "p50_ns": [
+          1.169435215946844,
+          0.9578947368421052,
+          0.8857894736842105,
+          1.0126315789473685,
+          0.9319526627218935
+        ],
+        "p99_ns": [
+          1.3095238095238095,
+          0.9214285714285715,
+          0.8292682926829268,
+          0.9221611721611721,
+          0.9069767441860466
+        ]
+      }
+    },
+    {
+      "layout": "normal",
+      "cache": "32",
+      "workload": "recall-by-id",
+      "raw": {
+        "before-p50_ns": [
+          4736,
+          3584,
+          4352,
+          3648,
+          3648
+        ],
+        "before-lmdb-p50_ns": [
+          1536,
+          1632,
+          1440,
+          1440,
+          1536
+        ],
+        "after-p50_ns": [
+          3520,
+          3584,
+          3520,
+          3072,
+          3584
+        ],
+        "after-lmdb-p50_ns": [
+          1504,
+          1504,
+          1376,
+          1472,
+          1440
+        ],
+        "before-p99_ns": [
+          8704,
+          6272,
+          7424,
+          6144,
+          6400
+        ],
+        "before-lmdb-p99_ns": [
+          2624,
+          2688,
+          2240,
+          2432,
+          2496
+        ],
+        "after-p99_ns": [
+          5888,
+          6272,
+          6016,
+          4352,
+          6016
+        ],
+        "after-lmdb-p99_ns": [
+          2496,
+          2304,
+          2176,
+          1984,
+          2304
+        ]
+      },
+      "normalized": {
+        "p50_ns": [
+          0.7590569292696953,
+          1.0851063829787233,
+          0.8464432284541724,
+          0.8237986270022883,
+          1.047953216374269
+        ],
+        "p99_ns": [
+          0.7111613876319759,
+          1.1666666666666667,
+          0.8341784989858011,
+          0.8682795698924731,
+          1.0183333333333333
+        ]
+      }
+    },
+    {
+      "layout": "normal",
+      "cache": "32",
+      "workload": "recent-for-agent",
+      "raw": {
+        "before-p50_ns": [
+          3904,
+          3840,
+          4096,
+          3584,
+          3776
+        ],
+        "before-lmdb-p50_ns": [
+          2432,
+          2624,
+          2432,
+          2432,
+          2624
+        ],
+        "after-p50_ns": [
+          3648,
+          3584,
+          3520,
+          3264,
+          3840
+        ],
+        "after-lmdb-p50_ns": [
+          2496,
+          3008,
+          2496,
+          2624,
+          2496
+        ],
+        "before-p99_ns": [
+          8448,
+          8192,
+          9984,
+          7552,
+          7936
+        ],
+        "before-lmdb-p99_ns": [
+          5376,
+          5760,
+          5632,
+          5120,
+          5632
+        ],
+        "after-p99_ns": [
+          7552,
+          7680,
+          6400,
+          5632,
+          8704
+        ],
+        "after-lmdb-p99_ns": [
+          5376,
+          6272,
+          5248,
+          5632,
+          4992
+        ]
+      },
+      "normalized": {
+        "p50_ns": [
+          0.9104665825977301,
+          0.8141843971631205,
+          0.8373397435897437,
+          0.8440766550522648,
+          1.0691003911342896
+        ],
+        "p99_ns": [
+          0.8939393939393939,
+          0.860969387755102,
+          0.6879299562226392,
+          0.6779661016949152,
+          1.237386269644334
+        ]
+      }
+    },
+    {
+      "layout": "normal",
+      "cache": "default",
+      "workload": "recall-by-id",
+      "raw": {
+        "before-p50_ns": [
+          1312,
+          1472,
+          1440,
+          1312,
+          1408
+        ],
+        "before-lmdb-p50_ns": [
+          1344,
+          1600,
+          1632,
+          1440,
+          1536
+        ],
+        "after-p50_ns": [
+          1344,
+          1280,
+          1472,
+          1472,
+          1280
+        ],
+        "after-lmdb-p50_ns": [
+          1408,
+          1632,
+          1600,
+          1664,
+          1536
+        ],
+        "before-p99_ns": [
+          1888,
+          2304,
+          2240,
+          2048,
+          2176
+        ],
+        "before-lmdb-p99_ns": [
+          1856,
+          2496,
+          2624,
+          2304,
+          2560
+        ],
+        "after-p99_ns": [
+          2176,
+          2016,
+          2112,
+          2240,
+          1888
+        ],
+        "after-lmdb-p99_ns": [
+          1856,
+          2624,
+          2624,
+          2752,
+          2496
+        ]
+      },
+      "normalized": {
+        "p50_ns": [
+          0.9778270509977828,
+          0.8525149190110827,
+          1.0426666666666669,
+          0.9709193245778611,
+          0.9090909090909092
+        ],
+        "p99_ns": [
+          1.152542372881356,
+          0.8323170731707317,
+          0.942857142857143,
+          0.9156976744186047,
+          0.889894419306184
+        ]
+      }
+    },
+    {
+      "layout": "normal",
+      "cache": "default",
+      "workload": "recent-for-agent",
+      "raw": {
+        "before-p50_ns": [
+          3456,
+          3904,
+          3904,
+          3520,
+          3840
+        ],
+        "before-lmdb-p50_ns": [
+          2304,
+          2752,
+          2752,
+          2432,
+          2496
+        ],
+        "after-p50_ns": [
+          3584,
+          3712,
+          4032,
+          4352,
+          3456
+        ],
+        "after-lmdb-p50_ns": [
+          2496,
+          2880,
+          2880,
+          2880,
+          2688
+        ],
+        "before-p99_ns": [
+          6912,
+          8192,
+          7808,
+          7680,
+          8064
+        ],
+        "before-lmdb-p99_ns": [
+          4352,
+          6400,
+          6144,
+          5248,
+          5248
+        ],
+        "after-p99_ns": [
+          7296,
+          7552,
+          8192,
+          8448,
+          6656
+        ],
+        "after-lmdb-p99_ns": [
+          5376,
+          6272,
+          5888,
+          5888,
+          5248
+        ]
+      },
+      "normalized": {
+        "p50_ns": [
+          0.9572649572649573,
+          0.9085610200364299,
+          0.9868852459016392,
+          1.0440404040404039,
+          0.8357142857142857
+        ],
+        "p99_ns": [
+          0.8544973544973545,
+          0.940688775510204,
+          1.0947968638631504,
+          0.9804347826086957,
+          0.8253968253968254
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,237 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 649
+#
+# Samples: 4K of event 'cpu-clock:u'
+# Event count (approx.): 22145725875
+#
+# Overhead  Command          Shared Object  Symbol                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
+# ........  ...............  .............  .................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+#
+    16.86%  db::point_index  libc.so.6      [.] __memcmp_avx2_movbe
+            |
+            ---__memcmp_avx2_movbe
+               |          
+               |--7.96%--<kiban::memtable::Memtable>::insert_entry
+               |          |          
+               |          |--4.24%--0x127
+               |          |          
+               |           --1.95%--<std::sys::pal::unix::time::Timespec>::now
+               |          
+               |--2.16%--<[usize]>::partition_point::<kiban::db::get_from_version_at::{closure#3}>
+               |          0x7
+               |          
+               |--2.16%--<kiban::sstable::block::VerifiedBlock>::get
+               |          
+               |--1.75%--<kiban::sstable::builder::TableBuilder>::add
+               |          |          
+               |           --1.43%--0x7
+               |          
+               |--1.00%--<kiban::sstable::reader::SstTable>::get
+               |          
+                --0.73%--kiban::db::point_index_tests::point_index_maintenance_measurement
+
+     7.56%  db::point_index  before-test    [.] kiban::sstable::point::construct
+            |
+            ---kiban::sstable::point::construct
+               |          
+                --0.52%--0x7a11f
+
+     7.42%  db::point_index  libc.so.6      [.] __memmove_avx_unaligned_erms
+            |
+            ---__memmove_avx_unaligned_erms
+               |          
+               |--1.66%--_int_realloc
+               |          realloc
+               |          |          
+               |           --1.61%--<alloc::raw_vec::RawVecInner>::finish_grow
+               |          
+               |--1.23%--<kiban::sstable::block::BlockBuilder>::add
+               |          
+               |--0.79%--<kiban::sstable::builder::TableBuilder>::flush_block
+               |          
+               |--0.77%--<kiban::sstable::reader::CompactionIter as core::iter::traits::iterator::Iterator>::next
+               |          
+                --0.57%--<kiban::db::Kiban>::mirror_put
+
+     5.97%  db::point_index  before-test    [.] <kiban::memtable::Memtable>::insert_entry
+            |
+            ---<kiban::memtable::Memtable>::insert_entry
+               |          
+               |--2.90%--0x127
+               |          
+                --1.13%--<std::sys::pal::unix::time::Timespec>::now
+
+     5.47%  db::point_index  libc.so.6      [.] _int_free_chunk
+            |
+            ---_int_free_chunk
+               |          
+               |--2.20%--<alloc::collections::btree::map::BTreeMap<alloc::vec::Vec<u8>, kiban::memtable::KeyVersions> as core::ops::drop::Drop>::drop
+               |          
+               |--1.02%--<kiban::sstable::builder::TableBuilder>::flush_block
+               |          
+               |--0.86%--<kiban::cache::BlockCache>::get_or_load::<kiban::sstable::SstError, <kiban::sstable::reader::SstTable>::read_block::{closure#0}>
+               |          
+                --0.61%--<kiban::db::CompactionPlan>::build
+
+     4.29%  db::point_index  libc.so.6      [.] __libc_malloc2
+            |
+            ---__libc_malloc2
+               |          
+               |--1.66%--<kiban::memtable::Memtable>::insert_entry
+               |          |          
+               |           --0.91%--0x127
+               |          
+               |--0.57%--<kiban::db::CompactionPlan>::build
+               |          
+               |--0.57%--<kiban::db::Kiban>::mirror_put
+               |          
+                --0.54%--<kiban::db::Kiban>::put::<[u8; 8], alloc::vec::Vec<u8>>
+
+     4.22%  db::point_index  before-test    [.] kiban::crc32::pclmul::update
+            |
+            ---kiban::crc32::pclmul::update
+
+     3.27%  db::point_index  before-test    [.] <kiban::sstable::reader::SstTable>::get
+            |
+            ---<kiban::sstable::reader::SstTable>::get
+
+     3.02%  db::point_index  before-test    [.] <kiban::engine_lock::ShardedRwLock<kiban::memtable::Memtable>>::write_with_hook::<<kiban::engine_lock::ShardedRwLock<kiban::memtable::Memtable>>::write::{closure#0}>
+            |
+            ---<kiban::engine_lock::ShardedRwLock<kiban::memtable::Memtable>>::write_with_hook::<<kiban::engine_lock::ShardedRwLock<kiban::memtable::Memtable>>::write::{closure#0}>
+               |          
+                --2.95%--<kiban::db::Kiban>::mirror_put
+                          |          
+                           --1.57%--0x7a11f
+
+     2.65%  db::point_index  libc.so.6      [.] cfree@GLIBC_2.2.5
+            |
+            ---cfree@GLIBC_2.2.5
+               |          
+                --2.04%--<alloc::collections::btree::map::BTreeMap<alloc::vec::Vec<u8>, kiban::memtable::KeyVersions> as core::ops::drop::Drop>::drop
+
+     2.59%  db::point_index  before-test    [.] <[usize]>::partition_point::<kiban::db::get_from_version_at::{closure#3}>
+            |
+            ---<[usize]>::partition_point::<kiban::db::get_from_version_at::{closure#3}>
+               |          
+                --2.20%--0x7
+
+     2.06%  db::point_index  before-test    [.] core::ptr::drop_glue::<kiban::engine_lock::WriteGuard<kiban::db::Kiban>>
+            |
+            ---core::ptr::drop_glue::<kiban::engine_lock::WriteGuard<kiban::db::Kiban>>
+               0x127
+
+     1.95%  db::point_index  before-test    [.] <kiban::sstable::point::PointBuilder>::finish
+            |
+            ---<kiban::sstable::point::PointBuilder>::finish
+               |          
+                --1.75%--0x106ecc
+
+     1.91%  db::point_index  libc.so.6      [.] _int_free_create_chunk
+            |
+            ---_int_free_create_chunk
+               _int_free_merge_chunk
+               |          
+                --1.88%--_int_free_chunk
+                          |          
+                           --1.52%--<alloc::collections::btree::map::BTreeMap<alloc::vec::Vec<u8>, kiban::memtable::KeyVersions> as core::ops::drop::Drop>::drop
+
+     1.88%  db::point_index  before-test    [.] kiban::db::get_from_version_at
+            |
+            ---kiban::db::get_from_version_at
+
+     1.88%  db::point_index  libc.so.6      [.] _int_malloc
+            |
+            ---_int_malloc
+               |          
+                --1.59%--__libc_malloc2
+
+     1.72%  db::point_index  before-test    [.] <kiban::bloom::BloomFilter>::build_hashes
+            |
+            ---<kiban::bloom::BloomFilter>::build_hashes
+
+     1.52%  db::point_index  libc.so.6      [.] __memset_avx2_unaligned_erms
+            |
+            ---__memset_avx2_unaligned_erms
+               |          
+               |--0.77%--<kiban::sstable::reader::CompactionIter as core::iter::traits::iterator::Iterator>::next
+               |          
+                --0.52%--<kiban::file_cache::FileLease>::read_shared_range_at
+
+     1.38%  db::point_index  before-test    [.] <alloc::collections::btree::map::BTreeMap<alloc::vec::Vec<u8>, kiban::memtable::KeyVersions> as core::ops::drop::Drop>::drop
+            |
+            ---<alloc::collections::btree::map::BTreeMap<alloc::vec::Vec<u8>, kiban::memtable::KeyVersions> as core::ops::drop::Drop>::drop
+
+     1.29%  db::point_index  before-test    [.] <kiban::sstable::point::PointIndex>::validate
+            |
+            ---<kiban::sstable::point::PointIndex>::validate
+               |          
+                --1.27%--0xe220a8397b1dcdae
+
+     1.29%  db::point_index  libc.so.6      [.] unlink_chunk.isra.0
+            |
+            ---unlink_chunk.isra.0
+               |          
+                --1.02%--_int_free_create_chunk
+                          _int_free_merge_chunk
+                          _int_free_chunk
+                          |          
+                           --0.98%--<alloc::collections::btree::map::BTreeMap<alloc::vec::Vec<u8>, kiban::memtable::KeyVersions> as core::ops::drop::Drop>::drop
+
+     1.11%  db::point_index  before-test    [.] <alloc::collections::btree::node::Handle<alloc::collections::btree::node::NodeRef<alloc::collections::btree::node::marker::Mut, alloc::vec::Vec<u8>, kiban::memtable::KeyVersions, alloc::collections::btree::node::marker::Leaf>, alloc::collections::btree::node::marker::Edge>>::insert_recursing::<alloc::alloc::Global, <alloc::collections::btree::map::entry::VacantEntry<alloc::vec::Vec<u8>, kiban::memtable::KeyVersions>>::insert_entry::{closure#0}>
+            |
+            ---<alloc::collections::btree::node::Handle<alloc::collections::btree::node::NodeRef<alloc::collections::btree::node::marker::Mut, alloc::vec::Vec<u8>, kiban::memtable::KeyVersions, alloc::collections::btree::node::marker::Leaf>, alloc::collections::btree::node::marker::Edge>>::insert_recursing::<alloc::alloc::Global, <alloc::collections::btree::map::entry::VacantEntry<alloc::vec::Vec<u8>, kiban::memtable::KeyVersions>>::insert_entry::{closure#0}>
+               |          
+                --0.52%--0x7
+
+     1.11%  db::point_index  before-test    [.] <kiban::sstable::block::VerifiedBlock>::get
+            |
+            ---<kiban::sstable::block::VerifiedBlock>::get
+
+     1.09%  db::point_index  before-test    [.] <kiban::cache::BlockCache>::get
+            |
+            ---<kiban::cache::BlockCache>::get
+               |          
+                --0.61%--0x1039
+
+     0.91%  db::point_index  before-test    [.] <kiban::sstable::builder::TableBuilder>::add
+            |
+            ---<kiban::sstable::builder::TableBuilder>::add
+
+     0.86%  db::point_index  before-test    [.] <kiban::sstable::block::BlockBuilder>::add
+            |
+            ---<kiban::sstable::block::BlockBuilder>::add
+
+     0.82%  db::point_index  libc.so.6      [.] realloc
+            |
+            ---realloc
+               |          
+                --0.66%--<alloc::raw_vec::RawVecInner>::finish_grow
+
+     0.79%  db::point_index  before-test    [.] <core::iter::adapters::flatten::FlattenCompat<core::iter::adapters::map::Map<alloc::collections::btree::map::Iter<alloc::vec::Vec<u8>, kiban::memtable::KeyVersions>, <kiban::memtable::Memtable>::iter_all_versions::{closure#0}>, core::iter::adapters::map::Map<core::iter::adapters::filter::Filter<core::iter::adapters::chain::Chain<core::iter::sources::once::Once<&kiban::memtable::Entry>, core::iter::adapters::rev::Rev<core::slice::iter::Iter<kiban::memtable::Entry>>>, <kiban::memtable::Memtable>::iter_all_versions::{closure#0}::{closure#0}>, <kiban::memtable::Memtable>::iter_all_versions::{closure#0}::{closure#1}>> as core::iter::traits::iterator::Iterator>::next
+            |
+            ---<core::iter::adapters::flatten::FlattenCompat<core::iter::adapters::map::Map<alloc::collections::btree::map::Iter<alloc::vec::Vec<u8>, kiban::memtable::KeyVersions>, <kiban::memtable::Memtable>::iter_all_versions::{closure#0}>, core::iter::adapters::map::Map<core::iter::adapters::filter::Filter<core::iter::adapters::chain::Chain<core::iter::sources::once::Once<&kiban::memtable::Entry>, core::iter::adapters::rev::Rev<core::slice::iter::Iter<kiban::memtable::Entry>>>, <kiban::memtable::Memtable>::iter_all_versions::{closure#0}::{closure#0}>, <kiban::memtable::Memtable>::iter_all_versions::{closure#0}::{closure#1}>> as core::iter::traits::iterator::Iterator>::next
+
+     0.68%  db::point_index  before-test    [.] <alloc::collections::btree::map::IntoIter<alloc::vec::Vec<u8>, kiban::memtable::KeyVersions>>::dying_next
+            |
+            ---<alloc::collections::btree::map::IntoIter<alloc::vec::Vec<u8>, kiban::memtable::KeyVersions>>::dying_next
+
+     0.64%  db::point_index  libc.so.6      [.] _int_free_merge_chunk
+            |
+            ---_int_free_merge_chunk
+               _int_free_chunk
+
+     0.61%  db::point_index  libc.so.6      [.] malloc
+            |
+            ---malloc
+
+     0.54%  db::point_index  before-test    [.] <kiban::db::CompactionPlan>::build
+            |
+            ---<kiban::db::CompactionPlan>::build
+
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

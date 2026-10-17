@@ -1,0 +1,4 @@
+{"name": "before-kiban", "start": {"total": 1249587, "idle": 1097246}, "end": {"total": 1250004, "idle": 1097655}, "busy_fraction": 0.01918465227817745}
+{"name": "before-lmdb", "start": {"total": 1250004, "idle": 1097655}, "end": {"total": 1250329, "idle": 1097975}, "busy_fraction": 0.01538461538461533}
+{"name": "after-kiban", "start": {"total": 1250329, "idle": 1097975}, "end": {"total": 1250711, "idle": 1098354}, "busy_fraction": 0.007853403141361293}
+{"name": "after-lmdb", "start": {"total": 1250711, "idle": 1098354}, "end": {"total": 1251051, "idle": 1098683}, "busy_fraction": 0.032352941176470584}

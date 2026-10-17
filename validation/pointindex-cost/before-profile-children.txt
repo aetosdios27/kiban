@@ -1,0 +1,71 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 649
+#
+# Samples: 4K of event 'cpu-clock:u'
+# Event count (approx.): 22145725875
+#
+# Children      Self  Command           Shared Object         Symbol                                                                                              
+# ........  ........  ................  ....................  ....................................................................................................
+#
+    16.86%    16.86%  db::point_index   libc.so.6             [.] __memcmp_avx2_movbe
+    16.68%     5.97%  db::point_index   before-test           [.] <kiban::memtable::Memtable>::insert_entry
+    10.55%     0.00%  db::point_index   [unknown]             [.] 0x0000000000000127
+    10.46%     0.00%  db::point_index   [unknown]             [.] 0x0000000000000007
+     9.51%     5.47%  db::point_index   libc.so.6             [.] _int_free_chunk
+     8.44%     1.38%  db::point_index   before-test           [.] <alloc::collections::btree::map::BTreeMap<alloc::vec::Vec<u8>, kiban::memtable::KeyVersions> as 
+     8.37%     7.56%  db::point_index   before-test           [.] kiban::sstable::point::construct
+     7.42%     7.42%  db::point_index   libc.so.6             [.] __memmove_avx_unaligned_erms
+     6.72%     4.29%  db::point_index   libc.so.6             [.] __libc_malloc2
+     4.77%     2.59%  db::point_index   before-test           [.] <[usize]>::partition_point::<kiban::db::get_from_version_at::{closure#3}>
+     4.63%     0.14%  db::point_index   before-test           [.] <kiban::db::Kiban>::mirror_put
+     4.29%     3.27%  db::point_index   before-test           [.] <kiban::sstable::reader::SstTable>::get
+     4.22%     4.22%  db::point_index   before-test           [.] kiban::crc32::pclmul::update
+     3.99%     0.16%  db::point_index   before-test           [.] <alloc::raw_vec::RawVecInner>::finish_grow
+     3.68%     0.64%  db::point_index   libc.so.6             [.] _int_free_merge_chunk
+     3.65%     0.82%  db::point_index   libc.so.6             [.] realloc
+     3.59%     1.11%  db::point_index   before-test           [.] <kiban::sstable::block::VerifiedBlock>::get
+     3.59%     0.00%  db::point_index   before-test           [.] <std::sys::pal::unix::time::Timespec>::now
+     3.20%     1.88%  db::point_index   libc.so.6             [.] _int_malloc
+     3.13%     3.02%  db::point_index   before-test           [.] <kiban::engine_lock::ShardedRwLock<kiban::memtable::Memtable>>::write_with_hook::<<kiban::engine
+     2.95%     1.91%  db::point_index   libc.so.6             [.] _int_free_create_chunk
+     2.93%     0.00%  db::point_index   [unknown]             [.] 0x000000000007a11f
+     2.86%     0.29%  db::point_index   libc.so.6             [.] _int_realloc
+     2.75%     0.91%  db::point_index   before-test           [.] <kiban::sstable::builder::TableBuilder>::add
+     2.65%     2.65%  db::point_index   libc.so.6             [.] cfree@GLIBC_2.2.5
+     2.59%     1.95%  db::point_index   before-test           [.] <kiban::sstable::point::PointBuilder>::finish
+     2.54%     0.54%  db::point_index   before-test           [.] <kiban::db::CompactionPlan>::build
+     2.45%     0.86%  db::point_index   before-test           [.] <kiban::sstable::block::BlockBuilder>::add
+     2.25%     1.88%  db::point_index   before-test           [.] kiban::db::get_from_version_at
+     2.20%     0.07%  db::point_index   before-test           [.] <kiban::sstable::builder::TableBuilder>::flush_block
+     2.06%     2.06%  db::point_index   before-test           [.] core::ptr::drop_glue::<kiban::engine_lock::WriteGuard<kiban::db::Kiban>>
+     1.91%     0.00%  db::point_index   [unknown]             [.] 0x0000000000106ecc
+     1.84%     0.09%  db::point_index   before-test           [.] <kiban::sstable::reader::CompactionIter as core::iter::traits::iterator::Iterator>::next
+     1.72%     1.72%  db::point_index   before-test           [.] <kiban::bloom::BloomFilter>::build_hashes
+     1.68%     1.11%  db::point_index   before-test           [.] <alloc::collections::btree::node::Handle<alloc::collections::btree::node::NodeRef<alloc::collect
+     1.68%     0.32%  db::point_index   before-test           [.] kiban::db::point_index_tests::point_index_maintenance_measurement
+     1.52%     1.52%  db::point_index   libc.so.6             [.] __memset_avx2_unaligned_erms
+     1.47%     0.00%  db::point_index   [unknown]             [.] 0x0000000000001039
+     1.32%     0.27%  db::point_index   before-test           [.] <kiban::cache::BlockCache>::get_or_load::<kiban::sstable::SstError, <kiban::sstable::reader::Sst
+     1.29%     1.29%  db::point_index   before-test           [.] <kiban::sstable::point::PointIndex>::validate
+     1.29%     1.29%  db::point_index   libc.so.6             [.] unlink_chunk.isra.0
+     1.29%     0.00%  db::point_index   [unknown]             [.] 0xe220a8397b1dcdae
+     1.09%     1.09%  db::point_index   before-test           [.] <kiban::cache::BlockCache>::get
+     1.02%     0.20%  db::point_index   before-test           [.] <kiban::db::Kiban>::put::<[u8; 8], alloc::vec::Vec<u8>>
+     1.00%     0.68%  db::point_index   before-test           [.] <alloc::collections::btree::map::IntoIter<alloc::vec::Vec<u8>, kiban::memtable::KeyVersions>>::d
+     0.79%     0.79%  db::point_index   before-test           [.] <core::iter::adapters::flatten::FlattenCompat<core::iter::adapters::map::Map<alloc::collections:
+     0.73%     0.27%  db::point_index   before-test           [.] <kiban::sstable::block::BlockIter as core::iter::traits::iterator::Iterator>::next
+     0.61%     0.61%  db::point_index   libc.so.6             [.] malloc
+     0.61%     0.00%  db::point_index   [unknown]             [.] 0x0000000000000059
+     0.59%     0.00%  db::point_index   [unknown]             [.] 0x00000000000000ae
+     0.54%     0.29%  db::point_index   before-test           [.] <kiban::db::MergeCore>::pop_best
+     0.54%     0.00%  db::point_index   [unknown]             [.] 0x0000000000000001
+     0.54%     0.00%  db::point_index   [unknown]             [.] 0x0000000000000df4
+     0.52%     0.00%  db::point_index   before-test           [.] <kiban::file_cache::FileLease>::read_shared_range_at
+     0.52%     0.00%  db::point_index   [unknown]             [.] 0x0000000000000006
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

@@ -13,8 +13,25 @@ All integers are little endian. The 64-byte section header is:
 - 8 bytes magic, u64 hash seed, u32 distinct key count N, u32 bucket count B;
 - u64 arena offset;
 - six u32 fields: address width W, key-length width K, version-count width C,
-  sequence-delta width S, tagged-value-length width L, reserved zero;
+  sequence-delta width S, tagged-value-length width L, reserved feature flags zero;
 - u64 minimum sequence number.
+
+The fixed header byte offsets are:
+
+| Offset | Bytes | Field |
+|---:|---:|---|
+| 0 | 8 | `KIBANPH3` |
+| 8 | 8 | Hash seed |
+| 16 | 4 | Distinct key count N |
+| 20 | 4 | Bucket count B |
+| 24 | 8 | Arena offset, exactly `64 + 4*B + (W+2)*N` |
+| 32 | 4 | Address width W |
+| 36 | 4 | Key-length width K |
+| 40 | 4 | Version-count width C |
+| 44 | 4 | Sequence-delta width S |
+| 48 | 4 | Tagged-value-length width L |
+| 52 | 4 | Reserved feature flags, currently zero |
+| 56 | 8 | Minimum sequence number |
 
 W is 4 or 8. K and C are 1, 2, or 4. S is 1, 2, 4, or 8. L is 2 or 4.
 B is ceil(N/2). The existing PH2 hash, fingerprint, bucket reduction and pilot
@@ -70,3 +87,37 @@ collisions, multiple anchor groups, binary/empty/long keys, large values,
 sequence extremes, wide version counts, tombstones, snapshots and reservation
 release. The two crash suites retain seed-parity format-3/PH3 writes and
 format-switching reopens.
+
+## Extension rules
+
+The flag-zero encoding above is frozen. The hash function, bucket reduction,
+pilot interpretation, slot layout, 1,024-key anchor grouping, field order and
+integer meanings are part of that encoding. Existing PH2 and flag-zero PH3
+files remain readable when a future writer adds an extension.
+
+Byte 52 provides explicit feature negotiation for extra metadata. The current
+writer emits zero and the current resident decoder rejects every nonzero value.
+The current cache-denied path checks section magic and CRC, then reads the
+unchanged sorted blocks without interpreting the point records. An extension
+must preserve that sorted representation. A future reader must check supported
+flag bits before it uses any point address and calculate every record stride
+from the flags. Unknown bits require explicit rejection or a verified sorted
+fallback. Extra header or algorithm changes require a new section magic and
+mixed-version reads, rather than changing the meaning of flag zero.
+
+Bit 0 is reserved for a possible **per-version value CRC-32/IEEE** extension.
+This reservation is a merge contract, not an implemented feature. If used, the
+flag adds one little-endian u32 immediately after each version value address.
+The version stride becomes `S + L + W + 4`; key headers, slots and the fixed
+64-byte header keep their positions. The checksum covers only the exact value
+bytes, with the same IEEE polynomial, initial state and final complement as
+`crate::crc32::crc32`. The empty-value checksum is zero, including tombstones.
+Presence comes from the flag, so a zero checksum is not an absence marker.
+
+A reader that implements bit 0 must retain the flag-zero stride `S + L + W`,
+keep the existing verification policy for records without a value checksum,
+and validate the added field before trusting separately read value bytes.
+The new writer and reader need checksum-corruption, zero/one-flag mixed-table,
+PH2 compatibility, snapshot/tombstone and cache-admission tests, plus both
+seeded suites with the new encoding represented. The small-cache task can add
+that implementation without changing the layout shipped by this task.
