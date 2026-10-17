@@ -1,0 +1,13 @@
+{
+  "backend": "lmdb",
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-a7586988/target/v2-final-data/before/lmdb-1000000-bulk",
+  "n": 1000000,
+  "operations": 1000000,
+  "k": 10,
+  "seed": 20261016,
+  "output": "",
+  "action": "profile",
+  "layout": "bulk",
+  "cache_mib": 512,
+  "stage": 1
+}

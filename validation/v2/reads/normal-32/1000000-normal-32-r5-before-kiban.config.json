@@ -1,0 +1,12 @@
+{
+  "backend": "kiban",
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-a7586988/target/v2-final-data/before/kiban-1000000-normal",
+  "n": 1000000,
+  "operations": 100000,
+  "k": 10,
+  "seed": 20261016,
+  "output": "/home/aetos/.t3/worktrees/kiban/t3-a7586988/validation/v2/reads/normal-32/1000000-normal-32-r5-before-kiban.jsonl",
+  "action": "read",
+  "layout": "normal",
+  "cache_mib": 32
+}

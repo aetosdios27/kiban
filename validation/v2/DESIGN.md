@@ -1,6 +1,8 @@
 # Optional SST point index (format 4)
 
-Status: implemented design, selected after the completed five-trial attribution ablation.
+Status: locator redesign implemented and correctness gates pass. The final paired
+p50 scan gate passes; strict tail non-regression remains on hold. See REPORT.md.
+The initial hashing design followed the completed five-trial attribution ablation.
 Bulk raw MPHF p50 is 465 ns (THP allowed) / 532 ns (disabled), versus
 2,851 / 3,203 ns for binary search in the identical decoded arena. Normal is
 741 / 749 ns versus 3,435 / 3,654 ns. See ablation/REPORT.md for paired controls
