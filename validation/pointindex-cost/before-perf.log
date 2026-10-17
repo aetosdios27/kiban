@@ -1,0 +1,10 @@
+[ perf record: Woken up 1937 times to write data ]
+Warning:
+Processed 128335 events and lost 6 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 5056 samples and lost 12.84%!
+
+[ perf record: Captured and wrote 30.339 MB target/pointindex-cost/before.perf.data (4407 samples) ]

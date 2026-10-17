@@ -1,0 +1,470 @@
+{
+  "maintenance": {
+    "before": {
+      "flush_ns": {
+        "off": 0.948089417,
+        "on": 1.727495176,
+        "paired_median": 2.1455657623194955,
+        "paired_min": 0.46658627048648893,
+        "paired_max": 3.345961481183794,
+        "unit": "s"
+      },
+      "compaction_build_ns": {
+        "off": 0.729020995,
+        "on": 0.94845842,
+        "paired_median": 1.532380784177553,
+        "paired_min": 1.0721463954909867,
+        "paired_max": 4.396877222791373,
+        "unit": "s"
+      },
+      "compaction_commit_ns": {
+        "off": 3.126809,
+        "on": 20.963511,
+        "paired_median": 7.887374233423696,
+        "paired_min": 2.1795253825978143,
+        "paired_max": 10.829579666998974,
+        "unit": "ms"
+      }
+    },
+    "after": {
+      "flush_ns": {
+        "off": 1.700337749,
+        "on": 3.033142693,
+        "paired_median": 1.3619215408618621,
+        "paired_min": 0.5862811332162259,
+        "paired_max": 3.4485659085936162,
+        "unit": "s"
+      },
+      "compaction_build_ns": {
+        "off": 1.193664649,
+        "on": 1.347847619,
+        "paired_median": 1.2629625922822922,
+        "paired_min": 0.5600548073922678,
+        "paired_max": 2.447800696324383,
+        "unit": "s"
+      },
+      "compaction_commit_ns": {
+        "off": 7.53584,
+        "on": 23.846801,
+        "paired_median": 4.716873235100533,
+        "paired_min": 1.454308629336775,
+        "paired_max": 5.154012391173072,
+        "unit": "ms"
+      }
+    }
+  },
+  "reads": [
+    {
+      "layout": "bulk",
+      "cache": "512",
+      "workload": "recall-by-id",
+      "normalized": {
+        "p50_ns": {
+          "median": 1.0327868852459015,
+          "minimum": 0.8484848484848485,
+          "maximum": 1.2804804804804804
+        },
+        "p99_ns": {
+          "median": 1.1666666666666667,
+          "minimum": 0.72090112640801,
+          "maximum": 1.6363636363636362
+        }
+      },
+      "after_point_lmdb_p50": 0.7
+    },
+    {
+      "layout": "bulk",
+      "cache": "512",
+      "workload": "recent-for-agent",
+      "normalized": {
+        "p50_ns": {
+          "median": 1.0579787234042553,
+          "minimum": 0.7749019607843137,
+          "maximum": 1.205357142857143
+        },
+        "p99_ns": {
+          "median": 1.0669354838709677,
+          "minimum": 0.5163934426229508,
+          "maximum": 1.4068085106382981
+        }
+      },
+      "after_point_lmdb_p50": 1.25
+    },
+    {
+      "layout": "bulk",
+      "cache": "32",
+      "workload": "recall-by-id",
+      "normalized": {
+        "p50_ns": {
+          "median": 1.0065359477124183,
+          "minimum": 0.8148148148148149,
+          "maximum": 1.173529411764706
+        },
+        "p99_ns": {
+          "median": 1.1541811846689896,
+          "minimum": 0.7177083333333334,
+          "maximum": 1.399345335515548
+        }
+      },
+      "after_point_lmdb_p50": 2.588235294117647
+    },
+    {
+      "layout": "bulk",
+      "cache": "32",
+      "workload": "recent-for-agent",
+      "normalized": {
+        "p50_ns": {
+          "median": 0.9631147540983607,
+          "minimum": 0.9130434782608696,
+          "maximum": 1.1088512241054616
+        },
+        "p99_ns": {
+          "median": 0.9830508474576272,
+          "minimum": 0.7993730407523512,
+          "maximum": 1.1358139534883722
+        }
+      },
+      "after_point_lmdb_p50": 1.25
+    },
+    {
+      "layout": "bulk",
+      "cache": "default",
+      "workload": "recall-by-id",
+      "normalized": {
+        "p50_ns": {
+          "median": 0.9814814814814815,
+          "minimum": 0.8423645320197044,
+          "maximum": 1.1920289855072463
+        },
+        "p99_ns": {
+          "median": 1.103061224489796,
+          "minimum": 0.6850961538461539,
+          "maximum": 1.5494978479196557
+        }
+      },
+      "after_point_lmdb_p50": 0.6808510638297872
+    },
+    {
+      "layout": "bulk",
+      "cache": "default",
+      "workload": "recent-for-agent",
+      "normalized": {
+        "p50_ns": {
+          "median": 1.0658370132476915,
+          "minimum": 0.8750000000000001,
+          "maximum": 1.0911983032873807
+        },
+        "p99_ns": {
+          "median": 1.128135593220339,
+          "minimum": 0.8686365254538981,
+          "maximum": 1.1944444444444444
+        }
+      },
+      "after_point_lmdb_p50": 1.25
+    },
+    {
+      "layout": "normal",
+      "cache": "512",
+      "workload": "recall-by-id",
+      "normalized": {
+        "p50_ns": {
+          "median": 1.0033444816053512,
+          "minimum": 0.8678489702517163,
+          "maximum": 1.0702519379844961
+        },
+        "p99_ns": {
+          "median": 0.946949602122016,
+          "minimum": 0.7103825136612022,
+          "maximum": 1.0571428571428572
+        }
+      },
+      "after_point_lmdb_p50": 0.8695652173913043
+    },
+    {
+      "layout": "normal",
+      "cache": "512",
+      "workload": "recent-for-agent",
+      "normalized": {
+        "p50_ns": {
+          "median": 0.9578947368421052,
+          "minimum": 0.8857894736842105,
+          "maximum": 1.169435215946844
+        },
+        "p99_ns": {
+          "median": 0.9214285714285715,
+          "minimum": 0.8292682926829268,
+          "maximum": 1.3095238095238095
+        }
+      },
+      "after_point_lmdb_p50": 1.3846153846153846
+    },
+    {
+      "layout": "normal",
+      "cache": "32",
+      "workload": "recall-by-id",
+      "normalized": {
+        "p50_ns": {
+          "median": 0.8464432284541724,
+          "minimum": 0.7590569292696953,
+          "maximum": 1.0851063829787233
+        },
+        "p99_ns": {
+          "median": 0.8682795698924731,
+          "minimum": 0.7111613876319759,
+          "maximum": 1.1666666666666667
+        }
+      },
+      "after_point_lmdb_p50": 2.382978723404255
+    },
+    {
+      "layout": "normal",
+      "cache": "32",
+      "workload": "recent-for-agent",
+      "normalized": {
+        "p50_ns": {
+          "median": 0.8440766550522648,
+          "minimum": 0.8141843971631205,
+          "maximum": 1.0691003911342896
+        },
+        "p99_ns": {
+          "median": 0.860969387755102,
+          "minimum": 0.6779661016949152,
+          "maximum": 1.237386269644334
+        }
+      },
+      "after_point_lmdb_p50": 1.4102564102564104
+    },
+    {
+      "layout": "normal",
+      "cache": "default",
+      "workload": "recall-by-id",
+      "normalized": {
+        "p50_ns": {
+          "median": 0.9709193245778611,
+          "minimum": 0.8525149190110827,
+          "maximum": 1.0426666666666669
+        },
+        "p99_ns": {
+          "median": 0.9156976744186047,
+          "minimum": 0.8323170731707317,
+          "maximum": 1.152542372881356
+        }
+      },
+      "after_point_lmdb_p50": 0.8846153846153846
+    },
+    {
+      "layout": "normal",
+      "cache": "default",
+      "workload": "recent-for-agent",
+      "normalized": {
+        "p50_ns": {
+          "median": 0.9572649572649573,
+          "minimum": 0.8357142857142857,
+          "maximum": 1.0440404040404039
+        },
+        "p99_ns": {
+          "median": 0.940688775510204,
+          "minimum": 0.8253968253968254,
+          "maximum": 1.0947968638631504
+        }
+      },
+      "after_point_lmdb_p50": 1.4
+    }
+  ],
+  "space": [
+    {
+      "label": "before",
+      "layout": "bulk",
+      "sst_bytes": 410177250,
+      "point_bytes": 80333373,
+      "files": 1,
+      "bytes_per_key": 80.333373
+    },
+    {
+      "label": "before",
+      "layout": "normal",
+      "sst_bytes": 410198054,
+      "point_bytes": 80337159,
+      "files": 99,
+      "bytes_per_key": 80.337159
+    },
+    {
+      "label": "after",
+      "layout": "bulk",
+      "sst_bytes": 360945109,
+      "point_bytes": 31101232,
+      "files": 1,
+      "bytes_per_key": 31.101232
+    },
+    {
+      "label": "after",
+      "layout": "normal",
+      "sst_bytes": 361480243,
+      "point_bytes": 31622158,
+      "files": 94,
+      "bytes_per_key": 31.622158
+    },
+    {
+      "label": "off",
+      "layout": "bulk",
+      "sst_bytes": 329843853,
+      "point_bytes": 0,
+      "files": 1,
+      "bytes_per_key": 0
+    },
+    {
+      "label": "off",
+      "layout": "normal",
+      "sst_bytes": 329852455,
+      "point_bytes": 0,
+      "files": 84,
+      "bytes_per_key": 0
+    }
+  ],
+  "host": [
+    {
+      "case": "bulk-32",
+      "cpu9_busy": {
+        "median": 0.19511494252873562,
+        "minimum": 0.03976143141153077,
+        "maximum": 0.3136363636363636
+      },
+      "peak_rss_mib": {
+        "before": [
+          63.2109375,
+          63.296875,
+          63.296875,
+          63.4375,
+          63.19921875
+        ],
+        "after": [
+          63.3359375,
+          63.46484375,
+          63.2265625,
+          63.41015625,
+          63.44921875
+        ]
+      }
+    },
+    {
+      "case": "bulk-512",
+      "cpu9_busy": {
+        "median": 0.0398725094282949,
+        "minimum": 0.0,
+        "maximum": 0.1827731092436975
+      },
+      "peak_rss_mib": {
+        "before": [
+          422.29296875,
+          421.3359375,
+          422.21875,
+          422.1015625,
+          422.125
+        ],
+        "after": [
+          367.30078125,
+          367.30859375,
+          367.30078125,
+          362.91015625,
+          367.18359375
+        ]
+      }
+    },
+    {
+      "case": "bulk-default",
+      "cpu9_busy": {
+        "median": 0.12496191135734075,
+        "minimum": 0.015873015873015928,
+        "maximum": 0.21014492753623193
+      },
+      "peak_rss_mib": {
+        "before": [
+          422.25390625,
+          422.25390625,
+          422.2890625,
+          422.29296875,
+          422.453125
+        ],
+        "after": [
+          367.5859375,
+          367.24609375,
+          367.19921875,
+          367.3828125,
+          367.26171875
+        ]
+      }
+    },
+    {
+      "case": "normal-32",
+      "cpu9_busy": {
+        "median": 0.04764984727345567,
+        "minimum": 0.028301886792452824,
+        "maximum": 0.16221033868092694
+      },
+      "peak_rss_mib": {
+        "before": [
+          61.57421875,
+          61.51171875,
+          61.35546875,
+          61.46875,
+          61.4453125
+        ],
+        "after": [
+          61.40625,
+          61.421875,
+          61.60546875,
+          61.25,
+          61.45703125
+        ]
+      }
+    },
+    {
+      "case": "normal-512",
+      "cpu9_busy": {
+        "median": 0.055932740398759784,
+        "minimum": 0.03669724770642202,
+        "maximum": 0.10463121783876506
+      },
+      "peak_rss_mib": {
+        "before": [
+          469.578125,
+          440.4453125,
+          467.578125,
+          469.17578125,
+          469.328125
+        ],
+        "after": [
+          393.9609375,
+          378.921875,
+          403.2890625,
+          403.08203125,
+          403.171875
+        ]
+      }
+    },
+    {
+      "case": "normal-default",
+      "cpu9_busy": {
+        "median": 0.047688488057312906,
+        "minimum": 0.02547770700636942,
+        "maximum": 0.06349206349206349
+      },
+      "peak_rss_mib": {
+        "before": [
+          432.87109375,
+          442.85546875,
+          450.5078125,
+          436.890625,
+          445.1875
+        ],
+        "after": [
+          391.1171875,
+          389.61328125,
+          397.40625,
+          398.7265625,
+          396.6875
+        ]
+      }
+    }
+  ]
+}

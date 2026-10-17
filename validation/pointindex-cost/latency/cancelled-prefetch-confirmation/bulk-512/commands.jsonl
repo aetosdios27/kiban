@@ -1,0 +1,5 @@
+{"config": "1000000-bulk-512-r1-before-kiban.config.json", "started": 1792274006.7843788, "ended": 1792274010.8543184, "load": [4.14453125, 4.31787109375, 4.7314453125], "affinity": "8"}
+{"config": "1000000-bulk-512-r1-before-lmdb.config.json", "started": 1792274010.8551354, "ended": 1792274014.0161545, "load": [4.1328125, 4.3125, 4.72705078125], "affinity": "8"}
+{"config": "1000000-bulk-512-r1-after-kiban.config.json", "started": 1792274014.0171385, "ended": 1792274018.0617802, "load": [4.20263671875, 4.32421875, 4.72900390625], "affinity": "8"}
+{"config": "1000000-bulk-512-r1-after-lmdb.config.json", "started": 1792274018.0625863, "ended": 1792274021.3738704, "load": [4.20263671875, 4.32421875, 4.72900390625], "affinity": "8"}
+{"config": "1000000-bulk-512-r2-after-kiban.config.json", "started": 1792274021.3747435, "ended": 1792274025.047885, "load": [4.10595703125, 4.3017578125, 4.71923828125], "affinity": "8"}

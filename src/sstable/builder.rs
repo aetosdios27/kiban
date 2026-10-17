@@ -56,6 +56,14 @@ impl TableBuilder {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn with_legacy_point_index() -> Self {
+        Self {
+            point: Some(PointBuilder::legacy()),
+            ..Self::default()
+        }
+    }
+
     /// Bytes written to the output so far, including the open block —
     /// a lower bound on the finished file size.
     pub fn approximate_size(&self) -> usize {

@@ -1,0 +1,10 @@
+{
+  "direct": {
+    "binary_sha256": "a72bb498f75e12586a0b5b7e2f149b30999317682c71447d209b2a431a8368cc",
+    "text_sha256": "0fab08232f68b5f203f4795a9851674efdff8335aaeca67f5964c626c407a880"
+  },
+  "final-readbench": {
+    "binary_sha256": "90b4327c2047b3cce8de5d0fbac8e56ed04fdb1ad0468f5414074227563dd6ed",
+    "text_sha256": "0fab08232f68b5f203f4795a9851674efdff8335aaeca67f5964c626c407a880"
+  }
+}

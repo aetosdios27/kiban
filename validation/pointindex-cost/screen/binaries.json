@@ -1,0 +1,18 @@
+{
+  "before": {
+    "path": "/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-cost/bin/before",
+    "sha256": "4db26cea86b18f90ebb91fb05864eb5b2b0228d01bff9037415913477f55ed77"
+  },
+  "before-test": {
+    "path": "/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-cost/bin/before-test",
+    "sha256": "659ffb17594160bb6eaa3209964118bb83cc8d7e0733ad04d20ebfc2698cc3b4"
+  },
+  "after": {
+    "path": "/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-cost/bin/after",
+    "sha256": "8ceafa5b6ffe8dc395181c3c996797ddb3c0bc4660c2c2502c419cb5db95b91e"
+  },
+  "after-test": {
+    "path": "/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-cost/bin/after-test",
+    "sha256": "f981d8b22b9bdc476a7137aa96edd9b5e0c94f91bc73254921555a8e0ab3c4bb"
+  }
+}

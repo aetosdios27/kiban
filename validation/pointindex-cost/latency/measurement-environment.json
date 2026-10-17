@@ -1,0 +1,8 @@
+{
+  "cpu": 8,
+  "driver_and_child_nice": 10,
+  "build_test_cpu": "12-21",
+  "build_test_nice": 10,
+  "priority_evidence": "All recorded task launch commands use nice -n 10; taskset changes affinity without changing priority.",
+  "sibling_idle_certified": false
+}

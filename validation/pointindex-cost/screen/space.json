@@ -1,0 +1,34 @@
+[
+  {
+    "label": "before",
+    "layout": "bulk",
+    "sst_bytes": 410177250,
+    "point_bytes": 80333373,
+    "files": 1,
+    "bytes_per_key": 80.333373
+  },
+  {
+    "label": "before",
+    "layout": "normal",
+    "sst_bytes": 410198054,
+    "point_bytes": 80337159,
+    "files": 99,
+    "bytes_per_key": 80.337159
+  },
+  {
+    "label": "after",
+    "layout": "bulk",
+    "sst_bytes": 360945109,
+    "point_bytes": 31101232,
+    "files": 1,
+    "bytes_per_key": 31.101232
+  },
+  {
+    "label": "after",
+    "layout": "normal",
+    "sst_bytes": 361480243,
+    "point_bytes": 31622158,
+    "files": 94,
+    "bytes_per_key": 31.622158
+  }
+]

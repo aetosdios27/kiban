@@ -289,7 +289,7 @@ impl SstTable {
                 let header = lease
                     .read_range_at(path, offset, 8)
                     .map_err(|e| bad(e.to_string()))?;
-                if header != b"KIBANPH2" {
+                if header != b"KIBANPH2" && header != b"KIBANPH3" {
                     return Err(bad("unsupported point section encoding".into()));
                 }
                 // Even an unused optional section must pass its checksum.
@@ -544,11 +544,12 @@ impl SstTable {
     /// Point lookup. Returns the newest version of `key` whose sequence
     /// number does not exceed `limit`, or `None` when provably absent.
     pub fn get(&self, key: &[u8], limit: Option<u64>) -> Result<Option<Found>, SstError> {
-        if !self.filter.may_contain(key) {
-            return Ok(None);
-        }
+        // Resident point indexes reject misses with a fingerprint and full-key check.
         if let Some(point) = &self.point {
             return Ok(point.get(key, limit));
+        }
+        if !self.filter.may_contain(key) {
+            return Ok(None);
         }
         let idx = self.index.partition_point(|e| e.separator.as_slice() < key);
         if idx == self.index.len() {

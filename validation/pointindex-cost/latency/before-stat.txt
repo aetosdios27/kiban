@@ -1,0 +1,16 @@
+# started on Sun Oct 18 03:08:10 2026
+
+
+ Performance counter stats for '/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-cost/bin/before /home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-latency/before-stat.json':
+
+       12233510991      cpu_core/cycles/u
+       16922588621      cpu_core/instructions/u
+        3441823487      cpu_core/branches/u
+           2319353      cpu_core/branch-misses/u
+         105960371      cpu_core/cache-references/u
+          74195266      cpu_core/cache-misses/u
+
+       6.379151648 seconds time elapsed
+
+       0.000000000 seconds user
+       0.000000000 seconds sys

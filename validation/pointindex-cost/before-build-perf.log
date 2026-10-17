@@ -1,0 +1,23 @@
+Events disabled
+Events enabled
+Events disabled
+Events enabled
+Events disabled
+Events enabled
+Events disabled
+Events enabled
+Events disabled
+Events enabled
+Events disabled
+Events enabled
+Events disabled
+Events enabled
+Events disabled
+Events enabled
+Events disabled
+Events enabled
+Events disabled
+Events enabled
+Events disabled
+[ perf record: Woken up 369 times to write data ]
+[ perf record: Captured and wrote 21.029 MB /home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-cost/before-build.perf.data (2211 samples) ]

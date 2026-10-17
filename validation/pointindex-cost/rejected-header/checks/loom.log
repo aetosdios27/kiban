@@ -1,0 +1,65 @@
+   Compiling rustversion v1.0.23
+   Compiling once_cell v1.21.4
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.12
+   Compiling regex-syntax v0.8.11
+   Compiling cfg-if v1.0.4
+   Compiling libc v0.2.189
+   Compiling log v0.4.34
+   Compiling pin-project-lite v0.2.17
+   Compiling lazy_static v1.5.0
+   Compiling cc v1.4.5
+   Compiling tracing-core v0.1.36
+   Compiling sharded-slab v0.1.7
+   Compiling thread_local v1.1.10
+   Compiling nu-ansi-term v0.50.3
+   Compiling smallvec v1.16.0
+   Compiling scoped-tls v1.0.1
+   Compiling tracing v0.1.44
+   Compiling tracing-log v0.2.0
+   Compiling regex-automata v0.4.18
+   Compiling generator v0.8.9
+   Compiling matchers v0.2.0
+   Compiling tracing-subscriber v0.3.23
+   Compiling loom v0.7.2
+   Compiling kiban v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-f9d8504f)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 15.39s
+     Running unittests src/lib.rs (target/debug/deps/kiban-b0c25a1e286cf3bd)
+
+running 3 tests
+test engine_lock::loom_tests::loom_single_writer_excludes_concurrent_readers ... ok
+test engine_lock::loom_tests::loom_two_writers_never_share_the_gate ... ok
+test engine_lock::loom_tests::loom_write_handoff_is_ordered_and_visible ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 351 filtered out; finished in 33.37s
+
+     Running unittests src/bin/kiban.rs (target/debug/deps/kiban-0aac9c6adfc07861)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/operations.rs (target/debug/deps/operations-21cff998e76ef758)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+     Running tests/recovery_validation.rs (target/debug/deps/recovery_validation-3a90e287f13792d8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+     Running tests/site_examples.rs (target/debug/deps/site_examples-d7be8d3783d5b338)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+   Doc-tests kiban
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

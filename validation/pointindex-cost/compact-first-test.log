@@ -1,0 +1,44 @@
+   Compiling kiban v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-f9d8504f)
+warning: type `CompactIndex` is more private than the item `PointIndex::Compact::0`
+   --> src/sstable/point.rs:498:13
+    |
+498 |     Compact(compact::CompactIndex),
+    |             ^^^^^^^^^^^^^^^^^^^^^ field `PointIndex::Compact::0` is reachable at visibility `pub(in crate::sstable)`
+    |
+note: but type `CompactIndex` is only usable at visibility `pub(in crate::sstable::point)`
+   --> src/sstable/point/compact.rs:95:1
+    |
+ 95 | pub(super) struct CompactIndex {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = note: `#[warn(private_interfaces)]` on by default
+
+warning: `kiban` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.58s
+     Running unittests src/lib.rs (target/debug/deps/kiban-60f9814aeb7cdf24)
+
+running 9 tests
+test db::point_index_tests::point_index_maintenance_measurement ... ignored, CPU-8 maintenance benchmark; set KIBAN_POINT_BENCH_N to run
+test db::point_index_tests::point_index_mixed_tables_resolve_by_sequence_across_overlapping_levels ... ok
+test db::point_index_tests::point_index_presence_is_independent_of_writer_switch_and_cache_admission ... ok
+test db::point_index_tests::indexed_scans_share_backing_blocks_without_duplicate_cache_admission ... ok
+test sstable::point::tests::point_index_bijection_property ... ok
+test sstable::point::tests::point_index_roundtrip_versions_and_binary_keys ... ok
+test db::point_index_tests::point_index_every_section_and_footer_bit_flip_is_detected_with_or_without_admission ... ok
+test db::point_index_tests::point_index_conversion_reserves_outputs_for_full_key_expansion ... FAILED
+test db::point_index_tests::point_index_randomized_mixed_formats_snapshots_and_compaction_match_model ... ok
+
+failures:
+
+---- db::point_index_tests::point_index_conversion_reserves_outputs_for_full_key_expansion stdout ----
+
+thread 'db::point_index_tests::point_index_conversion_reserves_outputs_for_full_key_expansion' (218402) panicked at src/point_index_tests.rs:298:5:
+fixture must exceed the old format-preserving bound
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    db::point_index_tests::point_index_conversion_reserves_outputs_for_full_key_expansion
+
+test result: FAILED. 7 passed; 1 failed; 1 ignored; 0 measured; 339 filtered out; finished in 0.49s
+
+error: test failed, to rerun pass `--lib`

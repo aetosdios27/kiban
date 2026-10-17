@@ -1,0 +1,26 @@
+{
+  "ph2-readbench": {
+    "path": "/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-latency/ph2-readbench",
+    "sha256": "f8010ef9351358ab3fc8a9712bae034f3fb5b7d60c0b5ce1b31c0b1fbb2fac89"
+  },
+  "direct": {
+    "path": "/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-latency/direct",
+    "sha256": "a72bb498f75e12586a0b5b7e2f149b30999317682c71447d209b2a431a8368cc"
+  },
+  "final-readbench": {
+    "path": "/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-latency/final-readbench",
+    "sha256": "90b4327c2047b3cce8de5d0fbac8e56ed04fdb1ad0468f5414074227563dd6ed"
+  },
+  "ph3-test": {
+    "path": "/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-latency/ph3-test",
+    "sha256": "71b4f6404c72cf33221dae0d4626147d43da397aea2dcdc48789d733d3f6ffa4"
+  },
+  "final-test": {
+    "path": "/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-latency/final-test",
+    "sha256": "4559f9e1ef924fdd0c613ba709429e9c47ed55c0dcca8cd59a0f3485dd329c34"
+  },
+  "ph3-original-readbench": {
+    "path": "/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-cost/bin/after",
+    "sha256": "f8df670dc0684fb5c58ce974af1d6853ec243520a2b35e98a8116f639a3ee8d7"
+  }
+}
