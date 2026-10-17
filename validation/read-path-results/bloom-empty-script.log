@@ -1,0 +1,9 @@
+    Finished `release` profile [optimized] target(s) in 0.01s
+empty(): 17 encoded bytes; decode succeeds: false
+build(empty): 18 encoded bytes; decode succeeds: true
+
+thread 'main' (546085) panicked at validation/read-path-results/bloom-empty-repro.rs:11:5:
+assertion `left == right` failed: a valid empty filter must round-trip through its public codec
+  left: None
+ right: Some(BloomFilter { bits: [0, 0, 0, 0, 0, 0, 0, 0], num_bits: 64, num_probes: 7 })
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

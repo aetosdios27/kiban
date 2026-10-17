@@ -1,0 +1,6 @@
+Events disabled
+Events enabled
+Events disabled
+{"digest":804,"errors":0,"ns":4649590137,"operations":1000000,"type":"profile"}
+[ perf record: Woken up 1389 times to write data ]
+[ perf record: Captured and wrote 173.202 MB validation/read-path-results/profile-resumed/bulk-512-w3-lmdb-stacks.data (21557 samples) ]

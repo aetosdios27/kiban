@@ -1,0 +1,12 @@
+{
+  "binary": "/home/aetos/.t3/worktrees/kiban/t3-53ad0f47/target/read-path-tools/kiban-readbench-range-alloc-final",
+  "sha256": "9afa6c894677e7f940e4984b199fb09a601caa6ae829c37d66268d2c563c4867",
+  "git_head": "1a685d16c54c1a57baea48dc13ffec12b1e32457",
+  "affinity": "3",
+  "load": [
+    25.12646484375,
+    24.8955078125,
+    24.3271484375
+  ],
+  "trials": 5
+}

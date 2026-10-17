@@ -1,0 +1,5 @@
+{
+  "binary_sha256": "f2ceb8520bdc2b4d7b80b5fdbcbf232ba15234f4a704f3ddce14324041f82326",
+  "trials": 5,
+  "scope": "Existing scalar CRC versus crc32fast 1.5.0 hardware reference; no engine change"
+}

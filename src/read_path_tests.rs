@@ -224,13 +224,19 @@ fn range_reads_skip_tables_outside_the_bounds() {
     ];
     db.version = StdArc::new(Version::new(1, tables));
     db.last_sequence = 6;
-    let (l0, leveled) = db.version.overlapping(b"c", Some(b"d"));
-    assert!(l0.is_empty());
-    let numbers: Vec<u64> = leveled[0].1.iter().map(|t| t.number).collect();
-    assert_eq!(numbers, vec![21]);
-    let (_, leveled) = db.version.overlapping(b"bb", None);
-    let numbers: Vec<u64> = leveled[0].1.iter().map(|t| t.number).collect();
-    assert_eq!(numbers, vec![21, 22]);
+    // Opening the fixture warmed its single-block tables. Count actual
+    // block accesses instead of inspecting the source planner's internals.
+    let before = db.cache.stats().hits;
+    let keys: Vec<_> = db.range(b"c", b"d").map(|r| r.unwrap().0).collect();
+    assert_eq!(keys, vec![b"c".to_vec()]);
+    assert_eq!(db.cache.stats().hits - before, 1);
+    let before = db.cache.stats().hits;
+    let keys: Vec<_> = db.iter_from(b"bb").map(|r| r.unwrap().0).collect();
+    assert_eq!(
+        keys,
+        vec![b"c".to_vec(), b"d".to_vec(), b"e".to_vec(), b"f".to_vec()]
+    );
+    assert_eq!(db.cache.stats().hits - before, 2);
     let keys: Vec<Vec<u8>> = db.range(b"b", b"e").map(|r| r.unwrap().0).collect();
     assert_eq!(keys, vec![b"b".to_vec(), b"c".to_vec(), b"d".to_vec()]);
 }

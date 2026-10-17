@@ -13,6 +13,7 @@ use std::sync::Arc;
 
 use super::block::{BlockIter, VerifiedBlock};
 use super::builder::{FOOTER_LEN, FORMAT_VERSION, MAGIC};
+use super::separator::Separator;
 use super::{Kind, SstError};
 use crate::bloom::BloomFilter;
 use crate::cache::{BlockCache, CachedBlock};
@@ -20,8 +21,9 @@ use crate::crc32;
 use crate::file_cache::TableFileCache;
 use crate::range_cache::Window;
 
+#[repr(align(64))]
 struct IndexEntry {
-    separator: Vec<u8>,
+    separator: Separator,
     offset: u64,
     len: u64,
 }
@@ -654,7 +656,7 @@ fn parse_index(index_raw: &[u8], data_end: u64) -> Result<Vec<IndexEntry>, SstEr
     index
         .try_reserve(count)
         .map_err(|e| bad(format!("index allocation: {e}")))?;
-    let mut prev_separator: Option<Vec<u8>> = None;
+    let mut prev_separator: Option<&[u8]> = None;
     let mut previous_end = 0;
     for _ in 0..count {
         let sep_len = read_u32(&mut pos)? as usize;
@@ -665,7 +667,7 @@ fn parse_index(index_raw: &[u8], data_end: u64) -> Result<Vec<IndexEntry>, SstEr
         {
             return Err(bad("index entry runs past index block".to_string()));
         }
-        let separator = payload[pos..pos + sep_len].to_vec();
+        let separator = &payload[pos..pos + sep_len];
         pos += sep_len;
         let offset = u64::from_le_bytes(payload[pos..pos + 8].try_into().unwrap());
         pos += 8;
@@ -679,14 +681,14 @@ fn parse_index(index_raw: &[u8], data_end: u64) -> Result<Vec<IndexEntry>, SstEr
             return Err(bad("index entry points outside data area".to_string()));
         }
         previous_end = offset + len;
-        if let Some(prev) = &prev_separator
-            && separator <= *prev
+        if let Some(prev) = prev_separator
+            && separator <= prev
         {
             return Err(bad("separators not strictly increasing".to_string()));
         }
-        prev_separator = Some(separator.clone());
+        prev_separator = Some(separator);
         index.push(IndexEntry {
-            separator,
+            separator: Separator::new(separator),
             offset,
             len,
         });

@@ -50,7 +50,7 @@ impl BloomFilter {
 
     pub fn empty() -> Self {
         BloomFilter {
-            bits: vec![0u8; MIN_BITS / 8],
+            bits: vec![0u8; MIN_BITS / 8 + 1],
             num_bits: MIN_BITS as u64,
             num_probes: NUM_PROBES,
         }
@@ -152,6 +152,17 @@ mod tests {
             rate < 0.05,
             "false positive rate {rate:.4} exceeded 5% ({false_positives}/2000)"
         );
+    }
+
+    #[test]
+    fn empty_filter_roundtrips_through_encode_and_decode() {
+        let empty = BloomFilter::empty();
+        let decoded = BloomFilter::decode(&empty.encode());
+        assert_eq!(decoded, Some(BloomFilter::empty()));
+        let decoded = decoded.unwrap();
+        for key in [b"".as_slice(), b"a", b"hello", &[0], &[u8::MAX]] {
+            assert!(!decoded.may_contain(key));
+        }
     }
 
     #[test]

@@ -1,0 +1,362 @@
+diff --git a/src/cache.rs b/src/cache.rs
+index b799139..b046a90 100644
+--- a/src/cache.rs
++++ b/src/cache.rs
+@@ -204,6 +204,30 @@ impl BlockCache {
+         Some(block)
+     }
+ 
++    /// Borrows a resident block for a bounded point lookup. The callback must
++    /// not reenter this cache: membership remains read-locked until it returns.
++    /// Large blocks return owned storage for decoding after the guard drops.
++    pub(crate) fn with_point<R>(
++        &self,
++        key: &CacheKey,
++        read: impl FnOnce(&CachedBlock) -> R,
++    ) -> Option<Result<R, CachedBlock>> {
++        let inner = self.inner.read().expect("block cache lock poisoned");
++        let Some(entry) = inner.map.get(key) else {
++            self.misses.increment();
++            return None;
++        };
++        if !entry.referenced.load(Ordering::Relaxed) {
++            entry.referenced.store(true, Ordering::Relaxed);
++        }
++        self.hits.increment();
++        // Large values/keys must not extend the membership lock's lifetime.
++        if entry.block.data.len() > 16 * 1024 {
++            return Some(Err(entry.block.clone()));
++        }
++        Some(Ok(read(&entry.block)))
++    }
++
+     /// Inserts a verified block. Oversized blocks bypass admission without
+     /// disturbing resident entries. CLOCK work is deliberately insertion
+     /// work, never hit-path work.
+@@ -268,14 +292,40 @@ impl BlockCache {
+     /// retry as a fresh leader rather than waiting on a condvar nothing
+     /// will ever signal again.
+     pub fn get_or_load<E, F>(&self, key: CacheKey, load: F) -> Result<CachedBlock, String>
++    where
++        F: FnOnce() -> Result<CachedBlock, E>,
++        E: std::fmt::Display,
++    {
++        self.load_after_lookup(key, load, true)
++    }
++
++    pub(crate) fn get_or_load_after_miss<E, F>(
++        &self,
++        key: CacheKey,
++        load: F,
++    ) -> Result<CachedBlock, String>
++    where
++        F: FnOnce() -> Result<CachedBlock, E>,
++        E: std::fmt::Display,
++    {
++        self.load_after_lookup(key, load, false)
++    }
++
++    fn load_after_lookup<E, F>(
++        &self,
++        key: CacheKey,
++        load: F,
++        mut check_cache: bool,
++    ) -> Result<CachedBlock, String>
+     where
+         F: FnOnce() -> Result<CachedBlock, E>,
+         E: std::fmt::Display,
+     {
+         loop {
+-            if let Some(hit) = self.get(&key) {
++            if check_cache && let Some(hit) = self.get(&key) {
+                 return Ok(hit);
+             }
++            check_cache = true;
+ 
+             enum Role {
+                 Leader(Arc<InFlight>),
+@@ -401,6 +451,29 @@ mod tests {
+     use std::sync::atomic::AtomicU64;
+     use std::sync::{Arc, Barrier};
+ 
++    #[test]
++    fn borrowed_point_hit_and_large_owned_fallback_preserve_evicted_bytes() {
++        let cache = BlockCache::new(64 * 1024);
++        cache.insert((1, 0), block(4096, 17));
++        assert_eq!(
++            cache
++                .with_point(&(1, 0), |block| block.data[100])
++                .unwrap()
++                .unwrap(),
++            17
++        );
++        cache.insert((2, 0), block(20 * 1024, 34));
++        let large = cache
++            .with_point(&(2, 0), |_| panic!("large block borrowed"))
++            .unwrap()
++            .unwrap_err();
++        cache.insert((3, 0), block(64 * 1024, 51));
++        assert_eq!(large.data[100], 34);
++        assert!(cache.with_point(&(1, 0), |_| ()).is_none());
++        assert_eq!(cache.stats().hits, 2);
++        assert_eq!(cache.stats().misses, 1);
++    }
++
+     fn block(size: usize, fill: u8) -> CachedBlock {
+         CachedBlock {
+             data: vec![fill; size].into(),
+@@ -689,3 +762,34 @@ mod tests {
+         );
+     }
+ }
++
++#[cfg(all(test, feature = "loom"))]
++mod point_loom {
++    use loom::sync::{Arc, RwLock};
++    use loom::thread;
++
++    #[test]
++    fn loom_borrowed_point_finishes_before_membership_can_change() {
++        loom::model(|| {
++            let slot = Arc::new(RwLock::new(Some(vec![17; 8])));
++            let reader = Arc::clone(&slot);
++            let task = thread::spawn(move || {
++                let captured = reader.read().unwrap();
++                if let Some(bytes) = &*captured {
++                    let first = bytes[0];
++                    thread::yield_now();
++                    assert!(first == 17 || first == 34);
++                    assert!(bytes.iter().all(|byte| *byte == first));
++                    bytes.to_vec()
++                } else {
++                    Vec::new()
++                }
++            });
++            *slot.write().unwrap() = None;
++            thread::yield_now();
++            *slot.write().unwrap() = Some(vec![34; 8]);
++            let value = task.join().unwrap();
++            assert!(value.is_empty() || value == vec![17; 8] || value == vec![34; 8]);
++        });
++    }
++}
+diff --git a/src/sstable/block.rs b/src/sstable/block.rs
+index 22b87b5..eba0c5c 100644
+--- a/src/sstable/block.rs
++++ b/src/sstable/block.rs
+@@ -183,47 +183,20 @@ impl VerifiedBlock {
+         }
+     }
+ 
+-    fn restart_offset(&self, i: usize) -> usize {
+-        restart_offset_of(&self.data, self.meta.restart_start, i)
+-    }
+-
+     fn header(&self, pos: usize) -> Result<(Kind, u64, usize, usize, usize), SstError> {
+         header_at(&self.data, &self.meta, pos)
+     }
+ 
+     pub fn get(&self, target: &[u8], limit: Option<u64>) -> Result<Option<Match<'_>>, SstError> {
+-        let start = seek_restart_index(&self.data, &self.meta, target)?;
+-        let mut key: Vec<u8> = Vec::new();
+-        let mut pos = self.restart_offset(start);
++        get_in_block(&self.data, &self.meta, target, limit)
++    }
+ 
+-        loop {
+-            if pos >= self.meta.entries_end {
+-                return Ok(None);
+-            }
+-            let (kind, seq, shared, non_shared, value_len) = self.header(pos)?;
+-            if shared > key.len() {
+-                return Err(SstError::Corrupt(
+-                    "shared length exceeds previous key".to_string(),
+-                ));
+-            }
+-            key.truncate(shared);
+-            key.extend_from_slice(
+-                &self.data[pos + ENTRY_FIXED_LEN..pos + ENTRY_FIXED_LEN + non_shared],
+-            );
+-            let value = entry_value(&self.data, pos, kind, non_shared, value_len);
+-            if key.as_slice() == target {
+-                // visibility limit: skip versions newer than the snapshot
+-                // bound; entries for one key are seq-descending, so the
+-                // first qualifying match is the newest visible version
+-                if limit.is_none_or(|lim| seq <= lim) {
+-                    return Ok(Some(Match { kind, seq, value }));
+-                }
+-            }
+-            if key.as_slice() > target {
+-                return Ok(None);
+-            }
+-            pos += ENTRY_FIXED_LEN + non_shared + value_len;
+-        }
++    pub(crate) fn get_from_cached<'a>(
++        cached: &'a CachedBlock,
++        target: &[u8],
++        limit: Option<u64>,
++    ) -> Result<Option<Match<'a>>, SstError> {
++        get_in_block(&cached.data, &cached.meta, target, limit)
+     }
+ 
+     /// First entry in the block.
+@@ -247,6 +220,44 @@ impl VerifiedBlock {
+     }
+ }
+ 
++fn get_in_block<'a>(
++    data: &'a [u8],
++    meta: &BlockMeta,
++    target: &[u8],
++    limit: Option<u64>,
++) -> Result<Option<Match<'a>>, SstError> {
++    let start = seek_restart_index(data, meta, target)?;
++    let mut key: Vec<u8> = Vec::new();
++    let mut pos = restart_offset_of(data, meta.restart_start, start);
++
++    loop {
++        if pos >= meta.entries_end {
++            return Ok(None);
++        }
++        let (kind, seq, shared, non_shared, value_len) = header_at(data, meta, pos)?;
++        if shared > key.len() {
++            return Err(SstError::Corrupt(
++                "shared length exceeds previous key".to_string(),
++            ));
++        }
++        key.truncate(shared);
++        key.extend_from_slice(&data[pos + ENTRY_FIXED_LEN..pos + ENTRY_FIXED_LEN + non_shared]);
++        let value = entry_value(data, pos, kind, non_shared, value_len);
++        if key.as_slice() == target {
++            // visibility limit: skip versions newer than the snapshot
++            // bound; entries for one key are seq-descending, so the
++            // first qualifying match is the newest visible version
++            if limit.is_none_or(|lim| seq <= lim) {
++                return Ok(Some(Match { kind, seq, value }));
++            }
++        }
++        if key.as_slice() > target {
++            return Ok(None);
++        }
++        pos += ENTRY_FIXED_LEN + non_shared + value_len;
++    }
++}
++
+ fn header_at(
+     data: &[u8],
+     meta: &BlockMeta,
+diff --git a/src/sstable/reader.rs b/src/sstable/reader.rs
+index de093f8..71bda0d 100644
+--- a/src/sstable/reader.rs
++++ b/src/sstable/reader.rs
+@@ -293,46 +293,44 @@ impl SstTable {
+     /// (leases a descriptor, or slices the mapping); the rest wait for
+     /// its result.
+     fn read_block(&self, entry: &IndexEntry) -> Result<VerifiedBlock, SstError> {
+-        let key = (self.number, entry.offset);
++        let cached = self
++            .block_cache
++            .get_or_load((self.number, entry.offset), || self.load_block(entry))
++            .map_err(SstError::Corrupt)?;
++        Ok(VerifiedBlock::from_cached(cached))
++    }
++
++    fn load_block(&self, entry: &IndexEntry) -> Result<CachedBlock, SstError> {
+         let number = self.number;
+         let path = &self.path;
+         let file_cache = &self.file_cache;
+         let mmap = self.mmap.as_ref();
+-        let cached = self
+-            .block_cache
+-            .get_or_load(key, || -> Result<CachedBlock, SstError> {
+-                let data = if let Some(m) = mmap {
+-                    let start = entry.offset as usize;
+-                    let end = start + entry.len as usize;
+-                    let slice = m.as_slice();
+-                    if end > slice.len() {
+-                        return Err(SstError::Corrupt(format!(
+-                            "mmap read past end of file at offset {}",
+-                            entry.offset
+-                        )));
+-                    }
+-                    slice[start..end].to_vec()
+-                } else {
+-                    let lease = file_cache.acquire(number, path).map_err(|e| {
+-                        SstError::Corrupt(format!("table {number} cannot be opened: {e}"))
+-                    })?;
+-                    lease
+-                        .read_range_at(path, entry.offset, entry.len)
+-                        .map_err(|e| {
+-                            SstError::Corrupt(format!(
+-                                "read failed at offset {}: {e}",
+-                                entry.offset
+-                            ))
+-                        })?
+-                };
+-                let meta = VerifiedBlock::verify(&data)?;
+-                Ok(CachedBlock {
+-                    data: Arc::from(data),
+-                    meta,
+-                })
+-            })
+-            .map_err(SstError::Corrupt)?;
+-        Ok(VerifiedBlock::from_cached(cached))
++        let data = if let Some(m) = mmap {
++            let start = entry.offset as usize;
++            let end = start + entry.len as usize;
++            let slice = m.as_slice();
++            if end > slice.len() {
++                return Err(SstError::Corrupt(format!(
++                    "mmap read past end of file at offset {}",
++                    entry.offset
++                )));
++            }
++            slice[start..end].to_vec()
++        } else {
++            let lease = file_cache
++                .acquire(number, path)
++                .map_err(|e| SstError::Corrupt(format!("table {number} cannot be opened: {e}")))?;
++            lease
++                .read_range_at(path, entry.offset, entry.len)
++                .map_err(|e| {
++                    SstError::Corrupt(format!("read failed at offset {}: {e}", entry.offset))
++                })?
++        };
++        let meta = VerifiedBlock::verify(&data)?;
++        Ok(CachedBlock {
++            data: Arc::from(data),
++            meta,
++        })
+     }
+ 
+     /// Sequential-iterator block read. Identical to `read_block` unless the
+@@ -453,7 +451,28 @@ impl SstTable {
+         if idx == self.index.len() {
+             return Ok(None);
+         }
+-        let block = self.read_block(&self.index[idx])?;
++        let entry = &self.index[idx];
++        let cache_key = (self.number, entry.offset);
++        let read = |cached: &CachedBlock| {
++            VerifiedBlock::get_from_cached(cached, key, limit).map(|found| {
++                found.map(|found| Found {
++                    kind: found.kind,
++                    seq: found.seq,
++                    value: found.value.to_vec(),
++                })
++            })
++        };
++        if let Some(found) = self.block_cache.with_point(&cache_key, read) {
++            return match found {
++                Ok(found) => found,
++                Err(cached) => read(&cached),
++            };
++        }
++        let cached = self
++            .block_cache
++            .get_or_load_after_miss(cache_key, || self.load_block(entry))
++            .map_err(SstError::Corrupt)?;
++        let block = VerifiedBlock::from_cached(cached);
+         Ok(block.get(key, limit)?.map(|m| Found {
+             kind: m.kind,
+             seq: m.seq,

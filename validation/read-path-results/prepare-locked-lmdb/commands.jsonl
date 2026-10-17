@@ -1,0 +1,4 @@
+{"config": "10000-bulk-lmdb-prepare.config.json", "started": 1792171656.4899418, "ended": 1792171656.5404816, "load": [23.21728515625, 22.8603515625, 16.580078125], "affinity": "3"}
+{"config": "10000-normal-lmdb-prepare.config.json", "started": 1792171656.541019, "ended": 1792171656.584948, "load": [23.21728515625, 22.8603515625, 16.580078125], "affinity": "3"}
+{"config": "1000000-bulk-lmdb-prepare.config.json", "started": 1792171656.6784797, "ended": 1792171660.7878911, "load": [23.03955078125, 22.8291015625, 16.60400390625], "affinity": "3"}
+{"config": "1000000-normal-lmdb-prepare.config.json", "started": 1792171660.8738093, "ended": 1792171664.6297731, "load": [22.8759765625, 22.79833984375, 16.6279296875], "affinity": "3"}

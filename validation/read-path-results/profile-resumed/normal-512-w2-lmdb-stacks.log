@@ -1,0 +1,11 @@
+Events disabled
+Events enabled
+Events disabled
+{"digest":353027,"errors":0,"ns":2165065086,"operations":1000000,"type":"profile"}
+[ perf record: Woken up 705 times to write data ]
+Warning:
+Processed 11686 events and lost 1 chunks!
+
+Check IO/CPU overload!
+
+[ perf record: Captured and wrote 87.782 MB validation/read-path-results/profile-resumed/normal-512-w2-lmdb-stacks.data (10925 samples) ]

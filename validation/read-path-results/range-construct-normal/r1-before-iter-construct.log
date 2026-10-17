@@ -1,0 +1,4 @@
+Events disabled
+Events enabled
+Events disabled
+{"errors":0,"layout":"normal","name":"iter-construct","ns":393236322,"ns_per_op":393.236322,"operations":1000000,"type":"micro"}

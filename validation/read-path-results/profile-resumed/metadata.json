@@ -1,0 +1,6 @@
+{
+  "binary": "/home/aetos/.t3/worktrees/kiban/t3-53ad0f47/tools/agentbench/readpath/target/release/kiban-readbench",
+  "sha256": "9e182938dbc0817ebfa8ed2b8cec4d3b91a78f4b4acdbcd86df81852e4d4a060",
+  "affinity": "3",
+  "events": "cpu_core/cycles/u,cpu_core/instructions/u,cpu_core/L1-dcache-load-misses/u,cpu_core/LLC-load-misses/u,cpu_core/branch-misses/u,cpu_core/dTLB-load-misses/u"
+}

@@ -1,0 +1,9 @@
+   Compiling kiban v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-53ad0f47)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.32s
+     Running unittests src/lib.rs (target/debug/deps/kiban-b0c25a1e286cf3bd)
+
+running 1 test
+test cache::point_loom::loom_borrowed_point_finishes_before_membership_can_change ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 333 filtered out; finished in 0.00s
+
