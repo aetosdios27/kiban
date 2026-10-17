@@ -76,3 +76,28 @@ opt-in already documents this tradeoff. All 300k sampled values passed the
 payload oracle. The initial pre-open-only cache-drop run warmed mapped data
 during open and is explicitly excluded; its zero storage/fault counters were
 caught by the report guard, not reported as a cold speedup.
+
+## Latest-K merge candidate
+
+A private enum replaced per-entry virtual table-iterator dispatch. The merge
+state refilled only the previous winner and remembered the runner-up, using
+(key, descending sequence, source index) to preserve existing tie behavior.
+It passed all workspace, fixed-crash, loom and benchmark gates. The
+[full paired matrix](LATEST.md) nevertheless established no consistent
+complete-read win:
+
+| Scenario | Latest-K before p50 / p99 | Candidate | LMDB candidate control |
+| --- | ---: | ---: | ---: |
+| bulk/32 | 4.032 / 8.064 | 4.096 / 8.960 | 3.584 / 7.168 |
+| bulk/512 | 3.968 / 7.936 | 4.224 / 8.704 | 3.520 / 7.168 |
+| normal/32 | 4.736 / 9.728 | 4.992 / 10.240 | 3.520 / 7.168 |
+| normal/512 | 4.864 / 11.264 | 4.864 / 11.264 | 3.456 / 7.552 |
+
+Microseconds, median of five trials. Control drift and overlapping ranges
+prevent a precise regression claim. In normal/512 the K/LMDB ratio improved
+1.520 → 1.407 while Kiban's absolute p50/p99 stayed unchanged; that is not a
+Kiban speedup. Bulk/512's ratio worsened 1.196 → 1.222. Removing a vtable
+call and source scans was insufficient in the complete owned-value decoding
+workload. The entire engine candidate is reverted. Its independently
+applicable [source patch](experiments/latest-merge.patch) preserves the testable
+implementation; the baseline trial halves identify the final retained engine.

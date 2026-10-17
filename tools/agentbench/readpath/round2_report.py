@@ -7,13 +7,19 @@ import statistics
 
 parser = argparse.ArgumentParser()
 parser.add_argument('folder', type=Path)
+parser.add_argument('--retained', choices=['before', 'after'], help='Report one retained engine with its matching LMDB controls')
 args = parser.parse_args()
 print('Five alternating before/after trials, each followed by its LMDB control. '
       'Latencies are median trial p50 / p99 in microseconds. All timed results '
       'are checked outside their timer, with full dataset verification before '
       'and after the reads. Write trials use fresh copies and verify the final state.\n')
-print('| Scenario | Workload | Before Kiban p50 / p99 | After Kiban p50 / p99 | After LMDB p50 / p99 | Paired after K/LMDB p50 [range] |')
-print('| --- | --- | ---: | ---: | ---: | ---: |')
+if args.retained:
+    print(f'Retained engine: `{args.retained}`; controls are from the same trial half.\n')
+    print('| Scenario | Workload | Kiban p50 / p99 | LMDB p50 / p99 | Paired K/LMDB p50 [range] |')
+    print('| --- | --- | ---: | ---: | ---: |')
+else:
+    print('| Scenario | Workload | Before Kiban p50 / p99 | After Kiban p50 / p99 | After LMDB p50 / p99 | Paired after K/LMDB p50 [range] |')
+    print('| --- | --- | ---: | ---: | ---: | ---: |')
 for folder in sorted(args.folder.iterdir()):
     if not folder.is_dir() or not (folder/'commands.jsonl').exists():
         continue
@@ -39,7 +45,9 @@ for folder in sorted(args.folder.iterdir()):
                 rows[row['workload'], trial, label, engine] = row
     for work in sorted({key[0] for key in rows}):
         cells = []
-        for label, engine in [('before', 'kiban'), ('after', 'kiban'), ('after', 'lmdb')]:
+        selected = args.retained or 'after'
+        pairs = [(selected, 'kiban'), (selected, 'lmdb')] if args.retained else [('before', 'kiban'), ('after', 'kiban'), ('after', 'lmdb')]
+        for label, engine in pairs:
             cells.append(' / '.join(f'{statistics.median(rows[work, f"r{i}", label, engine]["latency"][field]/1000 for i in range(1, 6)):.3f}' for field in ['p50_ns', 'p99_ns']))
-        ratios = [rows[work, f'r{i}', 'after', 'kiban']['latency']['p50_ns']/rows[work, f'r{i}', 'after', 'lmdb']['latency']['p50_ns'] for i in range(1, 6)]
+        ratios = [rows[work, f'r{i}', selected, 'kiban']['latency']['p50_ns']/rows[work, f'r{i}', selected, 'lmdb']['latency']['p50_ns'] for i in range(1, 6)]
         print(f'| {folder.name} | {work} | '+ ' | '.join(cells) + f' | {statistics.median(ratios):.3f} [{min(ratios):.3f}, {max(ratios):.3f}] |')

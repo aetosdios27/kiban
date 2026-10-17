@@ -548,3 +548,27 @@ with its raw evidence.
 [cold probes](read-path-results/round2/COLD.md) preserve both the wins and
 regressions. All prototypes passed their payload oracles and storage gates;
 no storage correctness bug was found. The point-read objective remains unmet.
+
+## Round 2: latest-K and retained result
+
+The concrete table-feed enum and cached merge runner were also rejected.
+Bulk/32 latest-K p50/p99 changed 4.032/8.064 → 4.096/8.960 µs;
+bulk/512 3.968/7.936 → 4.224/8.704; normal/32
+4.736/9.728 → 4.992/10.240; normal/512 stayed 4.864/11.264.
+LMDB controls also drifted. The lower normal/512 paired ratio, 1.520 → 1.407,
+therefore does not establish a Kiban speedup. The entire implementation is
+preserved as an independent source patch and reverted.
+
+[Latest-K paired matrix](read-path-results/round2/LATEST.md) includes all
+four read scenarios and fresh-copy 10k fast/durable write trials. Each stage
+has 1,000 timed calls in write trials. Workspace debug/release tests, Clippy,
+formatting, fixed corpora, loom and benchmark tests passed for the prototype.
+The restored engine's source hashes match its earlier passing baseline gates.
+
+[Final retained-engine table](read-path-results/round2/FINAL.md) selects the
+latest matrix's **before** binary and the LMDB controls from those same trial
+halves; it does not combine baseline Kiban with candidate-side LMDB.
+All experiments use five alternating trials on CPU 3; builds and storage
+gates use CPUs 2–5. The cache-budget policy is the only retained engine change.
+No public API, on-disk format, or mapping option meaning changed.
+**The target of beating LMDB on 1M point and latest-K reads remains unmet.**
