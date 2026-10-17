@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generated_at": "2026-10-16T17:18:26+00:00",
+  "generated_at": "2026-10-17T08:04:10+00:00",
   "engine": {
     "version": "0.1.0",
     "commit": "082858f86fc38b79e582eb34b7f39aa2368b3af0",
@@ -253,8 +253,10 @@
     "lib_tests": 328,
     "crash_seeds_per_pr": 128,
     "crashes_per_seed": 4,
-    "nightly_seeds_total": 0,
-    "nightly_run_ids": []
+    "nightly_seeds_total": 800000,
+    "nightly_run_ids": [
+      "39015322052"
+    ]
   },
   "examples": {
     "basic": "use kiban::db::Kiban;\n\nfn main() -> Result<(), Box<dyn std::error::Error>> {\n    let mut db = Kiban::open(\"example-db\")?;\n    db.put(b\"hello\", b\"world\")?;\n    db.sync()?; // put alone is not crash-durable\n    assert_eq!(db.get(b\"hello\")?, Some(b\"world\".to_vec()));\n    drop(db);\n\n    let reopened = Kiban::open(\"example-db\")?;\n    assert_eq!(reopened.get(b\"hello\")?, Some(b\"world\".to_vec()));\n    Ok(())\n}\n",
