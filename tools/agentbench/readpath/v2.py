@@ -67,17 +67,23 @@ def main():
                             print(name,flush=True)
                             execute(bins[label],config(engine,1000000,layout,cache,label),folder,name)
     elif a.action=='range':
-        # The unchanged baseline micro harness fixes this at 512 MiB. This is
-        # also the default on this host; the final report states that limit.
         for layout in ['bulk','normal']:
-            folder=OUT/'ranges'/layout
-            for trial in range(1,6):
-                for label in ['before','after'] if trial%2 else ['after','before']:
-                    c=config('kiban',1000000,layout,'512',label)
-                    c.update(action='micro',micro='iter-ten',operations=100000)
-                    name=f'{layout}-r{trial}-{label}'
-                    if (folder/(name+'.log')).exists(): raise RuntimeError('Existing range trial '+name)
-                    execute(bins[label],c,folder,name)
+            for cache in ['512','default']:
+                folder=OUT/'ranges'/f'{layout}-{cache}'
+                folder.mkdir(parents=True,exist_ok=True)
+                for trial in range(1,6):
+                    for label in ['before','after'] if trial%2 else ['after','before']:
+                        binary=bins[label].with_name(label+'-range')
+                        name=f'{layout}-{cache}-r{trial}-{label}'
+                        log=folder/(name+'.jsonl')
+                        if log.exists(): raise RuntimeError('Existing range trial '+name)
+                        cmd=['taskset','-c','8',str(binary),str(DATA/label/f'kiban-1000000-{layout}'),cache]
+                        started=time.time()
+                        with log.open('w') as out:
+                            subprocess.run(cmd,cwd=ROOT,stdout=out,check=True)
+                        with (folder/'commands.jsonl').open('a') as out:
+                            out.write(json.dumps(dict(command=cmd,started=started,ended=time.time(),sha256=hashlib.sha256(binary.read_bytes()).hexdigest()))+'\n')
+                        print(name,flush=True)
     elif a.action=='write':
         for durable in [False,True]:
             folder=OUT/'writes'/('durable' if durable else 'fast')

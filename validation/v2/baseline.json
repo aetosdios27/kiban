@@ -1,8 +1,8 @@
 {
-  "commit": "2a083fa",
-  "source_archive": "git archive 2a083fa into target/baseline-source",
-  "binary": "/home/aetos/.t3/worktrees/kiban/t3-a7586988/target/v2-bin/before",
-  "sha256": "e379ed313e4252a4eb336fe9619207496328b0a68111ef70b5891f1c965dd47b",
-  "build_cpus": "6,7,10,11",
+  "commit": "8bbb4934f8d102ed0285c813a3770831b21c63e5",
+  "source_archive": "git archive 8bbb4934 into target/v2-main-8bbb4934",
+  "binary": "/home/aetos/.t3/worktrees/kiban/t3-a7586988/target/v2-final-bin/before",
+  "sha256": "acc09f77ff637c28757f3f8324b666fb6bfb06170f5f549aa8003b369e676bdf",
+  "build_cpus": "2,3,4,5,6,7,10,11",
   "priority": "nice 10"
 }

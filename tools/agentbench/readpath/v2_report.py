@@ -46,7 +46,7 @@ for layout in ['bulk','normal']:
             def pair(label,engine):return f'{med(vals[label,engine,"p50_ns"])/1000:.3f} / {med(vals[label,engine,"p99_ns"])/1000:.3f}'
             lines.append(f'| {layout} | {cache} | {workload} | {pair("before","kiban")} | {pair("after","kiban")} | {pair("after","lmdb")} | {med(ratios["before"]):.3f} → {med(ratios["after"]):.3f} |')
             summary.append(dict(layout=layout,cache=cache,workload=workload,distributions={f'{l}-{e}-{p}':v for (l,e,p),v in vals.items()},ratios=ratios))
-lines+=['','Default uses KibanOptions::default().block_cache_bytes in both builds (cache_mib=null), 512 MiB on this host. Default trials are separate repetitions, not reused 512-MiB observations.','',
+lines+=['','Default uses KibanOptions::default().block_cache_bytes in both builds (cache_mib=null), about 492 MiB on this host (the exact byte budget is recorded by the range probe). Default trials are separate repetitions, not reused 512-MiB observations.','',
         '## Full distributions','', '| Layout/cache/workload | Candidate | p50 µs | p99 µs | Paired p50 ratio |','|---|---|---:|---:|---:|']
 for row in summary:
     for label in ['before','after']:
