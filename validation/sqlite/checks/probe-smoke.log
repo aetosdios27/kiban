@@ -1,0 +1,1 @@
+sync_probe fsync=1 fdatasync=1 failures=0

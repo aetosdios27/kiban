@@ -88,3 +88,27 @@ alternates full W2 profiles with LMDB controls; use `--stage 2` for W3 and
 `--stacks` for complete sampled-IP flame graphs. Offline perf decoding and
 SVG generation inherit the profiler coordinator's P-core affinity (2–5);
 the timed children remain pinned to CPU 3.
+
+## SQLite comparison
+
+The SQLite campaign adds `backend: "sqlite"` with bundled rusqlite. Config options
+are `sqlite_layout` (`rowid` or `clustered`), `sqlite_sync` (`OFF`, `NORMAL`, or
+`FULL`), and `sqlite_mmap_bytes`. SQLite durability follows `sqlite_sync`;
+`durable` controls Kiban and LMDB. The driver records effective pragmas, SQLite
+version/source ID and indexed query plans. SQLite uses cached statements,
+one connection per worker, and one commit per acknowledged mutation.
+
+[`validation/sqlite/REPORT.md`](../../../validation/sqlite/REPORT.md) describes
+schema selection, crash guarantees, cache budgets, timing boundaries, CPU
+allocation and the reproduction commands. `sqlite_bench.py` prepares fixtures,
+screens layouts and runs five rotated trials. Its select phase also invokes
+`sqlite_mmap_screen.py` before choosing the mmap layout. `sqlite_report.py`
+audits receipts and generates tables, JSON and CSV. `sqlite_fdatasync.py`
+compares Linux SQLite FULL sync implementations in a separate five-round group.
+CPU counters and sync-call probes are separate diagnostics.
+
+All benchmark children use CPU 10. Keep CPU 11 free of benchmark work. Build
+and test on CPUs 12–21 at nice 10, with no timed campaign active. Start with
+fresh private data and output directories. `--resume` validates completed
+receipts and frozen binary/source hashes. The write suite now fully verifies
+again after closing and reopening each database.

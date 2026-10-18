@@ -1,0 +1,9 @@
+{
+  "default_binary": "/home/aetos/.t3/worktrees/kiban/t3-59b24bda/tools/agentbench/readpath/target/release/kiban-readbench",
+  "default_sha256": "a9d6e53d6f19db45ddd840f8d654dcccc73df0fb03310ec0e90987a244944a26",
+  "tuned_binary": "/home/aetos/.t3/worktrees/kiban/t3-59b24bda/target/sqlite/fdatasync-target/release/kiban-readbench",
+  "tuned_sha256": "9cfab6ba11f1fc46374f03d9f80691ff09dce832e842cc9cd513bba76eee89d1",
+  "flags": "LIBSQLITE3_FLAGS=-DHAVE_FDATASYNC=1",
+  "cpu": 10,
+  "trials": 5
+}

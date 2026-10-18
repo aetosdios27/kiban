@@ -24,6 +24,7 @@ mod random;
 #[path = "../../src/runner.rs"]
 #[allow(dead_code)]
 mod runner;
+mod sqlite;
 
 use api::{Backend, Result};
 use kiban::db::{Kiban, KibanOptions};
@@ -76,6 +77,21 @@ struct Options {
     durable: bool,
     #[serde(default)]
     micro: String,
+    #[serde(default)]
+    sqlite_layout: sqlite::Layout,
+    #[serde(default)]
+    sqlite_sync: sqlite::Sync,
+    #[serde(default)]
+    sqlite_mmap_bytes: u64,
+}
+
+impl Options {
+    fn cache_bytes(&self) -> usize {
+        self.cache_mib.map_or_else(
+            || KibanOptions::default().block_cache_bytes,
+            |mib| mib * 1024 * 1024,
+        )
+    }
 }
 
 fn one_reader() -> usize {
@@ -83,21 +99,35 @@ fn one_reader() -> usize {
 }
 
 fn open(o: &Options) -> Result<Box<dyn Backend>> {
+    eprintln!(
+        "{}",
+        json!({"type":"requested_config", "backend":o.suite.backend,
+        "cache_bytes":o.cache_bytes(),"point_index":o.point_index,"durable":o.durable})
+    );
     Ok(match o.suite.backend.as_str() {
-        "kiban" => Box::new(backend::Embedded::with_options(
+        "kiban" => Box::new(backend::Embedded::with_options_and_durability(
             &o.suite.db,
             KibanOptions {
                 point_index: o.point_index,
-                block_cache_bytes: o.cache_mib.map_or_else(
-                    || KibanOptions::default().block_cache_bytes,
-                    |mib| mib * 1024 * 1024,
-                ),
+                block_cache_bytes: o.cache_bytes(),
                 mmap_max_level: o.mmap_max_level,
                 ..KibanOptions::default()
             },
+            o.durable,
         )?) as Box<dyn Backend>,
-        "lmdb" => Box::new(backend::Lmdb::open(&o.suite.db, Mode::Fast)?.0),
-        _ => return Err("only kiban/lmdb supported".into()),
+        "lmdb" => {
+            let (db, details) = backend::Lmdb::open(
+                &o.suite.db,
+                if o.durable { Mode::Durable } else { Mode::Fast },
+            )?;
+            eprintln!(
+                "{}",
+                json!({"type":"backend_config","backend":"lmdb","details":details})
+            );
+            Box::new(db)
+        }
+        "sqlite" => Box::new(sqlite::Sqlite::open(o)?),
+        _ => return Err("only kiban/lmdb/sqlite supported".into()),
     })
 }
 
@@ -261,12 +291,15 @@ fn reads(o: &Options) -> Result<()> {
                 ),
             )?;
         }
+        runner::verify_initial(b.as_mut(), c)?;
         runner::emit(
             &mut out,
             &json!({"type":"complete","verified_records":c.n,"errors":0,"timed_writes":0,"layout":before,"proc_status":std::fs::read_to_string("/proc/self/status")?}),
         )?;
     }
-    runner::verify_initial(b.as_mut(), c)?;
+    if o.action == "profile" {
+        runner::verify_initial(b.as_mut(), c)?;
+    }
     drop(b);
     if layout(c)? != before {
         return Err("read-only suite changed layout".into());
@@ -276,18 +309,7 @@ fn reads(o: &Options) -> Result<()> {
 
 fn writes(o: &Options) -> Result<()> {
     let c = &o.suite;
-    let mut b: Box<dyn Backend> = if c.backend == "kiban" {
-        Box::new(backend::Embedded::with_options_and_durability(
-            &c.db,
-            KibanOptions {
-                point_index: o.point_index,
-                ..KibanOptions::default()
-            },
-            o.durable,
-        )?)
-    } else {
-        Box::new(backend::Lmdb::open(&c.db, if o.durable { Mode::Durable } else { Mode::Fast })?.0)
-    };
+    let mut b = open(o)?;
     runner::verify_initial(b.as_mut(), c)?;
     let mut out = std::io::BufWriter::new(
         std::fs::OpenOptions::new()
@@ -295,15 +317,19 @@ fn writes(o: &Options) -> Result<()> {
             .create_new(true)
             .open(&c.output)?,
     );
-    runner::suite_plan(
-        b.as_mut(),
-        c,
-        runner::Plan {
-            base_population: c.n,
-            insertions: c.operations,
-            write_operations: c.operations,
-        },
+    let plan = runner::Plan {
+        base_population: c.n,
+        insertions: c.operations,
+        write_operations: c.operations,
+    };
+    runner::suite_plan(b.as_mut(), c, plan, &mut out)?;
+    drop(b);
+    let mut b = open(o)?;
+    runner::verify_persisted_plan(b.as_mut(), c, plan, &mut out)?;
+    runner::emit(
         &mut out,
+        &json!({"type":"resources",
+        "proc_status":std::fs::read_to_string("/proc/self/status")?}),
     )
 }
 
@@ -323,6 +349,14 @@ fn run() -> Result<()> {
         return Err("invalid readbench options".into());
     }
     match o.action.as_str() {
+        "metadata" => {
+            println!(
+                "{}",
+                json!({"default_cache_bytes":KibanOptions::default().block_cache_bytes,
+                "sqlite_version":rusqlite::version(), "sqlite_version_number":rusqlite::version_number()})
+            );
+            Ok(())
+        }
         "prepare" => prepare(&o),
         "read" | "profile" => reads(&o),
         "write" => writes(&o),
@@ -376,6 +410,9 @@ mod tests {
                     stage: 0,
                     durable: false,
                     micro: String::new(),
+                    sqlite_layout: sqlite::Layout::default(),
+                    sqlite_sync: sqlite::Sync::default(),
+                    sqlite_mmap_bytes: 0,
                 };
                 prepare(&o)?;
                 reads(&o)?;

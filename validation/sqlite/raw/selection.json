@@ -1,0 +1,19 @@
+{
+  "read": "rowid",
+  "write": "rowid",
+  "scores_seconds": {
+    "read": {
+      "rowid": 6.250676547186311e-06,
+      "clustered": 6.6160858872988165e-06
+    },
+    "write": {
+      "rowid": 9.187427385685059e-05,
+      "clustered": 0.00010953206666414168
+    }
+  },
+  "read_mmap": "rowid",
+  "mmap_scores_seconds": {
+    "rowid": 4.760738727203508e-06,
+    "clustered": 4.9458931347675866e-06
+  }
+}

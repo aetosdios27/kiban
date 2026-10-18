@@ -1,0 +1,18 @@
+{
+  "backend": "kiban",
+  "n": 1000000,
+  "operations": 1000000,
+  "k": 10,
+  "seed": 20261016,
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-59b24bda/target/sqlite/data/1000000-kiban-index0-bulk",
+  "output": "",
+  "action": "profile",
+  "layout": "bulk",
+  "cache_mib": 512,
+  "point_index": false,
+  "durable": false,
+  "sqlite_layout": "rowid",
+  "sqlite_sync": "NORMAL",
+  "sqlite_mmap_bytes": 0,
+  "stage": 1
+}
