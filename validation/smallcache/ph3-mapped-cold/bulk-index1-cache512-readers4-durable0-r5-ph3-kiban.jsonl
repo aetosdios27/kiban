@@ -1,0 +1,1 @@
+{"backend":"kiban","errors":0,"evicted_mappings":1,"latency":{"p50_ns":1056,"p999_ns":5632,"p99_ns":1632},"major_faults":0,"minor_faults":30,"mmap_max_level":4294967295,"operations":10000,"readers":4,"storage_read_bytes":0,"type":"cold-start","verified_calls":10000}

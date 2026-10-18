@@ -1,0 +1,16 @@
+{
+  "backend": "lmdb",
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-9b9cb0e0/target/smallcache/data/lmdb-1000000-normal-0",
+  "n": 1000000,
+  "operations": 10000,
+  "k": 10,
+  "seed": 20261016,
+  "output": "/home/aetos/.t3/worktrees/kiban/t3-9b9cb0e0/validation/smallcache/ph3-mapped-cold/normal-index0-cache512-readers1-durable0-r5-before-lmdb.jsonl",
+  "action": "cold",
+  "layout": "normal",
+  "cache_mib": 512,
+  "point_index": false,
+  "readers": 1,
+  "durable": false,
+  "mmap_max_level": 4294967295
+}

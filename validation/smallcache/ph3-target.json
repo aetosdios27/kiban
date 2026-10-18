@@ -1,0 +1,14 @@
+[
+  {
+    "layout": "bulk",
+    "p50_ratio": 0.6413043478260869,
+    "p99_ratio": 0.5873015873015873,
+    "accepted": true
+  },
+  {
+    "layout": "normal",
+    "p50_ratio": 0.7777777777777778,
+    "p99_ratio": 0.796875,
+    "accepted": true
+  }
+]

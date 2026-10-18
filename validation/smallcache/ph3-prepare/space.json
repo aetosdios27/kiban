@@ -1,0 +1,38 @@
+[
+  {
+    "dataset": "kiban-10000-bulk-1",
+    "tables": 1,
+    "sst_bytes": 3823221,
+    "point_bytes": 542964,
+    "locator_view_bytes": 517964,
+    "distinct_keys": 10000,
+    "feature_flags": 1
+  },
+  {
+    "dataset": "kiban-10000-normal-1",
+    "tables": 1,
+    "sst_bytes": 3823221,
+    "point_bytes": 542964,
+    "locator_view_bytes": 517964,
+    "distinct_keys": 10000,
+    "feature_flags": 1
+  },
+  {
+    "dataset": "kiban-1000000-bulk-1",
+    "tables": 1,
+    "sst_bytes": 364945109,
+    "point_bytes": 35101232,
+    "locator_view_bytes": 32601232,
+    "distinct_keys": 1000000,
+    "feature_flags": 1
+  },
+  {
+    "dataset": "kiban-1000000-normal-1",
+    "tables": 90,
+    "sst_bytes": 364860417,
+    "point_bytes": 35003540,
+    "locator_view_bytes": 32503515,
+    "distinct_keys": 1000000,
+    "feature_flags": 1
+  }
+]

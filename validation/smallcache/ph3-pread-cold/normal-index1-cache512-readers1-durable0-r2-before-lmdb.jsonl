@@ -1,0 +1,1 @@
+{"backend":"lmdb","errors":0,"evicted_mappings":2,"latency":{"p50_ns":5248,"p999_ns":3932160,"p99_ns":1179648},"major_faults":288,"minor_faults":7465,"mmap_max_level":null,"operations":10000,"readers":1,"storage_read_bytes":159322112,"type":"cold-start","verified_calls":10000}

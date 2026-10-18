@@ -100,6 +100,7 @@ pub struct BlockCache {
     range: RangeCache,
     /// Largest read-ahead window a sequential iterator may request.
     readahead_bytes: u64,
+    compact_points: AtomicBool,
 }
 
 /// Raw counters for a [`BlockCache`] (phase 11.7, extended 11.17-F) —
@@ -165,6 +166,7 @@ impl BlockCache {
             // both; let small early windows merge up to one full window.
             range: RangeCache::new(range_bytes, readahead_bytes as usize),
             readahead_bytes,
+            compact_points: AtomicBool::new(false),
         }
     }
 
@@ -178,6 +180,16 @@ impl BlockCache {
 
     pub fn capacity(&self) -> usize {
         self.capacity
+    }
+
+    pub(crate) fn prefer_compact_points(&self) -> bool {
+        self.compact_points.load(Ordering::Relaxed)
+    }
+
+    /// Admission policy only: existing residents/snapshots keep their leases.
+    pub(crate) fn set_point_working_set(&self, bytes: u64) {
+        self.compact_points
+            .store(bytes > self.capacity as u64, Ordering::Relaxed);
     }
 
     pub fn resident_bytes(&self) -> usize {

@@ -13,7 +13,7 @@ All integers are little endian. The 64-byte section header is:
 - 8 bytes magic, u64 hash seed, u32 distinct key count N, u32 bucket count B;
 - u64 arena offset;
 - six u32 fields: address width W, key-length width K, version-count width C,
-  sequence-delta width S, tagged-value-length width L, reserved feature flags zero;
+  sequence-delta width S, tagged-value-length width L, feature flags (zero or bit 0);
 - u64 minimum sequence number.
 
 The fixed header byte offsets are:
@@ -30,7 +30,7 @@ The fixed header byte offsets are:
 | 40 | 4 | Version-count width C |
 | 44 | 4 | Sequence-delta width S |
 | 48 | 4 | Tagged-value-length width L |
-| 52 | 4 | Reserved feature flags, currently zero |
+| 52 | 4 | Feature flags (zero or bit 0) |
 | 56 | 8 | Minimum sequence number |
 
 W is 4 or 8. K and C are 1, 2, or 4. S is 1, 2, 4, or 8. L is 2 or 4.
@@ -72,8 +72,9 @@ sequence reconstruction. Extra or missing records and pointers to other in-range
 values are corruption. Only validated addresses reach point lookups. PH2 keeps
 its existing structural and backing validation. On cache denial, both encodings
 stream their section checksum in bounded chunks and fall back to sorted reads.
-Point section and complete sorted backing remain charged together to the
-existing cache budget. Scans share verified backing blocks.
+Full-resident point sections and complete sorted backing remain charged together
+to the existing cache budget. CRC-bearing sections can alternatively admit only
+validated locators under that same budget. Scans share verified backing blocks.
 
 Construction distributes key indices into contiguous bucket ranges using
 counts and prefix sums. Equal hashes must share a bucket, so a local pair check
@@ -84,8 +85,9 @@ expensive late multi-key pilot searches. Whole-SST builders still retain a
 temporary full-key MVCC arena and MPHF workspace. This change does not introduce
 a hard process-memory bound.
 
-Publication, durability, cache admission, public APIs and cross-table sequence
-resolution are unchanged. Focused tests exercise PH2/PH3/format-3 mixtures,
+Publication, durability, public APIs and cross-table sequence resolution remain
+unchanged. The small-cache extension adds locator-only admission under the same
+cache budget. Focused tests exercise PH2/PH3/format-3 mixtures,
 checksummed malformed fields, both address widths, full-key fingerprint
 collisions, multiple anchor groups, binary/empty/long keys, large values,
 sequence extremes, wide version counts, tombstones, snapshots and reservation
@@ -97,31 +99,24 @@ format-switching reopens.
 The flag-zero encoding above is frozen. The hash function, bucket reduction,
 pilot interpretation, slot layout, 1,024-key anchor grouping, field order and
 integer meanings are part of that encoding. Existing PH2 and flag-zero PH3
-files remain readable when a future writer adds an extension.
+files remain readable. Extra header or algorithm changes require a new section
+magic and mixed-version reads, rather than changing the meaning of flag zero.
 
-Byte 52 provides explicit feature negotiation for extra metadata. The current
-writer emits zero and the current resident decoder rejects every nonzero value.
-The current cache-denied path checks section magic and CRC, then reads the
-unchanged sorted blocks without interpreting the point records. An extension
-must preserve that sorted representation. A future reader must check supported
-flag bits before it uses any point address and calculate every record stride
-from the flags. Unknown bits require explicit rejection or a verified sorted
-fallback. Extra header or algorithm changes require a new section magic and
-mixed-version reads, rather than changing the meaning of flag zero.
+## Per-version checksum extension (feature bit 0)
 
-Bit 0 is reserved for a possible **per-version value CRC-32/IEEE** extension.
-This reservation is a merge contract, not an implemented feature. If used, the
-flag adds one little-endian u32 immediately after each version value address.
-The version stride becomes `S + L + W + 4`; key headers, slots and the fixed
-64-byte header keep their positions. The checksum covers only the exact value
-bytes, with the same IEEE polynomial, initial state and final complement as
-`crate::crc32::crc32`. The empty-value checksum is zero, including tombstones.
-Presence comes from the flag, so a zero checksum is not an absence marker.
+Flag zero is frozen. The small-cache writer sets bit 0 in the u32 at byte 52.
+This adds one little-endian u32 immediately after each version's value address;
+the stride is S + L + W + 4. The checksum is CRC-32/IEEE over the exact value
+bytes, using crate::crc32::crc32. Empty values and tombstones have checksum zero;
+zero is a value, not an absence marker. Anchors, slots, hashing and all existing
+field meanings retain the flag-zero PH3 layout. No new compact locator encoding
+is introduced on disk.
 
-A reader that implements bit 0 must retain the flag-zero stride `S + L + W`,
-keep the existing verification policy for records without a value checksum,
-and validate the added field before trusting separately read value bytes.
-The new writer and reader need checksum-corruption, zero/one-flag mixed-table,
-PH2 compatibility, snapshot/tombstone and cache-admission tests, plus both
-seeded suites with the new encoding represented. The small-cache task can add
-that implementation without changing the layout shipped by this task.
+Readers accept PH2, flag-zero PH3, and bit-zero PH3. Unsupported feature bits
+cause explicit rejection before using a point address, or a section-CRC-verified
+sorted fallback when the section is not admitted. Readers of this extension
+validate each value checksum against verified sorted backing before admitting
+locators, then check the copied return bytes on every external-value read.
+Flag-zero sections keep their original verification policy. See the
+[small-cache design](../smallcache/DESIGN.md) for resident-view packing, admission,
+corruption boundaries and the unchanged mmap_max_level semantics.

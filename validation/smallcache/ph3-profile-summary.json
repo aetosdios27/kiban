@@ -1,0 +1,210 @@
+[
+  {
+    "mode": "pread",
+    "name": "before-bulk-kiban",
+    "ns_per_op": 3647.354066,
+    "events_per_op": {
+      "cpu_core/cycles/u": 9743.956235,
+      "cpu_core/instructions/u": 13881.169223,
+      "cpu_core/L1-dcache-load-misses/u": 52.717872,
+      "cpu_core/LLC-load-misses/u": 4.741031,
+      "cpu_core/branch-misses/u": 5.958625,
+      "cpu_core/dTLB-load-misses/u": 0.877006
+    }
+  },
+  {
+    "mode": "pread",
+    "name": "before-bulk-lmdb",
+    "ns_per_op": 1402.887029,
+    "events_per_op": {
+      "cpu_core/cycles/u": 5099.269407,
+      "cpu_core/instructions/u": 7893.380337,
+      "cpu_core/L1-dcache-load-misses/u": 44.640215,
+      "cpu_core/LLC-load-misses/u": 12.098977,
+      "cpu_core/branch-misses/u": 10.069028,
+      "cpu_core/dTLB-load-misses/u": 2.264575
+    }
+  },
+  {
+    "mode": "pread",
+    "name": "before-normal-kiban",
+    "ns_per_op": 3160.203769,
+    "events_per_op": {
+      "cpu_core/cycles/u": 8156.869101,
+      "cpu_core/instructions/u": 15559.141351,
+      "cpu_core/L1-dcache-load-misses/u": 112.240748,
+      "cpu_core/LLC-load-misses/u": 2.622354,
+      "cpu_core/branch-misses/u": 13.093757,
+      "cpu_core/dTLB-load-misses/u": 2.703299
+    }
+  },
+  {
+    "mode": "pread",
+    "name": "before-normal-lmdb",
+    "ns_per_op": 1227.46454,
+    "events_per_op": {
+      "cpu_core/cycles/u": 4718.295264,
+      "cpu_core/instructions/u": 7893.379359,
+      "cpu_core/L1-dcache-load-misses/u": 44.914754,
+      "cpu_core/LLC-load-misses/u": 9.827035,
+      "cpu_core/branch-misses/u": 10.041169,
+      "cpu_core/dTLB-load-misses/u": 2.034896
+    }
+  },
+  {
+    "mode": "pread",
+    "name": "ph3-bulk-kiban",
+    "ns_per_op": 1245.065537,
+    "events_per_op": {
+      "cpu_core/cycles/u": 3052.637423,
+      "cpu_core/instructions/u": 6429.61197,
+      "cpu_core/L1-dcache-load-misses/u": 8.649915,
+      "cpu_core/LLC-load-misses/u": 2.035787,
+      "cpu_core/branch-misses/u": 1.983034,
+      "cpu_core/dTLB-load-misses/u": 0.168511
+    }
+  },
+  {
+    "mode": "pread",
+    "name": "ph3-bulk-lmdb",
+    "ns_per_op": 1392.857382,
+    "events_per_op": {
+      "cpu_core/cycles/u": 5142.982974,
+      "cpu_core/instructions/u": 7893.380194,
+      "cpu_core/L1-dcache-load-misses/u": 46.376762,
+      "cpu_core/LLC-load-misses/u": 12.033512,
+      "cpu_core/branch-misses/u": 11.138585,
+      "cpu_core/dTLB-load-misses/u": 2.037702
+    }
+  },
+  {
+    "mode": "pread",
+    "name": "ph3-normal-kiban",
+    "ns_per_op": 1833.005973,
+    "events_per_op": {
+      "cpu_core/cycles/u": 5035.80132,
+      "cpu_core/instructions/u": 7349.377768,
+      "cpu_core/L1-dcache-load-misses/u": 32.141552,
+      "cpu_core/LLC-load-misses/u": 3.589613,
+      "cpu_core/branch-misses/u": 5.705495,
+      "cpu_core/dTLB-load-misses/u": 0.414584
+    }
+  },
+  {
+    "mode": "pread",
+    "name": "ph3-normal-lmdb",
+    "ns_per_op": 1353.315915,
+    "events_per_op": {
+      "cpu_core/cycles/u": 5967.262976,
+      "cpu_core/instructions/u": 7893.37971,
+      "cpu_core/L1-dcache-load-misses/u": 46.32349,
+      "cpu_core/LLC-load-misses/u": 13.681175,
+      "cpu_core/branch-misses/u": 11.864253,
+      "cpu_core/dTLB-load-misses/u": 1.981607
+    }
+  },
+  {
+    "mode": "mapped",
+    "name": "before-bulk-kiban",
+    "ns_per_op": 2774.60962,
+    "events_per_op": {
+      "cpu_core/cycles/u": 12003.20241,
+      "cpu_core/instructions/u": 13168.08417,
+      "cpu_core/L1-dcache-load-misses/u": 103.360811,
+      "cpu_core/LLC-load-misses/u": 41.562538,
+      "cpu_core/branch-misses/u": 5.160589,
+      "cpu_core/dTLB-load-misses/u": 1.672724
+    }
+  },
+  {
+    "mode": "mapped",
+    "name": "before-bulk-lmdb",
+    "ns_per_op": 1381.909432,
+    "events_per_op": {
+      "cpu_core/cycles/u": 5988.026768,
+      "cpu_core/instructions/u": 7893.379688,
+      "cpu_core/L1-dcache-load-misses/u": 47.217525,
+      "cpu_core/LLC-load-misses/u": 14.29354,
+      "cpu_core/branch-misses/u": 10.089196,
+      "cpu_core/dTLB-load-misses/u": 1.98169
+    }
+  },
+  {
+    "mode": "mapped",
+    "name": "before-normal-kiban",
+    "ns_per_op": 2244.508882,
+    "events_per_op": {
+      "cpu_core/cycles/u": 9615.25002,
+      "cpu_core/instructions/u": 14503.765609,
+      "cpu_core/L1-dcache-load-misses/u": 143.123659,
+      "cpu_core/LLC-load-misses/u": 40.913309,
+      "cpu_core/branch-misses/u": 10.070458,
+      "cpu_core/dTLB-load-misses/u": 1.753017
+    }
+  },
+  {
+    "mode": "mapped",
+    "name": "before-normal-lmdb",
+    "ns_per_op": 1327.678632,
+    "events_per_op": {
+      "cpu_core/cycles/u": 5867.482012,
+      "cpu_core/instructions/u": 7893.37848,
+      "cpu_core/L1-dcache-load-misses/u": 46.761295,
+      "cpu_core/LLC-load-misses/u": 13.735588,
+      "cpu_core/branch-misses/u": 10.070115,
+      "cpu_core/dTLB-load-misses/u": 1.984168
+    }
+  },
+  {
+    "mode": "mapped",
+    "name": "ph3-bulk-kiban",
+    "ns_per_op": 864.13065,
+    "events_per_op": {
+      "cpu_core/cycles/u": 3839.779694,
+      "cpu_core/instructions/u": 5641.486334,
+      "cpu_core/L1-dcache-load-misses/u": 14.175138,
+      "cpu_core/LLC-load-misses/u": 8.153507,
+      "cpu_core/branch-misses/u": 1.988144,
+      "cpu_core/dTLB-load-misses/u": 1.076423
+    }
+  },
+  {
+    "mode": "mapped",
+    "name": "ph3-bulk-lmdb",
+    "ns_per_op": 1294.376396,
+    "events_per_op": {
+      "cpu_core/cycles/u": 5751.328126,
+      "cpu_core/instructions/u": 7893.378399,
+      "cpu_core/L1-dcache-load-misses/u": 44.249998,
+      "cpu_core/LLC-load-misses/u": 12.864359,
+      "cpu_core/branch-misses/u": 11.082776,
+      "cpu_core/dTLB-load-misses/u": 2.000019
+    }
+  },
+  {
+    "mode": "mapped",
+    "name": "ph3-normal-kiban",
+    "ns_per_op": 1012.426418,
+    "events_per_op": {
+      "cpu_core/cycles/u": 4485.53775,
+      "cpu_core/instructions/u": 6260.928483,
+      "cpu_core/L1-dcache-load-misses/u": 25.730778,
+      "cpu_core/LLC-load-misses/u": 8.433733,
+      "cpu_core/branch-misses/u": 3.235493,
+      "cpu_core/dTLB-load-misses/u": 1.206099
+    }
+  },
+  {
+    "mode": "mapped",
+    "name": "ph3-normal-lmdb",
+    "ns_per_op": 1435.180032,
+    "events_per_op": {
+      "cpu_core/cycles/u": 5387.837029,
+      "cpu_core/instructions/u": 7893.379668,
+      "cpu_core/L1-dcache-load-misses/u": 44.688587,
+      "cpu_core/LLC-load-misses/u": 13.627485,
+      "cpu_core/branch-misses/u": 11.767668,
+      "cpu_core/dTLB-load-misses/u": 1.970913
+    }
+  }
+]

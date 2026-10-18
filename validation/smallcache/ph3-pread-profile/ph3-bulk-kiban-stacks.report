@@ -1,0 +1,93 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 42
+#
+# Samples: 3K of event 'cpu_core/cycles/u'
+# Event count (approx.): 3305000000
+#
+# Overhead  Command  Shared Object     Symbol                                                                                                                                                                  
+# ........  .......  ................  ........................................................................................................................................................................
+#
+    42.24%  ph3      ph3               [.] <kiban::sstable::point::compact::CompactIndex>::locate
+     5.57%  ph3      ph3               [.] <serde_json::read::SliceRead>::skip_to_escape
+     4.18%  ph3      [unknown]         [k] 0xffffffff98200080
+            |          
+            |--2.18%--__internal_syscall_cancel
+            |          __syscall_cancel
+            |          __libc_pread
+            |          
+             --2.00%--syscall
+
+     3.90%  ph3      ph3               [.] core::str::converts::from_utf8
+     3.18%  ph3      ph3               [.] serde_json::de::from_trait::<serde_json::read::SliceRead, kiban_readbench::model::Memory>
+     2.87%  ph3      ph3               [.] <kiban::file_cache::FileLease as core::ops::drop::Drop>::drop
+     2.78%  ph3      ph3               [.] kiban::db::get_from_version_at::{closure#0}
+     2.72%  ph3      ph3               [.] kiban::crc32::pclmul::update
+     2.60%  ph3      libc.so.6         [.] __memcmp_avx2_movbe
+            |
+            ---__memcmp_avx2_movbe
+
+     2.60%  ph3      ph3               [.] <serde_json::read::SliceRead as serde_json::read::Read>::parse_str
+     2.27%  ph3      ph3               [.] <kiban::db::Kiban>::get::<alloc::string::String>
+     2.27%  ph3      ph3               [.] <kiban::file_cache::TableFileCache>::acquire
+     1.48%  ph3      ph3               [.] <serde_json::de::MapAccess<_> as serde_core::de::MapAccess>::next_key_seed::has_next_key::<serde_json::read::SliceRead>
+     1.39%  ph3      ph3               [.] <kiban_readbench::embedded::Embedded as kiban_readbench::api::Backend>::get
+     1.36%  ph3      ph3               [.] <serde_json::de::Deserializer<serde_json::read::SliceRead>>::parse_integer
+     1.27%  ph3      ph3               [.] _mi_page_malloc
+     1.18%  ph3      ph3               [.] <u64>::_fmt_inner
+     1.15%  ph3      ph3               [.] kiban_readbench::profile
+     1.09%  ph3      libc.so.6         [.] __memmove_avx_unaligned_erms
+            |
+            ---__memmove_avx_unaligned_erms
+
+     1.03%  ph3      ph3               [.] <std::hash::random::RandomState as core::hash::BuildHasher>::hash_one::<&u64>
+     1.03%  ph3      ph3               [.] mi_heap_malloc_aligned_at
+     1.00%  ph3      ph3               [.] alloc::fmt::format::format_inner
+     0.97%  ph3      ph3               [.] <core::fmt::Formatter>::pad_integral
+     0.73%  ph3      ph3               [.] core::fmt::write
+     0.70%  ph3      ph3               [.] mi_free
+     0.67%  ph3      ph3               [.] <std::hash::random::DefaultHasher as core::hash::Hasher>::write.243
+     0.61%  ph3      libc.so.6         [.] __syscall_cancel
+            |
+            ---__syscall_cancel
+               __libc_pread
+
+     0.61%  ph3      ph3               [.] _mi_heap_realloc_zero
+     0.48%  ph3      ph3               [.] <core::marker::PhantomData<alloc::string::String> as serde_core::de::DeserializeSeed>::deserialize::<&mut serde_json::de::Deserializer<serde_json::read::SliceRead>>
+     0.45%  ph3      ph3               [.] _mi_page_retire
+     0.39%  ph3      libc.so.6         [.] __internal_syscall_cancel
+     0.36%  ph3      ph3               [.] <alloc::string::String as core::fmt::Write>::write_str.16
+     0.36%  ph3      ph3               [.] <kiban::sys::File>::read_range_at
+     0.30%  ph3      libc.so.6         [.] __libc_pread
+     0.30%  ph3      ph3               [.] <alloc::raw_vec::RawVecInner>::finish_grow
+     0.30%  ph3      ph3               [.] <alloc::string::String as core::fmt::Write>::write_char.17
+     0.30%  ph3      ph3               [.] <u64 as core::fmt::Display>::fmt
+     0.27%  ph3      libc.so.6         [.] __memset_avx2_unaligned_erms
+     0.27%  ph3      ph3               [.] <core::fmt::Formatter>::pad_integral::write_prefix
+     0.24%  ph3      ph3               [.] <u32 as serde_core::de::Deserialize>::deserialize::<&mut serde_json::de::Deserializer<serde_json::read::SliceRead>>
+     0.21%  ph3      ph3               [.] <core::marker::PhantomData<u64> as serde_core::de::DeserializeSeed>::deserialize::<&mut serde_json::de::Deserializer<serde_json::read::SliceRead>>
+     0.21%  ph3      ph3               [.] <kiban::sys::File>::read_exact_at
+     0.21%  ph3      ph3               [.] kiban::crc32::update
+     0.18%  ph3      ph3               [.] <alloc::raw_vec::RawVecInner<_>>::reserve::do_reserve_and_handle::<alloc::alloc::Global>
+     0.18%  ph3      ph3               [.] mi_find_page
+     0.18%  ph3      ph3               [.] mi_heap_malloc_zero_aligned_at_generic
+     0.18%  ph3      ph3               [.] mi_malloc_aligned
+     0.15%  ph3      libc.so.6         [.] syscall
+     0.15%  ph3      ph3               [.] <alloc::raw_vec::RawVecInner>::finish_grow
+     0.15%  ph3      ph3               [.] <serde_json::de::Deserializer<serde_json::read::SliceRead>>::end_map
+     0.15%  ph3      ph3               [.] _mi_page_bin
+     0.12%  ph3      ph3               [.] <alloc::raw_vec::RawVecInner>::grow_exact
+     0.12%  ph3      ph3               [.] _mi_malloc_generic
+     0.09%  ph3      ph3               [.] mi_realloc_aligned
+     0.06%  ph3      ph3               [.] mi_heap_realloc_aligned
+     0.03%  ph3      ph3               [.] <alloc::collections::vec_deque::VecDeque<u64>>::wrap_copy
+     0.03%  ph3      ph3               [.] _mi_bin
+     0.03%  ph3      ph3               [.] _mi_page_free_collect
+     0.03%  ph3      ph3               [.] memcpy@plt
+     0.03%  ph3      [unknown]         [k] 0xffffffff982015f0
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

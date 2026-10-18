@@ -162,6 +162,7 @@ fn construct_with_bucket_size(
 #[derive(Default)]
 pub(super) struct PointBuilder {
     arena: Vec<u8>,
+    checksums: Vec<u32>,
     heads: Vec<usize>,
     suffix_bytes: usize,
     versions: usize,
@@ -174,6 +175,8 @@ pub(super) struct PointBuilder {
     scan_prefix_len: usize,
     #[cfg(test)]
     legacy: bool,
+    #[cfg(test)]
+    without_value_crc: bool,
 }
 impl PointBuilder {
     pub(super) fn with_scan_prefix_len(scan_prefix_len: usize) -> Self {
@@ -226,6 +229,7 @@ impl PointBuilder {
         self.max_seq = self.max_seq.max(seq);
         self.max_value_len = self.max_value_len.max(value.len() as u32);
         self.versions += 1;
+        self.checksums.push(crate::crc32::crc32(value));
         self.arena.extend_from_slice(&seq.to_le_bytes());
         self.arena.push(kind.to_u8());
         self.arena
@@ -239,6 +243,13 @@ impl PointBuilder {
         self.arena[patch..patch + 8].copy_from_slice(&value_offset.to_le_bytes());
     }
     #[cfg(test)]
+    pub(super) fn without_value_crc() -> Self {
+        Self {
+            without_value_crc: true,
+            ..Self::default()
+        }
+    }
+    #[cfg(test)]
     pub(super) fn legacy() -> Self {
         Self {
             legacy: true,
@@ -249,6 +260,10 @@ impl PointBuilder {
         #[cfg(test)]
         if self.legacy {
             return self.finish_legacy();
+        }
+        #[cfg(test)]
+        if self.without_value_crc {
+            return compact::encode_without_crc(self);
         }
         compact::encode(self)
     }

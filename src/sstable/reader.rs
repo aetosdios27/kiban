@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use super::block::{BlockIter, VerifiedBlock};
 use super::builder::{FOOTER_LEN, FORMAT_VERSION, MAGIC, POINT_FOOTER_EXTRA, POINT_FORMAT_VERSION};
-use super::point::PointIndex;
+use super::point::{PointIndex, compact::CompactIndex};
 use super::separator::Separator;
 use super::{Kind, SstError};
 use crate::bloom::BloomFilter;
@@ -128,6 +128,7 @@ pub struct SstTable {
     index: Vec<IndexEntry>,
     filter: BloomFilter,
     point: Option<Box<PointIndex>>,
+    locators: Option<Box<CompactIndex>>,
     first_key: Vec<u8>,
     last_key: Vec<u8>,
     block_cache: Arc<BlockCache>,
@@ -266,12 +267,26 @@ impl SstTable {
             &index_raw,
             point_range.map_or(filter_offset, |(offset, _)| offset),
         )?;
+        let mut locators = None;
         let point = if let Some((offset, len)) = point_range {
             let lease = file_cache.acquire(number, path).map_err(open_err)?;
-            let resident = offset
-                .checked_add(len)
-                .and_then(|n| usize::try_from(n).ok())
-                .and_then(|n| block_cache.reserve_point(n));
+            let resident = (!block_cache.prefer_compact_points())
+                .then(|| {
+                    offset
+                        .checked_add(len)
+                        .and_then(|n| usize::try_from(n).ok())
+                        .and_then(|n| block_cache.reserve_point(n))
+                })
+                .flatten();
+            let header = lease
+                .read_range_at(path, offset, len.min(64))
+                .map_err(|e| bad(e.to_string()))?;
+            let locator_reservation = if resident.is_none() {
+                CompactIndex::locator_bytes(&header, len, offset)
+                    .and_then(|n| block_cache.reserve_point(n))
+            } else {
+                None
+            };
             if let Some(reservation) = resident {
                 let raw = lease
                     .read_shared_range_at(path, offset, len)
@@ -285,6 +300,24 @@ impl SstTable {
                     reservation,
                     index.iter().map(|entry| (entry.offset, entry.len)),
                 )?))
+            } else if let Some(reservation) = locator_reservation {
+                let raw = lease
+                    .read_shared_range_at(path, offset, len)
+                    .map_err(|e| bad(e.to_string()))?;
+                locators = CompactIndex::decode_locators(
+                    raw,
+                    usize::try_from(offset).map_err(|_| bad("backing offset overflow".into()))?,
+                    reservation,
+                    index.iter().map(|entry| (entry.offset, entry.len)),
+                    |start, amount| {
+                        lease
+                            .read_range_at(path, start as u64, amount as u64)
+                            .map(std::borrow::Cow::Owned)
+                            .map_err(|e| bad(e.to_string()))
+                    },
+                )?
+                .map(Box::new);
+                None
             } else {
                 let header = lease
                     .read_range_at(path, offset, 8)
@@ -332,6 +365,7 @@ impl SstTable {
             index,
             filter,
             point,
+            locators,
             first_key: Vec::new(),
             last_key: Vec::new(),
             block_cache,
@@ -557,6 +591,31 @@ impl SstTable {
         // Resident point indexes reject misses with a fingerprint and full-key check.
         if let Some(point) = &self.point {
             return Ok(point.get(key, limit));
+        }
+        if let Some(locators) = &self.locators {
+            let Some(v) = locators.locate(key, limit) else {
+                return Ok(None);
+            };
+            let value = if let Some(m) = &self.mmap {
+                m.as_slice()[v.offset..v.offset + v.len].to_vec()
+            } else {
+                let lease = self
+                    .file_cache
+                    .acquire(self.number, &self.path)
+                    .map_err(|e| SstError::Corrupt(format!("point file cannot be opened: {e}")))?;
+                lease
+                    .read_range_at(&self.path, v.offset as u64, v.len as u64)
+                    .map_err(|e| SstError::Corrupt(format!("point value read failed: {e}")))?
+            };
+            // Verify the owned copy, not the mutable file page that supplied it.
+            if crc32::crc32(&value) != v.checksum {
+                return Err(SstError::Corrupt("point value checksum mismatch".into()));
+            }
+            return Ok(Some(Found {
+                kind: v.kind,
+                seq: v.seq,
+                value,
+            }));
         }
         if !self.filter.may_contain(key) {
             return Ok(None);
@@ -1257,6 +1316,183 @@ mod mmap_tests {
             .collect();
         for h in handles {
             h.join().unwrap();
+        }
+    }
+}
+
+#[cfg(test)]
+mod compact_point_tests {
+    use super::*;
+    use crate::sstable::TableBuilder;
+    use crate::testutil::TempDir;
+    use std::os::unix::fs::FileExt;
+
+    fn fixture(path: &Path, mapped: bool) -> SstTable {
+        fixture_with(path, mapped, TableBuilder::with_point_index(true))
+    }
+
+    fn fixture_with(path: &Path, mapped: bool, mut builder: TableBuilder) -> SstTable {
+        builder.add(Kind::Put, b"", b"empty", 1).unwrap();
+        for id in 0..97 {
+            let key = [b"\0prefix/".as_slice(), &(id as u64).to_be_bytes(), b"\xff"].concat();
+            for seq in (1..=40).rev() {
+                let (kind, value) = if seq == 40 {
+                    (Kind::Tombstone, Vec::new())
+                } else {
+                    (Kind::Put, vec![(id + seq) as u8; 200])
+                };
+                builder.add(kind, &key, &value, seq as u64).unwrap();
+            }
+        }
+        let file = path.join("1.sst");
+        crate::atomic::commit_file(&file, &builder.finish().unwrap()).unwrap();
+        let cache = Arc::new(BlockCache::new(256 * 1024));
+        cache.set_point_working_set(u64::MAX);
+        let table =
+            SstTable::open(1, &file, cache, Arc::new(TableFileCache::new(2)), mapped).unwrap();
+        assert!(table.locators.is_some());
+        assert!(table.point.is_none());
+        table
+    }
+
+    #[test]
+    fn compact_locators_preserve_versions_full_keys_and_cache_budget() {
+        for mapped in [false, true] {
+            let dir = TempDir::new("compact-versions");
+            let table = fixture(dir.path(), mapped);
+            assert_eq!(table.get(b"", None).unwrap().unwrap().value, b"empty");
+            for id in 0..97u64 {
+                let key = [b"\0prefix/".as_slice(), &id.to_be_bytes(), b"\xff"].concat();
+                assert_eq!(
+                    table.get(&key, None).unwrap().unwrap().kind,
+                    Kind::Tombstone
+                );
+                for seq in [1, 17, 39] {
+                    let found = table.get(&key, Some(seq)).unwrap().unwrap();
+                    assert_eq!(found.seq, seq);
+                    assert_eq!(found.value, vec![(id + seq) as u8; 200]);
+                }
+                assert!(table.get(&key, Some(0)).unwrap().is_none());
+            }
+            for id in 0..100_000u64 {
+                assert!(table.get(&id.to_be_bytes(), None).unwrap().is_none());
+            }
+            assert!(table.block_cache.stats().point_index_bytes > 0);
+            assert!(table.block_cache.resident_bytes() <= table.block_cache.capacity());
+            let before = table.block_cache.stats();
+            table.get(b"", None).unwrap();
+            assert_eq!(before.misses, table.block_cache.stats().misses);
+            let cache = table.block_cache.clone();
+            drop(table);
+            assert_eq!(cache.stats().point_index_bytes, 0);
+        }
+    }
+
+    #[test]
+    fn compact_values_recheck_corruption_after_open_for_pread_and_mapping() {
+        for mapped in [false, true] {
+            let dir = TempDir::new("compact-value-corruption");
+            let table = fixture(dir.path(), mapped);
+            let locator = table.locators.as_ref().unwrap().locate(b"", None).unwrap();
+            let file = std::fs::OpenOptions::new()
+                .write(true)
+                .open(dir.path().join("1.sst"))
+                .unwrap();
+            file.write_all_at(b"X", locator.offset as u64).unwrap();
+            file.sync_all().unwrap();
+            for _ in 0..2 {
+                assert!(matches!(table.get(b"", None), Err(SstError::Corrupt(_))));
+            }
+        }
+    }
+
+    #[test]
+    fn compact_pread_reports_short_reads_as_corruption() {
+        let dir = TempDir::new("compact-short-read");
+        let table = fixture(dir.path(), false);
+        let locator = table.locators.as_ref().unwrap().locate(b"", None).unwrap();
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(dir.path().join("1.sst"))
+            .unwrap()
+            .set_len(locator.offset as u64 + 1)
+            .unwrap();
+        assert!(matches!(table.get(b"", None), Err(SstError::Corrupt(_))));
+    }
+
+    #[test]
+    fn compact_open_rejects_corrupt_sorted_bytes_before_publishing_locators() {
+        let dir = TempDir::new("compact-open-corruption");
+        let table = fixture(dir.path(), false);
+        let offset = table
+            .locators
+            .as_ref()
+            .unwrap()
+            .locate(b"", None)
+            .unwrap()
+            .offset;
+        drop(table);
+        let path = dir.path().join("1.sst");
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .write_all_at(b"X", offset as u64)
+            .unwrap();
+        for mapped in [false, true] {
+            let cache = Arc::new(BlockCache::new(256 * 1024));
+            cache.set_point_working_set(u64::MAX);
+            assert!(matches!(
+                SstTable::open(1, &path, cache, Arc::new(TableFileCache::new(2)), mapped),
+                Err(SstError::Corrupt(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn compact_mapping_survives_unlink_with_concurrent_reads() {
+        let dir = TempDir::new("compact-unlink-concurrent");
+        let table = fixture(dir.path(), true);
+        assert!(table.mmap.is_some());
+        std::fs::remove_file(dir.path().join("1.sst")).unwrap();
+        std::thread::scope(|scope| {
+            for _ in 0..4 {
+                let table = &table;
+                scope.spawn(move || {
+                    for _ in 0..1000 {
+                        assert_eq!(table.get(b"", None).unwrap().unwrap().value, b"empty");
+                    }
+                });
+            }
+        });
+    }
+
+    #[test]
+    fn locators_admit_tables_with_scan_extension_and_still_check_values() {
+        for mapped in [false, true] {
+            let dir = TempDir::new("compact-scan-flags");
+            let table = fixture_with(dir.path(), mapped, TableBuilder::with_scan_index(true, 4));
+            // Locator mode drops the scan directory; point reads stay verified.
+            assert!(table.scan_index().is_none());
+            let plain = TempDir::new("compact-plain-flags");
+            let other = fixture(plain.path(), mapped);
+            let charge = |t: &SstTable| t.block_cache.stats().point_index_bytes;
+            assert_eq!(charge(&table), charge(&other));
+            for id in 0..97u64 {
+                let key = [b"\0prefix/".as_slice(), &id.to_be_bytes(), b"\xff"].concat();
+                assert_eq!(
+                    table.get(&key, Some(17)).unwrap().unwrap().value,
+                    vec![(id + 17) as u8; 200]
+                );
+            }
+            let locator = table.locators.as_ref().unwrap().locate(b"", None).unwrap();
+            let file = std::fs::OpenOptions::new()
+                .write(true)
+                .open(dir.path().join("1.sst"))
+                .unwrap();
+            file.write_all_at(b"X", locator.offset as u64).unwrap();
+            file.sync_all().unwrap();
+            assert!(matches!(table.get(b"", None), Err(SstError::Corrupt(_))));
         }
     }
 }

@@ -1,0 +1,33 @@
+--- a/src/sstable/reader.rs
++++ b/src/sstable/reader.rs
+@@ -420,7 +420,7 @@
+                 .map_err(|e| bad(e.to_string()))?;
+             let count = u32::from_le_bytes(header[16..20].try_into().unwrap()) as u64;
+             let buckets = u32::from_le_bytes(header[20..24].try_into().unwrap()) as u64;
+-            let compact_possible = count * 8 + buckets * 4 <= block_cache.capacity() as u64;
++            let compact_possible = compact_admission(count, buckets, offset, block_cache.capacity());
+             let resident = (!block_cache.prefer_compact_points())
+                 .then(|| {
+                     offset
+@@ -1453,3 +1453,21 @@
+         }
+     }
+ }
++
++// A file may exceed usize on a 32-bit reader even when its locator metadata
++// fits the cache. Preserve the positional sorted fallback for those tables.
++#[inline(always)]
++fn compact_admission(count: u64, buckets: u64, data_end: u64, capacity: usize) -> bool {
++    usize::try_from(data_end).is_ok() && count * 8 + buckets * 4 <= capacity as u64
++}
++
++#[cfg(test)]
++mod compact_address_space_tests {
++    #[test]
++    fn unaddressable_data_region_does_not_select_compact_decoding() {
++        assert_eq!(
++            super::compact_admission(1, 1, u64::MAX, 16),
++            cfg!(target_pointer_width = "64")
++        );
++    }
++}

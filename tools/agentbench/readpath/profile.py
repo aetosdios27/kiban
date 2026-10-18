@@ -9,11 +9,11 @@ import hashlib
 import gzip
 from fold import restore_ips
 
-from run import ROOT, BINARY, config
+from run import ROOT, BINARY, CPU, config
 import json
 
-# Offline stack decoding and SVG generation also stay off the E-core sweep.
-os.sched_setaffinity(0, {2, 3, 4, 5})
+# Offline decoding follows the configured build CPU set.
+os.sched_setaffinity(0, {int(c) for c in os.environ.get('READBENCH_BUILD_CPUS', '2,3,4,5').split(',')})
 
 PERF = ROOT / 'target/read-path-tools/root/usr/bin/perf'
 INFERNO = ROOT / 'target/read-path-tools/inferno/bin'
@@ -32,12 +32,12 @@ def collect(c, folder, name, record=False, flamegraph=True):
         env = {**os.environ, 'READBENCH_PERF_CTL':str(ctl), 'READBENCH_PERF_ACK':str(ack)}
         if record:
             command = ['record', '-e', 'cpu_core/cycles/u', '--no-inherit', '--user-callchains',
-                       '-m', '128', '-c', '1000000', '-g', '--call-graph', 'dwarf,8192',
+                       '-m', os.environ.get('READBENCH_PERF_PAGES', '128'), '-c', '1000000', '-g', '--call-graph', 'dwarf,8192',
                        '-o', str(folder/(name+'.data'))]
         else:
             command = ['stat', '-x', ';', '-e', EVENTS, '-o', str(folder/(name+'.stat'))]
         with (folder/(name+'.log')).open('w') as log:
-            subprocess.run(['taskset','-c','3', str(PERF), *command,
+            subprocess.run(['taskset','-c',str(CPU), str(PERF), *command,
                             '--control', f'fifo:{ctl},{ack}', '-D', '-1', '--', str(BINARY), str(path)],
                            check=True, env=env, stdout=log, stderr=log)
     if record:

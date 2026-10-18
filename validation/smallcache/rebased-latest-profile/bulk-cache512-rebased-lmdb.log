@@ -1,0 +1,6 @@
+Events disabled
+{"backend":"lmdb","cache_bytes":536870912,"durable":false,"point_index":true,"type":"requested_config"}
+{"backend":"lmdb","details":{"heed3":"0.22.0","lmdb_flags":"EnvFlags(NO_SYNC | NO_META_SYNC)","lmdb_flags_bits":327680,"map_size_bytes":10737418240},"type":"backend_config"}
+Events enabled
+Events disabled
+{"digest":804,"errors":0,"ns":3291431757,"operations":1000000,"type":"profile"}

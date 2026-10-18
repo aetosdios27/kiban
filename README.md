@@ -91,12 +91,14 @@ several databases multiplies it. Set `block_cache_bytes` explicitly to override
 it, including zero to disable block admission.
 
 `KibanOptions::point_index` is opt-in (`false` by default). It writes compact
-`KIBANPH3` perfect-hash sections in format-4 SSTs. Readers also accept existing
-`KIBANPH2` sections and format-3 tables. Section and sorted backing residency
-share the block-cache budget; denied admission uses sorted blocks. PH2-only
-engines reject PH3, so rewrite with the option off before downgrading. See the
-[encoding](validation/pointindex-cost/DESIGN.md) and
-[cost validation](validation/pointindex-cost/REPORT.md).
+`KIBANPH3` sections with per-version value checksums in format-4 SSTs. Readers
+also accept PH2, flag-zero PH3, and format-3 tables. When the dataset exceeds the
+cache budget, resident locators can fetch and verify exact values through pread
+or the existing `mmap_max_level` option. Locator and full-data residency share
+the block-cache budget. Denied admission uses verified sorted blocks. Older
+engines may reject the new section feature; rewrite with the option off before
+downgrading. See the [encoding](validation/pointindex-cost/DESIGN.md) and
+[small-cache validation](validation/smallcache/REPORT.md).
 
 ## Checkpoints, backups and inspection
 

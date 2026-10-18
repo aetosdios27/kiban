@@ -1,0 +1,170 @@
+[
+  {
+    "name": "bulk-cache32-before-kiban",
+    "mean_us": 4.28106775,
+    "events_per_op": {
+      "cpu_core/cycles/u": 12549.995545,
+      "cpu_core/instructions/u": 49116.773141,
+      "cpu_core/L1-dcache-load-misses/u": 79.777011,
+      "cpu_core/LLC-load-misses/u": 0.100902,
+      "cpu_core/branch-misses/u": 20.486846,
+      "cpu_core/dTLB-load-misses/u": 0.316376,
+      "minor-faults:u": 0.000363,
+      "major-faults:u": 0.0
+    }
+  },
+  {
+    "name": "bulk-cache32-before-lmdb",
+    "mean_us": 3.703833323,
+    "events_per_op": {
+      "cpu_core/cycles/u": 10484.378402,
+      "cpu_core/instructions/u": 42342.608408,
+      "cpu_core/L1-dcache-load-misses/u": 62.087099,
+      "cpu_core/LLC-load-misses/u": 0.072346,
+      "cpu_core/branch-misses/u": 22.146047,
+      "cpu_core/dTLB-load-misses/u": 0.10454,
+      "minor-faults:u": 0.000478,
+      "major-faults:u": 0.0
+    }
+  },
+  {
+    "name": "bulk-cache32-rebased-kiban",
+    "mean_us": 4.5156246719999995,
+    "events_per_op": {
+      "cpu_core/cycles/u": 12217.887167,
+      "cpu_core/instructions/u": 49044.152047,
+      "cpu_core/L1-dcache-load-misses/u": 77.860618,
+      "cpu_core/LLC-load-misses/u": 0.083593,
+      "cpu_core/branch-misses/u": 12.994622,
+      "cpu_core/dTLB-load-misses/u": 0.258915,
+      "minor-faults:u": 0.00042,
+      "major-faults:u": 0.0
+    }
+  },
+  {
+    "name": "bulk-cache32-rebased-lmdb",
+    "mean_us": 3.599812507,
+    "events_per_op": {
+      "cpu_core/cycles/u": 9866.875897,
+      "cpu_core/instructions/u": 42342.508431,
+      "cpu_core/L1-dcache-load-misses/u": 60.113193,
+      "cpu_core/LLC-load-misses/u": 0.073292,
+      "cpu_core/branch-misses/u": 14.736435,
+      "cpu_core/dTLB-load-misses/u": 0.103653,
+      "minor-faults:u": 0.000479,
+      "major-faults:u": 0.0
+    }
+  },
+  {
+    "name": "bulk-cache512-before-kiban",
+    "mean_us": 4.064638824,
+    "events_per_op": {
+      "cpu_core/cycles/u": 12016.720562,
+      "cpu_core/instructions/u": 48518.77632,
+      "cpu_core/L1-dcache-load-misses/u": 74.633623,
+      "cpu_core/LLC-load-misses/u": 0.074422,
+      "cpu_core/branch-misses/u": 20.139432,
+      "cpu_core/dTLB-load-misses/u": 0.326149,
+      "minor-faults:u": 0.000349,
+      "major-faults:u": 0.0
+    }
+  },
+  {
+    "name": "bulk-cache512-before-lmdb",
+    "mean_us": 3.7324394659999998,
+    "events_per_op": {
+      "cpu_core/cycles/u": 10078.186783,
+      "cpu_core/instructions/u": 42342.508503,
+      "cpu_core/L1-dcache-load-misses/u": 57.214681,
+      "cpu_core/LLC-load-misses/u": 0.06698,
+      "cpu_core/branch-misses/u": 21.901959,
+      "cpu_core/dTLB-load-misses/u": 0.094533,
+      "minor-faults:u": 0.000478,
+      "major-faults:u": 0.0
+    }
+  },
+  {
+    "name": "bulk-cache512-rebased-kiban",
+    "mean_us": 4.971689113,
+    "events_per_op": {
+      "cpu_core/cycles/u": 12741.297582,
+      "cpu_core/instructions/u": 48451.071638,
+      "cpu_core/L1-dcache-load-misses/u": 80.321016,
+      "cpu_core/LLC-load-misses/u": 0.106871,
+      "cpu_core/branch-misses/u": 14.522592,
+      "cpu_core/dTLB-load-misses/u": 0.391274,
+      "minor-faults:u": 0.000394,
+      "major-faults:u": 0.0
+    }
+  },
+  {
+    "name": "bulk-cache512-rebased-lmdb",
+    "mean_us": 3.291431757,
+    "events_per_op": {
+      "cpu_core/cycles/u": 9552.408548,
+      "cpu_core/instructions/u": 42342.607452,
+      "cpu_core/L1-dcache-load-misses/u": 55.236271,
+      "cpu_core/LLC-load-misses/u": 0.060507,
+      "cpu_core/branch-misses/u": 14.384041,
+      "cpu_core/dTLB-load-misses/u": 0.096503,
+      "minor-faults:u": 0.000478,
+      "major-faults:u": 0.0
+    }
+  },
+  {
+    "name": "bulk-cacheNone-before-kiban",
+    "mean_us": 4.516876892,
+    "events_per_op": {
+      "cpu_core/cycles/u": 12220.895696,
+      "cpu_core/instructions/u": 48521.294964,
+      "cpu_core/L1-dcache-load-misses/u": 77.222889,
+      "cpu_core/LLC-load-misses/u": 0.088728,
+      "cpu_core/branch-misses/u": 20.07017,
+      "cpu_core/dTLB-load-misses/u": 0.496958,
+      "minor-faults:u": 0.000406,
+      "major-faults:u": 0.0
+    }
+  },
+  {
+    "name": "bulk-cacheNone-before-lmdb",
+    "mean_us": 3.757754922,
+    "events_per_op": {
+      "cpu_core/cycles/u": 10068.172592,
+      "cpu_core/instructions/u": 42340.762848,
+      "cpu_core/L1-dcache-load-misses/u": 56.723879,
+      "cpu_core/LLC-load-misses/u": 0.058464,
+      "cpu_core/branch-misses/u": 21.531642,
+      "cpu_core/dTLB-load-misses/u": 0.086233,
+      "minor-faults:u": 0.000479,
+      "major-faults:u": 0.0
+    }
+  },
+  {
+    "name": "bulk-cacheNone-rebased-kiban",
+    "mean_us": 4.385912296000001,
+    "events_per_op": {
+      "cpu_core/cycles/u": 11873.989802,
+      "cpu_core/instructions/u": 48453.800264,
+      "cpu_core/L1-dcache-load-misses/u": 77.096934,
+      "cpu_core/LLC-load-misses/u": 0.095727,
+      "cpu_core/branch-misses/u": 12.642063,
+      "cpu_core/dTLB-load-misses/u": 0.2244,
+      "minor-faults:u": 0.00038,
+      "major-faults:u": 0.0
+    }
+  },
+  {
+    "name": "bulk-cacheNone-rebased-lmdb",
+    "mean_us": 3.376045638,
+    "events_per_op": {
+      "cpu_core/cycles/u": 9773.343481,
+      "cpu_core/instructions/u": 42340.662461,
+      "cpu_core/L1-dcache-load-misses/u": 56.998322,
+      "cpu_core/LLC-load-misses/u": 0.077013,
+      "cpu_core/branch-misses/u": 14.191791,
+      "cpu_core/dTLB-load-misses/u": 0.097166,
+      "minor-faults:u": 0.000478,
+      "major-faults:u": 0.0
+    }
+  }
+]

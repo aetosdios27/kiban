@@ -1,0 +1,11 @@
+{
+  "cpu": 6,
+  "stage": 2,
+  "counters_operations": 1000000,
+  "stacks_operations": 300000,
+  "events": "cpu_core/cycles/u,cpu_core/instructions/u,cpu_core/L1-dcache-load-misses/u,cpu_core/LLC-load-misses/u,cpu_core/branch-misses/u,cpu_core/dTLB-load-misses/u,minor-faults:u,major-faults:u,cpu_core/ref-cycles/u,task-clock:u",
+  "binaries": {
+    "before": "147530d97786dcd731eca529865e23826c4d59a0b8edcc817a9dc7c700298b39",
+    "rebased": "dac89ce9f596806f99a4dde64661ee74f65ee0aa609662c5b96f54fff5594a59"
+  }
+}

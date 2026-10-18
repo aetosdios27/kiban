@@ -65,6 +65,13 @@ impl TableBuilder {
     }
 
     #[cfg(test)]
+    pub(crate) fn with_point_index_without_value_crc() -> Self {
+        Self {
+            point: Some(PointBuilder::without_value_crc()),
+            ..Self::default()
+        }
+    }
+    #[cfg(test)]
     pub(crate) fn with_legacy_point_index() -> Self {
         Self {
             point: Some(PointBuilder::legacy()),

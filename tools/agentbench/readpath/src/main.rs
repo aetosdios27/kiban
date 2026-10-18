@@ -351,6 +351,31 @@ fn writes(o: &Options) -> Result<()> {
     )
 }
 
+fn inspect(o: &Options) -> Result<()> {
+    let started = Instant::now();
+    let db = kiban::db::SharedKiban::open_with_options(
+        &o.suite.db,
+        KibanOptions {
+            block_cache_bytes: o.cache_mib.map_or_else(
+                || KibanOptions::default().block_cache_bytes,
+                |mib| mib << 20,
+            ),
+            mmap_max_level: o.mmap_max_level,
+            ..KibanOptions::default()
+        },
+    )?;
+    let open_ns = started.elapsed().as_nanos();
+    let stats = db.stats()?;
+    let cache = stats.block_cache;
+    assert!(cache.resident_bytes <= cache.capacity_bytes);
+    let row = json!({"type":"inspection", "open_ns":open_ns,
+        "capacity_bytes":cache.capacity_bytes, "resident_bytes":cache.resident_bytes,
+        "point_index_bytes":cache.point_index_bytes, "resident_entries":cache.resident_entries,
+        "proc_status":std::fs::read_to_string("/proc/self/status")?});
+    std::fs::write(&o.suite.output, format!("{row}\n"))?;
+    Ok(())
+}
+
 fn run() -> Result<()> {
     let path = std::env::args()
         .nth(1)
@@ -384,6 +409,7 @@ fn run() -> Result<()> {
         "scan-cost" => remix_cost::run(&o),
         "cold" => cold::run(&o),
         "micro" => micro::run(&o),
+        "inspect" => inspect(&o),
         _ => Err("unknown action".into()),
     }
 }
