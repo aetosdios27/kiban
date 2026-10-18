@@ -174,12 +174,15 @@ fn encode_with(builder: PointBuilder, encoding: Encoding) -> Result<Vec<u8>, Sst
         encoding.count,
         encoding.seq,
         encoding.value,
-        (if encoding.checksum { CHECKSUM_FLAG as usize } else { 0 })
-            | if builder.scan_prefix_len > 0 {
-                SCAN_FLAG as usize
-            } else {
-                0
-            },
+        (if encoding.checksum {
+            CHECKSUM_FLAG as usize
+        } else {
+            0
+        }) | if builder.scan_prefix_len > 0 {
+            SCAN_FLAG as usize
+        } else {
+            0
+        },
     ] {
         bytes.extend_from_slice(&(w as u32).to_le_bytes());
     }

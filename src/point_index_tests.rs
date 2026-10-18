@@ -834,3 +834,91 @@ fn remix_memtable_histories_emit_one_visible_value_per_key() {
         vec![b"old".to_vec()]
     );
 }
+
+/// PH3 tables carry the per-value CRC (flag bit 0) and the scan extension
+/// (flag bit 1) together. Both resident modes (full backing with the scan
+/// directory, and cache-resident locators without it) must agree with a model.
+#[test]
+fn ph3_value_crc_and_scan_extension_together_match_model_and_detect_corruption() {
+    for (cache, scan_expected) in [(32 * 1024 * 1024, true), (192 * 1024, false)] {
+        let dir = TempDir::new("ph3-crc-scan");
+        let mut opts = options(true, cache);
+        opts.scan_prefix_len = 2;
+        opts.l0_compaction_trigger = 100;
+        opts.l0_write_stall_trigger = 200;
+        let mut db = Kiban::open_with_options(dir.path(), opts.clone()).unwrap();
+        let mut model = BTreeMap::<Vec<u8>, Vec<u8>>::new();
+        let agent = |a: u8, id: u64| [&[b'a', b'0' + a][..], &id.to_be_bytes()].concat();
+        for a in 0..3u8 {
+            for id in 0..400u64 {
+                let value = vec![a ^ id as u8; 150];
+                db.put(agent(a, id), value.clone()).unwrap();
+                model.insert(agent(a, id), value);
+            }
+        }
+        db.flush_without_compaction().unwrap();
+        let snapshot = db.snapshot();
+        let old = model.clone();
+        for id in (0..400u64).step_by(3) {
+            db.delete(agent(1, id)).unwrap();
+            model.remove(&agent(1, id));
+            let value = vec![0xee; 150];
+            db.put(agent(2, id), value.clone()).unwrap();
+            model.insert(agent(2, id), value);
+        }
+        db.flush_without_compaction().unwrap();
+        let resident = db
+            .version
+            .scan
+            .get_or_init(|| crate::remix::Remix::build(&db.version));
+        assert_eq!(resident.is_some(), scan_expected, "cache {cache}");
+        assert!(db.cache.stats().point_index_bytes > 0);
+        for (k, v) in &model {
+            assert_eq!(db.get(k).unwrap().as_deref(), Some(v.as_slice()));
+        }
+        assert_eq!(db.get(&agent(1, 0)).unwrap(), None);
+        for a in 0..3u8 {
+            let prefix = vec![b'a', b'0' + a];
+            for count in [1, 10, 500] {
+                let expected = |m: &BTreeMap<Vec<u8>, Vec<u8>>| {
+                    m.range(prefix.clone()..)
+                        .take_while(|(k, _)| k.starts_with(&prefix))
+                        .take(count)
+                        .map(|(_, v)| v.clone())
+                        .collect::<Vec<_>>()
+                };
+                assert_eq!(
+                    db.prefix_values(&prefix, count, |v| Ok::<_, DbError>(v.to_vec()))
+                        .unwrap(),
+                    expected(&model)
+                );
+                assert_eq!(
+                    snapshot
+                        .range_values(&prefix, &[b'a', b'1' + a], count, |v| {
+                            Ok::<_, DbError>(v.to_vec())
+                        })
+                        .unwrap(),
+                    expected(&old)
+                );
+            }
+        }
+        drop(snapshot);
+        db.close().unwrap();
+
+        // Corrupting a stored value fails open (admission checks every block
+        // and every per-value CRC) in both resident modes.
+        let sst = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .filter(|p| p.extension().is_some_and(|e| e == SST_EXTENSION))
+            .min()
+            .unwrap();
+        let mut bytes = std::fs::read(&sst).unwrap();
+        bytes[200] ^= 0x40;
+        std::fs::write(&sst, bytes).unwrap();
+        assert!(
+            Kiban::open_with_options(dir.path(), opts).is_err(),
+            "cache {cache}"
+        );
+    }
+}

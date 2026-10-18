@@ -1328,7 +1328,10 @@ mod compact_point_tests {
     use std::os::unix::fs::FileExt;
 
     fn fixture(path: &Path, mapped: bool) -> SstTable {
-        let mut builder = TableBuilder::with_point_index(true);
+        fixture_with(path, mapped, TableBuilder::with_point_index(true))
+    }
+
+    fn fixture_with(path: &Path, mapped: bool, mut builder: TableBuilder) -> SstTable {
         builder.add(Kind::Put, b"", b"empty", 1).unwrap();
         for id in 0..97 {
             let key = [b"\0prefix/".as_slice(), &(id as u64).to_be_bytes(), b"\xff"].concat();
@@ -1462,5 +1465,34 @@ mod compact_point_tests {
                 });
             }
         });
+    }
+
+    #[test]
+    fn locators_admit_tables_with_scan_extension_and_still_check_values() {
+        for mapped in [false, true] {
+            let dir = TempDir::new("compact-scan-flags");
+            let table = fixture_with(dir.path(), mapped, TableBuilder::with_scan_index(true, 4));
+            // Locator mode drops the scan directory; point reads stay verified.
+            assert!(table.scan_index().is_none());
+            let plain = TempDir::new("compact-plain-flags");
+            let other = fixture(plain.path(), mapped);
+            let charge = |t: &SstTable| t.block_cache.stats().point_index_bytes;
+            assert_eq!(charge(&table), charge(&other));
+            for id in 0..97u64 {
+                let key = [b"\0prefix/".as_slice(), &id.to_be_bytes(), b"\xff"].concat();
+                assert_eq!(
+                    table.get(&key, Some(17)).unwrap().unwrap().value,
+                    vec![(id + 17) as u8; 200]
+                );
+            }
+            let locator = table.locators.as_ref().unwrap().locate(b"", None).unwrap();
+            let file = std::fs::OpenOptions::new()
+                .write(true)
+                .open(dir.path().join("1.sst"))
+                .unwrap();
+            file.write_all_at(b"X", locator.offset as u64).unwrap();
+            file.sync_all().unwrap();
+            assert!(matches!(table.get(b"", None), Err(SstError::Corrupt(_))));
+        }
     }
 }
