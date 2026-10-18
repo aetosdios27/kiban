@@ -1,0 +1,14 @@
+{
+  "backend": "lmdb",
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/target/remix-data/after/lmdb-10000-bulk-write",
+  "n": 10000,
+  "operations": 1000,
+  "k": 10,
+  "seed": 20261016,
+  "output": "/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/validation/remix-engine/writes/fast/1000000-bulk-512-r4-after-lmdb.jsonl",
+  "action": "write",
+  "layout": "bulk",
+  "cache_mib": 512,
+  "point_index": true,
+  "durable": false
+}

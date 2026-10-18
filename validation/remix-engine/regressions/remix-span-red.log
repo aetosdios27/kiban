@@ -1,0 +1,24 @@
+   Compiling kiban v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.99s
+     Running unittests src/lib.rs (target/debug/deps/kiban-60f9814aeb7cdf24)
+
+running 1 test
+test db::point_index_tests::remix_memtable_handoff_respects_remaining_source_span ... FAILED
+
+failures:
+
+---- db::point_index_tests::remix_memtable_handoff_respects_remaining_source_span stdout ----
+
+thread 'db::point_index_tests::remix_memtable_handoff_respects_remaining_source_span' (477496) panicked at src/point_index_tests.rs:709:5:
+assertion `left == right` failed
+  left: [[100], [1], [2], [3], [4], [10], [6], [7], [8], [9]]
+ right: [[100], [1], [2], [3], [4], [5], [6], [7], [8], [9]]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    db::point_index_tests::remix_memtable_handoff_respects_remaining_source_span
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 356 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`

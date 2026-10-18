@@ -1,0 +1,457 @@
+reads bulk-512 1000000-bulk-512-r1-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 32.0%
+reads bulk-512 1000000-bulk-512-r1-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 19.2%
+reads bulk-512 1000000-bulk-512-r1-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 18.5%
+reads bulk-512 1000000-bulk-512-r1-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+reads bulk-512 1000000-bulk-512-r2-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.1%
+reads bulk-512 1000000-bulk-512-r2-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.5%
+reads bulk-512 1000000-bulk-512-r2-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 14.8%
+reads bulk-512 1000000-bulk-512-r2-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+reads bulk-512 1000000-bulk-512-r3-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 16.0%
+reads bulk-512 1000000-bulk-512-r3-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.4%
+reads bulk-512 1000000-bulk-512-r3-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 8.0%
+reads bulk-512 1000000-bulk-512-r3-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 12.0%
+reads bulk-512 1000000-bulk-512-r4-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.1%
+reads bulk-512 1000000-bulk-512-r4-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 8.0%
+reads bulk-512 1000000-bulk-512-r4-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 20.0%
+reads bulk-512 1000000-bulk-512-r4-before-lmdb
+reads bulk-512 1000000-bulk-512-r5-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.7%
+reads bulk-512 1000000-bulk-512-r5-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 8.3%
+reads bulk-512 1000000-bulk-512-r5-after-kiban
+reads bulk-512 1000000-bulk-512-r5-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.4%
+reads bulk-default 1000000-bulk-None-r1-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 8.0%
+reads bulk-default 1000000-bulk-None-r1-before-lmdb
+reads bulk-default 1000000-bulk-None-r1-after-kiban
+reads bulk-default 1000000-bulk-None-r1-after-lmdb
+reads bulk-default 1000000-bulk-None-r2-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+reads bulk-default 1000000-bulk-None-r2-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 16.0%
+reads bulk-default 1000000-bulk-None-r2-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+reads bulk-default 1000000-bulk-None-r2-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 12.0%
+reads bulk-default 1000000-bulk-None-r3-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.7%
+reads bulk-default 1000000-bulk-None-r3-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+reads bulk-default 1000000-bulk-None-r3-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.5%
+reads bulk-default 1000000-bulk-None-r3-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 18.5%
+reads bulk-default 1000000-bulk-None-r4-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+reads bulk-default 1000000-bulk-None-r4-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 8.0%
+reads bulk-default 1000000-bulk-None-r4-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 16.0%
+reads bulk-default 1000000-bulk-None-r4-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 28.0%
+reads bulk-default 1000000-bulk-None-r5-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.7%
+reads bulk-default 1000000-bulk-None-r5-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 16.7%
+reads bulk-default 1000000-bulk-None-r5-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.4%
+reads bulk-default 1000000-bulk-None-r5-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.5%
+reads normal-512 1000000-normal-512-r1-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.4%
+reads normal-512 1000000-normal-512-r1-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+reads normal-512 1000000-normal-512-r1-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.5%
+reads normal-512 1000000-normal-512-r1-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+reads normal-512 1000000-normal-512-r2-after-kiban
+reads normal-512 1000000-normal-512-r2-after-lmdb
+reads normal-512 1000000-normal-512-r2-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 8.0%
+reads normal-512 1000000-normal-512-r2-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 15.4%
+reads normal-512 1000000-normal-512-r3-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+reads normal-512 1000000-normal-512-r3-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.2%
+reads normal-512 1000000-normal-512-r3-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 8.0%
+reads normal-512 1000000-normal-512-r3-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+reads normal-512 1000000-normal-512-r4-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 8.0%
+reads normal-512 1000000-normal-512-r4-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 25.9%
+reads normal-512 1000000-normal-512-r4-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.7%
+reads normal-512 1000000-normal-512-r4-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 32.0%
+reads normal-512 1000000-normal-512-r5-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.7%
+reads normal-512 1000000-normal-512-r5-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 15.4%
+reads normal-512 1000000-normal-512-r5-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.1%
+reads normal-512 1000000-normal-512-r5-after-lmdb
+reads normal-default 1000000-normal-None-r1-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 20.0%
+reads normal-default 1000000-normal-None-r1-before-lmdb
+reads normal-default 1000000-normal-None-r1-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.4%
+reads normal-default 1000000-normal-None-r1-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.1%
+reads normal-default 1000000-normal-None-r2-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.4%
+reads normal-default 1000000-normal-None-r2-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 15.4%
+reads normal-default 1000000-normal-None-r2-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 14.8%
+reads normal-default 1000000-normal-None-r2-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 34.6%
+reads normal-default 1000000-normal-None-r3-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+reads normal-default 1000000-normal-None-r3-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+reads normal-default 1000000-normal-None-r3-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.7%
+reads normal-default 1000000-normal-None-r3-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.7%
+reads normal-default 1000000-normal-None-r4-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+reads normal-default 1000000-normal-None-r4-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 18.5%
+reads normal-default 1000000-normal-None-r4-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+reads normal-default 1000000-normal-None-r4-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 44.0%
+reads normal-default 1000000-normal-None-r5-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 20.0%
+reads normal-default 1000000-normal-None-r5-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 12.0%
+reads normal-default 1000000-normal-None-r5-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+reads normal-default 1000000-normal-None-r5-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.7%
+varied bulk-512 1000000-bulk-512-r1-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 8.0%
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.5%
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.5%
+varied bulk-512 1000000-bulk-512-r1-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.5%
+waiting for quiet host: 0 build/test processes; CPU4 busy 34.6%
+waiting for quiet host: 0 build/test processes; CPU4 busy 19.2%
+varied bulk-512 1000000-bulk-512-r1-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.4%
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.1%
+waiting for quiet host: 0 build/test processes; CPU4 busy 16.7%
+waiting for quiet host: 0 build/test processes; CPU4 busy 12.0%
+varied bulk-512 1000000-bulk-512-r1-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+waiting for quiet host: 0 build/test processes; CPU4 busy 14.8%
+waiting for quiet host: 0 build/test processes; CPU4 busy 32.0%
+waiting for quiet host: 0 build/test processes; CPU4 busy 16.0%
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.5%
+varied bulk-512 1000000-bulk-512-r2-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 15.4%
+varied bulk-512 1000000-bulk-512-r2-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.5%
+varied bulk-512 1000000-bulk-512-r2-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.5%
+varied bulk-512 1000000-bulk-512-r2-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.2%
+varied bulk-512 1000000-bulk-512-r3-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 12.5%
+waiting for quiet host: 0 build/test processes; CPU4 busy 14.8%
+varied bulk-512 1000000-bulk-512-r3-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.7%
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.7%
+varied bulk-512 1000000-bulk-512-r3-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 12.5%
+varied bulk-512 1000000-bulk-512-r3-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.5%
+varied bulk-512 1000000-bulk-512-r4-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 18.5%
+varied bulk-512 1000000-bulk-512-r4-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.4%
+varied bulk-512 1000000-bulk-512-r4-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.7%
+varied bulk-512 1000000-bulk-512-r4-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+varied bulk-512 1000000-bulk-512-r5-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+varied bulk-512 1000000-bulk-512-r5-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+varied bulk-512 1000000-bulk-512-r5-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.1%
+varied bulk-512 1000000-bulk-512-r5-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.7%
+varied bulk-default 1000000-bulk-None-r1-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.4%
+varied bulk-default 1000000-bulk-None-r1-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.7%
+varied bulk-default 1000000-bulk-None-r1-after-kiban
+varied bulk-default 1000000-bulk-None-r1-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.1%
+varied bulk-default 1000000-bulk-None-r2-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+varied bulk-default 1000000-bulk-None-r2-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+varied bulk-default 1000000-bulk-None-r2-before-kiban
+varied bulk-default 1000000-bulk-None-r2-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.7%
+varied bulk-default 1000000-bulk-None-r3-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+varied bulk-default 1000000-bulk-None-r3-before-lmdb
+varied bulk-default 1000000-bulk-None-r3-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+varied bulk-default 1000000-bulk-None-r3-after-lmdb
+varied bulk-default 1000000-bulk-None-r4-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.4%
+varied bulk-default 1000000-bulk-None-r4-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+varied bulk-default 1000000-bulk-None-r4-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.7%
+varied bulk-default 1000000-bulk-None-r4-before-lmdb
+varied bulk-default 1000000-bulk-None-r5-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+varied bulk-default 1000000-bulk-None-r5-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+varied bulk-default 1000000-bulk-None-r5-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.4%
+varied bulk-default 1000000-bulk-None-r5-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.7%
+varied normal-512 1000000-normal-512-r1-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.1%
+varied normal-512 1000000-normal-512-r1-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.7%
+varied normal-512 1000000-normal-512-r1-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+varied normal-512 1000000-normal-512-r1-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.5%
+varied normal-512 1000000-normal-512-r2-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+varied normal-512 1000000-normal-512-r2-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+varied normal-512 1000000-normal-512-r2-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+varied normal-512 1000000-normal-512-r2-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.4%
+varied normal-512 1000000-normal-512-r3-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+varied normal-512 1000000-normal-512-r3-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+varied normal-512 1000000-normal-512-r3-after-kiban
+varied normal-512 1000000-normal-512-r3-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.7%
+varied normal-512 1000000-normal-512-r4-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.4%
+varied normal-512 1000000-normal-512-r4-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.5%
+varied normal-512 1000000-normal-512-r4-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+varied normal-512 1000000-normal-512-r4-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+varied normal-512 1000000-normal-512-r5-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.4%
+varied normal-512 1000000-normal-512-r5-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+varied normal-512 1000000-normal-512-r5-after-kiban
+varied normal-512 1000000-normal-512-r5-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 12.0%
+varied normal-default 1000000-normal-None-r1-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.7%
+varied normal-default 1000000-normal-None-r1-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+varied normal-default 1000000-normal-None-r1-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.7%
+varied normal-default 1000000-normal-None-r1-after-lmdb
+varied normal-default 1000000-normal-None-r2-after-kiban
+varied normal-default 1000000-normal-None-r2-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+varied normal-default 1000000-normal-None-r2-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.7%
+varied normal-default 1000000-normal-None-r2-before-lmdb
+varied normal-default 1000000-normal-None-r3-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+varied normal-default 1000000-normal-None-r3-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 19.2%
+varied normal-default 1000000-normal-None-r3-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.7%
+varied normal-default 1000000-normal-None-r3-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+varied normal-default 1000000-normal-None-r4-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.1%
+varied normal-default 1000000-normal-None-r4-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.7%
+varied normal-default 1000000-normal-None-r4-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.7%
+varied normal-default 1000000-normal-None-r4-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.4%
+varied normal-default 1000000-normal-None-r5-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+varied normal-default 1000000-normal-None-r5-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.4%
+varied normal-default 1000000-normal-None-r5-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+varied normal-default 1000000-normal-None-r5-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 14.3%
+writes fast 1000000-bulk-512-r1-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.7%
+writes fast 1000000-bulk-512-r1-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.7%
+writes fast 1000000-bulk-512-r1-after-kiban
+writes fast 1000000-bulk-512-r1-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 10.3%
+writes fast 1000000-bulk-512-r2-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+writes fast 1000000-bulk-512-r2-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+writes fast 1000000-bulk-512-r2-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+writes fast 1000000-bulk-512-r2-before-lmdb
+writes fast 1000000-bulk-512-r3-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.5%
+writes fast 1000000-bulk-512-r3-before-lmdb
+writes fast 1000000-bulk-512-r3-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.5%
+writes fast 1000000-bulk-512-r3-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+writes fast 1000000-bulk-512-r4-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+writes fast 1000000-bulk-512-r4-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.4%
+writes fast 1000000-bulk-512-r4-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+writes fast 1000000-bulk-512-r4-before-lmdb
+writes fast 1000000-bulk-512-r5-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 8.0%
+writes fast 1000000-bulk-512-r5-before-lmdb
+writes fast 1000000-bulk-512-r5-after-kiban
+writes fast 1000000-bulk-512-r5-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+writes durable 1000000-bulk-512-r1-before-kiban
+writes durable 1000000-bulk-512-r1-before-lmdb
+writes durable 1000000-bulk-512-r1-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.7%
+writes durable 1000000-bulk-512-r1-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.7%
+writes durable 1000000-bulk-512-r2-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 14.8%
+writes durable 1000000-bulk-512-r2-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+writes durable 1000000-bulk-512-r2-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+writes durable 1000000-bulk-512-r2-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+writes durable 1000000-bulk-512-r3-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.4%
+writes durable 1000000-bulk-512-r3-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 8.0%
+writes durable 1000000-bulk-512-r3-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+writes durable 1000000-bulk-512-r3-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.4%
+writes durable 1000000-bulk-512-r4-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.4%
+writes durable 1000000-bulk-512-r4-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 57.7%
+writes durable 1000000-bulk-512-r4-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+writes durable 1000000-bulk-512-r4-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.5%
+writes durable 1000000-bulk-512-r5-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+writes durable 1000000-bulk-512-r5-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 53.8%
+writes durable 1000000-bulk-512-r5-after-kiban
+writes durable 1000000-bulk-512-r5-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.7%
+waiting for quiet host: 0 build/test processes; CPU4 busy 17.9%
+waiting for quiet host: 0 build/test processes; CPU4 busy 26.9%
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.1%
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.5%
+waiting for quiet host: 0 build/test processes; CPU4 busy 8.0%
+waiting for quiet host: 0 build/test processes; CPU4 busy 8.0%
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.5%
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.7%
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.4%
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.1%
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.4%
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.7%
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.7%
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.5%
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.4%
+waiting for quiet host: 0 build/test processes; CPU4 busy 15.4%
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+waiting for quiet host: 0 build/test processes; CPU4 busy 14.8%
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.2%
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.5%
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.5%
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+waiting for quiet host: 0 build/test processes; CPU4 busy 14.3%
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.5%
+waiting for quiet host: 0 build/test processes; CPU4 busy 12.0%
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.1%
+waiting for quiet host: 0 build/test processes; CPU4 busy 8.0%
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.4%
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.7%
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.1%
+waiting for quiet host: 0 build/test processes; CPU4 busy 4.0%
+waiting for quiet host: 0 build/test processes; CPU4 busy 8.0%
+waiting for quiet host: 0 build/test processes; CPU4 busy 7.4%
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.1%
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+| Scenario | Workload | Trials | K p50/p99 before (us) | K p50/p99 after (us) | LMDB after (us) | Paired p50 before/after | Paired p99 before/after |
+|---|---|---:|---:|---:|---:|---:|---:|
+| bulk-512 | recall-by-id | 5 | 1.280/2.016 | 1.216/1.952 | 1.920/3.008 | 0.645/0.633 | 0.681/0.678 |
+| bulk-512 | recent-for-agent | 5 | 3.968/7.296 | 2.624/4.992 | 3.136/6.272 | 1.216/0.837 | 1.245/0.796 |
+| bulk-default | recall-by-id | 5 | 1.248/1.952 | 1.184/1.760 | 1.888/2.816 | 0.629/0.627 | 0.623/0.580 |
+| bulk-default | recent-for-agent | 5 | 3.968/7.680 | 2.560/4.864 | 3.136/5.376 | 1.240/0.833 | 1.277/0.881 |
+| normal-512 | recall-by-id | 5 | 1.664/2.688 | 1.696/2.816 | 1.952/3.200 | 0.852/0.867 | 0.800/0.846 |
+| normal-512 | recent-for-agent | 5 | 4.480/8.960 | 2.560/4.608 | 3.136/5.504 | 1.400/0.816 | 1.321/0.878 |
+| normal-default | recall-by-id | 5 | 1.728/2.752 | 1.568/2.624 | 1.888/3.200 | 0.931/0.825 | 0.933/0.833 |
+| normal-default | recent-for-agent | 5 | 4.608/9.728 | 2.624/4.992 | 3.136/5.760 | 1.400/0.833 | 1.462/0.767 |
+| Scenario | Workload | Trials | K p50/p99 before (us) | K p50/p99 after (us) | LMDB after (us) | Paired p50 before/after | Paired p99 before/after |
+|---|---|---:|---:|---:|---:|---:|---:|
+| bulk-512 | varied-bounds | 5 | 5.760/11.008 | 4.608/8.960 | 5.760/10.496 | 1.022/0.833 | 1.000/0.860 |
+| bulk-default | varied-bounds | 5 | 5.376/10.240 | 4.352/9.216 | 5.376/10.752 | 1.023/0.810 | 0.955/0.881 |
+| normal-512 | varied-bounds | 5 | 6.272/12.032 | 4.480/8.704 | 5.376/10.752 | 1.163/0.814 | 1.250/0.857 |
+| normal-default | varied-bounds | 5 | 5.760/11.520 | 3.904/7.808 | 4.992/9.472 | 1.122/0.803 | 1.098/0.847 |
+| Scenario | Workload | Trials | K p50/p99 before (us) | K p50/p99 after (us) | LMDB after (us) | Paired p50 before/after | Paired p99 before/after |
+|---|---|---:|---:|---:|---:|---:|---:|
+| durable | remember | 5 | 1114.112/13107.200 | 1146.880/6553.600 | 2228.224/9961.472 | 0.472/0.515 | 0.607/0.714 |
+| durable | recall-by-id | 5 | 0.848/2.048 | 0.800/2.176 | 0.976/2.560 | 0.855/0.803 | 0.872/0.795 |
+| durable | recent-for-agent | 5 | 3.200/8.704 | 2.688/7.296 | 2.752/6.400 | 1.233/0.980 | 1.694/1.121 |
+| durable | update | 5 | 1146.880/11796.480 | 1114.112/8912.896 | 2293.760/11534.336 | 0.457/0.486 | 0.682/0.679 |
+| durable | mixed-90-10 | 5 | 1.888/1179.648 | 1.824/1179.648 | 1.984/2752.512 | 0.922/0.887 | 0.292/0.429 |
+| fast | remember | 5 | 0.704/7.168 | 0.736/7.296 | 7.296/18.432 | 0.095/0.096 | 0.459/0.459 |
+| fast | recall-by-id | 5 | 0.736/1.152 | 0.720/1.312 | 0.944/1.408 | 0.730/0.776 | 0.774/0.955 |
+| fast | recent-for-agent | 5 | 3.328/6.144 | 2.560/4.864 | 2.560/3.648 | 1.220/0.975 | 1.116/1.070 |
+| fast | update | 5 | 0.832/7.296 | 0.864/7.552 | 7.552/14.592 | 0.105/0.107 | 0.482/0.557 |
+| fast | mixed-90-10 | 5 | 0.880/1.408 | 0.816/1.504 | 0.928/9.472 | 0.902/0.879 | 0.141/0.159 |

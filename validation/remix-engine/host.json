@@ -1,0 +1,14 @@
+{
+  "physical_bytes": 33032925184,
+  "cgroup_limits": [
+    28737957888
+  ],
+  "default_cache_bytes": 449030592,
+  "cpu3_siblings": "3-4",
+  "governor": "powersave",
+  "load": [
+    5.03466796875,
+    5.73974609375,
+    5.7373046875
+  ]
+}

@@ -1,0 +1,18 @@
+reads bulk-512 1000000-bulk-512-r1-before-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 11.5%
+reads bulk-512 1000000-bulk-512-r1-before-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 3.8%
+reads bulk-512 1000000-bulk-512-r1-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 20.0%
+reads bulk-512 1000000-bulk-512-r1-after-lmdb
+waiting for quiet host: 0 build/test processes; CPU4 busy 76.0%
+reads bulk-512 1000000-bulk-512-r2-after-kiban
+waiting for quiet host: 0 build/test processes; CPU4 busy 8.0%
+reads bulk-512 1000000-bulk-512-r2-after-lmdb
+waiting for quiet host: 3 build/test processes; CPU4 busy 15.4%
+waiting for quiet host: 1 build/test processes; CPU4 busy 12.5%
+waiting for quiet host: 1 build/test processes; CPU4 busy 4.0%
+waiting for quiet host: 1 build/test processes; CPU4 busy 4.0%
+waiting for quiet host: 1 build/test processes; CPU4 busy 23.1%
+waiting for quiet host: 1 build/test processes; CPU4 busy 4.0%
+waiting for quiet host: 1 build/test processes; CPU4 busy 80.0%

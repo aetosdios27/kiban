@@ -56,6 +56,14 @@ impl TableBuilder {
         }
     }
 
+    /// Attach the versioned scan extension to PH3. Zero disables it.
+    pub fn with_scan_index(enabled: bool, prefix_len: usize) -> Self {
+        Self {
+            point: enabled.then(|| PointBuilder::with_scan_prefix_len(prefix_len)),
+            ..Self::default()
+        }
+    }
+
     #[cfg(test)]
     pub(crate) fn with_legacy_point_index() -> Self {
         Self {

@@ -1,0 +1,10 @@
+{"config": "1000000-bulk-512-r1-before-kiban.config.json", "started": 1792277705.1040595, "ended": 1792277709.3169327, "load": [4.75146484375, 5.875, 5.52001953125], "affinity": "3"}
+{"config": "1000000-bulk-512-r1-before-lmdb.config.json", "started": 1792277709.318045, "ended": 1792277713.0596042, "load": [4.771484375, 5.8603515625, 5.51708984375], "affinity": "3"}
+{"config": "1000000-bulk-512-r1-after-kiban.config.json", "started": 1792277713.060668, "ended": 1792277717.03044, "load": [4.771484375, 5.8603515625, 5.51708984375], "affinity": "3"}
+{"config": "1000000-bulk-512-r1-after-lmdb.config.json", "started": 1792277717.031369, "ended": 1792277720.8828504, "load": [4.9501953125, 5.87939453125, 5.525390625], "affinity": "3"}
+{"config": "1000000-bulk-512-r2-after-kiban.config.json", "started": 1792277720.883855, "ended": 1792277724.781179, "load": [5.03466796875, 5.8818359375, 5.5283203125], "affinity": "3"}
+{"config": "1000000-bulk-512-r2-after-lmdb.config.json", "started": 1792277724.7821276, "ended": 1792277728.3346622, "load": [5.03173828125, 5.8671875, 5.525390625], "affinity": "3"}
+{"config": "1000000-bulk-512-r2-before-kiban.config.json", "started": 1792277728.335594, "ended": 1792277732.3925931, "load": [5.03173828125, 5.8671875, 5.525390625], "affinity": "3"}
+{"config": "1000000-bulk-512-r2-before-lmdb.config.json", "started": 1792277732.3934808, "ended": 1792277735.9452953, "load": [5.02880859375, 5.8525390625, 5.5224609375], "affinity": "3"}
+{"config": "1000000-bulk-512-r3-before-kiban.config.json", "started": 1792277735.946211, "ended": 1792277740.1953697, "load": [5.0263671875, 5.83837890625, 5.51953125], "affinity": "3"}
+{"config": "1000000-bulk-512-r3-before-lmdb.config.json", "started": 1792277740.196636, "ended": 1792277745.0891116, "load": [5.3447265625, 5.89111328125, 5.53857421875], "affinity": "3"}

@@ -1,0 +1,7 @@
+Events disabled
+scan preparation ready=true ns=263818482 stats=Some(RangeIndexStats { key_groups: 1000000, prefixes: 64, direct_ten_prefixes: 64, resident_bytes: 9532768, build_ns: 263815086 })
+Events enabled
+Events disabled
+{"digest":804,"errors":0,"ns":2337624338,"operations":1000000,"type":"profile"}
+[ perf record: Woken up 284 times to write data ]
+[ perf record: Captured and wrote 70.175 MB /home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/validation/remix-engine/profile/normal-after-kiban-stacks.data (8734 samples) ]

@@ -6,6 +6,9 @@ publish = false
 
 [workspace]
 
+[features]
+remix = []
+
 [dependencies]
 kiban = { path = "../../.." }
 heed3 = "=0.22.0"

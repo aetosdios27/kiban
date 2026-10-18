@@ -7,7 +7,7 @@ mod backend;
 mod block_compare;
 mod block_index;
 mod cold;
-#[path = "../../src/embedded.rs"]
+#[path = "embedded.rs"]
 #[allow(dead_code)]
 mod embedded;
 mod index_hints;
@@ -21,11 +21,14 @@ mod model;
 #[path = "../../../../examples/support/random.rs"]
 #[allow(dead_code)]
 mod random;
+#[cfg(feature = "remix")]
+mod remix_cost;
 mod rocks;
 #[path = "../../src/runner.rs"]
 #[allow(dead_code)]
 mod runner;
 mod sqlite;
+mod varied;
 
 use api::{Backend, Result};
 use kiban::db::{Kiban, KibanOptions};
@@ -72,6 +75,9 @@ struct Options {
     readers: usize,
     #[serde(default)]
     point_index: bool,
+    #[cfg(feature = "remix")]
+    #[serde(default = "scan_prefix_len")]
+    scan_prefix_len: usize,
     #[serde(default)]
     stage: u64,
     #[serde(default)]
@@ -96,6 +102,11 @@ impl Options {
     }
 }
 
+#[cfg(feature = "remix")]
+fn scan_prefix_len() -> usize {
+    18
+}
+
 fn one_reader() -> usize {
     1
 }
@@ -111,6 +122,8 @@ fn open(o: &Options) -> Result<Box<dyn Backend>> {
             &o.suite.db,
             KibanOptions {
                 point_index: o.point_index,
+                #[cfg(feature = "remix")]
+                scan_prefix_len: if o.point_index { o.scan_prefix_len } else { 0 },
                 block_cache_bytes: o.cache_bytes(),
                 mmap_max_level: o.mmap_max_level,
                 ..KibanOptions::default()
@@ -158,6 +171,8 @@ fn prepare(o: &Options) -> Result<()> {
             &c.db,
             KibanOptions {
                 point_index: o.point_index,
+                #[cfg(feature = "remix")]
+                scan_prefix_len: if o.point_index { o.scan_prefix_len } else { 0 },
                 ..KibanOptions::default()
             },
         )?;
@@ -364,6 +379,9 @@ fn run() -> Result<()> {
         "prepare" => prepare(&o),
         "read" | "profile" => reads(&o),
         "write" => writes(&o),
+        "varied" => varied::run(&o),
+        #[cfg(feature = "remix")]
+        "scan-cost" => remix_cost::run(&o),
         "cold" => cold::run(&o),
         "micro" => micro::run(&o),
         _ => Err("unknown action".into()),
@@ -408,6 +426,8 @@ mod tests {
                     action: "read".into(),
                     layout: shape.into(),
                     point_index: true,
+                    #[cfg(feature = "remix")]
+                    scan_prefix_len: 18,
                     cache_mib: Some(32),
                     mmap_max_level: None,
                     readers: 1,

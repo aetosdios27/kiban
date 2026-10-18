@@ -1,0 +1,33 @@
+    Checking kiban-readbench v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/tools/agentbench/readpath)
+error[E0063]: missing field `scan_prefix_len` in initializer of `Options`
+   --> src/main.rs:378:25
+    |
+378 |                 let o = Options {
+    |                         ^^^^^^^ missing `scan_prefix_len`
+
+error: unneeded `return` statement
+  --> src/embedded.rs:81:13
+   |
+81 | /             return self
+82 | |                 .db
+83 | |                 .range_values(start.as_bytes(), end.as_bytes(), k, |value| {
+84 | |                     Ok(serde_json::from_slice(value)?)
+85 | |                 });
+   | |__________________^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#needless_return
+   = note: `-D clippy::needless-return` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::needless_return)]`
+help: remove `return`
+   |
+81 ~             self
+82 +                 .db
+83 +                 .range_values(start.as_bytes(), end.as_bytes(), k, |value| {
+84 +                     Ok(serde_json::from_slice(value)?)
+85 ~                 })
+   |
+
+For more information about this error, try `rustc --explain E0063`.
+error: could not compile `kiban-readbench` (bin "kiban-readbench") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `kiban-readbench` (bin "kiban-readbench" test) due to 1 previous error

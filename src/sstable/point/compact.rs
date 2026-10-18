@@ -4,6 +4,9 @@ use crate::cache::{ArcBlock, BlockMeta};
 
 pub(super) const MAGIC: &[u8; 8] = b"KIBANPH3";
 const HEADER: usize = 64;
+const SCAN_FLAG: u32 = 2;
+const SCAN_MAGIC: &[u8; 8] = b"KIBANSC1";
+const SCAN_HEADER: usize = 24;
 pub(super) const GROUP: usize = 1024;
 
 #[inline(always)]
@@ -67,6 +70,11 @@ impl Encoding {
             + b.heads.len().div_ceil(2) * 4
             + b.heads.len() * (self.address + 2)
             + self.arena_len(b)
+            + if b.scan_prefix_len > 0 {
+                SCAN_HEADER + b.heads.len() * self.address + 8
+            } else {
+                0
+            }
             + 5
     }
     fn tombstone(self) -> u64 {
@@ -75,6 +83,11 @@ impl Encoding {
 }
 
 pub(super) fn encode(builder: PointBuilder) -> Result<Vec<u8>, SstError> {
+    if builder.scan_prefix_len > 24 {
+        return Err(SstError::InvalidArgument(
+            "scan prefix length exceeds 24".into(),
+        ));
+    }
     let encoding = Encoding::for_builder(&builder);
     encode_with(builder, encoding)
 }
@@ -126,7 +139,7 @@ fn encode_with(builder: PointBuilder, encoding: Encoding) -> Result<Vec<u8>, Sst
         }
     }
     let arena_start = HEADER + pilots.len() * 4 + slots.len() * (encoding.address + 2);
-    let mut bytes = Vec::with_capacity(arena_start + arena.len() + 5);
+    let mut bytes = Vec::with_capacity(encoding.section_len(&builder));
     bytes.extend_from_slice(MAGIC);
     bytes.extend_from_slice(&seed.to_le_bytes());
     bytes.extend_from_slice(&(slots.len() as u32).to_le_bytes());
@@ -138,7 +151,11 @@ fn encode_with(builder: PointBuilder, encoding: Encoding) -> Result<Vec<u8>, Sst
         encoding.count,
         encoding.seq,
         encoding.value,
-        0,
+        if builder.scan_prefix_len > 0 {
+            SCAN_FLAG as usize
+        } else {
+            0
+        },
     ] {
         bytes.extend_from_slice(&(w as u32).to_le_bytes());
     }
@@ -151,13 +168,34 @@ fn encode_with(builder: PointBuilder, encoding: Encoding) -> Result<Vec<u8>, Sst
         bytes.extend_from_slice(&fingerprint(hash(keys[member], seed)).to_le_bytes());
     }
     bytes.extend_from_slice(&arena);
+    if builder.scan_prefix_len > 0 {
+        let start = bytes.len();
+        bytes.extend_from_slice(SCAN_MAGIC);
+        bytes.extend_from_slice(&(builder.scan_prefix_len as u32).to_le_bytes());
+        bytes.extend_from_slice(&32u32.to_le_bytes());
+        let prefixes = keys
+            .iter()
+            .enumerate()
+            .filter(|&(i, key)| {
+                i == 0
+                    || key[..key.len().min(builder.scan_prefix_len)]
+                        != keys[i - 1][..keys[i - 1].len().min(builder.scan_prefix_len)]
+            })
+            .count();
+        bytes.extend_from_slice(&(prefixes as u64).to_le_bytes());
+        for &head in &heads {
+            put_uint(&mut bytes, head as u64, encoding.address);
+        }
+        let len = bytes.len() - start;
+        bytes.extend_from_slice(&(len as u64).to_le_bytes());
+    }
     bytes.push(0);
     let crc = crate::crc32::crc32(&bytes);
     bytes.extend_from_slice(&crc.to_le_bytes());
     Ok(bytes)
 }
 
-pub(in crate::sstable) struct CompactIndex {
+pub(crate) struct CompactIndex {
     bytes: ArcBlock,
     data: ArcBlock,
     blocks: Vec<(usize, usize, BlockMeta)>,
@@ -167,6 +205,7 @@ pub(in crate::sstable) struct CompactIndex {
     buckets: usize,
     arena: usize,
     encoding: Encoding,
+    scan: usize,
     _reservation: ResidentReservation,
 }
 impl CompactIndex {
@@ -201,7 +240,7 @@ impl CompactIndex {
             || !matches!(encoding.count, 1 | 2 | 4)
             || !matches!(encoding.seq, 1 | 2 | 4 | 8)
             || !matches!(encoding.value, 2 | 4)
-            || u32_at(&bytes, 52) != 0
+            || u32_at(&bytes, 52) & !SCAN_FLAG != 0
             || buckets
                 .checked_mul(4)
                 .and_then(|n| HEADER.checked_add(n))
@@ -215,6 +254,37 @@ impl CompactIndex {
         {
             return Err(bad("invalid compact dimensions"));
         }
+        let arena_end = bytes.len() - 5;
+        let scan = if u32_at(&bytes, 52) & SCAN_FLAG != 0 {
+            if arena_end < 8 {
+                return Err(bad("truncated scan length"));
+            }
+            let len = usize::try_from(u64_at(&bytes, arena_end - 8))
+                .map_err(|_| bad("scan length overflow"))?;
+            let start = (arena_end - 8)
+                .checked_sub(len)
+                .filter(|&p| p > arena)
+                .ok_or_else(|| bad("scan bounds"))?;
+            if len != SCAN_HEADER + count * encoding.address
+                || &bytes[start..start + 8] != SCAN_MAGIC
+            {
+                return Err(bad("unsupported scan dimensions"));
+            }
+            let prefix_len = u32_at(&bytes, start + 8) as usize;
+            let prefixes = usize::try_from(u64_at(&bytes, start + 16))
+                .map_err(|_| bad("scan prefix count overflow"))?;
+            if !(1..=24).contains(&prefix_len)
+                || u32_at(&bytes, start + 12) != 32
+                || prefixes == 0
+                || prefixes > count
+            {
+                return Err(bad("unsupported scan extractor or stride"));
+            }
+            start
+        } else {
+            0
+        };
+        let arena_end = if scan == 0 { arena_end } else { scan };
         let mut result = Self {
             bytes,
             data,
@@ -225,9 +295,10 @@ impl CompactIndex {
             buckets,
             arena,
             encoding,
+            scan,
             _reservation: reservation,
         };
-        result.validate(blocks)?;
+        result.validate(blocks, arena_end)?;
         Ok(result)
     }
     #[inline(always)]
@@ -240,7 +311,11 @@ impl CompactIndex {
         };
         HEADER + self.buckets * 4 + at * (self.encoding.address + 2)
     }
-    fn validate(&mut self, blocks: impl IntoIterator<Item = (u64, u64)>) -> Result<(), SstError> {
+    fn validate(
+        &mut self,
+        blocks: impl IntoIterator<Item = (u64, u64)>,
+        end: usize,
+    ) -> Result<(), SstError> {
         let e = self.encoding;
         for b in 0..self.buckets {
             let pilot = u32_at(&self.bytes, HEADER + b * 4);
@@ -248,7 +323,6 @@ impl CompactIndex {
                 return Err(bad("compact singleton slot out of bounds"));
             }
         }
-        let end = self.bytes.len() - 5;
         let mut pos = self.arena;
         let mut groups = 0usize;
         let mut remaining = 0usize;
@@ -257,6 +331,7 @@ impl CompactIndex {
         let mut anchor = 0;
         let mut anchor_len = 0;
         let mut previous = Vec::new();
+        let mut scan_prefixes = 0;
         let mut last_seq = None;
         let mut key = Vec::new();
         let mut data_end = 0;
@@ -323,6 +398,23 @@ impl CompactIndex {
                         if groups != 0 && previous.as_slice() >= key {
                             return Err(bad("compact key ordering"));
                         }
+                        if self.scan != 0 {
+                            let prefix_len = u32_at(&self.bytes, self.scan + 8) as usize;
+                            if uint(
+                                &self.bytes,
+                                self.scan + SCAN_HEADER + groups * e.address,
+                                e.address,
+                            ) != (start - self.arena) as u64
+                            {
+                                return Err(bad("scan locator disagrees with PH3 arena"));
+                            }
+                            if groups == 0
+                                || key[..key.len().min(prefix_len)]
+                                    != previous[..previous.len().min(prefix_len)]
+                            {
+                                scan_prefixes += 1;
+                            }
+                        }
                         previous.clear();
                         previous.extend_from_slice(key);
                         let h = hash(key, self.seed);
@@ -365,6 +457,9 @@ impl CompactIndex {
         }
         if data_end != self.data.len() || pos != end || remaining != 0 || groups != self.count {
             return Err(bad("compact and sorted coverage differ"));
+        }
+        if self.scan != 0 && u64_at(&self.bytes, self.scan + 16) as usize != scan_prefixes {
+            return Err(bad("scan prefix coverage differs"));
         }
         self.blocks = verified_blocks;
         Ok(())
@@ -450,6 +545,229 @@ impl CompactIndex {
             pos += e.version();
         }
         None
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct ScanKey<'a> {
+    prefix: &'a [u8],
+    suffix: &'a [u8],
+}
+impl ScanKey<'_> {
+    pub(crate) fn cmp_bytes(self, key: &[u8]) -> std::cmp::Ordering {
+        let n = self.prefix.len().min(key.len());
+        self.prefix[..n].cmp(&key[..n]).then_with(|| {
+            if key.len() < self.prefix.len() {
+                std::cmp::Ordering::Greater
+            } else {
+                self.suffix.cmp(&key[n..])
+            }
+        })
+    }
+    pub(crate) fn cmp_key(self, other: Self) -> std::cmp::Ordering {
+        self.prefix
+            .iter()
+            .chain(self.suffix)
+            .cmp(other.prefix.iter().chain(other.suffix))
+    }
+    pub(crate) fn copy_into(self, key: &mut Vec<u8>) {
+        key.clear();
+        key.reserve_exact(self.prefix.len() + self.suffix.len());
+        key.extend_from_slice(self.prefix);
+        key.extend_from_slice(self.suffix);
+    }
+}
+#[derive(Clone, Copy)]
+pub(crate) struct ScanValue<'a> {
+    pub(crate) seq: u64,
+    pub(crate) kind: Kind,
+    pub(crate) value: &'a [u8],
+}
+impl CompactIndex {
+    pub(crate) fn scan_config(&self) -> Option<(usize, usize, usize)> {
+        (self.scan != 0 && self.encoding.address == 4).then(|| {
+            (
+                u32_at(&self.bytes, self.scan + 8) as usize,
+                self.count,
+                u64_at(&self.bytes, self.scan + 16) as usize,
+            )
+        })
+    }
+    pub(crate) fn scan_offset(&self, index: usize) -> u32 {
+        uint(
+            &self.bytes,
+            self.scan + SCAN_HEADER + index * self.encoding.address,
+            self.encoding.address,
+        ) as u32
+    }
+    #[inline]
+    pub(crate) fn scan_key(&self, offset: u32) -> ScanKey<'_> {
+        let e = self.encoding;
+        let p = self.arena + offset as usize;
+        let anchor = self.arena + uint(&self.bytes, p, e.address) as usize;
+        let shared = uint(&self.bytes, p + e.address, e.key) as usize;
+        let len = uint(&self.bytes, p + e.address + e.key, e.key) as usize;
+        let suffix = p + e.key_header();
+        ScanKey {
+            prefix: &self.bytes[anchor..anchor + shared],
+            suffix: &self.bytes[suffix..suffix + len],
+        }
+    }
+    #[inline]
+    pub(crate) fn scan_value(&self, offset: u32, limit: u64) -> (u32, Option<ScanValue<'_>>) {
+        let e = self.encoding;
+        match (e.key, e.count, e.seq, e.value) {
+            (1, 1, 2, 2) => self.scan_value_encoded(
+                offset,
+                limit,
+                Encoding {
+                    address: 4,
+                    key: 1,
+                    count: 1,
+                    seq: 2,
+                    value: 2,
+                },
+            ),
+            (1, 1, 4, 2) => self.scan_value_encoded(
+                offset,
+                limit,
+                Encoding {
+                    address: 4,
+                    key: 1,
+                    count: 1,
+                    seq: 4,
+                    value: 2,
+                },
+            ),
+            _ => self.scan_value_encoded(offset, limit, e),
+        }
+    }
+    pub(crate) fn scan_values<T, E>(
+        &self,
+        offset: u32,
+        count: usize,
+        limit: u64,
+        map: &mut impl FnMut(&[u8]) -> Result<T, E>,
+        out: &mut Vec<T>,
+    ) -> Result<(), E> {
+        let e = self.encoding;
+        match (e.address, e.key, e.count, e.seq, e.value) {
+            (4, 1, 1, 2, 2) => self.scan_span(
+                offset,
+                count,
+                limit,
+                Encoding {
+                    address: 4,
+                    key: 1,
+                    count: 1,
+                    seq: 2,
+                    value: 2,
+                },
+                map,
+                out,
+            ),
+            (4, 1, 1, 4, 2) => self.scan_span(
+                offset,
+                count,
+                limit,
+                Encoding {
+                    address: 4,
+                    key: 1,
+                    count: 1,
+                    seq: 4,
+                    value: 2,
+                },
+                map,
+                out,
+            ),
+            _ => self.scan_span(offset, count, limit, e, map, out),
+        }
+    }
+    #[inline(always)]
+    fn scan_span<T, E>(
+        &self,
+        offset: u32,
+        count: usize,
+        limit: u64,
+        e: Encoding,
+        map: &mut impl FnMut(&[u8]) -> Result<T, E>,
+        out: &mut Vec<T>,
+    ) -> Result<(), E> {
+        if limit == u64::MAX {
+            self.scan_span_encoded::<true, T, E>(offset, count, limit, e, map, out)
+        } else {
+            self.scan_span_encoded::<false, T, E>(offset, count, limit, e, map, out)
+        }
+    }
+    #[inline(always)]
+    fn scan_span_encoded<const CURRENT: bool, T, E>(
+        &self,
+        mut offset: u32,
+        count: usize,
+        limit: u64,
+        e: Encoding,
+        map: &mut impl FnMut(&[u8]) -> Result<T, E>,
+        out: &mut Vec<T>,
+    ) -> Result<(), E> {
+        for _ in 0..count {
+            if CURRENT {
+                let p = self.arena + offset as usize;
+                let suffix = uint(&self.bytes, p + e.address + e.key, e.key) as usize;
+                let versions = uint(&self.bytes, p + e.address + 2 * e.key, e.count) as usize;
+                let p = p + e.key_header() + suffix;
+                offset = (p + versions * e.version() - self.arena) as u32;
+                let value = uint(&self.bytes, p + e.seq, e.value);
+                if value & e.tombstone() == 0 {
+                    let at = uint(&self.bytes, p + e.seq + e.value, e.address) as usize;
+                    let len = value as usize;
+                    out.push(map(&self.data[at..at + len])?);
+                }
+            } else {
+                let (next, value) = self.scan_value_encoded(offset, limit, e);
+                offset = next;
+                if let Some(value) = value
+                    && value.kind == Kind::Put
+                {
+                    out.push(map(value.value)?);
+                }
+            }
+        }
+        Ok(())
+    }
+    #[inline(always)]
+    fn scan_value_encoded(
+        &self,
+        offset: u32,
+        limit: u64,
+        e: Encoding,
+    ) -> (u32, Option<ScanValue<'_>>) {
+        let start = self.arena + offset as usize;
+        let suffix = uint(&self.bytes, start + e.address + e.key, e.key) as usize;
+        let count = uint(&self.bytes, start + e.address + 2 * e.key, e.count) as usize;
+        let mut p = start + e.key_header() + suffix;
+        let next = (p + count * e.version() - self.arena) as u32;
+        for _ in 0..count {
+            let seq = self.min_seq + uint(&self.bytes, p, e.seq);
+            if seq <= limit {
+                let value = uint(&self.bytes, p + e.seq, e.value);
+                let at = uint(&self.bytes, p + e.seq + e.value, e.address) as usize;
+                let len = (value & !e.tombstone()) as usize;
+                return (
+                    next,
+                    Some(ScanValue {
+                        seq,
+                        kind: if value & e.tombstone() == 0 {
+                            Kind::Put
+                        } else {
+                            Kind::Tombstone
+                        },
+                        value: &self.data[at..at + len],
+                    }),
+                );
+            }
+            p += e.version();
+        }
+        (next, None)
     }
 }
 

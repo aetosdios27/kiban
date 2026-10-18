@@ -1,0 +1,13 @@
+{
+  "backend": "kiban",
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/target/remix-data/after/kiban-1000000-bulk",
+  "n": 1000000,
+  "operations": 100000,
+  "k": 10,
+  "seed": 20261016,
+  "output": "/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/validation/remix-engine/final/reads/bulk-default/1000000-bulk-None-r4-after-kiban.jsonl",
+  "action": "read",
+  "layout": "bulk",
+  "cache_mib": null,
+  "point_index": true
+}

@@ -137,6 +137,7 @@ fn point_index_every_section_and_footer_bit_flip_is_detected_with_or_without_adm
     for mut builder in [
         TableBuilder::with_legacy_point_index(),
         TableBuilder::with_point_index(true),
+        TableBuilder::with_scan_index(true, 2),
     ] {
         builder.add(Kind::Put, b"a", b"one", 5).unwrap();
         builder.add(Kind::Tombstone, b"b", b"", 4).unwrap();
@@ -232,12 +233,12 @@ fn maintenance_perf_control(command: &str) {
     }
 }
 
-/// Run the already-built release test executable under taskset -c 8 with
+/// Run the already-built release test executable under taskset -c 3 with
 /// KIBAN_POINT_BENCH_N set. These measurements isolate flush and compaction
 /// BUILD from memtable fill. CI's `--ignored` stress job runs without the
 /// variable, so the benchmark is skipped there.
 #[test]
-#[ignore = "CPU-8 maintenance benchmark; set KIBAN_POINT_BENCH_N to run"]
+#[ignore = "CPU-3 maintenance benchmark; set KIBAN_POINT_BENCH_N to run"]
 fn point_index_maintenance_measurement() {
     let Ok(n) = std::env::var("KIBAN_POINT_BENCH_N") else {
         eprintln!("skipping: KIBAN_POINT_BENCH_N is unset");
@@ -253,7 +254,7 @@ fn point_index_maintenance_measurement() {
         std::fs::read_to_string("/proc/self/status")
             .unwrap()
             .lines()
-            .any(|line| line == "Cpus_allowed_list:\t8")
+            .any(|line| line == "Cpus_allowed_list:\t3")
     );
     for trial in 0..5 {
         if selected_trial.is_some_and(|selected| selected != trial + 1) {
@@ -266,6 +267,10 @@ fn point_index_maintenance_measurement() {
         } {
             let dir = TempDir::new("point-maintenance");
             let mut opts = options(indexed, 512 * 1024 * 1024);
+            if std::env::var_os("KIBAN_SCAN_BENCH").is_some() {
+                opts.point_index = true;
+                opts.scan_prefix_len = if indexed { 2 } else { 0 };
+            }
             opts.l0_compaction_trigger = 100;
             opts.l0_write_stall_trigger = 200;
             opts.target_file_size = 4 * 1024 * 1024;
@@ -381,4 +386,446 @@ fn point_index_conversion_reserves_outputs_for_full_key_expansion() {
         assert_eq!(db.get(key).unwrap().unwrap(), id.to_be_bytes());
     }
     assert_eq!(db.iter().count(), 16384);
+}
+
+#[test]
+fn remix_ranges_match_model_across_versions_memtables_and_bounds() {
+    for cache in [0, 8192, 32 * 1024 * 1024] {
+        let dir = TempDir::new("remix-model");
+        let mut opts = options(true, cache);
+        opts.scan_prefix_len = 2;
+        opts.l0_compaction_trigger = 20;
+        opts.l0_write_stall_trigger = 200;
+        let mut db = Kiban::open_with_options(dir.path(), opts.clone()).unwrap();
+        let mut model = BTreeMap::new();
+        let mut snapshots = Vec::new();
+        for round in 0..6u64 {
+            for op in 0..400u64 {
+                let h = crate::sys::SplitMix64(round * 400 + op).next();
+                let mut key = vec![(h % 5) as u8, (h / 5 % 3) as u8];
+                key.extend_from_slice(&(h % 130).to_be_bytes());
+                if h.is_multiple_of(11) {
+                    key.resize(90, 42);
+                }
+                if h.is_multiple_of(47) {
+                    key.truncate((h % 2) as usize);
+                }
+                if h.is_multiple_of(7) {
+                    db.delete(&key).unwrap();
+                    model.remove(&key);
+                } else {
+                    let v = h.to_le_bytes().to_vec();
+                    db.put(&key, &v).unwrap();
+                    model.insert(key, v);
+                }
+            }
+            snapshots.push((db.snapshot(), model.clone()));
+            if round % 2 == 0 {
+                db.freeze().unwrap();
+            } else {
+                db.flush().unwrap();
+            }
+            db.prepare_range_index();
+            for a in 0..6 {
+                for b in 0..4 {
+                    let prefix = [a, b];
+                    let expected = model
+                        .iter()
+                        .filter(|(key, _)| key.starts_with(&prefix))
+                        .take(50)
+                        .map(|(_, value)| value.clone())
+                        .collect::<Vec<_>>();
+                    assert_eq!(
+                        db.prefix_values(&prefix, 50, |v| Ok::<_, DbError>(v.to_vec()))
+                            .unwrap(),
+                        expected
+                    );
+                }
+            }
+            for (snapshot, _) in &snapshots {
+                snapshot
+                    .version
+                    .scan
+                    .get_or_init(|| crate::remix::Remix::build(&snapshot.version));
+            }
+            for probe in 0..350u64 {
+                let h = crate::sys::SplitMix64(probe + round * 350).next();
+                let prefix = vec![(h % 6) as u8, (h / 6 % 4) as u8];
+                let mut start = prefix.clone();
+                if !h.is_multiple_of(3) {
+                    start.extend_from_slice(&(h % 150).to_be_bytes());
+                }
+                let mut end = prefix;
+                if h.is_multiple_of(4) {
+                    end.extend_from_slice(&(h / 3 % 150).to_be_bytes());
+                } else {
+                    *end.last_mut().unwrap() += 1;
+                }
+                if h.is_multiple_of(9) {
+                    end = vec![7];
+                }
+                let count = (h % 40) as usize;
+                let expected = if start < end {
+                    model
+                        .range(start.clone()..end.clone())
+                        .take(count)
+                        .map(|(_, v)| v.clone())
+                        .collect::<Vec<_>>()
+                } else {
+                    Vec::new()
+                };
+                let actual = db
+                    .range_values(&start, &end, count, |v| Ok::<_, DbError>(v.to_vec()))
+                    .unwrap();
+                assert_eq!(
+                    actual, expected,
+                    "round {round} start {start:?} end {end:?}"
+                );
+                for (snapshot, old) in &snapshots {
+                    let expected = if start < end {
+                        old.range(start.clone()..end.clone())
+                            .take(count)
+                            .map(|(_, v)| v.clone())
+                            .collect::<Vec<_>>()
+                    } else {
+                        Vec::new()
+                    };
+                    assert_eq!(
+                        snapshot
+                            .range_values(&start, &end, count, |v| Ok::<_, DbError>(v.to_vec()))
+                            .unwrap(),
+                        expected
+                    );
+                }
+            }
+            if let Some(plan) = db.plan_flush() {
+                let output = plan.build().unwrap();
+                db.commit_flush(plan, output).unwrap();
+            }
+        }
+        db.flush().unwrap();
+        if cache == 32 * 1024 * 1024 {
+            assert!(
+                db.version
+                    .scan
+                    .get_or_init(|| crate::remix::Remix::build(&db.version))
+                    .is_some()
+            );
+        }
+        drop(snapshots);
+        db.close().unwrap();
+        // Writers can be switched off without changing how persisted sections read.
+        opts.scan_prefix_len = 0;
+        let db = Kiban::open_with_options(dir.path(), opts).unwrap();
+        let actual = db.iter().collect::<Result<BTreeMap<_, _>, _>>().unwrap();
+        for (key, value) in &model {
+            assert_eq!(
+                actual.get(key),
+                Some(value),
+                "reopen cache={cache} key={key:?}"
+            );
+        }
+        assert_eq!(actual.len(), model.len(), "reopen cache={cache}");
+    }
+}
+
+#[test]
+fn remix_mixed_formats_and_cache_reservations() {
+    let dir = TempDir::new("remix-mixed");
+    for round in 0..4 {
+        let mut opts = options(round != 0, 32 * 1024 * 1024);
+        opts.scan_prefix_len = if round == 3 { 2 } else { 0 };
+        opts.l0_compaction_trigger = 100;
+        opts.l0_write_stall_trigger = 200;
+        let mut db = Kiban::open_with_options(dir.path(), opts).unwrap();
+        for id in 0..128u64 {
+            db.put([b"ab".as_slice(), &id.to_be_bytes()].concat(), [round])
+                .unwrap();
+        }
+        db.flush_without_compaction().unwrap();
+        let expected = db
+            .range(b"ab", b"ac")
+            .map(|r| r.unwrap().1)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            db.range_values(b"ab", b"ac", 1000, |v| Ok::<_, DbError>(v.to_vec()))
+                .unwrap(),
+            expected
+        );
+        db.close().unwrap();
+    }
+}
+
+#[test]
+fn remix_scan_corruption_and_checksummed_bad_locators_are_rejected() {
+    let mut builder = TableBuilder::with_scan_index(true, 2);
+    for id in 0..70u64 {
+        builder
+            .add(
+                Kind::Put,
+                &[b"ab".as_slice(), &id.to_be_bytes()].concat(),
+                b"value",
+                id + 1,
+            )
+            .unwrap();
+    }
+    let original = builder.finish().unwrap();
+    let footer = original.len() - FOOTER_LEN - POINT_FOOTER_EXTRA;
+    let section = u64::from_le_bytes(original[footer..footer + 8].try_into().unwrap()) as usize;
+    let len = u64::from_le_bytes(original[footer + 8..footer + 16].try_into().unwrap()) as usize;
+    let extension_len = u64::from_le_bytes(
+        original[section + len - 13..section + len - 5]
+            .try_into()
+            .unwrap(),
+    ) as usize;
+    let extension = section + len - 13 - extension_len;
+    for repair_crc in [false, true] {
+        for at in extension..section + len {
+            let mut bytes = original.clone();
+            bytes[at] ^= 0x80;
+            if repair_crc {
+                let crc = crate::crc32::crc32(&bytes[section..section + len - 4]);
+                bytes[section + len - 4..section + len].copy_from_slice(&crc.to_le_bytes());
+                if at >= section + len - 5 {
+                    continue;
+                }
+            }
+            let dir = TempDir::new("remix-corrupt");
+            let path = dir.path().join("1.sst");
+            std::fs::write(&path, bytes).unwrap();
+            let cache = StdArc::new(BlockCache::new(32 * 1024 * 1024));
+            let files = StdArc::new(TableFileCache::new(4));
+            assert!(
+                SstTable::open(1, &path, cache.clone(), files, false).is_err(),
+                "accepted offset {at} repaired {repair_crc}"
+            );
+            assert_eq!(cache.stats().point_index_bytes, 0);
+        }
+    }
+}
+
+#[test]
+fn remix_duplicate_anchor_boundaries_and_ph3_anchor_groups() {
+    let dir = TempDir::new("remix-anchors");
+    let cache = StdArc::new(BlockCache::new(64 * 1024 * 1024));
+    let files = StdArc::new(TableFileCache::new(4));
+    let mut tables = Vec::new();
+    let mut histories = BTreeMap::<Vec<u8>, Vec<(u64, Kind, Vec<u8>)>>::new();
+    for run in 0..3u64 {
+        let mut builder = TableBuilder::with_scan_index(true, 2);
+        for id in 0..2300u64 {
+            let mut key = [b"ab".as_slice(), &id.to_be_bytes()].concat();
+            if id.is_multiple_of(31) {
+                key.resize(95, 255);
+            }
+            for v in (0..3u64).rev() {
+                let seq = 1 + run + 3 * v;
+                let kind = if (id + seq).is_multiple_of(13) {
+                    Kind::Tombstone
+                } else {
+                    Kind::Put
+                };
+                let value = if kind == Kind::Put {
+                    vec![seq as u8, id as u8]
+                } else {
+                    Vec::new()
+                };
+                builder.add(kind, &key, &value, seq).unwrap();
+                histories
+                    .entry(key.clone())
+                    .or_default()
+                    .push((seq, kind, value));
+            }
+        }
+        let path = dir.path().join(file_name(run + 1, SST_EXTENSION));
+        std::fs::write(&path, builder.finish().unwrap()).unwrap();
+        let table = SstTable::open(run + 1, &path, cache.clone(), files.clone(), false).unwrap();
+        tables.push(StdArc::new(TableEntry {
+            file_lifetime: StdArc::new(()),
+            level: run as u32,
+            number: run + 1,
+            size: table.size_on_disk(),
+            first_key: table.smallest_key().to_vec(),
+            last_key: table.largest_key().to_vec(),
+            table,
+        }));
+    }
+    let version = StdArc::new(Version::new(0, tables));
+    let before = cache.stats().point_index_bytes;
+    assert!(crate::remix::Remix::build_cancellable(&version, || true).is_none());
+    assert_eq!(cache.stats().point_index_bytes, before);
+    assert!(
+        version
+            .scan
+            .get_or_init(|| crate::remix::Remix::build(&version))
+            .is_some()
+    );
+    let resident = cache.stats().point_index_bytes;
+    for seq in 0..=10 {
+        let snapshot = Snapshot {
+            lease: None,
+            seq,
+            memtable: StdArc::new(Memtable::new()),
+            immutable: None,
+            version: version.clone(),
+        };
+        let model = histories
+            .iter()
+            .filter_map(|(key, vs)| {
+                let (_, kind, v) = vs
+                    .iter()
+                    .filter(|(s, _, _)| *s <= seq)
+                    .max_by_key(|(s, _, _)| s)?;
+                (*kind == Kind::Put).then(|| (key.clone(), v.clone()))
+            })
+            .collect::<BTreeMap<_, _>>();
+        for probe in 0..400u64 {
+            let id = crate::sys::SplitMix64(probe).next() % 2400;
+            let start = [b"ab".as_slice(), &id.to_be_bytes()].concat();
+            let end = if probe.is_multiple_of(2) {
+                b"ac".to_vec()
+            } else {
+                [b"ab".as_slice(), &(id + 50).to_be_bytes()].concat()
+            };
+            let expected = model
+                .range(start.clone()..end.clone())
+                .take(50)
+                .map(|(_, v)| v.clone())
+                .collect::<Vec<_>>();
+            assert_eq!(
+                snapshot
+                    .range_values(&start, &end, 50, |v| Ok::<_, DbError>(v.to_vec()))
+                    .unwrap(),
+                expected
+            );
+        }
+        assert_eq!(cache.stats().point_index_bytes, resident);
+    }
+    drop(version);
+    assert_eq!(cache.stats().point_index_bytes, 0);
+}
+
+#[test]
+fn remix_memtable_handoff_respects_remaining_source_span() {
+    let dir = TempDir::new("remix-short-span");
+    let mut opts = options(true, 32 * 1024 * 1024);
+    opts.scan_prefix_len = 2;
+    opts.l0_compaction_trigger = 100;
+    opts.l0_write_stall_trigger = 200;
+    let mut db = Kiban::open_with_options(dir.path(), opts).unwrap();
+    for id in (0..5u8).chain(10..15) {
+        db.put([b'a', b'b', id], [id]).unwrap();
+    }
+    db.flush_without_compaction().unwrap();
+    for id in 5..10u8 {
+        db.put([b'a', b'b', id], [id]).unwrap();
+    }
+    db.flush_without_compaction().unwrap();
+    db.put([b'a', b'b', 0], [100]).unwrap();
+    assert!(db.prepare_range_index());
+    let expected = std::iter::once(vec![100])
+        .chain((1..10u8).map(|id| vec![id]))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        db.range_values(b"ab", b"ac", 10, |v| Ok::<_, DbError>(v.to_vec()))
+            .unwrap(),
+        expected
+    );
+}
+
+#[test]
+fn remix_prefix_values_cover_binary_short_long_empty_and_memtable_bounds() {
+    for cache in [0, 32 * 1024 * 1024] {
+        let dir = TempDir::new("remix-prefix-values");
+        let mut opts = options(true, cache);
+        opts.scan_prefix_len = 2;
+        opts.l0_compaction_trigger = 100;
+        opts.l0_write_stall_trigger = 200;
+        let mut db = Kiban::open_with_options(dir.path(), opts).unwrap();
+        let keys = [
+            Vec::new(),
+            b"a".to_vec(),
+            b"ab".to_vec(),
+            b"ab0".to_vec(),
+            b"ab1".to_vec(),
+            b"ac0".to_vec(),
+            vec![255],
+            vec![255, 255],
+            vec![255, 255, 0],
+            vec![255; 80],
+        ];
+        for (i, key) in keys.iter().enumerate() {
+            db.put(key, [i as u8]).unwrap();
+        }
+        db.flush_without_compaction().unwrap();
+        db.put(b"ab0", b"new").unwrap();
+        db.delete(b"ab1").unwrap();
+        db.put(b"ab2", b"mem").unwrap();
+        db.put(b"ad0", b"mem-only-prefix").unwrap();
+        db.put([255, 255, 1], b"binary-mem").unwrap();
+        db.delete([255, 255, 0]).unwrap();
+        db.prepare_range_index();
+        for prefix in [
+            Vec::new(),
+            b"a".to_vec(),
+            b"ab".to_vec(),
+            b"ab0".to_vec(),
+            b"ad".to_vec(),
+            b"missing".to_vec(),
+            vec![255],
+            vec![255, 255],
+            vec![255; 80],
+        ] {
+            for count in [0, 1, 2, 10, 100] {
+                let expected = db
+                    .iter()
+                    .filter_map(|r| {
+                        let (key, value) = r.unwrap();
+                        key.starts_with(&prefix).then_some(value)
+                    })
+                    .take(count)
+                    .collect::<Vec<_>>();
+                assert_eq!(
+                    db.prefix_values(&prefix, count, |v| Ok::<_, DbError>(v.to_vec()))
+                        .unwrap(),
+                    expected
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn remix_memtable_histories_emit_one_visible_value_per_key() {
+    let dir = TempDir::new("remix-mem-histories");
+    let mut opts = options(true, 32 * 1024 * 1024);
+    opts.scan_prefix_len = 2;
+    let mut db = Kiban::open_with_options(dir.path(), opts).unwrap();
+    db.put(b"ab0", b"sst").unwrap();
+    db.flush_without_compaction().unwrap();
+    assert!(db.prepare_range_index());
+    db.memtable.set_snapshot_bounds(1, 100);
+    db.put(b"ab0", b"old").unwrap();
+    let seq = db.last_sequence;
+    db.put(b"ab0", b"new").unwrap();
+    db.put(b"ab1", b"deleted").unwrap();
+    db.delete(b"ab1").unwrap();
+    db.put(b"ab2", b"last").unwrap();
+    let values = db
+        .range_values(b"ab", b"ac", 100, |v| Ok::<_, DbError>(v.to_vec()))
+        .unwrap();
+    assert_eq!(values, vec![b"new".to_vec(), b"last".to_vec()]);
+    let snapshot = Snapshot {
+        lease: None,
+        seq,
+        memtable: StdArc::new(db.memtable.clone()),
+        immutable: None,
+        version: db.version.clone(),
+    };
+    assert_eq!(
+        snapshot
+            .range_values(b"ab", b"ac", 100, |v| Ok::<_, DbError>(v.to_vec()))
+            .unwrap(),
+        vec![b"old".to_vec()]
+    );
 }
