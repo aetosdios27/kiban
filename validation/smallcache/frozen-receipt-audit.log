@@ -1,0 +1,12 @@
+mapped-read
+Validated 240 commands and 24 scenario/workload groups.
+pread-read
+Validated 240 commands and 24 scenario/workload groups.
+mapped-cold
+Validated 480 commands and 24 scenario/workload groups.
+pread-cold
+Validated 480 commands and 24 scenario/workload groups.
+write
+Validated 80 commands and 20 scenario/workload groups.
+write-confirm
+Validated 40 commands and 10 scenario/workload groups.

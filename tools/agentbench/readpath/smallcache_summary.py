@@ -23,6 +23,74 @@ def normalized(row, pct):
     return median((a/b)/(c/e) for a,b,c,e in zip(
         d['ph3-kiban'][pct],d['ph3-lmdb'][pct],d['before-kiban'][pct],d['before-lmdb'][pct]))
 
+def rebased_adjusted(row, pct):
+    d = row['distributions']
+    return median((a/b)/(c/e) for a,b,c,e in zip(
+        d['rebased-kiban'][pct], d['rebased-lmdb'][pct],
+        d['before-kiban'][pct], d['before-lmdb'][pct]))
+
+def control_confirmation_lines():
+    path = 'rebased-controls-mapped-read/summary.json'
+    if not (OUT/path).exists():
+        return []
+    rows = load(path)
+    assert len(rows) == 6
+    lines = ['', '### Bulk control confirmation', '',
+             'Five additional alternating pairs repeat the three uncertain mapped bulk cache cases with the same binaries and fixtures. The original three-pair matrix is retained in full. Latencies are microseconds.', '',
+             '| Cache MiB / workload | Main p50/p99 | Candidate p50/p99 | Adjusted candidate/main p50/p99 |',
+             '| --- | ---: | ---: | ---: |']
+    for r in rows:
+        d = r['distributions']
+        name = f'{r["scenario"][2].replace("None", "default")} / {r["scenario"][-1]}'
+        lines.append(f'| {name} | {pair(d,"before-kiban")} | {pair(d,"rebased-kiban")} | {rebased_adjusted(r,"p50_ns"):.3f} / {rebased_adjusted(r,"p99_ns"):.3f} |')
+    lines += ['', 'The large initial bulk/32 latest-ten slowdown does not reproduce at five pairs: adjusted p50/p99 is 1.029/0.966. Other controls remain above main. Default point is 1.038/0.899, 512 MiB point is 1.045/1.049, and default latest-ten is 1.050/1.139. The data do not establish the requested larger-cache and latest-ten non-regression bounds. All trial ranges and both series remain visible.', '',
+              '[All five-pair controls and ranges](rebased-controls-mapped-read/SUMMARY.md).']
+    return lines
+
+def rebased_lines():
+    if not (OUT/'rebased-provenance.json').exists():
+        return []
+    provenance = load('rebased-provenance.json')
+    status = load('rebased-checks/status.json')
+    assert len(status) == 11 and all(r['code'] == 0 for r in status)
+    assert all(hashlib.sha256((ROOT/p).read_bytes()).hexdigest() == h
+               for p,h in provenance['engine_source_hashes'].items())
+    lines = [
+        '**The mapped warm point target passes; full acceptance is not established.** The final engine is rebased onto main `37feee99`. Larger-cache and latest-ten controls remain above main in the additional confirmation, and durable-write p99 non-regression remains unproven. Keep mmap opt-in and do not claim the full requested goal is met.', '',
+        f'Rebased source was frozen at `{provenance["head"]}`. Engine hashes in [rebased provenance](rebased-provenance.json) identify the validated source independently of later evidence-only commits.', '',
+        '## Rebased warm confirmation against current main', '',
+        'Three alternating pairs per layout, cache, and access mode. Every Kiban process has an adjacent LMDB control. Timed children use CPU 6; builds, gates, and coordinators use CPUs 12–21 at nice 10. Other host work remained active. Each trial runs 100,000 point calls and 100,000 latest-ten calls and verifies all 1M records. Ratios are medians of within-pair ratios. Latencies are microseconds.', '',
+        'Both binaries include main\'s SQLite benchmark support. Main fixtures are fresh flag-zero PH3, while candidate fixtures are the frozen CRC-bearing PH3 datasets. The production engine logic matches the frozen campaign; the reader has only main\'s explanatory comment, and the ignored maintenance benchmark gains a trial selector. See [source comparison](rebased-source-comparison.json).', '',
+        '| Mode / layout / cache MiB | Main p50/p99 | Candidate p50/p99 | LMDB p50/p99 | Paired K/L p50/p99 | Adjusted candidate/main p50/p99 |',
+        '| --- | ---: | ---: | ---: | ---: | ---: |']
+    controls = []
+    target = []
+    for mode in ['mapped', 'pread']:
+        for r in load(f'rebased-{mode}-read/summary.json'):
+            layout, _, cache, _, _, stage = r['scenario']
+            d = r['distributions']
+            name = f'{mode} / {layout} / {cache.replace("None", "default")}'
+            if stage == 'recent-for-agent':
+                controls.append(f'| {name} | {pair(d,"before-kiban")} | {pair(d,"rebased-kiban")} | {rebased_adjusted(r,"p50_ns"):.3f} / {rebased_adjusted(r,"p99_ns"):.3f} |')
+                continue
+            ratios = [median(a/b for a,b in zip(d['rebased-kiban'][pct], d['rebased-lmdb'][pct])) for pct in ['p50_ns', 'p99_ns']]
+            if mode == 'mapped' and cache == '32':
+                target.append(ratios[0] <= 0.9 and ratios[1] <= 1)
+            lines.append(f'| {name} | {pair(d,"before-kiban")} | {pair(d,"rebased-kiban")} | {pair(d,"rebased-lmdb")} | {ratios[0]:.3f} / {ratios[1]:.3f} | {rebased_adjusted(r,"p50_ns"):.3f} / {rebased_adjusted(r,"p99_ns"):.3f} |')
+    assert len(target) == 2 and all(target), target
+    lines += ['', '[Mapped trial ranges](rebased-mapped-read/SUMMARY.md), [pread trial ranges](rebased-pread-read/SUMMARY.md). Values above one in the adjusted columns remain visible; three pairs are a confirmation, not a replacement for the five-pair campaign.', '',
+              '| Latest-ten mode / layout / cache MiB | Main p50/p99 | Candidate p50/p99 | Adjusted candidate/main p50/p99 |',
+              '| --- | ---: | ---: | ---: |', *controls, *control_confirmation_lines(), '',
+              '## Rebase and final gates', '',
+              'PH3 base `4feca511` is already present through squash merge `f3d21dc1` and was dropped from the replay. Main\'s Bloom bypass is retained. Duplicate engine commit `0283fc7a` was dropped, with its unique tools and measurement evidence preserved in the campaign evidence commit. The locator lookup follows the same exact-key-before-Bloom ordering. The CRC extension, resident packing, exact reservation accounting, and L0 prefix fix remain. Main\'s PH3 field offsets and frozen flag-zero contract are retained in the design document. SQLite benchmarking from `37feee99` is unchanged.', '',
+              'All 11 gates passed again on the rebased source, including 353 debug and release library tests, fixed corpora, loom, and both complete 20,000-seed suites. No timing runs overlapped this task\'s builds or tests. See [gate status](rebased-checks/status.json), [source hashes](rebased-checks/source-hashes.json), and [reproduction commands](VERIFY.md).', '',
+              'The verifier now adds only the niceness increment needed to reach nice 10. A partial run with inherited nice 19 was preserved under rebased-checks-inherited-nice19, then all 11 gates were repeated at effective nice 10. The final metadata records coordinator nice 10 and increment zero.', '',
+              'No task process uses sibling CPU 7, but the sibling was not established to be idle. Whole-child CPU 7 busy fractions were median 12.3% for mapped, 10.8% for pread, and 11.9% for the extra controls, with maxima 48.8%, 87.9%, and 23.2%. These samples include open and verification, so they do not isolate activity during API timers. This is an active-host measurement, and strict idle-sibling acceptance is not established. See [sibling summary](rebased-sibling-summary.json) and the per-child sibling.jsonl receipts.', '',
+              'Cold, concurrent, profiling, and write rows below retain the original five-pair campaign against `06a457db`; they were not repeated against updated main. The separate write confirmation is also preserved. Those results establish the observed cold mmap tradeoff and leave durable-write p99 uncertain. The source comparison supports carrying that evidence forward, while the new three-pair warm matrix directly checks the rebased binary and main\'s PH3 baseline.', '',
+              'The [frozen source patch](experiments/frozen-source-from-37feee99.patch) reconstructs the archived engine and Rust readbench source from public main `37feee99`, independently of old local commit reachability after rebase. Applying it to a private Git index reproduced all 40 frozen engine file hashes. See the [reconstruction receipt](frozen-reconstruction.json).', '',
+              '## Archived five-pair campaign', '']
+    return lines
+
 def table(rows, mode, cold=False):
     lines=['', '| Layout / index / cache / readers | Main p50/p99 | PH3 p50/p99 | LMDB p50/p99 | Paired K/L p50 | Adjusted PH3/main p50/p99 |',
            '| --- | ---: | ---: | ---: | ---: | ---: |']
@@ -40,11 +108,13 @@ def table(rows, mode, cold=False):
 def main():
     provenance=load('ph3-provenance.json');gates=load('ph3-checks/status.json')
     assert len(gates)==11 and all(r['code']==0 for r in gates)
-    assert all(hashlib.sha256((ROOT/p).read_bytes()).hexdigest()==h for p,h in provenance['engine_source_hashes'].items())
+    assert provenance['engine_source_hashes'] == load('ph3-checks/source-hashes.json')
+    if not (OUT/'rebased-provenance.json').exists():
+        assert all(hashlib.sha256((ROOT/p).read_bytes()).hexdigest()==h for p,h in provenance['engine_source_hashes'].items())
     target=load('ph3-target.json')
     folders=['mapped-read','pread-read','mapped-cold','pread-cold','write']
     results={name:load(f'ph3-{name}/summary.json') for name in folders}
-    lines=['# Small-cache point reads', '',
+    lines=['# Small-cache point reads', '', *rebased_lines(),
         f'Engine source: `{provenance["engine_commit"]}`; baseline main `06a457db`. All timing children use CPU 6; build/test/coordinator processes use CPUs 12–21 at nice 10. No task work runs on sibling CPU 7. Other host workloads were active; this is not an isolated-host claim.', '',
         'The opt-in configuration is **CRC-bearing PH3 SSTs, point_index=true, block_cache_bytes=32 MiB, mmap_max_level=Some(u32::MAX)**. Both warm layout targets are evaluated on five alternating main/PH3 pairs, each side followed by its own LMDB control. Ratios use the median of within-trial ratios, rather than dividing unrelated medians. All five trials are retained. The warm read target is met; durable-write p99 non-regression remains uncertain after the additional confirmation block, as detailed below.', '',
         '| Warm 32 MiB layout | Paired PH3/LMDB p50 | Paired PH3/LMDB p99 | Meets ≤0.9 p50 and ≤1 p99 |',

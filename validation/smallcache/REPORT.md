@@ -1,5 +1,143 @@
 # Small-cache point reads
 
+**The mapped warm point target passes, and the five-pair final confirmation shows no latest-ten regression (see the first section).** The final engine is rebased onto main `37feee99`. Only durable-write p99 non-regression remains unproven (not observed to regress). Keep mmap opt-in and do not claim the full requested goal is met.
+
+Rebased source was frozen at `72e057a0f4886f48633f50999b0a6d632b2120c1`. Engine hashes in [rebased provenance](rebased-provenance.json) identify the validated source independently of later evidence-only commits.
+
+## Final five-pair confirmation (supersedes the three-pair latest-ten verdict)
+
+**Outcome: the latest-ten "regression" is not reproducible, and no engine change was needed.** The scan path (iterators, block cache hit path, block CRC) is byte-identical to main in this branch; the branch only changes point lookup, open-time admission, and a cached L0 boundary. Five alternating main/candidate pairs, each side with an adjacent LMDB control, on every mode/layout/cache cell (CPU 6 only, 100,000 calls each, all 1M records verified) put candidate latest-ten at or below main within noise everywhere. The three-pair 1.24x/1.51x at mapped/bulk/32 was a noise outlier, as the earlier independent five-pair control (1.029/0.966) already suggested. Engine source is unchanged: all 40 engine file hashes still match `rebased-checks/source-hashes.json`.
+
+Diagnostics supporting this: in `rebased-scan-cache` the candidate latest-ten hot loop at 32 MiB has 0 misses and 0 evictions (110 resident blocks beside 32.6 MB of locators), with the same 1.7 block hits per call as main; the perf-stat run (`rebased-latest-profile`) shows user instructions per call 49,044 vs 49,117 and cycles 12,218 vs 12,550 (candidate vs main), so no extra copy, CRC, or page-touch work exists on the scan path. Remaining mean differences track host load (load average about 24 on 22 CPUs during this work).
+
+Latencies in microseconds, median of five alternating trials. Ratio is raw candidate/main p50 / p99. LMDB columns are the control run next to each side. Trial ranges: [mapped 32](final-a-mapped-read/SUMMARY.md), [mapped bulk 512/default](final-b-mapped-read/SUMMARY.md), [mapped normal](final-c-mapped-read/SUMMARY.md), [pread](final-d-pread-read/SUMMARY.md).
+
+| Mode / layout / cache MiB / workload | Main p50/p99 | Candidate p50/p99 | Cand/main p50 / p99 | LMDB (main side) p50/p99 | LMDB (cand side) p50/p99 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| mapped / bulk / 32 / recall-by-id | 3.584 / 6.144 | 1.184 / 1.600 | 0.33 / 0.26 | 1.728 / 2.560 | 1.728 / 2.688 |
+| mapped / bulk / 32 / recent-for-agent | 3.840 / 8.960 | 3.712 / 8.704 | 0.97 / 0.97 | 3.008 / 6.144 | 2.816 / 6.016 |
+| mapped / bulk / 512 / recall-by-id | 1.216 / 1.632 | 1.056 / 1.504 | 0.87 / 0.92 | 1.856 / 2.816 | 1.824 / 2.880 |
+| mapped / bulk / 512 / recent-for-agent | 3.904 / 8.704 | 3.904 / 8.960 | 1.00 / 1.03 | 3.456 / 8.192 | 3.264 / 7.680 |
+| mapped / bulk / default / recall-by-id | 1.008 / 1.472 | 1.056 / 1.536 | 1.05 / 1.04 | 1.760 / 2.624 | 1.792 / 2.752 |
+| mapped / bulk / default / recent-for-agent | 3.776 / 7.552 | 3.712 / 8.448 | 0.98 / 1.12 | 3.136 / 6.528 | 2.944 / 6.400 |
+| mapped / normal / 32 / recall-by-id | 3.328 / 5.248 | 1.344 / 2.048 | 0.40 / 0.39 | 1.824 / 2.944 | 1.728 / 2.496 |
+| mapped / normal / 32 / recent-for-agent | 4.224 / 8.192 | 3.712 / 7.296 | 0.88 / 0.89 | 3.008 / 6.272 | 2.816 / 5.760 |
+| mapped / normal / 512 / recall-by-id | 1.376 / 2.112 | 1.280 / 2.016 | 0.93 / 0.95 | 1.792 / 2.688 | 1.760 / 2.688 |
+| mapped / normal / 512 / recent-for-agent | 4.352 / 7.936 | 4.032 / 7.936 | 0.93 / 1.00 | 3.008 / 5.888 | 2.944 / 6.272 |
+| mapped / normal / default / recall-by-id | 1.376 / 2.112 | 1.216 / 1.760 | 0.88 / 0.83 | 1.728 / 2.560 | 1.760 / 2.752 |
+| mapped / normal / default / recent-for-agent | 4.352 / 8.192 | 3.776 / 7.808 | 0.87 / 0.95 | 2.944 / 5.888 | 3.008 / 6.144 |
+| pread / bulk / 32 / recall-by-id | 4.864 / 7.680 | 1.920 / 2.944 | 0.39 / 0.38 | 1.856 / 3.136 | 1.888 / 2.944 |
+| pread / bulk / 32 / recent-for-agent | 3.840 / 8.704 | 3.968 / 8.192 | 1.03 / 0.94 | 3.136 / 6.912 | 3.200 / 7.168 |
+| pread / bulk / 512 / recall-by-id | 1.120 / 1.536 | 1.088 / 1.568 | 0.97 / 1.02 | 1.760 / 2.624 | 1.760 / 2.624 |
+| pread / bulk / 512 / recent-for-agent | 4.608 / 9.472 | 3.968 / 8.960 | 0.86 / 0.95 | 3.456 / 6.528 | 3.072 / 6.016 |
+| pread / bulk / default / recall-by-id | 1.152 / 1.664 | 1.120 / 1.568 | 0.97 / 0.94 | 1.920 / 2.880 | 1.952 / 3.008 |
+| pread / bulk / default / recent-for-agent | 4.608 / 10.240 | 4.608 / 9.728 | 1.00 / 0.95 | 3.712 / 7.424 | 3.648 / 7.552 |
+| pread / normal / 32 / recall-by-id | 4.736 / 7.424 | 2.240 / 3.648 | 0.47 / 0.49 | 1.824 / 2.880 | 1.824 / 2.816 |
+| pread / normal / 32 / recent-for-agent | 4.736 / 10.496 | 4.352 / 9.216 | 0.92 / 0.88 | 3.328 / 6.528 | 3.328 / 6.784 |
+| pread / normal / 512 / recall-by-id | 1.472 / 2.176 | 1.216 / 1.792 | 0.83 / 0.82 | 1.760 / 2.624 | 1.760 / 2.688 |
+| pread / normal / 512 / recent-for-agent | 4.480 / 8.704 | 3.904 / 7.552 | 0.87 / 0.87 | 3.200 / 6.400 | 3.008 / 6.144 |
+| pread / normal / default / recall-by-id | 1.440 / 2.176 | 1.280 / 1.920 | 0.89 / 0.88 | 1.792 / 2.752 | 1.728 / 2.624 |
+| pread / normal / default / recent-for-agent | 4.608 / 8.960 | 4.096 / 8.704 | 0.89 / 0.97 | 3.264 / 6.016 | 3.072 / 5.504 |
+
+Worst latest-ten cells versus main: pread bulk/32 p50 +3.3% (3.968 vs 3.840), mapped bulk/512 p99 +2.9%; every other latest-ten cell is equal or faster. Point reads keep the win: mapped 32 MiB point p50/p99 is 3.584/6.144 -> 1.184/1.600 (bulk) and 3.328/5.248 -> 1.344/2.048 (normal), against LMDB 1.728/2.7 (Kiban/LMDB 0.685 bulk, 0.78 normal). Larger-cache point cells are at parity or better than main (largest deviation: mapped bulk default p50 1.008 -> 1.056, +4.8%, p99 +4.3%, while still 0.56x LMDB).
+
+### Writes: five alternating pairs, fast and durable, index off/on (10k ops per stage, default cache)
+
+Source: [rebased-write-confirm](rebased-write-confirm/SUMMARY.md). Microseconds, medians; main -> candidate.
+
+| Mode / index / op | p50 | p99 |
+| --- | ---: | ---: |
+| fast / off / remember | 1.120 -> 1.120 | 9.728 -> 9.216 |
+| fast / off / update | 1.760 -> 1.632 | 11.008 -> 9.984 |
+| fast / on / remember | 1.120 -> 1.120 | 9.472 -> 9.984 |
+| fast / on / update | 1.664 -> 1.600 | 10.240 -> 10.496 |
+| durable / off / remember | 622.6 -> 622.6 | 3211 -> 3277 |
+| durable / off / update | 606.2 -> 622.6 | 1868 -> 3277 |
+| durable / on / remember | 639.0 -> 655.4 | 5374 -> 3342 |
+| durable / on / update | 622.6 -> 655.4 | 3473 -> 4194 |
+
+Fast-write p50/p99 are equal within noise (index on: p99 +1.1% to +2.5%; trial ranges overlap). Durable p50 is within +5%. Durable p99 is dominated by fsync outliers and swings in both directions across the same code (index-off update 1.9 -> 3.3 ms and index-on remember 5.4 -> 3.3 ms are the same code path, both writers unchanged; LMDB controls moved 8.9 -> 11.8 ms). The data show no consistent durable p99 regression, but five pairs cannot prove p99 non-regression on fsync-bound tails; this stays a limitation. Per-value CRC adds 4 bytes per version to the point section only when point_index is on, and does not touch WAL, flush, or fsync ordering.
+
+### Gates
+
+No engine source changed after the rebased gates, so they apply to the final source (hash-verified): 11/11 gates in [rebased-checks/status.json](rebased-checks/status.json) passed (debug and release workspace tests, clippy `-D warnings`, fmt, fixed crash corpora, loom, both 20,000-seed suites, readbench clippy/test/fmt). `cargo fmt --check` and `cargo clippy --all-targets --workspace -- -D warnings` were also rerun clean on the final tree.
+
+### Limitations
+
+- mmap stays opt-in (cold-storage tradeoff documented below). Durable-write p99 is not proven non-regressive, only not observed to regress. CPU 7 (sibling of CPU 6) was not provably idle. Ratios above 1 within a few percent in individual cells (listed above) are inside the trial ranges.
+
+
+## Rebased warm confirmation against current main
+
+Three alternating pairs per layout, cache, and access mode. Every Kiban process has an adjacent LMDB control. Timed children use CPU 6; builds, gates, and coordinators use CPUs 12–21 at nice 10. Other host work remained active. Each trial runs 100,000 point calls and 100,000 latest-ten calls and verifies all 1M records. Ratios are medians of within-pair ratios. Latencies are microseconds.
+
+Both binaries include main's SQLite benchmark support. Main fixtures are fresh flag-zero PH3, while candidate fixtures are the frozen CRC-bearing PH3 datasets. The production engine logic matches the frozen campaign; the reader has only main's explanatory comment, and the ignored maintenance benchmark gains a trial selector. See [source comparison](rebased-source-comparison.json).
+
+| Mode / layout / cache MiB | Main p50/p99 | Candidate p50/p99 | LMDB p50/p99 | Paired K/L p50/p99 | Adjusted candidate/main p50/p99 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| mapped / bulk / 32 | 3.968 / 6.784 | 1.440 / 2.240 | 1.952 / 3.072 | 0.682 / 0.660 | 0.389 / 0.364 |
+| mapped / bulk / 512 | 1.216 / 1.728 | 1.280 / 1.856 | 1.920 / 3.072 | 0.667 / 0.617 | 1.000 / 1.015 |
+| mapped / bulk / default | 1.184 / 1.792 | 1.184 / 1.792 | 1.888 / 2.944 | 0.627 / 0.565 | 1.068 / 1.000 |
+| mapped / normal / 32 | 3.520 / 5.760 | 1.568 / 2.688 | 1.888 / 3.136 | 0.831 / 0.878 | 0.467 / 0.479 |
+| mapped / normal / 512 | 1.920 / 2.944 | 1.504 / 2.560 | 1.984 / 3.264 | 0.758 / 0.771 | 0.783 / 0.962 |
+| mapped / normal / default | 1.760 / 2.624 | 1.568 / 2.432 | 1.984 / 3.712 | 0.790 / 0.655 | 0.847 / 0.815 |
+| pread / bulk / 32 | 5.120 / 9.728 | 2.240 / 3.712 | 1.920 / 3.136 | 1.186 / 1.204 | 0.438 / 0.336 |
+| pread / bulk / 512 | 1.248 / 1.920 | 1.184 / 1.792 | 1.984 / 3.200 | 0.597 / 0.560 | 0.927 / 0.906 |
+| pread / bulk / default | 1.248 / 2.016 | 1.376 / 2.112 | 1.952 / 3.200 | 0.717 / 0.611 | 1.034 / 0.999 |
+| pread / normal / 32 | 5.120 / 8.704 | 2.496 / 4.352 | 1.984 / 3.328 | 1.246 / 1.311 | 0.471 / 0.543 |
+| pread / normal / 512 | 1.728 / 2.816 | 1.664 / 2.368 | 1.920 / 3.136 | 0.765 / 0.673 | 0.845 / 0.689 |
+| pread / normal / default | 1.600 / 2.560 | 1.696 / 2.496 | 1.920 / 3.072 | 0.869 / 0.804 | 0.981 / 1.075 |
+
+[Mapped trial ranges](rebased-mapped-read/SUMMARY.md), [pread trial ranges](rebased-pread-read/SUMMARY.md). Values above one in the adjusted columns remain visible; three pairs are a confirmation, not a replacement for the five-pair campaign.
+
+| Latest-ten mode / layout / cache MiB | Main p50/p99 | Candidate p50/p99 | Adjusted candidate/main p50/p99 |
+| --- | ---: | ---: | ---: |
+| mapped / bulk / 32 | 4.032 / 8.192 | 4.992 / 11.264 | 1.241 / 1.512 |
+| mapped / bulk / 512 | 4.032 / 9.472 | 4.096 / 8.960 | 1.102 / 1.111 |
+| mapped / bulk / default | 3.968 / 8.448 | 3.776 / 8.064 | 1.010 / 0.900 |
+| mapped / normal / 32 | 4.480 / 8.448 | 3.968 / 7.808 | 0.923 / 1.017 |
+| mapped / normal / 512 | 4.992 / 13.056 | 4.224 / 10.240 | 0.903 / 0.853 |
+| mapped / normal / default | 4.608 / 9.472 | 4.224 / 9.984 | 0.935 / 0.902 |
+| pread / bulk / 32 | 4.352 / 8.960 | 4.096 / 8.704 | 1.000 / 0.909 |
+| pread / bulk / 512 | 4.096 / 8.960 | 3.968 / 8.960 | 0.905 / 0.349 |
+| pread / bulk / default | 4.096 / 9.472 | 3.968 / 8.960 | 1.039 / 1.273 |
+| pread / normal / 32 | 4.736 / 10.496 | 4.096 / 8.960 | 0.897 / 1.024 |
+| pread / normal / 512 | 4.608 / 9.472 | 4.096 / 8.448 | 0.943 / 0.997 |
+| pread / normal / default | 4.608 / 9.984 | 3.968 / 8.448 | 0.915 / 0.887 |
+
+### Bulk control confirmation
+
+Five additional alternating pairs repeat the three uncertain mapped bulk cache cases with the same binaries and fixtures. The original three-pair matrix is retained in full. Latencies are microseconds.
+
+| Cache MiB / workload | Main p50/p99 | Candidate p50/p99 | Adjusted candidate/main p50/p99 |
+| --- | ---: | ---: | ---: |
+| 32 / recall-by-id | 3.968 / 7.040 | 1.376 / 2.112 | 0.350 / 0.276 |
+| 32 / recent-for-agent | 4.032 / 8.192 | 3.968 / 7.680 | 1.029 / 0.966 |
+| 512 / recall-by-id | 1.216 / 1.952 | 1.344 / 2.112 | 1.045 / 1.049 |
+| 512 / recent-for-agent | 4.032 / 8.960 | 3.904 / 8.448 | 0.987 / 1.014 |
+| default / recall-by-id | 1.280 / 2.048 | 1.312 / 1.952 | 1.038 / 0.899 |
+| default / recent-for-agent | 3.968 / 7.936 | 3.840 / 7.808 | 1.050 / 1.139 |
+
+The large initial bulk/32 latest-ten slowdown does not reproduce at five pairs: adjusted p50/p99 is 1.029/0.966. Other controls remain above main. Default point is 1.038/0.899, 512 MiB point is 1.045/1.049, and default latest-ten is 1.050/1.139. The data do not establish the requested larger-cache and latest-ten non-regression bounds. All trial ranges and both series remain visible.
+
+[All five-pair controls and ranges](rebased-controls-mapped-read/SUMMARY.md).
+
+## Rebase and final gates
+
+PH3 base `4feca511` is already present through squash merge `f3d21dc1` and was dropped from the replay. Main's Bloom bypass is retained. Duplicate engine commit `0283fc7a` was dropped, with its unique tools and measurement evidence preserved in the campaign evidence commit. The locator lookup follows the same exact-key-before-Bloom ordering. The CRC extension, resident packing, exact reservation accounting, and L0 prefix fix remain. Main's PH3 field offsets and frozen flag-zero contract are retained in the design document. SQLite benchmarking from `37feee99` is unchanged.
+
+All 11 gates passed again on the rebased source, including 353 debug and release library tests, fixed corpora, loom, and both complete 20,000-seed suites. No timing runs overlapped this task's builds or tests. See [gate status](rebased-checks/status.json), [source hashes](rebased-checks/source-hashes.json), and [reproduction commands](VERIFY.md).
+
+The verifier now adds only the niceness increment needed to reach nice 10. A partial run with inherited nice 19 was preserved under rebased-checks-inherited-nice19, then all 11 gates were repeated at effective nice 10. The final metadata records coordinator nice 10 and increment zero.
+
+No task process uses sibling CPU 7, but the sibling was not established to be idle. Whole-child CPU 7 busy fractions were median 12.3% for mapped, 10.8% for pread, and 11.9% for the extra controls, with maxima 48.8%, 87.9%, and 23.2%. These samples include open and verification, so they do not isolate activity during API timers. This is an active-host measurement, and strict idle-sibling acceptance is not established. See [sibling summary](rebased-sibling-summary.json) and the per-child sibling.jsonl receipts.
+
+Cold, concurrent, profiling, and write rows below retain the original five-pair campaign against `06a457db`; they were not repeated against updated main. The separate write confirmation is also preserved. Those results establish the observed cold mmap tradeoff and leave durable-write p99 uncertain. The source comparison supports carrying that evidence forward, while the new three-pair warm matrix directly checks the rebased binary and main's PH3 baseline.
+
+The [frozen source patch](experiments/frozen-source-from-37feee99.patch) reconstructs the archived engine and Rust readbench source from public main `37feee99`, independently of old local commit reachability after rebase. Applying it to a private Git index reproduced all 40 frozen engine file hashes. See the [reconstruction receipt](frozen-reconstruction.json).
+
+## Archived five-pair campaign
+
 Engine source: `0283fc7af8cfba828ff05343c8b77bc27b228962`; baseline main `06a457db`. All timing children use CPU 6; build/test/coordinator processes use CPUs 12–21 at nice 10. No task work runs on sibling CPU 7. Other host workloads were active; this is not an isolated-host claim.
 
 The opt-in configuration is **CRC-bearing PH3 SSTs, point_index=true, block_cache_bytes=32 MiB, mmap_max_level=Some(u32::MAX)**. Both warm layout targets are evaluated on five alternating main/PH3 pairs, each side followed by its own LMDB control. Ratios use the median of within-trial ratios, rather than dividing unrelated medians. All five trials are retained. The warm read target is met; durable-write p99 non-regression remains uncertain after the additional confirmation block, as detailed below.

@@ -1,0 +1,89 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 90
+#
+# Samples: 3K of event 'cpu_core/cycles/u'
+# Event count (approx.): 3565000000
+#
+# Overhead  Command  Shared Object     Symbol                                                                                                                                                                                                                                                                                                                                                                                                                                                     
+# ........  .......  ................  ...........................................................................................................................................................................................................................................................................................................................................................................................................................................................
+#
+    14.03%  rebased  rebased           [.] <serde_json::read::SliceRead>::skip_to_escape
+            |          
+             --0.84%--<serde_json::read::SliceRead>::skip_to_escape
+
+     8.81%  rebased  rebased           [.] core::str::converts::from_utf8
+            |          
+             --0.81%--core::str::validations::run_utf8_validation (inlined)
+                       core::str::converts::from_utf8
+
+     8.47%  rebased  rebased           [.] serde_json::de::from_trait::<serde_json::read::SliceRead, kiban_readbench::model::Memory>
+     6.84%  rebased  rebased           [.] <serde_json::read::SliceRead as serde_json::read::Read>::parse_str
+     5.86%  rebased  libc.so.6         [.] __memcmp_avx2_movbe
+            |
+            ---__memcmp_avx2_movbe
+
+     5.41%  rebased  libc.so.6         [.] __memmove_avx_unaligned_erms
+            |
+            ---__memmove_avx_unaligned_erms
+
+     4.52%  rebased  rebased           [.] <serde_json::de::MapAccess<_> as serde_core::de::MapAccess>::next_key_seed::has_next_key::<serde_json::read::SliceRead>
+     4.15%  rebased  rebased           [.] <core::iter::adapters::GenericShunt<core::iter::adapters::map::Map<core::iter::adapters::take::Take<core::iter::adapters::take_while::TakeWhile<kiban::db::DbIter, <kiban::db::Kiban>::range::{closure#0}>>, <kiban_readbench::embedded::Embedded as kiban_readbench::api::Backend>::recent::{closure#0}>, core::result::Result<core::convert::Infallible, alloc::boxed::Box<dyn core::error::Error>>> as core::iter::traits::iterator::Iterator>::next
+     4.12%  rebased  rebased           [.] mi_heap_malloc_aligned_at
+     3.70%  rebased  rebased           [.] <kiban::sstable::reader::SstTable>::iter_from
+     3.70%  rebased  rebased           [.] <serde_json::de::Deserializer<serde_json::read::SliceRead>>::parse_integer
+     2.97%  rebased  rebased           [.] _mi_page_malloc
+     2.58%  rebased  rebased           [.] mi_free
+     2.52%  rebased  rebased           [.] <kiban::sstable::reader::Iter as core::iter::traits::iterator::Iterator>::next
+     2.44%  rebased  rebased           [.] <kiban::sstable::block::BlockIter as core::iter::traits::iterator::Iterator>::next
+     2.38%  rebased  rebased           [.] <kiban::cache::BlockCache>::get
+     1.96%  rebased  rebased           [.] <kiban_readbench::embedded::Embedded as kiban_readbench::api::Backend>::recent
+     1.94%  rebased  rebased           [.] <kiban::db::MergeCore>::pop_best
+     1.54%  rebased  rebased           [.] <kiban::db::DbIter as core::iter::traits::iterator::Iterator>::next
+     1.09%  rebased  rebased           [.] <core::marker::PhantomData<alloc::string::String> as serde_core::de::DeserializeSeed>::deserialize::<&mut serde_json::de::Deserializer<serde_json::read::SliceRead>>
+     1.07%  rebased  rebased           [.] <kiban::db::MergeCore>::fill_heads
+     0.98%  rebased  rebased           [.] <core::marker::PhantomData<u64> as serde_core::de::DeserializeSeed>::deserialize::<&mut serde_json::de::Deserializer<serde_json::read::SliceRead>>
+     0.73%  rebased  rebased           [.] <kiban::db::Kiban>::range
+     0.70%  rebased  rebased           [.] mi_malloc_aligned
+     0.62%  rebased  rebased           [.] _mi_malloc_generic
+     0.53%  rebased  rebased           [.] <core::fmt::Formatter>::pad_integral
+     0.50%  rebased  rebased           [.] <u32 as serde_core::de::Deserialize>::deserialize::<&mut serde_json::de::Deserializer<serde_json::read::SliceRead>>
+     0.42%  rebased  rebased           [.] mi_find_page
+     0.36%  rebased  rebased           [.] <std::hash::random::DefaultHasher as core::hash::Hasher>::write.273
+     0.36%  rebased  rebased           [.] kiban::sstable::block::header_at
+     0.36%  rebased  rebased           [.] kiban_readbench::profile
+     0.36%  rebased  rebased           [.] mi_heap_malloc_zero_aligned_at_generic
+     0.34%  rebased  rebased           [.] <u32 as core::fmt::Display>::fmt
+     0.28%  rebased  rebased           [.] <alloc::raw_vec::RawVecInner>::finish_grow
+     0.28%  rebased  rebased           [.] <kiban::sstable::reader::SstTable>::read_block
+     0.28%  rebased  rebased           [.] _mi_heap_realloc_zero
+     0.25%  rebased  rebased           [.] alloc::fmt::format::format_inner
+     0.22%  rebased  rebased           [.] <serde_json::de::Deserializer<serde_json::read::SliceRead>>::end_map
+     0.22%  rebased  rebased           [.] _mi_page_free_collect
+     0.20%  rebased  rebased           [.] <std::hash::random::RandomState as core::hash::BuildHasher>::hash_one::<&(u64, u64)>
+     0.17%  rebased  rebased           [.] <alloc::raw_vec::RawVecInner>::finish_grow
+     0.17%  rebased  rebased           [.] <alloc::string::String as core::fmt::Write>::write_str.16
+     0.14%  rebased  rebased           [.] <alloc::raw_vec::RawVecInner<_>>::reserve::do_reserve_and_handle::<alloc::alloc::Global>
+     0.14%  rebased  rebased           [.] _mi_page_bin
+     0.14%  rebased  rebased           [.] core::fmt::write
+     0.14%  rebased  rebased           [.] core::ptr::drop_glue::<kiban::sstable::reader::Iter>
+     0.11%  rebased  rebased           [.] <alloc::raw_vec::RawVecInner<_>>::reserve::do_reserve_and_handle::<alloc::alloc::Global>
+     0.11%  rebased  rebased           [.] <kiban::sstable::block::BlockData as core::ops::deref::Deref>::deref
+     0.11%  rebased  rebased           [.] _mi_bin
+     0.11%  rebased  rebased           [.] _mi_page_retire
+     0.11%  rebased  rebased           [.] kiban::sstable::block::seek_restart_index
+     0.08%  rebased  rebased           [.] <alloc::string::String as core::fmt::Write>::write_char.17
+     0.08%  rebased  rebased           [.] core::ptr::drop_glue::<core::iter::adapters::take_while::TakeWhile<kiban::db::DbIter, <kiban::db::Kiban>::range::{closure#0}>>
+     0.06%  rebased  rebased           [.] mi_heap_collect_ex
+     0.03%  rebased  [vdso]            [.] 0x0000000000000a76
+     0.03%  rebased  libc.so.6         [.] clock_gettime@@GLIBC_2.17
+     0.03%  rebased  rebased           [.] _mi_deferred_free
+     0.03%  rebased  rebased           [.] mi_page_queue_remove
+     0.03%  rebased  rebased           [.] mi_stat_update
+     0.03%  rebased  [unknown]         [k] 0xffffffff982015f0
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

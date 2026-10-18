@@ -1,0 +1,12 @@
+{
+  "coordinator_cpus": "12-21",
+  "coordinator_nice": 10,
+  "gate_subprocess_cpus": "12-21",
+  "gate_subprocess_nice": 10,
+  "gate_nice_reason": "verify.py adds only the increment needed to reach nice 10",
+  "timed_cpus": "6",
+  "timed_nice": 10,
+  "task_sibling_unused": "7",
+  "host_workloads": "Other work remained active; paired alternating controls are retained",
+  "interrupted_pass": "rebased-checks-inherited-nice19 records the partial run before fixing compounded niceness"
+}

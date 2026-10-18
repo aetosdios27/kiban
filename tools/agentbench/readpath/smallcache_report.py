@@ -14,6 +14,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('folder', type=Path)
     parser.add_argument('--after', default='after')
+    parser.add_argument('--trials', type=int, choices=range(1, 6), default=5)
     args = parser.parse_args()
     groups = defaultdict(dict)
     commands = [json.loads(s) for s in (args.folder/'commands.jsonl').read_text().splitlines()]
@@ -51,26 +52,26 @@ def main():
             groups[key][item] = row
     summary = []
     lines = ['# Paired results', '',
-             'Microseconds. Median [min, max] of five alternating trials per side with adjacent LMDB controls. CPU 6 only.', '',
+             f'Microseconds. Median [min, max] of {args.trials} alternating trials per side with adjacent LMDB controls. CPU 6 only.', '',
              '| Scenario / workload | Before p50 / p99 | After p50 / p99 | LMDB before p50 / p99 | LMDB after p50 / p99 | K/LMDB p50 before / after |',
              '| --- | ---: | ---: | ---: | ---: | ---: |']
     details = ['', '## Trial ranges', '', '| Scenario / workload | Side | p50 | p99 |', '| --- | --- | ---: | ---: |']
     for key, data in sorted(groups.items()):
-        expected = {(label, engine, t) for label in ['before', args.after] for engine in ['kiban', 'lmdb'] for t in range(1, 6)}
+        expected = {(label, engine, t) for label in ['before', args.after] for engine in ['kiban', 'lmdb'] for t in range(1, args.trials + 1)}
         assert set(data) == expected, (key, set(data) ^ expected)
         distributions = {}
         ratios = {}
         for label in ['before', args.after]:
-            ratios[label] = [data[label, 'kiban', t]['latency']['p50_ns']/data[label, 'lmdb', t]['latency']['p50_ns'] for t in range(1, 6)]
+            ratios[label] = [data[label, 'kiban', t]['latency']['p50_ns']/data[label, 'lmdb', t]['latency']['p50_ns'] for t in range(1, args.trials + 1)]
             for engine in ['kiban', 'lmdb']:
                 distributions[label+'-'+engine] = {
-                    pct: [data[label, engine, t]['latency'][pct] for t in range(1, 6)]
+                    pct: [data[label, engine, t]['latency'][pct] for t in range(1, args.trials + 1)]
                     for pct in ['p50_ns', 'p99_ns']}
                 if next(iter(data.values()))['type'] == 'cold-start':
                     distributions[label+'-'+engine].update({
-                        field: [data[label, engine, t][field] for t in range(1, 6)]
+                        field: [data[label, engine, t][field] for t in range(1, args.trials + 1)]
                         for field in ['storage_read_bytes', 'minor_faults', 'major_faults']})
-                    distributions[label+'-'+engine]['p999_ns'] = [data[label, engine, t]['latency']['p999_ns'] for t in range(1, 6)]
+                    distributions[label+'-'+engine]['p999_ns'] = [data[label, engine, t]['latency']['p999_ns'] for t in range(1, args.trials + 1)]
         def pair(label, engine):
             d = distributions[label+'-'+engine]
             return ' / '.join(f'{statistics.median(d[pct])/1000:.3f}' for pct in ['p50_ns', 'p99_ns'])

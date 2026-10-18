@@ -1,0 +1,12 @@
+{"backend":"kiban","cache_bytes":33554432,"durable":false,"point_index":true,"type":"requested_config"}
+Events disabled
+Events enabled
+Events disabled
+{"digest":898,"errors":0,"ns":1306898873,"operations":300000,"type":"profile"}
+[ perf record: Woken up 1834 times to write data ]
+Warning:
+Processed 5475 events and lost 29 chunks!
+
+Check IO/CPU overload!
+
+[ perf record: Captured and wrote 28.662 MB /home/aetos/.t3/worktrees/kiban/t3-9b9cb0e0/validation/smallcache/rebased-latest-profile/bulk-cache32-rebased-kiban-stacks.data (3565 samples) ]

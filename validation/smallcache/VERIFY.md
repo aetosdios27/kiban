@@ -1,5 +1,47 @@
 # Reproduce the small-cache campaign
 
+The complete five-pair campaign below is archived evidence against `06a457db`.
+The final engine is rebased onto `37feee99`, including PH3 and the SQLite
+benchmark. To reproduce the final confirmation, first build that main revision
+with the same locked release command and freeze its readbench binary as
+`target/smallcache/bin/main-rebased`. Return to the candidate branch before
+running these commands. Keep the original `before` and `ph3` binaries intact.
+
+    taskset -c 12-21 nice -n 10 python3 tools/agentbench/readpath/verify.py validation/smallcache/rebased-checks --cpus 12,13,14,15,16,17,18,19,20,21
+    taskset -c 12-21 nice -n 10 cargo build --release --locked --manifest-path tools/agentbench/readpath/Cargo.toml
+    cp tools/agentbench/readpath/target/release/kiban-readbench target/smallcache/bin/rebased
+    taskset -c 12-21 nice -n 10 python3 tools/agentbench/readpath/smallcache_rebase_confirm.py prepare-main
+    taskset -c 12-21 nice -n 10 python3 tools/agentbench/readpath/smallcache_rebase_confirm.py read --caches 32 default 512
+    taskset -c 12-21 nice -n 10 python3 tools/agentbench/readpath/smallcache_rebase_confirm.py read --layouts bulk --modes mapped --caches 32 default 512 --trials 5 --prefix rebased-controls
+    taskset -c 12-21 nice -n 10 python3 tools/agentbench/readpath/smallcache_summary.py
+    taskset -c 12-21 nice -n 10 python3 tools/agentbench/readpath/smallcache_headlines.py
+
+The confirmation uses three alternating pairs per layout, cache, and access
+mode, with an adjacent LMDB control after each Kiban process. Main writes fresh
+flag-zero PH3 fixtures. The candidate reads the frozen CRC-bearing PH3 fixtures.
+Production engine logic matches the frozen candidate, as recorded in
+`rebased-source-comparison.json`. Both binaries include main's SQLite benchmark
+support. The confirmation measures point reads and latest-ten at 32 MiB,
+the computed default, and 512 MiB. Cold and write measurements remain the
+original five-pair campaign, and the write confirmation remains a separate
+five-pair series. Run builds and gates to completion before any timing process.
+Use fresh output directories and database paths for a repeat; the drivers
+refuse to overwrite trial configs or fixtures.
+
+The extra five-pair mapped bulk block confirms uncertain read controls. Both
+the three-pair matrix and this block are retained. CPU 7 samples cover each
+whole child process, including open and verification. They record ambient
+sibling work even though no task child is assigned there. These samples cannot
+prove that the sibling was idle during each API timer.
+
+## Archived five-pair campaign
+
+`experiments/frozen-source-from-37feee99.patch` reconstructs the frozen engine
+and Rust readbench source when applied to public main `37feee99`. The patch
+preserves this source after rebase even if old local commits expire. The private
+Git-index reconstruction in `frozen-reconstruction.json` verifies all 40 engine
+SHA256 values against `ph3-provenance.json`.
+
 Use an isolated worktree at main `06a457dbfe24aabe1e33a3763e1ac0e1a8d73e05`.
 All timed children use CPU 6, including four-reader probes. Do not schedule
 this task on its sibling CPU 7, or CPUs 3, 4, 8, or 9. Builds, tests, and
@@ -74,8 +116,9 @@ affinity. It writes medians, full trial ranges, and paired Kiban/LMDB ratios.
 Cold summaries retain p999, storage bytes, and faults. Never use the syscall
 preload for latency trials: its clocks and interposition add overhead.
 
-The engine source hashes in `ph3-checks/source-hashes.json` must match the
-final commit. The initial error-classification failure and its fix are recorded
+The engine source hashes in `ph3-checks/source-hashes.json` identify the archived
+frozen source `0283fc7a`. The rebased source uses `rebased-checks/source-hashes.json`.
+The initial error-classification failure and its fix are recorded
 in `decisions.tsv`; they are development evidence rather than final failures.
 
 After the pipeline completes, render every result without filtering trials:

@@ -1,6 +1,6 @@
 # Paired results
 
-Microseconds. Median [min, max] of five alternating trials per side with adjacent LMDB controls. CPU 6 only.
+Microseconds. Median [min, max] of 5 alternating trials per side with adjacent LMDB controls. CPU 6 only.
 
 | Scenario / workload | Before p50 / p99 | After p50 / p99 | LMDB before p50 / p99 | LMDB after p50 / p99 | K/LMDB p50 before / after |
 | --- | ---: | ---: | ---: | ---: | ---: |

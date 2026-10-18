@@ -1,7 +1,10 @@
 # PH3 locators with verified external values
 
 This implementation extends commit 4feca511, not the private PH2-derived codec
-preserved in experiments/ph2-locators.patch. PH3 flag zero remains byte-for-byte
+preserved in experiments/ph2-locators.patch. The final branch is rebased onto
+main 37feee99, where PH3 was squash-merged as f3d21dc1. Main's resident-index
+Bloom bypass is retained, with locator hits using the same ordering.
+PH3 flag zero remains byte-for-byte
 compatible. The new writer sets feature bit 0 at byte 52 and appends one u32
 CRC-32/IEEE immediately after each version's value address. Its version stride
 is S + L + W + 4. The checksum covers the exact value bytes; zero is a valid

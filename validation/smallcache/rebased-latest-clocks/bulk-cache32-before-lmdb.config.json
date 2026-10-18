@@ -1,0 +1,15 @@
+{
+  "backend": "lmdb",
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-9b9cb0e0/target/smallcache/data/lmdb-1000000-bulk-0",
+  "n": 1000000,
+  "operations": 1000000,
+  "k": 10,
+  "seed": 20261016,
+  "output": "",
+  "action": "profile",
+  "layout": "bulk",
+  "cache_mib": 32,
+  "point_index": true,
+  "stage": 2,
+  "mmap_max_level": 4294967295
+}
