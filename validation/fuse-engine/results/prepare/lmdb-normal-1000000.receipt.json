@@ -1,0 +1,30 @@
+{
+  "name": "lmdb-normal-1000000",
+  "command": [
+    "taskset",
+    "-c",
+    "12-21",
+    "nice",
+    "-n",
+    "10",
+    "/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/target/fuse-engine/bin/before",
+    "/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/validation/fuse-engine/results/prepare/lmdb-normal-1000000.config.json"
+  ],
+  "code": 0,
+  "sha256": "707d41a57bc421b88dec629b57ae530b875672f5401c2a7767d6fe9595afddb1",
+  "seconds": 7.678100109100342,
+  "start": {
+    "total": 2381137,
+    "idle": 2124723
+  },
+  "end": {
+    "total": 2381841,
+    "idle": 2125330
+  },
+  "cpu9_busy_percent": 13.778409090909093,
+  "load": [
+    29.2275390625,
+    31.5654296875,
+    25.24365234375
+  ]
+}

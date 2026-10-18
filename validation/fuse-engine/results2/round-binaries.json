@@ -1,0 +1,6 @@
+{
+  "n_before_runs": 80,
+  "before_sha256": "fd9e5aba02b625e4fb6e813d2954f7d7f49e0edd3b0c42c1ac04cc6d82253f74",
+  "after_sha256": "1cc5a719f6183680a3d83deb6a3e04db2b6f5f7f675659b6b71202d8cf4a69cf",
+  "data": "/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/target/fuse-engine/data"
+}

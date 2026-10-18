@@ -52,3 +52,4 @@ pub mod testutil;
 pub mod wal;
 
 mod remix;
+mod xxh3;

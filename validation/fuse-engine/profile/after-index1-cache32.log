@@ -1,0 +1,2 @@
+{"backend":"kiban","binary_fuse_filter":true,"cache_bytes":33554432,"durable":false,"point_index":true,"type":"requested_config"}
+{"digest":353027,"errors":0,"ns":5327079929,"operations":1000000,"type":"profile"}

@@ -1,0 +1,91 @@
+{
+  "name": "normal-cacheNone-index1-read-r2-after-kiban",
+  "command": [
+    "taskset",
+    "-c",
+    "8",
+    "/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/target/fuse-engine/bin/after2",
+    "/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/validation/fuse-engine/results2/reads/normal-cacheNone-index1-read-r2-after-kiban.config.json"
+  ],
+  "code": 0,
+  "sha256": "1cc5a719f6183680a3d83deb6a3e04db2b6f5f7f675659b6b71202d8cf4a69cf",
+  "seconds": 5.446369409561157,
+  "start": {
+    "total": 3254251,
+    "idle": 2906621
+  },
+  "end": {
+    "total": 3254753,
+    "idle": 2907061
+  },
+  "cpu9_busy_percent": 12.350597609561753,
+  "load": [
+    22.986328125,
+    23.203125,
+    24.40576171875
+  ],
+  "stages": [
+    {
+      "call_ops_s": 698275.211348704,
+      "call_seconds": 0.14321001,
+      "errors": 0,
+      "latency": {
+        "count": 100000,
+        "max_ns": 70612,
+        "p50_ns": 1408,
+        "p999_ns": 6656,
+        "p99_ns": 1984
+      },
+      "reads": {
+        "count": 100000,
+        "max_ns": 70612,
+        "p50_ns": 1408,
+        "p999_ns": 6656,
+        "p99_ns": 1984
+      },
+      "type": "stage",
+      "verified_ops_s": 495218.4283692493,
+      "wall_seconds": 0.201931096,
+      "workload": "recall-by-id",
+      "write_readback_seconds": 0.0,
+      "writes": {
+        "count": 0,
+        "max_ns": 0,
+        "p50_ns": null,
+        "p999_ns": null,
+        "p99_ns": null
+      }
+    },
+    {
+      "call_ops_s": 225994.79910484998,
+      "call_seconds": 0.442488059,
+      "errors": 0,
+      "latency": {
+        "count": 100000,
+        "max_ns": 111681,
+        "p50_ns": 4224,
+        "p999_ns": 14592,
+        "p99_ns": 7808
+      },
+      "reads": {
+        "count": 100000,
+        "max_ns": 111681,
+        "p50_ns": 4224,
+        "p999_ns": 14592,
+        "p99_ns": 7808
+      },
+      "type": "stage",
+      "verified_ops_s": 103991.69327665043,
+      "wall_seconds": 0.961615268,
+      "workload": "recent-for-agent",
+      "write_readback_seconds": 0.0,
+      "writes": {
+        "count": 0,
+        "max_ns": 0,
+        "p50_ns": null,
+        "p999_ns": null,
+        "p99_ns": null
+      }
+    }
+  ]
+}

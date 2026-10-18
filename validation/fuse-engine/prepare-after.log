@@ -1,0 +1,4 @@
+after-kiban-bulk-index0-1000000 16.02s sibling=11.7%
+after-kiban-bulk-index1-1000000 13.62s sibling=10.3%
+after-kiban-normal-index0-1000000 35.15s sibling=19.7%
+after-kiban-normal-index1-1000000 54.50s sibling=21.2%

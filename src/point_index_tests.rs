@@ -276,6 +276,7 @@ fn point_index_maintenance_measurement() {
                 opts.point_index = true;
                 opts.scan_prefix_len = if indexed { 2 } else { 0 };
             }
+            opts.binary_fuse_filter = std::env::var_os("KIBAN_FUSE_BENCH").is_some();
             opts.l0_compaction_trigger = 100;
             opts.l0_write_stall_trigger = 200;
             opts.target_file_size = 4 * 1024 * 1024;

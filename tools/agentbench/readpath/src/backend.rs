@@ -90,6 +90,13 @@ impl Backend for Lmdb {
         Ok(())
     }
 
+    fn contains_key(&mut self, key: &[u8]) -> Result<bool> {
+        let txn = self.env.read_txn()?;
+        let found = self.records.get(&txn, key)?.is_some();
+        txn.commit()?;
+        Ok(found)
+    }
+
     fn get(&mut self, id: u64) -> Result<Memory> {
         self.point(id)
     }

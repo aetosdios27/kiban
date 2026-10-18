@@ -1,0 +1,91 @@
+{
+  "name": "normal-cacheNone-index1-miss-r5-before-lmdb",
+  "command": [
+    "taskset",
+    "-c",
+    "8",
+    "/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/target/fuse-engine/bin/before",
+    "/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/validation/fuse-engine/results/reads/normal-cacheNone-index1-miss-r5-before-lmdb.config.json"
+  ],
+  "code": 0,
+  "sha256": "707d41a57bc421b88dec629b57ae530b875672f5401c2a7767d6fe9595afddb1",
+  "seconds": 3.8581576347351074,
+  "start": {
+    "total": 2599141,
+    "idle": 2318500
+  },
+  "end": {
+    "total": 2599483,
+    "idle": 2318830
+  },
+  "cpu9_busy_percent": 3.508771929824561,
+  "load": [
+    23.82470703125,
+    23.88720703125,
+    24.4580078125
+  ],
+  "stages": [
+    {
+      "call_ops_s": 2277148.6155312145,
+      "call_seconds": 0.043914569,
+      "errors": 0,
+      "latency": {
+        "count": 100000,
+        "max_ns": 56510,
+        "p50_ns": 416,
+        "p999_ns": 1824,
+        "p99_ns": 960
+      },
+      "reads": {
+        "count": 100000,
+        "max_ns": 56510,
+        "p50_ns": 416,
+        "p999_ns": 1824,
+        "p99_ns": 960
+      },
+      "type": "stage",
+      "verified_ops_s": 2100075.9702482237,
+      "wall_seconds": 0.047617325,
+      "workload": "absent-uniform",
+      "write_readback_seconds": 0.0,
+      "writes": {
+        "count": 0,
+        "max_ns": 0,
+        "p50_ns": null,
+        "p999_ns": null,
+        "p99_ns": null
+      }
+    },
+    {
+      "call_ops_s": 2870866.1716164183,
+      "call_seconds": 0.034832693,
+      "errors": 0,
+      "latency": {
+        "count": 100000,
+        "max_ns": 11143,
+        "p50_ns": 328,
+        "p999_ns": 1344,
+        "p99_ns": 848
+      },
+      "reads": {
+        "count": 100000,
+        "max_ns": 11143,
+        "p50_ns": 328,
+        "p999_ns": 1344,
+        "p99_ns": 848
+      },
+      "type": "stage",
+      "verified_ops_s": 2601331.2833108604,
+      "wall_seconds": 0.038441855,
+      "workload": "absent-agent-prefix",
+      "write_readback_seconds": 0.0,
+      "writes": {
+        "count": 0,
+        "max_ns": 0,
+        "p50_ns": null,
+        "p999_ns": null,
+        "p99_ns": null
+      }
+    }
+  ]
+}

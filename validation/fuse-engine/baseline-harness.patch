@@ -1,0 +1,168 @@
+diff --git a/tools/agentbench/readpath/src/backend.rs b/tools/agentbench/readpath/src/backend.rs
+index 886ec430..e454fa00 100644
+--- a/tools/agentbench/readpath/src/backend.rs
++++ b/tools/agentbench/readpath/src/backend.rs
+@@ -90,6 +90,13 @@ impl Backend for Lmdb {
+         Ok(())
+     }
+ 
++    fn contains_key(&mut self, key: &[u8]) -> Result<bool> {
++        let txn = self.env.read_txn()?;
++        let found = self.records.get(&txn, key)?.is_some();
++        txn.commit()?;
++        Ok(found)
++    }
++
+     fn get(&mut self, id: u64) -> Result<Memory> {
+         self.point(id)
+     }
+diff --git a/tools/agentbench/readpath/src/main.rs b/tools/agentbench/readpath/src/main.rs
+index 857d7d4e..d5cdbbae 100644
+--- a/tools/agentbench/readpath/src/main.rs
++++ b/tools/agentbench/readpath/src/main.rs
+@@ -73,6 +73,8 @@ struct Options {
+     #[serde(default)]
+     point_index: bool,
+     #[serde(default)]
++    binary_fuse_filter: bool,
++    #[serde(default)]
+     stage: u64,
+     #[serde(default)]
+     durable: bool,
+@@ -104,7 +106,7 @@ fn open(o: &Options) -> Result<Box<dyn Backend>> {
+     eprintln!(
+         "{}",
+         json!({"type":"requested_config", "backend":o.suite.backend,
+-        "cache_bytes":o.cache_bytes(),"point_index":o.point_index,"durable":o.durable})
++        "cache_bytes":o.cache_bytes(),"point_index":o.point_index,"binary_fuse_filter":o.binary_fuse_filter,"durable":o.durable})
+     );
+     Ok(match o.suite.backend.as_str() {
+         "kiban" => Box::new(backend::Embedded::with_options_and_durability(
+@@ -253,14 +255,36 @@ fn reads(o: &Options) -> Result<()> {
+         let recent: Vec<_> = (0..model::AGENTS as u32)
+             .map(|a| model::recent_ids(c.n, a, c.k))
+             .collect();
+-        for (stage, name) in [(1, "recall-by-id"), (2, "recent-for-agent")] {
++        let stages = if o.action == "miss" {
++            vec![(3, "absent-uniform"), (4, "absent-agent-prefix")]
++        } else {
++            vec![(1, "recall-by-id"), (2, "recent-for-agent")]
++        };
++        // Keys generated and proven absent outside the per-lookup timer.
++        let missing: Vec<_> = (0..c.operations)
++            .map(|op| {
++                let h = random::mix(c.seed ^ op);
++                (
++                    model::key((h | (1 << 63)) & !63 | (op % model::AGENTS)).into_bytes(),
++                    model::key((h | (1 << 63)) & !63 | 7).into_bytes(),
++                )
++            })
++            .collect();
++        for (stage, name) in stages {
+             let mut histogram = metrics::Histogram::default();
+             let mut ns = 0;
+             let started = Instant::now();
+             for op in 0..c.operations {
+                 let id = random::mix(c.seed ^ random::mix(stage) ^ op) % c.n;
+                 let tick = Instant::now();
+-                let (one, many) = if stage == 2 {
++                let (one, many) = if stage >= 3 {
++                    let keys = &missing[op as usize];
++                    let key = if stage == 3 { &keys.0 } else { &keys.1 };
++                    if b.contains_key(key)? {
++                        return Err("absent lookup returned data".into());
++                    }
++                    (None, None)
++                } else if stage == 2 {
+                     (None, Some(b.recent((id % model::AGENTS) as u32, c.k)?))
+                 } else {
+                     (Some(b.get(id)?), None)
+@@ -362,7 +386,7 @@ fn run() -> Result<()> {
+             Ok(())
+         }
+         "prepare" => prepare(&o),
+-        "read" | "profile" => reads(&o),
++        "read" | "profile" | "miss" => reads(&o),
+         "write" => writes(&o),
+         "cold" => cold::run(&o),
+         "micro" => micro::run(&o),
+@@ -393,7 +417,7 @@ mod tests {
+         std::fs::create_dir(&root)?;
+         for backend in ["kiban", "lmdb", "rocksdb"] {
+             for shape in ["bulk", "normal"] {
+-                let o = Options {
++                let mut o = Options {
+                     suite: Config {
+                         backend: backend.into(),
+                         db: root.join(format!("{backend}-{shape}")),
+@@ -408,6 +432,7 @@ mod tests {
+                     action: "read".into(),
+                     layout: shape.into(),
+                     point_index: true,
++                    binary_fuse_filter: true,
+                     cache_mib: Some(32),
+                     mmap_max_level: None,
+                     readers: 1,
+@@ -430,6 +455,20 @@ mod tests {
+                     assert_eq!(row["reads"]["count"], 100);
+                     assert_eq!(row["errors"], 0);
+                 }
++                if backend == "kiban" || backend == "lmdb" {
++                    o.action = "miss".into();
++                    o.suite.output = root.join(format!("{backend}-{shape}-miss.jsonl"));
++                    reads(&o)?;
++                    let rows: Vec<Value> = std::fs::read_to_string(&o.suite.output)?
++                        .lines()
++                        .map(serde_json::from_str)
++                        .collect::<std::result::Result<_, _>>()?;
++                    assert_eq!(rows.len(), 3);
++                    for row in &rows[..2] {
++                        assert_eq!(row["reads"]["count"], 100);
++                        assert_eq!(row["errors"], 0);
++                    }
++                }
+                 let mut b = open(&o)?;
+                 b.put(&model::Memory::new(5, 99, o.suite.seed), false)?;
+                 b.finish()?;
+diff --git a/tools/agentbench/readpath/src/sqlite.rs b/tools/agentbench/readpath/src/sqlite.rs
+index 4f8c7e53..cbbee833 100644
+--- a/tools/agentbench/readpath/src/sqlite.rs
++++ b/tools/agentbench/readpath/src/sqlite.rs
+@@ -306,6 +306,7 @@ mod tests {
+                     mmap_max_level: None,
+                     readers: 1,
+                     point_index: false,
++                    binary_fuse_filter: false,
+                     stage: 0,
+                     durable: false,
+                     micro: String::new(),
+diff --git a/tools/agentbench/src/api.rs b/tools/agentbench/src/api.rs
+index ba6de923..9095e4e6 100644
+--- a/tools/agentbench/src/api.rs
++++ b/tools/agentbench/src/api.rs
+@@ -13,6 +13,10 @@ pub trait Backend {
+         Err("bulk loading is unsupported by this backend".into())
+     }
+     fn get(&mut self, id: u64) -> Result<Memory>;
++    /// Raw membership lookup used to verify absent-key read workloads.
++    fn contains_key(&mut self, _key: &[u8]) -> Result<bool> {
++        Err("raw membership lookup unsupported by this backend".into())
++    }
+     fn recent(&mut self, agent: u32, k: usize) -> Result<Vec<Memory>>;
+     fn finish(&mut self) -> Result<()>;
+ }
+diff --git a/tools/agentbench/src/embedded.rs b/tools/agentbench/src/embedded.rs
+index 80f3ee5f..d2704f94 100644
+--- a/tools/agentbench/src/embedded.rs
++++ b/tools/agentbench/src/embedded.rs
+@@ -65,6 +65,10 @@ impl Backend for Embedded {
+         Ok(serde_json::from_slice(&value)?)
+     }
+ 
++    fn contains_key(&mut self, key: &[u8]) -> Result<bool> {
++        Ok(self.db.get(key)?.is_some())
++    }
++
+     fn recent(&mut self, agent: u32, k: usize) -> Result<Vec<Memory>> {
+         let start = format!("agent/{agent:04}/memory/");
+         let end = format!("agent/{agent:04}/memory0");

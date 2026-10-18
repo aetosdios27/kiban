@@ -306,6 +306,7 @@ mod tests {
                     mmap_max_level: None,
                     readers: 1,
                     point_index: false,
+                    binary_fuse_filter: false,
                     stage: 0,
                     durable: false,
                     micro: String::new(),

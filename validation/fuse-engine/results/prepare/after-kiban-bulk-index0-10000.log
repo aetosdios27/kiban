@@ -1,0 +1,4 @@
+{"backend":"kiban","binary_fuse_filter":true,"cache_bytes":449030592,"durable":false,"point_index":false,"type":"requested_config"}
+kiban: bulk preload 10000/10000
+{"backend":"kiban","binary_fuse_filter":true,"cache_bytes":449030592,"durable":false,"point_index":false,"type":"requested_config"}
+{"layout":{"0":[2]},"type":"prepared","verified_records":10000}

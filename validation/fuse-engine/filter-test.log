@@ -1,0 +1,12 @@
+   Compiling kiban v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-c0aaa680)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.52s
+     Running unittests src/lib.rs (target/debug/deps/kiban-60f9814aeb7cdf24)
+
+running 4 tests
+test sstable::filter::tests::exhausted_seeds_collision_and_workspace_fall_back_positive ... ok
+test sstable::filter::tests::rejects_truncation_and_impossible_dimensions ... ok
+test sstable::filter::tests::all_members_random_and_adversarial_roundtrip ... ok
+test sstable::filter::tests::two_million_distinct_members_have_no_false_negatives ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 356 filtered out; finished in 8.35s
+

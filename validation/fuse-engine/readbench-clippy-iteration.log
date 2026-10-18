@@ -1,0 +1,61 @@
+   Compiling libc v0.2.172
+   Compiling find-msvc-tools v0.1.14
+   Compiling shlex v2.0.1
+   Compiling glob v0.3.4
+   Compiling memchr v2.7.4
+   Compiling regex-syntax v0.8.11
+   Compiling cfg-if v1.0.5
+   Compiling syn v2.0.104
+   Compiling minimal-lexical v0.2.1
+   Compiling bindgen v0.72.1
+   Compiling libloading v0.8.9
+   Compiling either v1.19.0
+   Compiling rustc-hash v2.1.3
+   Compiling bitflags v2.10.0
+   Compiling pkg-config v0.3.34
+   Compiling vcpkg v0.2.15
+   Compiling rustflags v0.1.7
+   Compiling itertools v0.13.0
+   Compiling clang-sys v1.9.1
+    Checking foldhash v0.2.0
+    Checking fallible-iterator v0.3.0
+    Checking hashbrown v0.17.1
+   Compiling jobserver v0.1.35
+   Compiling nom v7.1.3
+    Checking smallvec v1.14.0
+    Checking fallible-streaming-iterator v0.1.9
+   Compiling cc v1.8.0
+    Checking kiban v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-c0aaa680)
+    Checking hashlink v0.12.2
+   Compiling regex-automata v0.4.18
+   Compiling cexpr v0.6.0
+   Compiling lz4-sys v1.11.1+lz4-1.10.0
+   Compiling libmimalloc-sys v0.1.44
+   Compiling libsqlite3-sys v0.38.2
+   Compiling regex v1.13.1
+    Checking mimalloc v0.1.48
+   Compiling serde_derive v1.0.228
+   Compiling phf_macros v0.11.3
+   Compiling phf v0.11.3
+   Compiling doxygen-rs v0.4.2
+   Compiling lmdb-master3-sys v0.2.5
+    Checking serde v1.0.228
+   Compiling librocksdb-sys v0.19.0+11.8.1
+    Checking generic-array v0.14.7
+    Checking serde_json v1.0.143
+    Checking bincode v1.3.3
+    Checking crypto-common v0.1.6
+    Checking aead v0.5.2
+    Checking heed-types v0.21.0
+    Checking heed3 v0.22.0
+    Checking rusqlite v0.40.2
+    Checking rocksdb v0.25.0
+    Checking kiban-readbench v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/tools/agentbench/readpath)
+error[E0063]: missing field `binary_fuse_filter` in initializer of `Options`
+   --> src/sqlite.rs:291:25
+    |
+291 |                 let o = Options {
+    |                         ^^^^^^^ missing `binary_fuse_filter`
+
+For more information about this error, try `rustc --explain E0063`.
+error: could not compile `kiban-readbench` (bin "kiban-readbench" test) due to 1 previous error

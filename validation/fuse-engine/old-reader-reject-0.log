@@ -1,0 +1,2 @@
+{"backend":"kiban","binary_fuse_filter":true,"cache_bytes":449030592,"durable":false,"point_index":false,"type":"requested_config"}
+INVALID: database corrupt: unsupported format version 5
