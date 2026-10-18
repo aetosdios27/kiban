@@ -876,7 +876,7 @@ fn ph3_value_crc_and_scan_extension_together_match_model_and_detect_corruption()
         for (k, v) in &model {
             assert_eq!(db.get(k).unwrap().as_deref(), Some(v.as_slice()));
         }
-        assert_eq!(db.get(&agent(1, 0)).unwrap(), None);
+        assert_eq!(db.get(agent(1, 0)).unwrap(), None);
         for a in 0..3u8 {
             let prefix = vec![b'a', b'0' + a];
             for count in [1, 10, 500] {
