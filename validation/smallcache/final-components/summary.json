@@ -1,0 +1,66 @@
+[
+  {
+    "errors": 0,
+    "name": "bloom",
+    "ns": 62593233,
+    "ns_per_op": 62.593233,
+    "operations": 1000000,
+    "type": "micro"
+  },
+  {
+    "errors": 0,
+    "name": "index",
+    "ns": 278586746,
+    "ns_per_op": 278.586746,
+    "operations": 1000000,
+    "type": "micro"
+  },
+  {
+    "errors": 0,
+    "name": "verify-block",
+    "ns": 600542354,
+    "ns_per_op": 600.542354,
+    "operations": 1000000,
+    "type": "micro"
+  },
+  {
+    "errors": 0,
+    "name": "cache",
+    "ns": 329822125,
+    "ns_per_op": 329.822125,
+    "operations": 1000000,
+    "type": "micro"
+  },
+  {
+    "errors": 0,
+    "name": "hash",
+    "ns": 30073092,
+    "ns_per_op": 30.073092,
+    "operations": 1000000,
+    "type": "micro"
+  },
+  {
+    "errors": 0,
+    "name": "block-seek",
+    "ns": 680349688,
+    "ns_per_op": 680.349688,
+    "operations": 1000000,
+    "type": "micro"
+  },
+  {
+    "errors": 0,
+    "name": "copy",
+    "ns": 25204062,
+    "ns_per_op": 25.204062,
+    "operations": 1000000,
+    "type": "micro"
+  },
+  {
+    "errors": 0,
+    "name": "crc-value",
+    "ns": 19318000,
+    "ns_per_op": 19.318,
+    "operations": 1000000,
+    "type": "micro"
+  }
+]

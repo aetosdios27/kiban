@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <sys/uio.h>
 #include <unistd.h>
 /* Diagnostic only. The perf FIFO brackets the operation loop. Clock overhead
    is included. Never use this preload for latency comparisons. */
@@ -26,16 +27,46 @@ ssize_t pread64(int fd, void *buf, size_t n, off64_t off) {
     }
     return result;
 }
+/* std::io formatting may split a command into multiple writes or iovecs. */
+static void control(int fd, const void *buf, size_t n) {
+    static int command_fd = -1;
+    static size_t used;
+    static const char *expected;
+    const unsigned char *p = buf;
+    for (size_t i = 0; i < n; i++) {
+        if (fd != command_fd) used = 0;
+        if (!used) {
+            if (p[i] != 'e' && p[i] != 'd') continue;
+            command_fd = fd;
+            expected = p[i] == 'e' ? "enable\n" : "disable\n";
+        }
+        if (p[i] != (unsigned char)expected[used]) {
+            used = 0;
+            continue;
+        }
+        used++;
+        if (!expected[used]) {
+            int enable = expected[0] == 'e';
+            used = 0;
+            if (enable) {
+                calls = bytes = nanos = 0;
+                active = 1;
+            } else if (active) {
+                active = 0;
+                dprintf(2, "SYSCALL_PROBE calls=%lu bytes=%lu ns=%lu\n", calls, bytes, nanos);
+            }
+        }
+    }
+}
 ssize_t write(int fd, const void *buf, size_t n) {
     static ssize_t (*real_write)(int, const void *, size_t);
     if (!real_write) real_write = dlsym(RTLD_NEXT, "write");
-    if (n == 7 && memcmp(buf, "enable\n", 7) == 0) {
-        calls = bytes = nanos = 0;
-        active = 1;
-    }
-    if (n == 8 && memcmp(buf, "disable\n", 8) == 0 && active) {
-        active = 0;
-        dprintf(2, "SYSCALL_PROBE calls=%lu bytes=%lu ns=%lu\n", calls, bytes, nanos);
-    }
+    control(fd, buf, n);
     return real_write(fd, buf, n);
+}
+ssize_t writev(int fd, const struct iovec *iov, int count) {
+    static ssize_t (*real_writev)(int, const struct iovec *, int);
+    if (!real_writev) real_writev = dlsym(RTLD_NEXT, "writev");
+    for (int i = 0; i < count; i++) control(fd, iov[i].iov_base, iov[i].iov_len);
+    return real_writev(fd, iov, count);
 }

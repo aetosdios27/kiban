@@ -23,10 +23,13 @@ Preparation verifies every record after reopen. The raw space and topology
 receipts are in `prepare/space.json` and the preparation logs.
 
 After rebasing onto shared PH3 commit 4feca511 and applying the CRC extension,
-prepare candidate indexed fixtures under target/smallcache/ph3-data with the
-new binary and the same config/seed as prepare/. Then run all gates and build the final
+build and freeze the candidate, prepare its indexed fixtures using the same
+config/seed as prepare/, and run all gates and build the final
 readbench. `READBENCH_BUILD_CPUS` accepts a comma-separated CPU list.
 
+    taskset -c 12-21 nice -n 10 cargo build --release --locked --manifest-path tools/agentbench/readpath/Cargo.toml
+    cp tools/agentbench/readpath/target/release/kiban-readbench target/smallcache/bin/ph3
+    taskset -c 12-21 nice -n 10 python3 tools/agentbench/readpath/smallcache.py prepare-candidate --after ph3 --candidate-data target/smallcache/ph3-data --out validation/smallcache/ph3-prepare
     READBENCH_BUILD_CPUS=12,13,14,15,16,17,18,19,20,21 taskset -c 12-21 nice -n 10 python3 tools/agentbench/readpath/verify.py validation/smallcache/ph3-checks
     taskset -c 12-21 nice -n 10 cargo build --release --locked --manifest-path tools/agentbench/readpath/Cargo.toml
     taskset -c 12-21 nice -n 10 cc -shared -fPIC -O2 -Wall -Wextra -Werror tools/agentbench/readpath/syscall_probe.c -ldl -o target/smallcache/syscall_probe.so
@@ -74,3 +77,7 @@ preload for latency trials: its clocks and interposition add overhead.
 The engine source hashes in `ph3-checks/source-hashes.json` must match the
 final commit. The initial error-classification failure and its fix are recorded
 in `decisions.tsv`; they are development evidence rather than final failures.
+
+After the pipeline completes, render every result without filtering trials:
+
+    taskset -c 12-21 nice -n 10 python3 tools/agentbench/readpath/smallcache_summary.py

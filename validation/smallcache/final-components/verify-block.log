@@ -1,0 +1,4 @@
+Events disabled
+Events enabled
+Events disabled
+{"errors":0,"name":"verify-block","ns":600542354,"ns_per_op":600.542354,"operations":1000000,"type":"micro"}

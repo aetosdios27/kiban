@@ -1,0 +1,16 @@
+{
+  "backend": "kiban",
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-9b9cb0e0/target/smallcache/data/kiban-1000000-normal-0",
+  "n": 1000000,
+  "operations": 100000,
+  "k": 10,
+  "seed": 20261016,
+  "output": "/home/aetos/.t3/worktrees/kiban/t3-9b9cb0e0/validation/smallcache/ph3-pread-read/normal-index0-cache32-readers1-durable0-r1-before-kiban.jsonl",
+  "action": "read",
+  "layout": "normal",
+  "cache_mib": 32,
+  "point_index": false,
+  "readers": 1,
+  "durable": false,
+  "mmap_max_level": null
+}

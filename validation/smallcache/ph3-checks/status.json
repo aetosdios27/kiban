@@ -9,7 +9,7 @@
       "--test-threads=4"
     ],
     "code": 0,
-    "seconds": 14.066385507583618
+    "seconds": 55.34558868408203
   },
   {
     "name": "release",
@@ -22,7 +22,7 @@
       "--test-threads=4"
     ],
     "code": 0,
-    "seconds": 19.31688380241394
+    "seconds": 120.27047801017761
   },
   {
     "name": "clippy",
@@ -36,7 +36,7 @@
       "warnings"
     ],
     "code": 0,
-    "seconds": 2.707101821899414
+    "seconds": 7.06648850440979
   },
   {
     "name": "fmt",
@@ -47,7 +47,7 @@
       "--check"
     ],
     "code": 0,
-    "seconds": 0.47794628143310547
+    "seconds": 0.947197437286377
   },
   {
     "name": "fixed",
@@ -60,7 +60,7 @@
       "--test-threads=1"
     ],
     "code": 0,
-    "seconds": 0.6368799209594727
+    "seconds": 2.6447854042053223
   },
   {
     "name": "long-20000-each",
@@ -76,7 +76,7 @@
       "--nocapture"
     ],
     "code": 0,
-    "seconds": 153.02084112167358
+    "seconds": 205.79115056991577
   },
   {
     "name": "loom",
@@ -90,7 +90,7 @@
       "loom_"
     ],
     "code": 0,
-    "seconds": 31.380017042160034
+    "seconds": 30.48133683204651
   },
   {
     "name": "site-facts",
@@ -100,7 +100,7 @@
       "validate"
     ],
     "code": 0,
-    "seconds": 0.175431489944458
+    "seconds": 0.203521728515625
   },
   {
     "name": "readbench-clippy",
@@ -115,7 +115,7 @@
       "warnings"
     ],
     "code": 0,
-    "seconds": 1.6709380149841309
+    "seconds": 0.8167204856872559
   },
   {
     "name": "readbench-test",
@@ -126,7 +126,7 @@
       "tools/agentbench/readpath/Cargo.toml"
     ],
     "code": 0,
-    "seconds": 4.25148344039917
+    "seconds": 1.8173789978027344
   },
   {
     "name": "readbench-fmt",
@@ -138,6 +138,6 @@
       "--check"
     ],
     "code": 0,
-    "seconds": 0.0986931324005127
+    "seconds": 0.08476901054382324
   }
 ]

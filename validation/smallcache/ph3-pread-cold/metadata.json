@@ -1,0 +1,17 @@
+{
+  "cpu": 6,
+  "task_sibling_unused": 7,
+  "build_cpus": "12-21",
+  "time": 1792276881.7582498,
+  "head": "0283fc7af8cfba828ff05343c8b77bc27b228962",
+  "experiment": "main versus candidate",
+  "load": [
+    5.79150390625,
+    4.8251953125,
+    4.7548828125
+  ],
+  "binaries": {
+    "before": "d3d94ced651aef43c28fc7799bc7fabf4b7a232c64897ca5b8c7519542db6a3c",
+    "ph3": "01bcee3530e76439c9979189cb1f65a235946b92ac101ab578e4fe0b2103579d"
+  }
+}

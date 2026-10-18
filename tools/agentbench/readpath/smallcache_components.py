@@ -21,7 +21,7 @@ def main():
     profiler.CPU = 6
     (folder/'metadata.json').write_text(json.dumps(dict(
         binary=str(profiler.BINARY), sha256=hashlib.sha256(profiler.BINARY.read_bytes()).hexdigest(),
-        cpu=6, operations=1000000, cache_mib=32,
+        cpu=6, operations=1000000, fixture_cache_mib=32, component_block_cache_mib=512,
         note='Isolated component costs overlap; do not add them or call them full-read speedups.'
     ), indent=2)+'\n')
     rows = []

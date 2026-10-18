@@ -1,0 +1,5 @@
+Events disabled
+Events enabled
+Events disabled
+SYSCALL_PROBE calls=916538 bytes=3861264684 ns=1816189818
+{"digest":353027,"errors":0,"ns":4714103573,"operations":1000000,"type":"profile"}

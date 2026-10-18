@@ -34,7 +34,7 @@
   "src/sstable/mod.rs": "2be73745086444ae111c4fcee40cd5adbf57ab3a8fc02de9034f9db6a5e3ac4d",
   "src/sstable/point.rs": "f0e41c9736c7805d1b5056cbd7e473acf15ef8c788d592c35202c4de4d327c3b",
   "src/sstable/point/compact.rs": "4be36ec14a653f1f0cbdd495907d369bee43815482591ce546fa7929b15aa450",
-  "src/sstable/reader.rs": "9a8852ff4fd44d89d86704d6c8b9d1f6a63c9af867a48a94deea5f6d0b9777da",
+  "src/sstable/reader.rs": "87d41446e2cccd7a2d14485ea7e9d0bd0517209d0488bbc39138f8aaff6de7e0",
   "src/sstable/separator.rs": "d79eb12cbecb090c0a1a470996873c6dfdcd7fc3aa3f49c423cb5bb777c83fdd",
   "src/sys.rs": "141b00186e74dd0358895bdfef0060c32d7704e32187c94d0b61a36ef58d6da3",
   "src/testutil.rs": "848bfd0555768e2fd7d382df8531fc3cf68b8ef9f9382ea6c746cc1f967d960e",

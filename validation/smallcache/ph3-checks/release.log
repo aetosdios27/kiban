@@ -1,113 +1,113 @@
    Compiling kiban v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-9b9cb0e0)
    Compiling kiban-ffi v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-9b9cb0e0/crates/kiban-ffi)
-    Finished `release` profile [optimized] target(s) in 17.65s
+    Finished `release` profile [optimized] target(s) in 1m 49s
      Running unittests src/lib.rs (target/release/deps/kiban-9b697395093ef19c)
 
 running 359 tests
-test atomic::tests::durable_creation_fails_cleanly_for_missing_directory ... ok
-test atomic::tests::durable_creation_creates_exclusively_and_is_empty ... ok
 test atomic::tests::commit_creates_file_with_contents ... ok
 test atomic::tests::commit_overwrites_existing_atomically ... ok
-test atomic::tests::error_states_are_distinguishable_in_display ... ok
 test atomic::tests::empty_contents_are_committable ... ok
+test atomic::tests::error_states_are_distinguishable_in_display ... ok
 test atomic::tests::missing_directory_fails_without_creating_target ... ok
+test atomic::tests::durable_creation_fails_cleanly_for_missing_directory ... ok
+test atomic::tests::relative_target_without_parent_commits_to_cwd ... ok
 test bloom::tests::decode_rejects_nonsense ... ok
 test bloom::tests::empty_filter_roundtrips_through_encode_and_decode ... ok
-test atomic::tests::relative_target_without_parent_commits_to_cwd ... ok
-test bloom::tests::fnv1a_known_check_values ... ok
 test bloom::tests::encode_decode_roundtrip_preserves_answers ... ok
-test bloom::tests::single_bit_flip_in_payload_cannot_create_false_negatives_on_all_but_one_probe ... ok
-test cache::point_reservation_tests::point_reservations_share_global_capacity_and_release_on_drop ... ok
-test cache::tests::basic_hit_and_miss_track_exactly ... ok
+test bloom::tests::fnv1a_known_check_values ... ok
+test atomic::tests::durable_creation_creates_exclusively_and_is_empty ... ok
 test bloom::tests::no_false_negatives_across_sizes_and_boundaries ... ok
-test cache::tests::capacity_and_oversize_bypass_hold_under_pressure ... ok
-test cache::tests::clock_gives_touched_entry_second_chance ... ok
+test bloom::tests::single_bit_flip_in_payload_cannot_create_false_negatives_on_all_but_one_probe ... ok
 test bloom::tests::measured_false_positive_rate_stays_under_bound ... ok
+test cache::tests::basic_hit_and_miss_track_exactly ... ok
+test cache::tests::clock_gives_touched_entry_second_chance ... ok
+test cache::tests::capacity_and_oversize_bypass_hold_under_pressure ... ok
+test cache::point_reservation_tests::point_reservations_share_global_capacity_and_release_on_drop ... ok
 test cache::point_reservation_tests::concurrent_section_admission_and_block_insertion_keep_capacity ... ok
-test cache::tests::duplicate_insert_has_one_clock_slot ... ok
-test cache::tests::evicted_entry_clone_remains_usable ... ok
-test cache::tests::non_colliding_misses_do_not_coalesce_or_block_each_other ... ok
-test cache::tests::panicking_leader_does_not_strand_waiters ... ok
 test cache::tests::concurrent_scattered_hits_and_eviction_stay_consistent ... ok
+test cache::tests::evicted_entry_clone_remains_usable ... ok
+test cache::tests::duplicate_insert_has_one_clock_slot ... ok
+test cache::tests::non_colliding_misses_do_not_coalesce_or_block_each_other ... ok
 test cache::tests::referenced_entry_is_eventually_evictable ... ok
-test cache::tests::same_key_insert_race_keeps_one_entry ... ok
+test cache::tests::panicking_leader_does_not_strand_waiters ... ok
 test cache_budget::tests::budgets_respect_limits_floor_cap_and_missing_information ... ok
 test cache_budget::tests::cgroup_limit_parsing ... ok
+test cache::tests::same_key_insert_race_keeps_one_entry ... ok
 test cache::tests::concurrent_same_key_hits_are_correct ... ok
-test counter::tests::concurrent_increments_remain_exact_with_more_threads_than_slots ... ok
 test crc32::tests::every_single_byte_flip_is_detected ... ok
+test counter::tests::concurrent_increments_remain_exact_with_more_threads_than_slots ... ok
+test cache::tests::concurrent_misses_on_same_key_coalesce_to_one_load ... ok
 test crc32::tests::every_two_bit_flip_within_a_word_is_detected ... ok
 test crc32::tests::incremental_matches_one_shot ... ok
 test crc32::tests::published_check_values ... ok
-test crc32::tests::dispatched_updates_match_scalar_across_fold_boundaries ... ok
 test db::audit_regression_tests::direct_snapshot_reads_reject_another_engine_owner ... ok
+test crc32::tests::dispatched_updates_match_scalar_across_fold_boundaries ... ok
 test db::audit_regression_tests::direct_snapshot_release_is_identity_aware_and_drop_is_automatic ... ok
 test db::audit_regression_tests::failed_obsolete_unlink_is_retained_for_retry ... ok
-test db::audit_regression_tests::hot_updates_remain_bounded_and_copied_snapshots_preserve_values ... ok
 test db::audit_regression_tests::invalid_sizes_and_exhausted_sequences_do_not_poison_or_wrap ... ok
 test db::audit_regression_tests::maximum_sequence_is_preserved_by_compaction_without_a_sentinel_collision ... ok
 test db::audit_regression_tests::owner_lock_prevents_second_open_and_snapshot_reclamation ... ok
-test cache::tests::concurrent_misses_on_same_key_coalesce_to_one_load ... ok
+test db::audit_regression_tests::hot_updates_remain_bounded_and_copied_snapshots_preserve_values ... ok
 test db::audit_regression_tests::recovered_level_overlap_cannot_hide_behind_another_level ... ok
-test crc32::tests::sliced_matches_bitwise_for_lengths_alignments_and_streaming_states ... ok
+test db::audit_regression_tests::pinned_snapshot_preserves_old_value_without_retaining_intermediate_sst_versions ... ok
 test db::audit_regression_tests::streaming_snapshot_range_and_backup_match_captured_state ... ok
-test db::background_tests::background_build_failure_leaves_current_version_untouched ... ok
 test db::audit_regression_tests::shared_hot_updates_flush_by_write_volume_even_with_one_resident_key ... ok
-test db::background_tests::commit_ambiguity_during_background_publication_poisons_engine ... ok
+test db::background_tests::background_build_failure_leaves_current_version_untouched ... ok
+test db::audit_regression_tests::atomic_batch_never_exposes_a_prefix_to_gate_free_reads ... ok
 test db::background_tests::flush_published_during_paused_compaction_survives_commit_and_reopen ... ok
 test db::background_tests::foreground_work_continues_while_compaction_build_is_paused ... ok
-test db::audit_regression_tests::pinned_snapshot_preserves_old_value_without_retaining_intermediate_sst_versions ... ok
 test db::background_tests::last_handle_drop_stops_the_worker_thread ... ok
+test db::background_tests::commit_ambiguity_during_background_publication_poisons_engine ... ok
 test db::background_tests::pending_flush_commits_before_compaction_build_finishes ... ok
 test db::background_tests::shared_snapshot_survives_background_compaction ... ok
+test crc32::tests::sliced_matches_bitwise_for_lengths_alignments_and_streaming_states ... ok
 test db::backpressure_tests::compaction_commit_releases_a_stalled_writer ... ok
-test db::backpressure_tests::direct_kiban_ignores_the_stall_trigger_and_stays_synchronous ... ok
 test db::backpressure_tests::flush_stalls_at_the_ceiling_and_proceeds_after_room ... ok
+test db::backpressure_tests::direct_kiban_ignores_the_stall_trigger_and_stays_synchronous ... ok
 test db::backpressure_tests::maintenance_failure_wakes_a_stalled_writer_with_an_error ... ok
 test db::background_tests::point_reads_and_scans_agree_through_shared_kiban_under_compaction ... ok
-test db::background_tests::cooperative_flush_faults_preserve_acknowledged_overwrites_and_deletes ... ok
 test db::backpressure_tests::reads_continue_while_a_writer_stalls ... ok
 test db::backpressure_tests::poisoning_wakes_a_stalled_writer_and_refuses_mutation ... ok
 test db::backpressure_tests::sync_completes_while_a_writer_stalls ... ok
 test db::backpressure_tests::writer_stalls_when_l0_reaches_the_hard_ceiling ... ok
 test db::cache_scaling_tests::every_table_remains_readable_after_cold_reopen ... ok
 test db::compaction_tests::compaction_retires_inputs_and_never_leaves_garbage_in_manifest ... ok
-test db::audit_regression_tests::atomic_batch_never_exposes_a_prefix_to_gate_free_reads ... ok
+test db::background_tests::cooperative_flush_faults_preserve_acknowledged_overwrites_and_deletes ... ok
 test db::cache_scaling_tests::database_much_larger_than_cache_opens_and_serves_correctly ... ok
 test db::backpressure_tests::no_missed_wakeups_under_repeated_pressure_and_release ... ok
-test db::compaction_tests::tombstones_are_fully_reclaimed_at_the_deepest_level ... ok
+test db::compaction_tests::scored_scheduler_with_batching_keeps_reads_and_scans_correct ... ok
 test db::compaction_tests::trivial_move_relocates_a_table_without_rewriting_it_and_survives_reopen ... ok
 test db::correctness_tests::point_and_scan_agree_on_many_versions_after_flush_and_reopen ... ok
-test db::correctness_tests::point_scan_and_snapshots_agree_through_overlapping_generations_and_compaction ... ok
-test db::correctness_tests::point_selection_uses_sequence_not_file_or_level_order ... ok
-test db::correctness_tests::snapshot_before_first_flush_preserves_old_value_and_visible_delete ... ok
 test db::compaction_tests::compactions_keep_reads_and_scans_correct_over_many_generations ... ok
+test db::compaction_tests::governor_scheduler_keeps_reads_and_scans_correct_over_many_generations ... ok
+test db::correctness_tests::snapshot_before_first_flush_preserves_old_value_and_visible_delete ... ok
+test db::compaction_tests::tombstones_are_fully_reclaimed_at_the_deepest_level ... ok
 test db::correctness_tests::snapshots_pin_the_same_sst_across_repeated_metadata_moves_and_rewrite ... ok
 test db::correctness_tests::snapshot_captures_unflushed_versions_across_rotation_flush_and_compaction ... ok
-test db::compaction_tests::governor_scheduler_keeps_reads_and_scans_correct_over_many_generations ... ok
-test db::compaction_tests::scored_scheduler_with_batching_keeps_reads_and_scans_correct ... ok
-test db::crash_sweep_tests::every_single_syscall_failure_in_the_pipeline_recovers_correctly ... ok
+test db::correctness_tests::point_selection_uses_sequence_not_file_or_level_order ... ok
+test db::correctness_tests::point_scan_and_snapshots_agree_through_overlapping_generations_and_compaction ... ok
+test db::crash_sweep_tests::every_single_syscall_failure_recovers_correctly_under_governor ... ok
 test db::crash_sweep_tests::sweep_fails_at_every_index_when_asked_to ... ok
 test db::dbg_seq_probe::probe_seqs_after_compaction ... ok
-test db::crash_sweep_tests::every_single_syscall_failure_recovers_correctly_under_governor ... ok
+test db::crash_sweep_tests::every_single_syscall_failure_in_the_pipeline_recovers_correctly ... ok
 test db::file_cache_tests::block_cache_hit_requires_no_file_lease ... ok
-test db::file_cache_tests::background_compaction_respects_the_fd_bound ... ok
 test db::file_cache_tests::foreground_and_background_pressure_on_a_tiny_fd_cache_does_not_deadlock ... ok
 test db::file_cache_tests::live_tables_do_not_each_pin_a_file_cache_slot ... ok
-test db::file_cache_tests::reclaiming_an_obsolete_table_invalidates_its_cached_handle ... ok
 test db::file_cache_tests::opening_many_tables_with_a_tiny_fd_cache_succeeds ... ok
+test db::file_cache_tests::reclaiming_an_obsolete_table_invalidates_its_cached_handle ... ok
+test db::crash_sweep_tests::every_single_syscall_failure_recovers_correctly_under_scored_scheduler ... ok
 test db::file_cache_tests::snapshot_pins_many_tables_without_pinning_many_descriptors ... ok
 test db::flush_pipeline_tests::automatic_freeze_hands_writers_a_fresh_memtable_and_wal_immediately ... ok
-test db::flush_pipeline_tests::explicit_flush_waits_only_for_its_own_generation ... ok
+test db::file_cache_tests::background_compaction_respects_the_fd_bound ... ok
 test db::flush_pipeline_tests::foreground_writes_and_reads_continue_during_flush_build ... ok
-test db::crash_sweep_tests::every_single_syscall_failure_recovers_correctly_under_scored_scheduler ... ok
-test db::flush_pipeline_tests::immutable_memtable_shadows_older_sst_values_including_deletes ... ok
+test db::flush_pipeline_tests::explicit_flush_waits_only_for_its_own_generation ... ok
 test db::flush_pipeline_tests::immutable_slot_backpressure_blocks_until_the_pending_flush_commits ... ok
-test db::flush_pipeline_tests::manifest_ambiguity_during_flush_commit_poisons_engine ... ok
-test db::flush_pipeline_tests::multiple_live_wal_recovery_replays_both_generations_in_order ... ok
-test db::flush_pipeline_tests::old_wal_is_deleted_only_after_the_flush_commits ... ok
-test db::flush_pipeline_tests::orphan_sweep_keeps_both_live_wal_generations_and_removes_garbage ... ok
+test db::flush_pipeline_tests::immutable_memtable_shadows_older_sst_values_including_deletes ... ok
 test db::flush_pipeline_tests::manifest_ambiguity_during_freeze_handoff_poisons_engine ... ok
+test db::flush_pipeline_tests::multiple_live_wal_recovery_replays_both_generations_in_order ... ok
+test db::flush_pipeline_tests::manifest_ambiguity_during_flush_commit_poisons_engine ... ok
+test db::flush_pipeline_tests::orphan_sweep_keeps_both_live_wal_generations_and_removes_garbage ... ok
+test db::flush_pipeline_tests::old_wal_is_deleted_only_after_the_flush_commits ... ok
 test db::flush_pipeline_tests::snapshot_returns_the_same_state_through_every_freeze_flush_phase ... ok
 test db::flush_pipeline_tests::sync_completes_while_a_writer_is_stalled_on_the_immutable_slot ... ok
 test db::flush_tests::crash_after_commit_point_but_before_wal_deletion ... ok
@@ -130,7 +130,7 @@ test db::poisoning_tests::wal_append_failure_poisons_engine ... ok
 test db::poisoning_tests::wal_sync_failure_poisons_and_blocks_all_mutations ... ok
 test db::flush_pipeline_tests::power_loss_recovers_exactly_the_last_synced_state_across_the_flush_pipeline ... ok
 test db::read_path_tests::overlapping_level_falls_back_to_probing_every_table ... ok
-test db::crash_pair_sweep_tests::every_pair_of_syscall_failures_recovers_correctly ... ok
+test db::read_path_tests::randomized_reads_match_reference_with_and_without_range_cache ... ok
 test db::read_path_tests::range_reads_skip_tables_outside_the_bounds ... ok
 test db::read_path_tests::read_ahead_coalesces_block_reads_and_survives_block_eviction ... ok
 test db::read_view_tests::captured_get_pins_version_through_compaction_and_reclamation ... ok
@@ -145,8 +145,8 @@ test db::read_view_tests::two_gets_reach_sst_work_without_engine_serialization .
 test db::rotation_durability_tests::rotation_sync_failures_poison_before_creating_the_next_wal ... ok
 test db::rotation_durability_tests::shared_frozen_wal_prefix_repro ... ok
 test db::scale_validation_tests::durable_acknowledgements_after_a_flush_error_remain_recoverable ... ok
+test db::crash_pair_sweep_tests::every_pair_of_syscall_failures_recovers_correctly ... ok
 test db::scale_validation_tests::failed_flush_retry_never_reuses_a_cached_sst_identity ... ok
-test db::scale_validation_tests::frozen_wal_barrier_survives_every_flush_fault_and_power_loss ... ok
 test db::scale_validation_tests::frozen_wal_sync_failure_poisoning_covers_both_generations ... ok
 test db::scale_validation_tests::repeated_frozen_wal_generations_remain_durable_before_and_after_commit ... ok
 test db::scale_validation_tests::repeated_simulated_recovery_sweeps_orphans_in_the_device_namespace ... ok
@@ -157,9 +157,9 @@ test db::scan_tests::range_is_half_open_subspace_of_full_scan ... ok
 test db::scan_tests::raw_iteration_exposes_tombstones_and_newest_only ... ok
 test db::scan_tests::seek_positions_at_first_key_ge_target ... ok
 test db::shared_tests::concurrent_readers_never_see_torn_state ... ok
-test db::read_path_tests::randomized_reads_match_reference_with_and_without_range_cache ... ok
+test db::scale_validation_tests::frozen_wal_barrier_survives_every_flush_fault_and_power_loss ... ok
 test db::shared_tests::concurrent_writers_all_land_with_one_group_sync ... ok
-test db::flush_pipeline_tests::every_single_and_pairwise_fault_in_the_flush_pipeline_recovers_within_the_band ... ok
+test db::shared_tests::get_never_blocks_on_a_held_write_gate ... ok
 test db::shared_tests::handles_are_clonable_and_share_state ... ok
 test db::shared_tests::manual_maintenance_errors_and_panics_are_sticky ... ok
 test db::shared_tests::manual_maintenance_steps_jobs_and_relieve_backpressure ... ok
@@ -168,14 +168,14 @@ test db::shared_tests::sustained_read_churn_release_stress ... ignored, release 
 test db::simulation_tests::device_model::create_without_directory_sync_is_lost ... ok
 test db::simulation_tests::device_model::directory_sync_makes_entries_durable_but_not_unsynced_bytes ... ok
 test db::simulation_tests::device_model::rename_and_remove_revert_without_directory_sync ... ok
-test db::shared_tests::concurrent_reads_complete_under_sustained_compaction_churn ... ok
-test db::simulation_tests::device_model::seeded_torn_wal_payload_preserves_synced_prefix ... ok
 test db::simulation_tests::device_model::seeded_power_loss_is_deterministic_and_covers_every_tear ... ok
+test db::simulation_tests::device_model::seeded_torn_wal_payload_preserves_synced_prefix ... ok
 test db::power_loss_tests::power_loss_recovers_exactly_the_last_synced_state ... ok
+test db::simulation_tests::seeded_crash_device_state_is_deterministic ... ok
 test db::simulation_tests::seeded_crash_long ... ignored, long seeded crash sweep; configure KIBAN_SIM_SEEDS and KIBAN_SIM_SEED_START
 test db::simulation_tests::shared_engine_worker_runs_on_the_simulated_device ... ok
-test db::simulation_tests::seeded_crash_device_state_is_deterministic ... ok
-test db::simulation_tests::shared_seeded_crash_device_state_is_deterministic ... ok
+test db::flush_pipeline_tests::every_single_and_pairwise_fault_in_the_flush_pipeline_recovers_within_the_band ... ok
+test db::shared_tests::concurrent_reads_complete_under_sustained_compaction_churn ... ok
 test db::simulation_tests::shared_seeded_crash_long ... ignored, long shared seeded crash sweep; configure KIBAN_SIM_SEEDS and KIBAN_SIM_SEED_START
 test db::snapshot_tests::shared_snapshot_survives_concurrent_mutation ... ok
 test db::snapshot_tests::snapshot_reads_are_immune_to_later_writes_flushes_and_compaction ... ok
@@ -217,14 +217,14 @@ test engine_lock::tests::reader_panic_does_not_poison ... ok
 test engine_lock::tests::reader_starvation_under_sustained_writes ... ignored
 test engine_lock::tests::readers_admit_after_every_writer_flag_never_stuck ... ok
 test engine_lock::tests::readers_and_writers_preserve_value ... ok
-test engine_lock::tests::thread_shard_distribution_stays_in_bounds_and_spreads ... ok
+test db::simulation_tests::shared_seeded_crash_device_state_is_deterministic ... ok
 test engine_lock::tests::three_queued_writers_progress_under_reader_stream ... ok
 test engine_lock::tests::three_readers_hold_gate_simultaneously ... ok
-test engine_lock::tests::two_writers_serialize_deterministically ... ok
+test engine_lock::tests::thread_shard_distribution_stays_in_bounds_and_spreads ... ok
 test engine_lock::tests::writer_intent_clears_after_acquisition_failure ... ok
 test engine_lock::tests::writer_intent_clears_on_success ... ok
 test engine_lock::tests::writer_intent_clears_on_unwind_during_acquisition ... ok
-test engine_lock::tests::writer_makes_progress_under_sustained_reader_pressure ... ok
+test engine_lock::tests::two_writers_serialize_deterministically ... ok
 test engine_lock::tests::writer_panic_poison_is_reported ... ok
 test file_cache::tests::counters_track_hits_misses_and_evictions_exactly ... ok
 test file_cache::tests::in_use_handle_blocks_rather_than_being_evicted ... ok
@@ -311,12 +311,12 @@ test sstable::builder::tests::non_increasing_keys_are_rejected ... ok
 test sstable::builder::tests::separator_always_between_lo_and_hi ... ok
 test sstable::builder::tests::shortest_separator_cases ... ok
 test sstable::builder::tests::tombstones_must_not_carry_values ... ok
-test sstable::point::compact::tests::compact_point_checksummed_malformed_fields_release_reservation ... ok
-test sstable::point::compact::tests::compact_point_fingerprint_collision_still_compares_complete_key ... ok
 test db::simulation_tests::seeded_crash_fixed_corpus ... ok
-test sstable::point::compact::tests::compact_point_narrow_and_wide_roundtrip_versions_and_anchors ... ok
+test sstable::point::compact::tests::compact_point_fingerprint_collision_still_compares_complete_key ... ok
 test sstable::point::compact::tests::compact_point_large_fields_and_sequence_extremes ... ok
-test sstable::point::compact::tests::locator_admission_respects_address_space_and_legacy_verification ... ok
+test sstable::point::compact::tests::compact_point_narrow_and_wide_roundtrip_versions_and_anchors ... ok
+test sstable::point::compact::tests::compact_point_checksummed_malformed_fields_release_reservation ... ok
+test sstable::point::compact::tests::locator_crc_fields_and_budget_are_validated_before_admission ... ok
 test sstable::point::corruption_tests::in_range_wrong_value_locator_and_backing_bit_flip_are_rejected ... ok
 test sstable::point::corruption_tests::malformed_checksummed_point_records_are_rejected_and_release_budget ... ok
 test sstable::point::corruption_tests::matching_fingerprint_for_absent_key_requires_full_key_comparison ... ok
@@ -324,47 +324,47 @@ test sstable::point::tests::on_disk_bucket_reduction_uses_all_64_hash_bits ... o
 test sstable::point::tests::point_decode_retains_shared_allocations_and_accounts_for_both_regions ... ok
 test sstable::point::tests::point_index_bijection_property ... ok
 test sstable::point::tests::point_index_roundtrip_versions_and_binary_keys ... ok
-test db::shared_tests::get_never_blocks_on_a_held_write_gate ... ok
+test sstable::point::compact::tests::locator_admission_respects_address_space_and_legacy_verification ... ok
 test sstable::reader::compact_point_tests::compact_mapping_survives_unlink_with_concurrent_reads ... ok
 test sstable::reader::compact_point_tests::compact_open_rejects_corrupt_sorted_bytes_before_publishing_locators ... ok
 test sstable::reader::compact_point_tests::compact_pread_reports_short_reads_as_corruption ... ok
-test sstable::point::compact::tests::locator_crc_fields_and_budget_are_validated_before_admission ... ok
+test sstable::reader::compact_point_tests::compact_values_recheck_corruption_after_open_for_pread_and_mapping ... ok
 test sstable::reader::compaction_iter_tests::compaction_iter_does_not_contend_the_shared_file_cache ... ok
 test sstable::reader::compaction_iter_tests::compaction_iter_matches_foreground_iteration ... ok
 test sstable::reader::compaction_iter_tests::compaction_iter_matches_with_tiny_read_ahead_window ... ok
 test sstable::reader::compaction_iter_tests::compaction_iter_never_touches_block_cache ... ok
 test sstable::reader::compaction_iter_tests::compaction_iter_uses_the_simulated_device_and_bypasses_caches ... ok
-test sstable::reader::compact_point_tests::compact_values_recheck_corruption_after_open_for_pread_and_mapping ... ok
 test sstable::reader::compaction_iter_tests::malformed_index_counts_and_ranges_are_rejected_before_allocation_or_read ... ok
 test sstable::reader::compaction_iter_tests::overflowed_footer_ranges_return_corruption_before_reading_blocks ... ok
-test sstable::reader::compact_point_tests::compact_locators_preserve_versions_full_keys_and_cache_budget ... ok
+test sstable::reader::mmap_tests::mmap_reads_are_safe_under_concurrent_threads ... ok
+test sstable::reader::mmap_tests::mmap_reads_match_pread_reads ... ok
 test sstable::reader::mmap_tests::mmap_survives_the_backing_file_being_unlinked ... ok
 test sstable::separator::tests::separators_preserve_short_long_and_binary_keys ... ok
-test sstable::reader::mmap_tests::mmap_reads_match_pread_reads ... ok
-test sstable::reader::mmap_tests::mmap_reads_are_safe_under_concurrent_threads ... ok
+test wal::tests::aligned_records_and_invalid_markers_do_not_prove_durability ... ok
 test wal::tests::corrupted_record_is_reported_not_truncated ... ok
+test wal::tests::damaged_records_need_a_later_sync_marker_to_be_corruption ... ok
 test wal::tests::declared_lengths_must_match_payload_exactly ... ok
 test wal::tests::embedded_marker_with_different_nonce_in_torn_unsynced_value_truncates ... ok
-test wal::tests::aligned_records_and_invalid_markers_do_not_prove_durability ... ok
 test wal::tests::fresh_wal_has_a_header_and_replays_nothing ... ok
 test wal::tests::header_is_synced_during_creation_without_an_extra_fsync ... ok
-test wal::tests::malformed_batch_never_applies_a_prefix ... ok
 test wal::tests::legacy_headerless_logs_replay_and_ignore_markers ... ok
+test wal::tests::malformed_batch_never_applies_a_prefix ... ok
 test wal::tests::markers_are_lazy_and_cover_only_successful_syncs ... ok
-test wal::tests::put_and_delete_roundtrip_through_recovery ... ok
+test sstable::reader::compact_point_tests::compact_locators_preserve_versions_full_keys_and_cache_budget ... ok
 test wal::tests::reopening_after_clean_close_appends_continue ... ok
-test wal::tests::torn_tail_is_truncated_to_last_valid_record ... ok
-test wal::tests::truncated_header_is_replaced_durably_and_authenticates_new_markers ... ok
-test wal::tests::truncated_payload_header_is_corruption ... ok
+test wal::tests::put_and_delete_roundtrip_through_recovery ... ok
 test wal::tests::sync_padding_ends_on_alignment_even_with_a_short_gap ... ok
+test wal::tests::torn_tail_is_truncated_to_last_valid_record ... ok
+test wal::tests::truncated_payload_header_is_corruption ... ok
 test wal::tests::unknown_op_byte_is_corruption ... ok
-test wal::tests::damaged_records_need_a_later_sync_marker_to_be_corruption ... ok
-test wal::tests::unsynced_appends_survive_process_crash_via_flushed_file ... ok
 test wal::tests::unreadable_header_disables_matching_marker_proof ... ok
+test wal::tests::truncated_header_is_replaced_durably_and_authenticates_new_markers ... ok
+test wal::tests::unsynced_appends_survive_process_crash_via_flushed_file ... ok
 test wal::tests::zero_filled_tails_truncate_unless_a_later_marker_proves_sync ... ok
+test engine_lock::tests::writer_makes_progress_under_sustained_reader_pressure ... ok
 test db::simulation_tests::shared_seeded_crash_fixed_corpus ... ok
 
-test result: ok. 353 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 1.38s
+test result: ok. 353 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 9.76s
 
      Running unittests src/bin/kiban.rs (target/release/deps/kiban-0ffd74a072b92ad6)
 
@@ -378,13 +378,13 @@ running 4 tests
 test ownership_child ... ok
 database MANIFEST does not exist
 test nonexistent_cli_database_is_not_created ... ok
-created logical database at /tmp/kiban-ops-334621-2/backup
-created logical database at /tmp/kiban-ops-334621-2/restore
+created logical database at /tmp/kiban-ops-381889-2/backup
+test killed_process_releases_directory_lock_and_preserves_synced_data ... ok
+created logical database at /tmp/kiban-ops-381889-2/restore
 verified 1 tables, 1 live keys, 8 logical bytes
 test offline_cli_rejects_another_process_owner_and_restores_backups ... ok
-test killed_process_releases_directory_lock_and_preserves_synced_data ... ok
 
-test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
 
      Running tests/recovery_validation.rs (target/release/deps/recovery_validation-2f55f1510c860133)
 
@@ -394,14 +394,14 @@ test point_reads_match_scans_through_repeated_recovery_and_faults ... ok
 test snapshots_survive_repeated_recovery_and_faults ... ok
 test repeated_wal_power_loss_preserves_durable_state ... ok
 
-test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
 
      Running tests/site_examples.rs (target/release/deps/site_examples-5bf3aa82cd244c4f)
 
 running 3 tests
-test site_snapshot_example ... ok
-test site_range_example ... ok
 test site_batch_example ... ok
+test site_range_example ... ok
+test site_snapshot_example ... ok
 
 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
@@ -416,12 +416,12 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
 running 5 tests
 test header_covers_every_export ... ok
-test rejects_invalid_arguments_and_handles_without_mutation ... ok
 test ranges_prefixes_and_owned_iterator ... ok
+test rejects_invalid_arguments_and_handles_without_mutation ... ok
 test crud_snapshot_batch_and_reopen ... ok
 test buffers_and_errors_are_checked_and_thread_local ... ok
 
-test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
    Doc-tests kiban
 

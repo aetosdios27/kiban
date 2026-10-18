@@ -1,0 +1,12 @@
+{"config": "bulk-index0-cache32.config.json", "started": 1792273141.0284247, "ended": 1792273141.038191, "load": [3.9443359375, 4.775390625, 5.10693359375], "affinity": "6"}
+{"config": "bulk-index0-cacheNone.config.json", "started": 1792273141.0385659, "ended": 1792273141.0453553, "load": [3.9443359375, 4.775390625, 5.10693359375], "affinity": "6"}
+{"config": "bulk-index0-cache512.config.json", "started": 1792273141.0456557, "ended": 1792273141.0519319, "load": [3.9443359375, 4.775390625, 5.10693359375], "affinity": "6"}
+{"config": "bulk-index1-cache32.config.json", "started": 1792273141.0522478, "ended": 1792273141.3992589, "load": [3.9443359375, 4.775390625, 5.10693359375], "affinity": "6"}
+{"config": "bulk-index1-cacheNone.config.json", "started": 1792273141.3999, "ended": 1792273141.7903655, "load": [3.9443359375, 4.775390625, 5.10693359375], "affinity": "6"}
+{"config": "bulk-index1-cache512.config.json", "started": 1792273141.7911136, "ended": 1792273142.3883994, "load": [4.029296875, 4.779296875, 5.10595703125], "affinity": "6"}
+{"config": "normal-index0-cache32.config.json", "started": 1792273142.3888154, "ended": 1792273142.4695466, "load": [4.029296875, 4.779296875, 5.10595703125], "affinity": "6"}
+{"config": "normal-index0-cacheNone.config.json", "started": 1792273142.4698799, "ended": 1792273142.476676, "load": [4.029296875, 4.779296875, 5.10595703125], "affinity": "6"}
+{"config": "normal-index0-cache512.config.json", "started": 1792273142.477119, "ended": 1792273142.4836864, "load": [4.029296875, 4.779296875, 5.10595703125], "affinity": "6"}
+{"config": "normal-index1-cache32.config.json", "started": 1792273142.4840598, "ended": 1792273142.7066274, "load": [4.029296875, 4.779296875, 5.10595703125], "affinity": "6"}
+{"config": "normal-index1-cacheNone.config.json", "started": 1792273142.7070389, "ended": 1792273142.8784597, "load": [4.029296875, 4.779296875, 5.10595703125], "affinity": "6"}
+{"config": "normal-index1-cache512.config.json", "started": 1792273142.8789558, "ended": 1792273143.1013794, "load": [4.029296875, 4.779296875, 5.10595703125], "affinity": "6"}

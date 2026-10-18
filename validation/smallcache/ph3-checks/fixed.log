@@ -1,11 +1,11 @@
-    Finished `release` profile [optimized] target(s) in 0.05s
+    Finished `release` profile [optimized] target(s) in 0.41s
      Running unittests src/lib.rs (target/release/deps/kiban-9b697395093ef19c)
 
 running 2 tests
 test db::simulation_tests::seeded_crash_fixed_corpus ... ok
 test db::simulation_tests::shared_seeded_crash_fixed_corpus ... ok
 
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 357 filtered out; finished in 0.55s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 357 filtered out; finished in 2.05s
 
      Running unittests src/bin/kiban.rs (target/release/deps/kiban-0ffd74a072b92ad6)
 

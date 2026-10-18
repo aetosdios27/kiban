@@ -36,7 +36,7 @@ def execute(label, c, folder, name, binary_label=None):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument('action', choices=['prepare', 'profile', 'read', 'cold', 'write'])
+    p.add_argument('action', choices=['prepare', 'prepare-candidate', 'profile', 'read', 'cold', 'write'])
     p.add_argument('--after', default='after')
     p.add_argument('--candidate-data', type=Path)
     p.add_argument('--mmap-mode', choices=['none','all'], default='none')
@@ -61,7 +61,15 @@ def main():
                     load=os.getloadavg(), binaries={label: hashlib.sha256((BINS/(a.after if a.mapped else label)).read_bytes()).hexdigest()
                                                    for label in ['before', a.after] if (BINS/label).exists()})
     (folder/'metadata.json').write_text(json.dumps(metadata, indent=2)+'\n')
-    if a.action == 'prepare':
+    if a.action == 'prepare-candidate':
+        if not a.candidate_data:
+            p.error('prepare-candidate requires --candidate-data')
+        for n in [10000, 1000000]:
+            for layout in ['bulk', 'normal']:
+                c = config('kiban', layout, True, 32, n)
+                c.update(db=str(a.candidate_data / Path(c['db']).name), action='prepare')
+                execute(a.after, c, folder, f'kiban-{n}-{layout}-1')
+    elif a.action == 'prepare':
         for n in [10000, 1000000]:
             for layout in ['bulk', 'normal']:
                 for engine, indexed in [('kiban', False), ('kiban', True), ('lmdb', False)]:

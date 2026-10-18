@@ -2662,7 +2662,7 @@ kiban: engine POISONED — mutations refused until reopen: commit ambiguity: sim
 kiban: engine POISONED — mutations refused until reopen: wal append failure: simulated crash boundary reached
 kiban: engine POISONED — mutations refused until reopen: commit ambiguity: simulated crash boundary reached
 kiban: engine POISONED — mutations refused until reopen: commit ambiguity: simulated crash boundary reached
-checked 20000 seeds (0..20000), 80000 crashes in 61.801s (1165034 seeds/hour)
+checked 20000 seeds (0..20000), 80000 crashes in 107.346s (670730 seeds/hour)
 ok
 test db::simulation_tests::shared_seeded_crash_long ... kiban: engine POISONED — mutations refused until reopen: commit ambiguity: simulated crash boundary reached
 kiban: engine POISONED — mutations refused until reopen: commit ambiguity: simulated crash boundary reached
@@ -5737,8 +5737,8 @@ kiban: engine POISONED — mutations refused until reopen: wal sync failure: sim
 kiban: engine POISONED — mutations refused until reopen: wal sync failure: simulated crash boundary reached
 kiban: engine POISONED — mutations refused until reopen: wal sync failure: simulated crash boundary reached
 kiban: engine POISONED — mutations refused until reopen: commit ambiguity: simulated crash boundary reached
-checked 20000 seeds (0..20000), 80000 crashes in 91.172s (789712 seeds/hour)
+checked 20000 seeds (0..20000), 80000 crashes in 98.280s (732600 seeds/hour)
 ok
 
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 357 filtered out; finished in 152.97s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 357 filtered out; finished in 205.63s
 

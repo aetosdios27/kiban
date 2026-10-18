@@ -1,0 +1,8 @@
+{
+  "binary": "target/smallcache/bin/ph3-pilot",
+  "sha256": "3aa44acf4fbd9ed8e6e6f38739ac1fe27daf154e99eda2a81ffad397838bb1a8",
+  "seed": 20261016,
+  "timing_cpu": 6,
+  "point_encoding": "PH3 feature bit 0",
+  "note": "Fixtures prepared before the L0 prefix optimization; the PH3 writer is identical to the frozen final writer."
+}
