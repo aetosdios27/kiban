@@ -1,0 +1,21 @@
+{
+  "backend": "rocksdb",
+  "n": 1000000,
+  "operations": 1000000,
+  "k": 10,
+  "seed": 20261016,
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-7d737093/target/rocksdb/data/1000000-rocksdb-ribbon-16384-lz4-bulk",
+  "output": "",
+  "action": "profile",
+  "layout": "bulk",
+  "cache_mib": 512,
+  "point_index": false,
+  "durable": false,
+  "rocks": {
+    "block_size": 16384,
+    "ribbon": true,
+    "total_order": true,
+    "lz4": true
+  },
+  "stage": 2
+}

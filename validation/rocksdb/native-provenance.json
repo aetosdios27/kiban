@@ -1,0 +1,34 @@
+{
+  "rocksdb": "11.8.1",
+  "tag": "v11.8.1",
+  "git_sha": "abeebd9630f11bd08c28b7bd43c7bdfc62050654",
+  "source_files": {
+    "build_version.cc": "934889b5ac48ae6cff1a96546bdedad122b2242c936327b5e7247a01e99c3a90",
+    "rocksdb/include/rocksdb/version.h": "e0d7ea392587f1353f083c73178373e0874035a89667b30e8f3564913fee06ed",
+    "build.rs": "2dbb97b102a2c13f0192ee75a49d4fc0f84fa0692ac9ffc84d364a7a28b472a3"
+  },
+  "crate_archives": {
+    "rocksdb-0.25.0": {
+      "sha256": "d8d90add70d1d420ee487bce4a1449880a8d147451c6051b2ee5f8354553dcbf",
+      "bytes": 183498
+    },
+    "librocksdb-sys-0.19.0+11.8.1": {
+      "sha256": "4f45e86edad8e88efe97dbf384b4e48e1ff0f111eabf154c7b09d7a1e5fb573c",
+      "bytes": 7810821
+    },
+    "lz4-sys-1.11.1+lz4-1.10.0": {
+      "sha256": "6bd8c0d6c6ed0cd30b3652886bb8711dc4bb01d637a68105a3d5158039b418e6",
+      "bytes": 391317
+    }
+  },
+  "lmdb_control": {
+    "heed3": "0.22.0",
+    "sys_crate": "lmdb-master3-sys 0.2.5",
+    "vendored_header_version": "0.9.90",
+    "vendored_header_date": "May 1, 2017",
+    "source_files": {
+      "lmdb/libraries/liblmdb/lmdb.h": "76923addb24ce5e1c6484c4360d4eccf80f282ca300a50280179c5e5142dbeee",
+      "lmdb/libraries/liblmdb/mdb.c": "7a60232f6c709af6b144ec24a89ce3ed4105567f8d16528d7659e4d21b0e3801"
+    }
+  }
+}

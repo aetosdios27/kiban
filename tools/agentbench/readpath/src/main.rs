@@ -21,6 +21,7 @@ mod model;
 #[path = "../../../../examples/support/random.rs"]
 #[allow(dead_code)]
 mod random;
+mod rocks;
 #[path = "../../src/runner.rs"]
 #[allow(dead_code)]
 mod runner;
@@ -83,6 +84,7 @@ struct Options {
     sqlite_sync: sqlite::Sync,
     #[serde(default)]
     sqlite_mmap_bytes: u64,
+    rocks: rocks::Tuning,
 }
 
 impl Options {
@@ -127,7 +129,8 @@ fn open(o: &Options) -> Result<Box<dyn Backend>> {
             Box::new(db)
         }
         "sqlite" => Box::new(sqlite::Sqlite::open(o)?),
-        _ => return Err("only kiban/lmdb/sqlite supported".into()),
+        "rocksdb" => Box::new(rocks::Rocks::open(o)?),
+        _ => return Err("only kiban/lmdb/sqlite/rocksdb supported".into()),
     })
 }
 
@@ -353,7 +356,8 @@ fn run() -> Result<()> {
             println!(
                 "{}",
                 json!({"default_cache_bytes":KibanOptions::default().block_cache_bytes,
-                "sqlite_version":rusqlite::version(), "sqlite_version_number":rusqlite::version_number()})
+                "sqlite_version":rusqlite::version(), "sqlite_version_number":rusqlite::version_number(),
+                "rocksdb_version":"11.8.1", "rust_rocksdb":"0.25.0"})
             );
             Ok(())
         }
@@ -387,7 +391,7 @@ mod tests {
                 .as_nanos()
         ));
         std::fs::create_dir(&root)?;
-        for backend in ["kiban", "lmdb"] {
+        for backend in ["kiban", "lmdb", "rocksdb"] {
             for shape in ["bulk", "normal"] {
                 let o = Options {
                     suite: Config {
@@ -413,6 +417,7 @@ mod tests {
                     sqlite_layout: sqlite::Layout::default(),
                     sqlite_sync: sqlite::Sync::default(),
                     sqlite_mmap_bytes: 0,
+                    rocks: rocks::Tuning::default(),
                 };
                 prepare(&o)?;
                 reads(&o)?;

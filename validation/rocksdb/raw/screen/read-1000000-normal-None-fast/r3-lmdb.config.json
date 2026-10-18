@@ -1,0 +1,15 @@
+{
+  "backend": "lmdb",
+  "n": 1000000,
+  "operations": 100000,
+  "k": 10,
+  "seed": 20261016,
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-7d737093/target/rocksdb/data/1000000-lmdb",
+  "output": "/home/aetos/.t3/worktrees/kiban/t3-7d737093/validation/rocksdb/raw/screen/read-1000000-normal-None-fast/r3-lmdb.jsonl",
+  "action": "read",
+  "layout": "normal",
+  "cache_mib": null,
+  "point_index": false,
+  "durable": false,
+  "rocks": {}
+}
