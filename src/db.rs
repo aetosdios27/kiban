@@ -29,6 +29,16 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 pub type ScanEntry = (Vec<u8>, Vec<u8>);
 pub type ScanResult = Vec<ScanEntry>;
 
+/// Derived scan-view costs for the currently pinned SST topology.
+#[derive(Debug, Clone, Copy)]
+pub struct RangeIndexStats {
+    pub key_groups: usize,
+    pub prefixes: usize,
+    pub direct_ten_prefixes: usize,
+    pub resident_bytes: usize,
+    pub build_ns: u64,
+}
+
 /// Counts from a full offline data-block and lookup consistency check.
 #[derive(Debug, Clone, Copy)]
 pub struct IntegrityReport {
@@ -228,6 +238,8 @@ pub(crate) struct Version {
     pub(crate) tables: Vec<StdArc<TableEntry>>,
     /// One entry per populated level >= 1, ascending by level.
     levels: Vec<LevelIndex>,
+    scan: std::sync::OnceLock<Option<crate::remix::Remix>>,
+    scan_requested: AtomicBool,
 }
 
 /// Key-ordered view of one level >= 1 of a `Version`.
@@ -259,7 +271,40 @@ impl Version {
             }
             i = end;
         }
-        Version { id, tables, levels }
+        Version {
+            id,
+            tables,
+            levels,
+            scan: std::sync::OnceLock::new(),
+            scan_requested: AtomicBool::new(false),
+        }
+    }
+
+    fn request_scan(self: &StdArc<Self>) {
+        if self.scan.get().is_some()
+            || self.tables.is_empty()
+            || self.tables.iter().any(|t| t.table.scan_index().is_none())
+            || self.scan_requested.swap(true, Ordering::Relaxed)
+        {
+            return;
+        }
+        let version = StdArc::downgrade(self);
+        // Derived data publishes only inside this exact pinned Version. A
+        // replaced topology never receives locators for another generation.
+        let spawned = std::thread::Builder::new()
+            .name("kiban-scan".into())
+            .spawn(move || {
+                if let Some(version) = version.upgrade() {
+                    version.scan.get_or_init(|| {
+                        crate::remix::Remix::build_cancellable(&version, || {
+                            StdArc::strong_count(&version) == 1
+                        })
+                    });
+                }
+            });
+        if spawned.is_err() {
+            self.scan_requested.store(false, Ordering::Relaxed);
+        }
     }
 
     /// Merge only overlapping tables. Disjoint levels borrow their index
@@ -420,6 +465,9 @@ pub struct KibanOptions {
     /// accept both formats regardless of this switch. Section residency shares
     /// block_cache_bytes; denied admission falls back to sorted blocks.
     pub point_index: bool,
+    /// Optional fixed-byte scan extractor (1..=24), built with PH3. Zero
+    /// disables the scan extension. Bounds outside one prefix use sorted scans.
+    pub scan_prefix_len: usize,
     /// Hard bound on SST descriptors owned by the shared foreground
     /// `TableFileCache` (11.6), not a target or a soft threshold.
     /// Streaming compaction opens one independent input handle only during
@@ -530,6 +578,7 @@ impl Default for KibanOptions {
             target_file_size: 4 * MIB,
             block_cache_bytes: crate::cache_budget::default_block_cache_bytes(),
             point_index: false,
+            scan_prefix_len: 0,
             max_open_table_files: 128,
             write_buffer_bytes: 4 * MIB as usize,
             mmap_max_level: None,
@@ -550,6 +599,11 @@ impl KibanOptions {
     /// Rejects configurations backpressure (11.5) or the file-cache
     /// bound (11.6) cannot reason about.
     fn validate(&self) -> Result<(), DbError> {
+        if self.scan_prefix_len > 24 || (self.scan_prefix_len != 0 && !self.point_index) {
+            return Err(DbError::InvalidArgument(
+                "scan_prefix_len requires point_index and a length in 1..=24".into(),
+            ));
+        }
         if self.l0_write_stall_trigger <= self.l0_compaction_trigger {
             return Err(DbError::InvalidArgument(format!(
                 "invalid options: l0_write_stall_trigger ({}) must be greater than l0_compaction_trigger ({})",
@@ -1558,7 +1612,8 @@ impl Kiban {
         let new_wal_number = sst_number + 1;
         let new_next_file_number = sst_number + 2;
 
-        let mut builder = TableBuilder::with_point_index(self.options.point_index);
+        let mut builder =
+            TableBuilder::with_scan_index(self.options.point_index, self.options.scan_prefix_len);
         // `iter_all_versions` (not `iter`, which is live-only): a
         // snapshot may need an older, superseded version that only
         // exists in this memtable's retained history. Its own ordering
@@ -1802,6 +1857,7 @@ impl Kiban {
             file_cache: self.file_cache.clone(),
             mmap_max_level: self.options.mmap_max_level,
             point_index: self.options.point_index,
+            scan_prefix_len: self.options.scan_prefix_len,
         })
     }
 
@@ -1935,6 +1991,117 @@ impl Kiban {
             Ok((k, _)) => k.as_slice() < end,
             Err(_) => true,
         })
+    }
+
+    /// Observes a prepared view without triggering construction.
+    pub fn range_index_stats(&self) -> Option<RangeIndexStats> {
+        self.version
+            .scan
+            .get()?
+            .as_ref()
+            .map(crate::remix::Remix::stats)
+    }
+
+    /// Prepares the optional immutable scan view outside a latency-sensitive
+    /// call. Normal reads request it in the background and use sorted scans
+    /// until it is ready. Returns false on mixed formats or budget denial.
+    pub fn prepare_range_index(&self) -> bool {
+        self.version
+            .scan
+            .get_or_init(|| crate::remix::Remix::build(&self.version))
+            .is_some()
+    }
+
+    /// Map at most `count` live values whose byte keys begin with `prefix`.
+    /// An exact prepared extractor prefix uses its population extent directly.
+    /// Other short finite prefixes derive an upper bound on the stack; empty,
+    /// long and unprepared all-255 prefixes use the sorted iterator path.
+    pub fn prefix_values<T, E: From<DbError>>(
+        &self,
+        prefix: &[u8],
+        count: usize,
+        mut map: impl FnMut(&[u8]) -> Result<T, E>,
+    ) -> Result<Vec<T>, E> {
+        if count == 0 {
+            return Ok(Vec::new());
+        }
+        if let Some(cursor) = self
+            .version
+            .scan
+            .get()
+            .and_then(Option::as_ref)
+            .and_then(|s| s.prefix_cursor(&self.version, prefix, u64::MAX))
+        {
+            return map_scan_values(
+                cursor,
+                &self.memtable,
+                self.immutable.as_ref().map(|im| im.memtable.as_ref()),
+                prefix,
+                count,
+                u64::MAX,
+                &mut map,
+            );
+        }
+        if prefix.len() <= 24
+            && let Some(last) = prefix.iter().rposition(|&b| b != 255)
+        {
+            let mut end = [0; 24];
+            end[..prefix.len()].copy_from_slice(prefix);
+            end[last] += 1;
+            return self.range_values(prefix, &end[..last + 1], count, map);
+        }
+        self.iter_from(prefix)
+            .take_while(|entry| {
+                entry
+                    .as_ref()
+                    .map_or(true, |(key, _)| key.starts_with(prefix))
+            })
+            .take(count)
+            .map(|entry| {
+                let (_, value) = entry.map_err(E::from)?;
+                map(&value)
+            })
+            .collect()
+    }
+
+    /// Map at most `count` live values in `[start, end)` while their verified
+    /// backing is borrowed. The result owns only the callback outputs. Tables
+    /// without the optional scan section use the ordinary sorted range path.
+    pub fn range_values<T, E: From<DbError>>(
+        &self,
+        start: &[u8],
+        end: &[u8],
+        count: usize,
+        mut map: impl FnMut(&[u8]) -> Result<T, E>,
+    ) -> Result<Vec<T>, E> {
+        if count == 0 || start >= end {
+            return Ok(Vec::new());
+        }
+        self.version.request_scan();
+        if let Some(cursor) = self
+            .version
+            .scan
+            .get()
+            .and_then(Option::as_ref)
+            .and_then(|s| s.cursor(&self.version, start, end, u64::MAX))
+        {
+            return map_scan_values(
+                cursor,
+                &self.memtable,
+                self.immutable.as_ref().map(|im| im.memtable.as_ref()),
+                start,
+                count,
+                u64::MAX,
+                &mut map,
+            );
+        }
+        self.range(start, end)
+            .take(count)
+            .map(|entry| {
+                let (_, value) = entry.map_err(E::from)?;
+                map(&value)
+            })
+            .collect()
     }
 
     /// Internal iteration (raw mode) — newest entry per key, tombstones
@@ -2426,6 +2593,79 @@ pub struct RawEntry {
     pub value: Vec<u8>,
 }
 
+impl Snapshot {
+    /// Map at most `count` live values in `[start, end)` while their verified
+    /// backing is borrowed. The result owns only the callback outputs. Tables
+    /// without the optional scan section use the ordinary sorted range path.
+    pub fn range_values<T, E: From<DbError>>(
+        &self,
+        start: &[u8],
+        end: &[u8],
+        count: usize,
+        mut map: impl FnMut(&[u8]) -> Result<T, E>,
+    ) -> Result<Vec<T>, E> {
+        if count == 0 || start >= end {
+            return Ok(Vec::new());
+        }
+        self.version.request_scan();
+        if let Some(cursor) = self
+            .version
+            .scan
+            .get()
+            .and_then(Option::as_ref)
+            .and_then(|s| s.cursor(&self.version, start, end, self.seq))
+        {
+            return map_scan_values(
+                cursor,
+                &self.memtable,
+                self.immutable.as_deref(),
+                start,
+                count,
+                self.seq,
+                &mut map,
+            );
+        }
+        self.range(start, end)
+            .take(count)
+            .map(|entry| {
+                let (_, value) = entry.map_err(E::from)?;
+                map(&value)
+            })
+            .collect()
+    }
+
+    /// Streams this snapshot's half-open range in key order.
+    pub fn range<'a>(
+        &'a self,
+        start: &'a [u8],
+        end: &'a [u8],
+    ) -> impl Iterator<Item = Result<ScanEntry, DbError>> + 'a {
+        let mut sources = self.version.table_sources(start, Some(end));
+        sources.push(SourceHead {
+            feed: SourceFeed::Mem(Box::new(self.memtable.iter_from(start))),
+            head: None,
+            exhausted: false,
+        });
+        if let Some(im) = &self.immutable {
+            sources.push(SourceHead {
+                feed: SourceFeed::Mem(Box::new(im.iter_from(start))),
+                head: None,
+                exhausted: false,
+            });
+        }
+        DbIter {
+            core: MergeCore {
+                sources,
+                user_mode: true,
+                failed: false,
+                snap_limit: Some(self.seq),
+                done_key: None,
+            },
+        }
+        .take_while(move |item| item.as_ref().map_or(true, |(key, _)| key.as_slice() < end))
+    }
+}
+
 struct HeadEntry {
     key: Vec<u8>,
     kind: Kind,
@@ -2875,6 +3115,7 @@ pub(crate) struct CompactionPlan {
     target_file_size: u64,
     mmap_max_level: Option<u32>,
     point_index: bool,
+    scan_prefix_len: usize,
     /// 11.17-round-3, section 7: when true, this plan moves exactly one
     /// existing table down a level by metadata alone (`build()` reopens
     /// the same file's footer/index — no merge, no bytes rewritten).
@@ -2965,7 +3206,7 @@ impl CompactionPlan {
         }
 
         let mut outputs: Vec<TableEntry> = Vec::new();
-        let mut builder = TableBuilder::with_point_index(self.point_index);
+        let mut builder = TableBuilder::with_scan_index(self.point_index, self.scan_prefix_len);
         let mut output_entries = 0usize;
         let mut core = MergeCore {
             sources,
@@ -3026,7 +3267,7 @@ impl CompactionPlan {
             {
                 let number = self.next_output_number(&mut next_output)?;
                 self.emit_output(builder, number, &mut outputs)?;
-                builder = TableBuilder::with_point_index(self.point_index);
+                builder = TableBuilder::with_scan_index(self.point_index, self.scan_prefix_len);
                 output_entries = 0;
             }
             builder.add(v.kind, &v.key, &v.value, v.seq)?;
@@ -3108,6 +3349,7 @@ pub(crate) struct FlushPlan {
     file_cache: StdArc<TableFileCache>,
     mmap_max_level: Option<u32>,
     point_index: bool,
+    scan_prefix_len: usize,
 }
 
 impl FlushPlan {
@@ -3117,7 +3359,7 @@ impl FlushPlan {
     /// version isn't lost, same atomic publication. No engine lock is
     /// held here.
     pub(crate) fn build(&self) -> Result<TableEntry, DbError> {
-        let mut builder = TableBuilder::with_point_index(self.point_index);
+        let mut builder = TableBuilder::with_scan_index(self.point_index, self.scan_prefix_len);
         for (key, entry) in self.memtable.iter_all_versions() {
             match entry {
                 MemEntry::Value { value, seq } => builder.add(Kind::Put, key, value, *seq)?,
@@ -3387,6 +3629,7 @@ impl Kiban {
             target_file_size: self.options.target_file_size,
             mmap_max_level: self.options.mmap_max_level,
             point_index: self.options.point_index,
+            scan_prefix_len: self.options.scan_prefix_len,
             trivial_move: true,
             predicted_output_bytes: None,
         })
@@ -3700,6 +3943,7 @@ impl Kiban {
             target_file_size: self.options.target_file_size,
             mmap_max_level: self.options.mmap_max_level,
             point_index: self.options.point_index,
+            scan_prefix_len: self.options.scan_prefix_len,
             trivial_move: false,
             predicted_output_bytes: None,
         })
@@ -3915,6 +4159,7 @@ mod compaction_tests {
             level_multiplier: 4,
             target_file_size: 250,
             point_index: false,
+            scan_prefix_len: 0,
             block_cache_bytes: 1 << 20,
             // High enough that no existing (pre-11.6) test — none of
             // which exercise the file-cache bound deliberately — ever
@@ -4465,6 +4710,7 @@ mod crash_sweep_tests {
             level_multiplier: 4,
             target_file_size: 250,
             point_index: false,
+            scan_prefix_len: 0,
             block_cache_bytes: 1 << 20,
             max_open_table_files: 64,
             write_buffer_bytes: 1 << 20,
@@ -4604,6 +4850,7 @@ mod crash_sweep_tests {
                     level_multiplier: 4,
                     target_file_size: 250,
                     point_index: false,
+                    scan_prefix_len: 0,
                     block_cache_bytes: 1 << 20,
                     max_open_table_files: 64,
                     write_buffer_bytes: 1 << 20,
@@ -4956,6 +5203,46 @@ impl SharedSnapshot {
             done_key: None,
         };
         DbIter { core }
+    }
+
+    /// Map at most `count` live values in `[start, end)` while their verified
+    /// backing is borrowed. The result owns only the callback outputs. Tables
+    /// without the optional scan section use the ordinary sorted range path.
+    pub fn range_values<T, E: From<DbError>>(
+        &self,
+        start: &[u8],
+        end: &[u8],
+        count: usize,
+        mut map: impl FnMut(&[u8]) -> Result<T, E>,
+    ) -> Result<Vec<T>, E> {
+        if count == 0 || start >= end {
+            return Ok(Vec::new());
+        }
+        self.version.request_scan();
+        if let Some(cursor) = self
+            .version
+            .scan
+            .get()
+            .and_then(Option::as_ref)
+            .and_then(|s| s.cursor(&self.version, start, end, self.seq))
+        {
+            return map_scan_values(
+                cursor,
+                &self.memtable,
+                self.immutable.as_deref(),
+                start,
+                count,
+                self.seq,
+                &mut map,
+            );
+        }
+        self.range(start, end)
+            .take(count)
+            .map(|entry| {
+                let (_, value) = entry.map_err(E::from)?;
+                map(&value)
+            })
+            .collect()
     }
 
     /// Collects the snapshot. Prefer `iter` or `range` for bounded memory.
@@ -5911,6 +6198,7 @@ mod cache_scaling_tests {
             level_multiplier: 10,
             target_file_size: 64 * 1024,
             point_index: false,
+            scan_prefix_len: 0,
             block_cache_bytes: 4096,  // tiny: far smaller than the data
             max_open_table_files: 64, // this module tests the block cache, not the file cache
             // Irrelevant here: this module uses direct `Kiban`, which
@@ -9348,3 +9636,107 @@ mod rotation_durability_tests {
 #[cfg(test)]
 #[path = "point_index_tests.rs"]
 mod point_index_tests;
+
+fn map_scan_values<T, E>(
+    mut cursor: crate::remix::Cursor<'_>,
+    memtable: &Memtable,
+    immutable: Option<&Memtable>,
+    start: &[u8],
+    count: usize,
+    limit: u64,
+    map: &mut impl FnMut(&[u8]) -> Result<T, E>,
+) -> Result<Vec<T>, E> {
+    let mut out = Vec::with_capacity(count.min(1024));
+    if memtable.is_empty() && immutable.is_none_or(Memtable::is_empty) {
+        cursor.direct_values(count, map, &mut out)?;
+        while out.len() < count && cursor.key().is_some() {
+            if let Some(value) = cursor.pop()
+                && value.kind == Kind::Put
+            {
+                out.push(map(value.value)?);
+            }
+        }
+        return Ok(out);
+    }
+    let mut active = memtable
+        .iter_from(start)
+        .filter(|(_, e)| e.seq() <= limit)
+        .peekable();
+    let mut frozen = immutable
+        .into_iter()
+        .flat_map(|m| m.iter_from(start))
+        .filter(|(_, e)| e.seq() <= limit)
+        .peekable();
+    while out.len() < count {
+        let from_active = match (active.peek(), frozen.peek()) {
+            (Some((a, _)), Some((b, _))) => a <= b,
+            (Some(_), None) => true,
+            _ => false,
+        };
+        let mem = if from_active {
+            active.peek().copied()
+        } else {
+            frozen.peek().copied()
+        };
+        if mem.is_none() {
+            cursor.direct_values(count - out.len(), map, &mut out)?;
+            while out.len() < count && cursor.key().is_some() {
+                if let Some(value) = cursor.pop()
+                    && value.kind == Kind::Put
+                {
+                    out.push(map(value.value)?);
+                }
+            }
+            break;
+        }
+        let (key, mut entry) = mem.unwrap();
+        let order = cursor
+            .key()
+            .map_or(std::cmp::Ordering::Greater, |k| k.cmp_bytes(key));
+        if order == std::cmp::Ordering::Less {
+            if let Some(value) = cursor.pop()
+                && value.kind == Kind::Put
+            {
+                out.push(map(value.value)?);
+            }
+            continue;
+        }
+        if let Some(&(other_key, other)) = if from_active {
+            frozen.peek()
+        } else {
+            active.peek()
+        } && other_key == key
+            && other.seq() > entry.seq()
+        {
+            entry = other;
+        }
+        // Each source is ordered by key and descending sequence. Its first
+        // visible entry wins; retained history must not become another row.
+        while active.peek().is_some_and(|(k, _)| *k == key) {
+            active.next();
+        }
+        while frozen.peek().is_some_and(|(k, _)| *k == key) {
+            frozen.next();
+        }
+        let table = if order == std::cmp::Ordering::Equal {
+            cursor.pop()
+        } else {
+            None
+        };
+        // A memtable head past the SST extent still needs the original upper
+        // bound; the cursor only proves the SST population's bound.
+        if !cursor.contains_mem_key(key) {
+            break;
+        }
+        if let Some(value) = table
+            && value.seq > entry.seq()
+        {
+            if value.kind == Kind::Put {
+                out.push(map(value.value)?);
+            }
+        } else if let Some(value) = entry.as_value() {
+            out.push(map(value)?);
+        }
+    }
+    Ok(out)
+}

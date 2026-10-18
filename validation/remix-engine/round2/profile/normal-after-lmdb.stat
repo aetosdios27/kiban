@@ -1,0 +1,6 @@
+# started on Sun Oct 18 05:48:35 2026
+
+10665023876;;cpu_core/cycles/u;2664573203;100.00;;
+42341799307;;cpu_core/instructions/u;2664573203;100.00;;
+24568401;;cpu_core/branch-misses/u;2664573203;100.00;;
+65346;;cpu_core/LLC-load-misses/u;2664573203;100.00;;

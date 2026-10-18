@@ -1,0 +1,7 @@
+reads bulk-512 1000000-bulk-512-r1-before-kiban
+waiting for quiet host: 2 build/test processes; CPU4 busy 0.5%
+waiting for quiet host: 2 build/test processes; CPU4 busy 8.9%
+waiting for quiet host: 0 build/test processes; CPU4 busy 2.5%
+waiting for quiet host: 2 build/test processes; CPU4 busy 29.1%
+waiting for quiet host: 0 build/test processes; CPU4 busy 14.3%
+waiting for quiet host: 0 build/test processes; CPU4 busy 44.8%

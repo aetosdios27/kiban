@@ -50,3 +50,5 @@ pub mod sys;
 #[cfg(test)]
 pub mod testutil;
 pub mod wal;
+
+mod remix;

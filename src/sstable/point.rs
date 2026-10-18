@@ -171,10 +171,17 @@ pub(super) struct PointBuilder {
     max_key_len: u32,
     max_versions: u32,
     last_value_offset: u64,
+    scan_prefix_len: usize,
     #[cfg(test)]
     legacy: bool,
 }
 impl PointBuilder {
+    pub(super) fn with_scan_prefix_len(scan_prefix_len: usize) -> Self {
+        Self {
+            scan_prefix_len,
+            ..Self::default()
+        }
+    }
     pub(super) fn approximate_size(&self) -> usize {
         compact::Encoding::for_builder(self).section_len(self)
     }
@@ -504,7 +511,7 @@ impl LegacyIndex {
     }
 }
 
-mod compact;
+pub(crate) mod compact;
 
 pub(super) enum PointIndex {
     Legacy(LegacyIndex),

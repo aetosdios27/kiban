@@ -355,6 +355,16 @@ impl SstTable {
         Ok(table)
     }
 
+    pub(crate) fn scan_index(&self) -> Option<&super::point::compact::CompactIndex> {
+        match self.point.as_deref()? {
+            PointIndex::Compact(index) if index.scan_config().is_some() => Some(index),
+            _ => None,
+        }
+    }
+    pub(crate) fn scan_cache(&self) -> &Arc<BlockCache> {
+        &self.block_cache
+    }
+
     pub fn number(&self) -> u64 {
         self.number
     }

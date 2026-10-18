@@ -1,0 +1,10 @@
+{
+  "cpu": 3,
+  "decode_cpu": "12-21",
+  "perf": "/home/aetos/.t3/worktrees/kiban/t3-53ad0f47/target/read-path-tools/root/usr/bin/perf",
+  "events": "cpu_core/cycles/u,cpu_core/instructions/u,cpu_core/branch-misses/u,cpu_core/LLC-load-misses/u",
+  "binaries": {
+    "before": "64e1db72d018e3df7a062ea5cb5eb2f194a8317ed2af5e1574cbc50c3bc8ab77",
+    "after": "4beea778e34bfff0d47dc22d767c338e9e135553e6c651b076248014a6c9640f"
+  }
+}
