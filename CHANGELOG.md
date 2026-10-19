@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `KibanOptions::agent_memory(prefix_len)`: one-call profile enabling the point index and
+  prefix scan extension for agent-memory workloads.
 - Atomic shared batch visibility and lifetime-held database ownership locks.
 - Checksummed, versioned MANIFEST envelope with legacy decoding; strict recovery
   identity/range checks and bounded, checked batch/SST/frame decoding.

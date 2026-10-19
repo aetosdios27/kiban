@@ -60,6 +60,15 @@ engine with background flush/compaction; its snapshot exposes `get` and `scan`.
 One engine owner per directory is enforced with an OS lock; a second independent
 open returns `DbError::Locked`. Shared clones belong to one owner.
 
+For agent-memory style workloads (many small records, keys that begin with a fixed-length
+agent prefix, reads by id or "the latest N for one agent"), start from
+`KibanOptions::agent_memory(prefix_len)`. It turns on the per-SST perfect-hash point index and
+the prefix scan extension, which is the configuration measured in the head-to-head reports
+(`validation/{sqlite,rocksdb,remix-engine}`). It costs about 9% more SST bytes and slower
+flush/compaction builds. `mmap_max_level` and `binary_fuse_filter` stay separate choices:
+the first helps caches far smaller than the data but worsens cold-read tails, the second
+speeds misses but slows hits while a point index is resident.
+
 ## Supported operations
 
 - WAL-backed puts, deletes and atomic WAL write batches with explicit sync.
