@@ -4,6 +4,7 @@
 
 mod block;
 pub mod builder;
+mod filter;
 pub(crate) mod point;
 pub mod reader;
 mod separator;

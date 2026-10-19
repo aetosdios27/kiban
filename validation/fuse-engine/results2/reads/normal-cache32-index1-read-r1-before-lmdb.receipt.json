@@ -1,0 +1,91 @@
+{
+  "name": "normal-cache32-index1-read-r1-before-lmdb",
+  "command": [
+    "taskset",
+    "-c",
+    "8",
+    "/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/target/fuse-engine/bin/after",
+    "/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/validation/fuse-engine/results2/reads/normal-cache32-index1-read-r1-before-lmdb.config.json"
+  ],
+  "code": 0,
+  "sha256": "fd9e5aba02b625e4fb6e813d2954f7d7f49e0edd3b0c42c1ac04cc6d82253f74",
+  "seconds": 5.5348241329193115,
+  "start": {
+    "total": 3232935,
+    "idle": 2888862
+  },
+  "end": {
+    "total": 3233444,
+    "idle": 2889284
+  },
+  "cpu9_busy_percent": 17.092337917485267,
+  "load": [
+    24.54541015625,
+    23.46875,
+    24.78125
+  ],
+  "stages": [
+    {
+      "call_ops_s": 523611.45481112454,
+      "call_seconds": 0.190981307,
+      "errors": 0,
+      "latency": {
+        "count": 100000,
+        "max_ns": 226087,
+        "p50_ns": 1888,
+        "p999_ns": 8704,
+        "p99_ns": 2752
+      },
+      "reads": {
+        "count": 100000,
+        "max_ns": 226087,
+        "p50_ns": 1888,
+        "p999_ns": 8704,
+        "p99_ns": 2752
+      },
+      "type": "stage",
+      "verified_ops_s": 393452.91671112843,
+      "wall_seconds": 0.254160017,
+      "workload": "recall-by-id",
+      "write_readback_seconds": 0.0,
+      "writes": {
+        "count": 0,
+        "max_ns": 0,
+        "p50_ns": null,
+        "p999_ns": null,
+        "p99_ns": null
+      }
+    },
+    {
+      "call_ops_s": 296919.35362747026,
+      "call_seconds": 0.336791788,
+      "errors": 0,
+      "latency": {
+        "count": 100000,
+        "max_ns": 104674,
+        "p50_ns": 3264,
+        "p999_ns": 10496,
+        "p99_ns": 5632
+      },
+      "reads": {
+        "count": 100000,
+        "max_ns": 104674,
+        "p50_ns": 3264,
+        "p999_ns": 10496,
+        "p99_ns": 5632
+      },
+      "type": "stage",
+      "verified_ops_s": 114749.3275350896,
+      "wall_seconds": 0.871464802,
+      "workload": "recent-for-agent",
+      "write_readback_seconds": 0.0,
+      "writes": {
+        "count": 0,
+        "max_ns": 0,
+        "p50_ns": null,
+        "p999_ns": null,
+        "p99_ns": null
+      }
+    }
+  ]
+}

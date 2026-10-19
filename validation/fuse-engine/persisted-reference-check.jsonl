@@ -1,0 +1,4 @@
+{"file":"target/fuse-engine/data/before-kiban-bulk-index0-1000000/2.sst","version":3,"members":1000000,"false_negatives":0,"misses_per_distribution":1000000,"uniform_positives":8334,"prefix_positives":8334}
+{"file":"target/fuse-engine/data/after-kiban-bulk-index0-1000000/2.sst","version":5,"members":1000000,"false_negatives":0,"misses_per_distribution":1000000,"uniform_positives":3900,"prefix_positives":3896}
+{"file":"target/fuse-engine/data/before-kiban-bulk-index0-10000/2.sst","version":3,"members":10000,"false_negatives":0,"misses_per_distribution":1000000,"uniform_positives":8263,"prefix_positives":8247}
+{"file":"target/fuse-engine/data/after-kiban-bulk-index0-10000/2.sst","version":5,"members":10000,"false_negatives":0,"misses_per_distribution":1000000,"uniform_positives":3893,"prefix_positives":3881}

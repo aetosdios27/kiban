@@ -79,6 +79,8 @@ struct Options {
     #[serde(default = "scan_prefix_len")]
     scan_prefix_len: usize,
     #[serde(default)]
+    binary_fuse_filter: bool,
+    #[serde(default)]
     stage: u64,
     #[serde(default)]
     durable: bool,
@@ -115,7 +117,7 @@ fn open(o: &Options) -> Result<Box<dyn Backend>> {
     eprintln!(
         "{}",
         json!({"type":"requested_config", "backend":o.suite.backend,
-        "cache_bytes":o.cache_bytes(),"point_index":o.point_index,"durable":o.durable})
+        "cache_bytes":o.cache_bytes(),"point_index":o.point_index,"binary_fuse_filter":o.binary_fuse_filter,"durable":o.durable})
     );
     Ok(match o.suite.backend.as_str() {
         "kiban" => Box::new(backend::Embedded::with_options_and_durability(
@@ -124,6 +126,7 @@ fn open(o: &Options) -> Result<Box<dyn Backend>> {
                 point_index: o.point_index,
                 #[cfg(feature = "remix")]
                 scan_prefix_len: if o.point_index { o.scan_prefix_len } else { 0 },
+                binary_fuse_filter: o.binary_fuse_filter,
                 block_cache_bytes: o.cache_bytes(),
                 mmap_max_level: o.mmap_max_level,
                 ..KibanOptions::default()
@@ -173,6 +176,7 @@ fn prepare(o: &Options) -> Result<()> {
                 point_index: o.point_index,
                 #[cfg(feature = "remix")]
                 scan_prefix_len: if o.point_index { o.scan_prefix_len } else { 0 },
+                binary_fuse_filter: o.binary_fuse_filter,
                 ..KibanOptions::default()
             },
         )?;
@@ -268,14 +272,36 @@ fn reads(o: &Options) -> Result<()> {
         let recent: Vec<_> = (0..model::AGENTS as u32)
             .map(|a| model::recent_ids(c.n, a, c.k))
             .collect();
-        for (stage, name) in [(1, "recall-by-id"), (2, "recent-for-agent")] {
+        let stages = if o.action == "miss" {
+            vec![(3, "absent-uniform"), (4, "absent-agent-prefix")]
+        } else {
+            vec![(1, "recall-by-id"), (2, "recent-for-agent")]
+        };
+        // Keys generated and proven absent outside the per-lookup timer.
+        let missing: Vec<_> = (0..c.operations)
+            .map(|op| {
+                let h = random::mix(c.seed ^ op);
+                (
+                    model::key((h | (1 << 63)) & !63 | (op % model::AGENTS)).into_bytes(),
+                    model::key((h | (1 << 63)) & !63 | 7).into_bytes(),
+                )
+            })
+            .collect();
+        for (stage, name) in stages {
             let mut histogram = metrics::Histogram::default();
             let mut ns = 0;
             let started = Instant::now();
             for op in 0..c.operations {
                 let id = random::mix(c.seed ^ random::mix(stage) ^ op) % c.n;
                 let tick = Instant::now();
-                let (one, many) = if stage == 2 {
+                let (one, many) = if stage >= 3 {
+                    let keys = &missing[op as usize];
+                    let key = if stage == 3 { &keys.0 } else { &keys.1 };
+                    if b.contains_key(key)? {
+                        return Err("absent lookup returned data".into());
+                    }
+                    (None, None)
+                } else if stage == 2 {
                     (None, Some(b.recent((id % model::AGENTS) as u32, c.k)?))
                 } else {
                     (Some(b.get(id)?), None)
@@ -402,7 +428,7 @@ fn run() -> Result<()> {
             Ok(())
         }
         "prepare" => prepare(&o),
-        "read" | "profile" => reads(&o),
+        "read" | "profile" | "miss" => reads(&o),
         "write" => writes(&o),
         "varied" => varied::run(&o),
         #[cfg(feature = "remix")]
@@ -437,7 +463,7 @@ mod tests {
         std::fs::create_dir(&root)?;
         for backend in ["kiban", "lmdb", "rocksdb"] {
             for shape in ["bulk", "normal"] {
-                let o = Options {
+                let mut o = Options {
                     suite: Config {
                         backend: backend.into(),
                         db: root.join(format!("{backend}-{shape}")),
@@ -454,6 +480,7 @@ mod tests {
                     point_index: true,
                     #[cfg(feature = "remix")]
                     scan_prefix_len: 18,
+                    binary_fuse_filter: true,
                     cache_mib: Some(32),
                     mmap_max_level: None,
                     readers: 1,
@@ -475,6 +502,20 @@ mod tests {
                 for row in &rows[..2] {
                     assert_eq!(row["reads"]["count"], 100);
                     assert_eq!(row["errors"], 0);
+                }
+                if backend == "kiban" || backend == "lmdb" {
+                    o.action = "miss".into();
+                    o.suite.output = root.join(format!("{backend}-{shape}-miss.jsonl"));
+                    reads(&o)?;
+                    let rows: Vec<Value> = std::fs::read_to_string(&o.suite.output)?
+                        .lines()
+                        .map(serde_json::from_str)
+                        .collect::<std::result::Result<_, _>>()?;
+                    assert_eq!(rows.len(), 3);
+                    for row in &rows[..2] {
+                        assert_eq!(row["reads"]["count"], 100);
+                        assert_eq!(row["errors"], 0);
+                    }
                 }
                 let mut b = open(&o)?;
                 b.put(&model::Memory::new(5, 99, o.suite.seed), false)?;

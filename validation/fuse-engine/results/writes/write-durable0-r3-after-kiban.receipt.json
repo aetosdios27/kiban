@@ -1,0 +1,184 @@
+{
+  "name": "write-durable0-r3-after-kiban",
+  "command": [
+    "taskset",
+    "-c",
+    "8",
+    "/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/target/fuse-engine/bin/after",
+    "/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/validation/fuse-engine/results/writes/write-durable0-r3-after-kiban.config.json"
+  ],
+  "code": 0,
+  "sha256": "fd9e5aba02b625e4fb6e813d2954f7d7f49e0edd3b0c42c1ac04cc6d82253f74",
+  "seconds": 0.9495828151702881,
+  "start": {
+    "total": 2601656,
+    "idle": 2320883
+  },
+  "end": {
+    "total": 2601699,
+    "idle": 2320924
+  },
+  "cpu9_busy_percent": 4.651162790697672,
+  "load": [
+    23.8125,
+    23.87939453125,
+    24.4423828125
+  ],
+  "stages": [
+    {
+      "call_ops_s": 611241.7878137702,
+      "call_seconds": 0.016360138,
+      "errors": 0,
+      "latency": {
+        "count": 10000,
+        "max_ns": 248462,
+        "p50_ns": 1120,
+        "p999_ns": 16128,
+        "p99_ns": 9728
+      },
+      "reads": {
+        "count": 0,
+        "max_ns": 0,
+        "p50_ns": null,
+        "p999_ns": null,
+        "p99_ns": null
+      },
+      "type": "stage",
+      "verified_ops_s": 268237.70989801973,
+      "wall_seconds": 0.037280366,
+      "workload": "remember",
+      "write_readback_seconds": 0.013729385,
+      "writes": {
+        "count": 10000,
+        "max_ns": 248462,
+        "p50_ns": 1120,
+        "p999_ns": 16128,
+        "p99_ns": 9728
+      }
+    },
+    {
+      "call_ops_s": 765685.879205702,
+      "call_seconds": 0.013060186,
+      "errors": 0,
+      "latency": {
+        "count": 10000,
+        "max_ns": 17182,
+        "p50_ns": 1216,
+        "p999_ns": 7936,
+        "p99_ns": 2368
+      },
+      "reads": {
+        "count": 10000,
+        "max_ns": 17182,
+        "p50_ns": 1216,
+        "p999_ns": 7936,
+        "p99_ns": 2368
+      },
+      "type": "stage",
+      "verified_ops_s": 373872.9366653637,
+      "wall_seconds": 0.026747055,
+      "workload": "recall-by-id",
+      "write_readback_seconds": 0.0,
+      "writes": {
+        "count": 0,
+        "max_ns": 0,
+        "p50_ns": null,
+        "p999_ns": null,
+        "p99_ns": null
+      }
+    },
+    {
+      "call_ops_s": 200299.74456174174,
+      "call_seconds": 0.049925176,
+      "errors": 0,
+      "latency": {
+        "count": 10000,
+        "max_ns": 55950,
+        "p50_ns": 4736,
+        "p999_ns": 18432,
+        "p99_ns": 10752
+      },
+      "reads": {
+        "count": 10000,
+        "max_ns": 55950,
+        "p50_ns": 4736,
+        "p999_ns": 18432,
+        "p99_ns": 10752
+      },
+      "type": "stage",
+      "verified_ops_s": 81336.97026715665,
+      "wall_seconds": 0.122945322,
+      "workload": "recent-for-agent",
+      "write_readback_seconds": 0.0,
+      "writes": {
+        "count": 0,
+        "max_ns": 0,
+        "p50_ns": null,
+        "p999_ns": null,
+        "p99_ns": null
+      }
+    },
+    {
+      "call_ops_s": 497877.0770373665,
+      "call_seconds": 0.020085279,
+      "errors": 0,
+      "latency": {
+        "count": 10000,
+        "max_ns": 230022,
+        "p50_ns": 1536,
+        "p999_ns": 17408,
+        "p99_ns": 11008
+      },
+      "reads": {
+        "count": 0,
+        "max_ns": 0,
+        "p50_ns": null,
+        "p999_ns": null,
+        "p99_ns": null
+      },
+      "type": "stage",
+      "verified_ops_s": 239995.40744788307,
+      "wall_seconds": 0.041667464,
+      "workload": "update",
+      "write_readback_seconds": 0.013959208,
+      "writes": {
+        "count": 10000,
+        "max_ns": 230022,
+        "p50_ns": 1536,
+        "p999_ns": 17408,
+        "p99_ns": 11008
+      }
+    },
+    {
+      "call_ops_s": 727102.8760408841,
+      "call_seconds": 0.013753212,
+      "errors": 0,
+      "latency": {
+        "count": 10000,
+        "max_ns": 24749,
+        "p50_ns": 1120,
+        "p999_ns": 13568,
+        "p99_ns": 3136
+      },
+      "reads": {
+        "count": 9000,
+        "max_ns": 14771,
+        "p50_ns": 1088,
+        "p999_ns": null,
+        "p99_ns": 2880
+      },
+      "type": "stage",
+      "verified_ops_s": 359174.0505368664,
+      "wall_seconds": 0.027841655,
+      "workload": "mixed-90-10",
+      "write_readback_seconds": 0.001404331,
+      "writes": {
+        "count": 1000,
+        "max_ns": 24749,
+        "p50_ns": 1696,
+        "p999_ns": null,
+        "p99_ns": 13312
+      }
+    }
+  ]
+}

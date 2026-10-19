@@ -1,0 +1,11 @@
+before-kiban-bulk-index0-1000000 15.46s sibling=19.6%
+before-kiban-bulk-index1-1000000 15.16s sibling=21.3%
+lmdb-bulk-1000000 9.82s sibling=20.7%
+before-kiban-normal-index0-1000000 55.15s sibling=17.6%
+before-kiban-normal-index1-1000000 44.94s sibling=15.7%
+lmdb-normal-1000000 7.68s sibling=13.8%
+before-kiban-bulk-index0-10000 0.75s sibling=12.5%
+after-kiban-bulk-index0-10000 0.91s sibling=5.3%
+before-kiban-bulk-index1-10000 0.75s sibling=6.2%
+after-kiban-bulk-index1-10000 0.70s sibling=6.7%
+lmdb-bulk-10000 0.64s sibling=20.0%

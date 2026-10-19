@@ -1,0 +1,30 @@
+{
+  "name": "lmdb-bulk-10000",
+  "command": [
+    "taskset",
+    "-c",
+    "12-21",
+    "nice",
+    "-n",
+    "10",
+    "/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/target/fuse-engine/bin/before",
+    "/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/validation/fuse-engine/results/prepare/lmdb-bulk-10000.config.json"
+  ],
+  "code": 0,
+  "sha256": "707d41a57bc421b88dec629b57ae530b875672f5401c2a7767d6fe9595afddb1",
+  "seconds": 0.6445703506469727,
+  "start": {
+    "total": 2382228,
+    "idle": 2125669
+  },
+  "end": {
+    "total": 2382238,
+    "idle": 2125677
+  },
+  "cpu9_busy_percent": 19.999999999999996,
+  "load": [
+    29.2275390625,
+    31.5654296875,
+    25.24365234375
+  ]
+}

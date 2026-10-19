@@ -494,6 +494,10 @@ pub struct KibanOptions {
     /// Optional fixed-byte scan extractor (1..=24), built with PH3. Zero
     /// disables the scan extension. Bounds outside one prefix use sorted scans.
     pub scan_prefix_len: usize,
+    /// Write version-5/6 SSTs with a checksummed four-wise binary fuse8 filter.
+    /// Readers accept mixed legacy and new tables regardless of this switch.
+    /// Disabled by default pending integrated performance and compatibility gates.
+    pub binary_fuse_filter: bool,
     /// Hard bound on SST descriptors owned by the shared foreground
     /// `TableFileCache` (11.6), not a target or a soft threshold.
     /// Streaming compaction opens one independent input handle only during
@@ -605,6 +609,7 @@ impl Default for KibanOptions {
             block_cache_bytes: crate::cache_budget::default_block_cache_bytes(),
             point_index: false,
             scan_prefix_len: 0,
+            binary_fuse_filter: false,
             max_open_table_files: 128,
             write_buffer_bytes: 4 * MIB as usize,
             mmap_max_level: None,
@@ -1814,7 +1819,8 @@ impl Kiban {
         let new_next_file_number = sst_number + 2;
 
         let mut builder =
-            TableBuilder::with_scan_index(self.options.point_index, self.options.scan_prefix_len);
+            TableBuilder::with_scan_index(self.options.point_index, self.options.scan_prefix_len)
+                .with_filter(self.options.binary_fuse_filter);
         // `iter_all_versions` (not `iter`, which is live-only): a
         // snapshot may need an older, superseded version that only
         // exists in this memtable's retained history. Its own ordering
@@ -2059,6 +2065,7 @@ impl Kiban {
             mmap_max_level: self.options.mmap_max_level,
             point_index: self.options.point_index,
             scan_prefix_len: self.options.scan_prefix_len,
+            binary_fuse_filter: self.options.binary_fuse_filter,
         })
     }
 
@@ -3317,6 +3324,7 @@ pub(crate) struct CompactionPlan {
     mmap_max_level: Option<u32>,
     point_index: bool,
     scan_prefix_len: usize,
+    binary_fuse_filter: bool,
     /// 11.17-round-3, section 7: when true, this plan moves exactly one
     /// existing table down a level by metadata alone (`build()` reopens
     /// the same file's footer/index — no merge, no bytes rewritten).
@@ -3407,7 +3415,8 @@ impl CompactionPlan {
         }
 
         let mut outputs: Vec<TableEntry> = Vec::new();
-        let mut builder = TableBuilder::with_scan_index(self.point_index, self.scan_prefix_len);
+        let mut builder = TableBuilder::with_scan_index(self.point_index, self.scan_prefix_len)
+            .with_filter(self.binary_fuse_filter);
         let mut output_entries = 0usize;
         let mut core = MergeCore {
             sources,
@@ -3468,7 +3477,8 @@ impl CompactionPlan {
             {
                 let number = self.next_output_number(&mut next_output)?;
                 self.emit_output(builder, number, &mut outputs)?;
-                builder = TableBuilder::with_scan_index(self.point_index, self.scan_prefix_len);
+                builder = TableBuilder::with_scan_index(self.point_index, self.scan_prefix_len)
+                    .with_filter(self.binary_fuse_filter);
                 output_entries = 0;
             }
             builder.add(v.kind, &v.key, &v.value, v.seq)?;
@@ -3551,6 +3561,7 @@ pub(crate) struct FlushPlan {
     mmap_max_level: Option<u32>,
     point_index: bool,
     scan_prefix_len: usize,
+    binary_fuse_filter: bool,
 }
 
 impl FlushPlan {
@@ -3560,7 +3571,8 @@ impl FlushPlan {
     /// version isn't lost, same atomic publication. No engine lock is
     /// held here.
     pub(crate) fn build(&self) -> Result<TableEntry, DbError> {
-        let mut builder = TableBuilder::with_scan_index(self.point_index, self.scan_prefix_len);
+        let mut builder = TableBuilder::with_scan_index(self.point_index, self.scan_prefix_len)
+            .with_filter(self.binary_fuse_filter);
         for (key, entry) in self.memtable.iter_all_versions() {
             match entry {
                 MemEntry::Value { value, seq } => builder.add(Kind::Put, key, value, *seq)?,
@@ -3831,6 +3843,7 @@ impl Kiban {
             mmap_max_level: self.options.mmap_max_level,
             point_index: self.options.point_index,
             scan_prefix_len: self.options.scan_prefix_len,
+            binary_fuse_filter: self.options.binary_fuse_filter,
             trivial_move: true,
             predicted_output_bytes: None,
         })
@@ -4145,6 +4158,7 @@ impl Kiban {
             mmap_max_level: self.options.mmap_max_level,
             point_index: self.options.point_index,
             scan_prefix_len: self.options.scan_prefix_len,
+            binary_fuse_filter: self.options.binary_fuse_filter,
             trivial_move: false,
             predicted_output_bytes: None,
         })
@@ -4361,6 +4375,7 @@ mod compaction_tests {
             target_file_size: 250,
             point_index: false,
             scan_prefix_len: 0,
+            binary_fuse_filter: false,
             block_cache_bytes: 1 << 20,
             // High enough that no existing (pre-11.6) test — none of
             // which exercise the file-cache bound deliberately — ever
@@ -4912,6 +4927,7 @@ mod crash_sweep_tests {
             target_file_size: 250,
             point_index: false,
             scan_prefix_len: 0,
+            binary_fuse_filter: false,
             block_cache_bytes: 1 << 20,
             max_open_table_files: 64,
             write_buffer_bytes: 1 << 20,
@@ -5052,6 +5068,7 @@ mod crash_sweep_tests {
                     target_file_size: 250,
                     point_index: false,
                     scan_prefix_len: 0,
+                    binary_fuse_filter: false,
                     block_cache_bytes: 1 << 20,
                     max_open_table_files: 64,
                     write_buffer_bytes: 1 << 20,
@@ -6472,6 +6489,7 @@ mod cache_scaling_tests {
             target_file_size: 64 * 1024,
             point_index: false,
             scan_prefix_len: 0,
+            binary_fuse_filter: false,
             block_cache_bytes: 4096,  // tiny: far smaller than the data
             max_open_table_files: 64, // this module tests the block cache, not the file cache
             // Irrelevant here: this module uses direct `Kiban`, which
@@ -10013,3 +10031,6 @@ fn map_scan_values<T, E>(
     }
     Ok(out)
 }
+#[cfg(test)]
+#[path = "fuse_filter_tests.rs"]
+mod fuse_filter_tests;
