@@ -1,0 +1,8 @@
+
+running 1 test
+test db::point_index_tests::point_index_maintenance_measurement ... {"type":"maintenance","trial":4,"point_index":true,"n":1000000,"flush_ns":1790189405,"compaction_build_ns":906926527,"compaction_commit_ns":52092824,"input_bytes":349552144,"output_bytes":347806315,"output_files":83,"point_resident_bytes":189225548,"verified_records":1000000,"errors":0}
+{"type":"maintenance","trial":4,"point_index":false,"n":1000000,"flush_ns":905539509,"compaction_build_ns":644945548,"compaction_commit_ns":23686135,"input_bytes":322777528,"output_bytes":322914294,"output_files":77,"point_resident_bytes":0,"verified_records":1000000,"errors":0}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 360 filtered out; finished in 7.72s
+

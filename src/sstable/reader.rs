@@ -12,7 +12,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use super::block::{BlockIter, VerifiedBlock};
-use super::builder::{FOOTER_LEN, FORMAT_VERSION, MAGIC, POINT_FOOTER_EXTRA, POINT_FORMAT_VERSION};
+use super::builder::{
+    FILTER_FORMAT_VERSION, FILTER_POINT_FORMAT_VERSION, FOOTER_LEN, FORMAT_VERSION, MAGIC,
+    POINT_FOOTER_EXTRA, POINT_FORMAT_VERSION,
+};
+use super::filter::{BLOCK_TYPE_FILTER, SstFilter};
 use super::point::{PointIndex, compact::CompactIndex};
 use super::separator::Separator;
 use super::{Kind, SstError};
@@ -126,7 +130,7 @@ pub struct SstTable {
     path: PathBuf,
     file_len: u64,
     index: Vec<IndexEntry>,
-    filter: BloomFilter,
+    filter: SstFilter,
     point: Option<Box<PointIndex>>,
     locators: Option<Box<CompactIndex>>,
     first_key: Vec<u8>,
@@ -193,41 +197,49 @@ impl SstTable {
             return Err(bad("bad magic number; not a kiban sstable".to_string()));
         }
         let version = u32::from_le_bytes(footer[16..20].try_into().unwrap());
-        if version != FORMAT_VERSION && version != POINT_FORMAT_VERSION {
+        if ![
+            FORMAT_VERSION,
+            POINT_FORMAT_VERSION,
+            FILTER_FORMAT_VERSION,
+            FILTER_POINT_FORMAT_VERSION,
+        ]
+        .contains(&version)
+        {
             return Err(bad(format!("unsupported format version {version}")));
         }
         let index_offset = u64::from_le_bytes(footer[0..8].try_into().unwrap());
         let index_len = u64::from_le_bytes(footer[8..16].try_into().unwrap());
         let filter_offset = u64::from_le_bytes(footer[20..28].try_into().unwrap());
         let filter_len = u64::from_le_bytes(footer[28..36].try_into().unwrap());
-        let point_range = if version == POINT_FORMAT_VERSION {
-            if file_len < (FOOTER_LEN + POINT_FOOTER_EXTRA) as u64 {
-                return Err(bad("truncated point footer".into()));
-            }
-            let lease = file_cache.acquire(number, path).map_err(open_err)?;
-            let extra = lease
-                .read_range_at(
-                    path,
-                    file_len - (FOOTER_LEN + POINT_FOOTER_EXTRA) as u64,
-                    POINT_FOOTER_EXTRA as u64,
-                )
-                .map_err(|e| bad(e.to_string()))?;
-            let state = crc32::update(crc32::INITIAL, &extra[..20]);
-            let checksum = crc32::finalize(crc32::update(state, footer));
-            if checksum != u32::from_le_bytes(extra[20..24].try_into().unwrap())
-                || u32::from_le_bytes(extra[16..20].try_into().unwrap()) != 2
-            {
-                return Err(bad("point footer checksum or feature flags".into()));
-            }
-            let offset = u64::from_le_bytes(extra[..8].try_into().unwrap());
-            let len = u64::from_le_bytes(extra[8..16].try_into().unwrap());
-            if len < 37 || offset.checked_add(len) != Some(filter_offset) {
-                return Err(bad("point section out of bounds".into()));
-            }
-            Some((offset, len))
-        } else {
-            None
-        };
+        let point_range =
+            if version == POINT_FORMAT_VERSION || version == FILTER_POINT_FORMAT_VERSION {
+                if file_len < (FOOTER_LEN + POINT_FOOTER_EXTRA) as u64 {
+                    return Err(bad("truncated point footer".into()));
+                }
+                let lease = file_cache.acquire(number, path).map_err(open_err)?;
+                let extra = lease
+                    .read_range_at(
+                        path,
+                        file_len - (FOOTER_LEN + POINT_FOOTER_EXTRA) as u64,
+                        POINT_FOOTER_EXTRA as u64,
+                    )
+                    .map_err(|e| bad(e.to_string()))?;
+                let state = crc32::update(crc32::INITIAL, &extra[..20]);
+                let checksum = crc32::finalize(crc32::update(state, footer));
+                if checksum != u32::from_le_bytes(extra[20..24].try_into().unwrap())
+                    || u32::from_le_bytes(extra[16..20].try_into().unwrap()) != 2
+                {
+                    return Err(bad("point footer checksum or feature flags".into()));
+                }
+                let offset = u64::from_le_bytes(extra[..8].try_into().unwrap());
+                let len = u64::from_le_bytes(extra[8..16].try_into().unwrap());
+                if len < 37 || offset.checked_add(len) != Some(filter_offset) {
+                    return Err(bad("point section out of bounds".into()));
+                }
+                Some((offset, len))
+            } else {
+                None
+            };
         let data_end = file_len
             - FOOTER_LEN as u64
             - if point_range.is_some() {
@@ -260,9 +272,19 @@ impl SstTable {
                 .map_err(|e| bad(e.to_string()))?;
             (filter_raw, index_raw)
         };
-        verify_trailer(&filter_raw, "filter")?;
-        let filter = BloomFilter::decode(&filter_raw[..filter_raw.len() - 5])
-            .ok_or_else(|| bad("filter block payload is malformed".to_string()))?;
+        let tagged = version == FILTER_FORMAT_VERSION || version == FILTER_POINT_FORMAT_VERSION;
+        verify_typed_trailer(
+            &filter_raw,
+            "filter",
+            if tagged { BLOCK_TYPE_FILTER } else { 0 },
+        )?;
+        let payload = &filter_raw[..filter_raw.len() - 5];
+        let filter = if tagged {
+            SstFilter::decode(payload)
+        } else {
+            BloomFilter::decode(payload).map(SstFilter::Legacy)
+        }
+        .ok_or_else(|| bad("filter block payload is malformed".to_string()))?;
         let index = parse_index(
             &index_raw,
             point_range.map_or(filter_offset, |(offset, _)| offset),
@@ -588,8 +610,20 @@ impl SstTable {
     /// Point lookup. Returns the newest version of `key` whose sequence
     /// number does not exceed `limit`, or `None` when provably absent.
     pub fn get(&self, key: &[u8], limit: Option<u64>) -> Result<Option<Found>, SstError> {
-        // Resident point indexes reject misses with a fingerprint and full-key check.
+        // A table carrying BOTH a resident point index and a binary fuse
+        // filter asks the (much smaller, cache-independent) filter first: a
+        // fuse "absent" is a proof of absence, because the construction has
+        // zero false negatives and the builder verifies every published
+        // filter against all of its sorted source keys before the table can
+        // ever become visible. Missing the filter skips the resident
+        // point-index probe entirely; a positive answer falls through to the
+        // unchanged point-index path. Bloom tables, positive-fallback
+        // tables (`SstFilter::Positive`, guard rejects them) and tables
+        // without the fuse filter keep the original ordering below.
         if let Some(point) = &self.point {
+            if matches!(self.filter, SstFilter::Fuse(_)) && !self.filter.may_contain(key) {
+                return Ok(None);
+            }
             return Ok(point.get(key, limit));
         }
         if let Some(locators) = &self.locators {
@@ -796,7 +830,11 @@ impl Iterator for CompactionIter<'_> {
 }
 
 pub(super) fn verify_trailer(raw: &[u8], what: &str) -> Result<(), SstError> {
-    if raw.len() < 6 || raw[raw.len() - 5] != super::block::BLOCK_TYPE_NONE {
+    verify_typed_trailer(raw, what, super::block::BLOCK_TYPE_NONE)
+}
+
+fn verify_typed_trailer(raw: &[u8], what: &str, kind: u8) -> Result<(), SstError> {
+    if raw.len() < 6 || raw[raw.len() - 5] != kind {
         return Err(SstError::Corrupt(format!("unknown {what} block type")));
     }
     let stored_crc = u32::from_le_bytes(raw[raw.len() - 4..].try_into().unwrap());
@@ -1493,6 +1531,206 @@ mod compact_point_tests {
             file.write_all_at(b"X", locator.offset as u64).unwrap();
             file.sync_all().unwrap();
             assert!(matches!(table.get(b"", None), Err(SstError::Corrupt(_))));
+        }
+    }
+}
+
+/// Every {Bloom, fuse} x {no point index, PH2, PH3 flag zero, bit 0, bits 0+1}
+/// table must round-trip through each read path and refuse damaged filters.
+#[cfg(test)]
+mod filter_matrix_tests {
+    use super::*;
+    use crate::sstable::TableBuilder;
+    use crate::testutil::TempDir;
+    use std::collections::BTreeMap;
+
+    type Variant = (&'static str, fn() -> TableBuilder, bool);
+    type Model = BTreeMap<Vec<u8>, Vec<(u64, Kind, Vec<u8>)>>;
+
+    const VARIANTS: [Variant; 5] = [
+        ("no-point", TableBuilder::new, false),
+        ("ph2", TableBuilder::with_legacy_point_index, true),
+        (
+            "ph3-flag0",
+            TableBuilder::with_point_index_without_value_crc,
+            true,
+        ),
+        ("ph3-bit0", || TableBuilder::with_point_index(true), true),
+        (
+            "ph3-bit0+bit1",
+            || TableBuilder::with_scan_index(true, 2),
+            true,
+        ),
+    ];
+
+    fn key(id: u64) -> Vec<u8> {
+        if id == 0 {
+            Vec::new()
+        } else {
+            [b"\0prefix/".as_slice(), &id.to_be_bytes(), b"\xff"].concat()
+        }
+    }
+
+    /// Present ids are even; odd ids and ids past the end are provably absent.
+    fn model(versions: u64, width: usize) -> Model {
+        (0..97u64)
+            .map(|n| {
+                let id = n * 2;
+                let rows = (1..=versions)
+                    .rev()
+                    .map(|seq| {
+                        if seq == versions && id % 3 == 0 {
+                            (seq, Kind::Tombstone, Vec::new())
+                        } else {
+                            (seq, Kind::Put, vec![(id + seq) as u8; width])
+                        }
+                    })
+                    .collect();
+                (key(id), rows)
+            })
+            .collect()
+    }
+
+    fn build(make: fn() -> TableBuilder, fuse: bool, model: &Model) -> Vec<u8> {
+        let mut builder = make().with_filter(fuse);
+        for (key, rows) in model {
+            for (seq, kind, value) in rows {
+                builder.add(*kind, key, value, *seq).unwrap();
+            }
+        }
+        builder.finish().unwrap()
+    }
+
+    fn version_of(bytes: &[u8]) -> u32 {
+        let footer = bytes.len() - FOOTER_LEN;
+        u32::from_le_bytes(bytes[footer + 16..footer + 20].try_into().unwrap())
+    }
+
+    fn open(path: &Path, capacity: usize, compact: bool, mapped: bool) -> SstTable {
+        let cache = Arc::new(BlockCache::new(capacity));
+        if compact {
+            cache.set_point_working_set(u64::MAX);
+        }
+        SstTable::open(1, path, cache, Arc::new(TableFileCache::new(2)), mapped).unwrap()
+    }
+
+    #[test]
+    fn every_filter_and_point_combination_round_trips_on_every_read_path() {
+        let data = model(12, 100);
+        let dir = TempDir::new("filter-matrix");
+        let path = dir.path().join("1.sst");
+        for (name, make, point) in VARIANTS {
+            for fuse in [false, true] {
+                let bytes = build(make, fuse, &data);
+                let expected_version = match (fuse, point) {
+                    (false, false) => FORMAT_VERSION,
+                    (false, true) => POINT_FORMAT_VERSION,
+                    (true, false) => FILTER_FORMAT_VERSION,
+                    (true, true) => FILTER_POINT_FORMAT_VERSION,
+                };
+                assert_eq!(version_of(&bytes), expected_version, "{name} fuse={fuse}");
+                crate::atomic::commit_file(&path, &bytes).unwrap();
+                // (capacity, compact locators): no admission, locators, resident.
+                for (capacity, compact) in [(0, false), (64 * 1024, true), (64 << 20, false)] {
+                    for mapped in [false, true] {
+                        let table = open(&path, capacity, compact, mapped);
+                        let context = format!("{name} fuse={fuse} cap={capacity} mapped={mapped}");
+                        // Locators need the per-value CRC flag; older point
+                        // sections stay unadmitted under a compact policy.
+                        let locators = point && compact && name.starts_with("ph3-bit0");
+                        let resident = point && capacity > 0 && !compact;
+                        assert_eq!(table.locators.is_some(), locators, "{context}");
+                        assert_eq!(table.point.is_some(), resident, "{context}");
+                        assert_eq!(
+                            matches!(table.filter, SstFilter::Fuse(_)),
+                            fuse,
+                            "{context}"
+                        );
+                        for (key, rows) in &data {
+                            for limit in [None, Some(0), Some(3), Some(11), Some(12)] {
+                                let want = rows
+                                    .iter()
+                                    .find(|(seq, ..)| limit.is_none_or(|l| *seq <= l));
+                                let got = table.get(key, limit).unwrap();
+                                assert_eq!(
+                                    got.as_ref().map(|f| (f.seq, f.kind, f.value.clone())),
+                                    want.cloned(),
+                                    "{context} {key:?} {limit:?}"
+                                );
+                            }
+                        }
+                        for id in (0..300u64).filter(|id| id % 2 == 1 || *id > 200) {
+                            assert!(
+                                table.get(&key(id), None).unwrap().is_none(),
+                                "{context} absent {id}"
+                            );
+                        }
+                        for stray in [&b"\0"[..], b"zzz", b"\0prefix", b"\xff\xff"] {
+                            assert!(table.get(stray, None).unwrap().is_none(), "{context}");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn damaged_filter_blocks_and_rewritten_versions_are_rejected_for_every_combination() {
+        let data = model(3, 8);
+        let dir = TempDir::new("filter-matrix-corrupt");
+        let path = dir.path().join("1.sst");
+        let attempt = |bytes: &[u8], capacity: usize| {
+            std::fs::write(&path, bytes).unwrap();
+            SstTable::open(
+                1,
+                &path,
+                Arc::new(BlockCache::new(capacity)),
+                Arc::new(TableFileCache::new(2)),
+                false,
+            )
+            .map(|_| ())
+        };
+        for (name, make, _) in VARIANTS {
+            for fuse in [false, true] {
+                let good = build(make, fuse, &data);
+                assert!(attempt(&good, 0).is_ok() && attempt(&good, 1 << 20).is_ok());
+                let footer = good.len() - FOOTER_LEN;
+                let at = |lo: usize| {
+                    u64::from_le_bytes(good[footer + lo..footer + lo + 8].try_into().unwrap())
+                        as usize
+                };
+                let (offset, len) = (at(20), at(28));
+                for capacity in [0, 1 << 20] {
+                    for byte in offset..offset + len {
+                        for bit in 0..8 {
+                            let mut bad = good.clone();
+                            bad[byte] ^= 1 << bit;
+                            assert!(
+                                matches!(attempt(&bad, capacity), Err(SstError::Corrupt(_))),
+                                "{name} fuse={fuse} cap={capacity} byte={byte} bit={bit}"
+                            );
+                        }
+                    }
+                }
+                // A foreign footer version must not parse the filter as another kind.
+                for version in [
+                    FORMAT_VERSION,
+                    POINT_FORMAT_VERSION,
+                    FILTER_FORMAT_VERSION,
+                    FILTER_POINT_FORMAT_VERSION,
+                    7,
+                ] {
+                    if version == version_of(&good) {
+                        continue;
+                    }
+                    let mut bad = good.clone();
+                    bad[footer + 16..footer + 20].copy_from_slice(&version.to_le_bytes());
+                    assert!(
+                        attempt(&bad, 1 << 20).is_err(),
+                        "{name} fuse={fuse} accepted version {version}"
+                    );
+                }
+            }
         }
     }
 }

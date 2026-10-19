@@ -5,7 +5,9 @@
 //! whole-table bloom filter block, fixed 44-byte footer with trailing
 //! magic.
 
+use super::block::VerifiedBlock;
 use super::block::{BLOCK_TYPE_NONE, BlockBuilder};
+use super::filter::{BLOCK_TYPE_FILTER, SstFilter};
 use super::point::PointBuilder;
 use super::{Kind, SstError};
 use crate::bloom::BloomFilter;
@@ -15,6 +17,8 @@ pub const TARGET_BLOCK_SIZE: usize = 4096;
 pub const FOOTER_LEN: usize = 44;
 pub const FORMAT_VERSION: u32 = 3;
 pub const POINT_FORMAT_VERSION: u32 = 4;
+pub const FILTER_FORMAT_VERSION: u32 = 5;
+pub const FILTER_POINT_FORMAT_VERSION: u32 = 6;
 pub const POINT_FOOTER_EXTRA: usize = 24;
 pub const MAGIC: &[u8; 8] = b"KIBANSST";
 
@@ -41,6 +45,7 @@ pub struct TableBuilder {
     has_last: bool,
     key_hashes: Vec<u64>,
     point: Option<PointBuilder>,
+    binary_fuse: bool,
 }
 
 impl TableBuilder {
@@ -77,6 +82,12 @@ impl TableBuilder {
             point: Some(PointBuilder::legacy()),
             ..Self::default()
         }
+    }
+
+    /// Select revision-1 binary fuse filters for new SSTs (footer 5/6).
+    pub fn with_filter(mut self, binary_fuse: bool) -> Self {
+        self.binary_fuse = binary_fuse;
+        self
     }
 
     /// Bytes written to the output so far, including the open block —
@@ -153,7 +164,11 @@ impl TableBuilder {
                 .set_value_offset(patch, self.out.len() as u64 + value_offset as u64);
         }
         if !self.has_last || key != self.last_key.as_slice() {
-            self.key_hashes.push(crate::bloom::fnv1a_64(key));
+            self.key_hashes.push(if self.binary_fuse {
+                crate::xxh3::hash(key)
+            } else {
+                crate::bloom::fnv1a_64(key)
+            });
         }
 
         self.last_key.clear();
@@ -215,9 +230,35 @@ impl TableBuilder {
             self.out.extend_from_slice(&point.finish()?);
         }
         let point_len = self.out.len() as u64 - point_offset;
-        let filter = BloomFilter::build_hashes(&self.key_hashes);
-        let mut filter_bytes = filter.encode();
-        filter_bytes.push(BLOCK_TYPE_NONE);
+        let mut filter_bytes = if self.binary_fuse {
+            let filter = SstFilter::build(&mut self.key_hashes);
+            let encoded = filter.encode();
+            let decoded = SstFilter::decode(&encoded).ok_or_else(|| {
+                SstError::InvalidArgument("constructed filter failed decoding".into())
+            })?;
+            // Verify the persisted representation from source keys before atomic
+            // publication, in release too. Includes tombstones and all versions.
+            for entry in &self.index {
+                let start = entry.offset as usize;
+                let block =
+                    VerifiedBlock::from_raw(self.out[start..start + entry.len as usize].to_vec())?;
+                for entry in block.iter() {
+                    if !decoded.may_contain(&entry?.2) {
+                        return Err(SstError::InvalidArgument(
+                            "constructed filter rejected a source key".into(),
+                        ));
+                    }
+                }
+            }
+            encoded
+        } else {
+            BloomFilter::build_hashes(&self.key_hashes).encode()
+        };
+        filter_bytes.push(if self.binary_fuse {
+            BLOCK_TYPE_FILTER
+        } else {
+            BLOCK_TYPE_NONE
+        });
         let crc = crc32::crc32(&filter_bytes);
         filter_bytes.extend_from_slice(&crc.to_le_bytes());
         let filter_offset = self.out.len() as u64;
@@ -237,10 +278,11 @@ impl TableBuilder {
         }
         self.out.extend_from_slice(&index_offset.to_le_bytes());
         self.out.extend_from_slice(&index_len.to_le_bytes());
-        let version = if has_point {
-            POINT_FORMAT_VERSION
-        } else {
-            FORMAT_VERSION
+        let version = match (self.binary_fuse, has_point) {
+            (false, false) => FORMAT_VERSION,
+            (false, true) => POINT_FORMAT_VERSION,
+            (true, false) => FILTER_FORMAT_VERSION,
+            (true, true) => FILTER_POINT_FORMAT_VERSION,
         };
         self.out.extend_from_slice(&version.to_le_bytes());
         self.out.extend_from_slice(&filter_offset.to_le_bytes());

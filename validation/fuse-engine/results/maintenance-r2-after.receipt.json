@@ -1,0 +1,62 @@
+{
+  "name": "maintenance-r2-after",
+  "code": 0,
+  "command": [
+    "taskset",
+    "-c",
+    "8",
+    "/usr/bin/time",
+    "-v",
+    "-o",
+    "/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/validation/fuse-engine/results/maintenance-r2-after.time.txt",
+    "/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/target/fuse-engine/bin/after-test",
+    "point_index_maintenance_measurement",
+    "--ignored",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "sha256": "b7a81bc3c8dc09976fc42865ac922d07825d4bf6102bcc011150da024e6f5269",
+  "records": [
+    {
+      "type": "maintenance",
+      "trial": 2,
+      "point_index": true,
+      "n": 1000000,
+      "flush_ns": 1855236949,
+      "compaction_build_ns": 975672036,
+      "compaction_commit_ns": 39263630,
+      "input_bytes": 349552144,
+      "output_bytes": 347806315,
+      "output_files": 83,
+      "point_resident_bytes": 189225548,
+      "verified_records": 1000000,
+      "errors": 0
+    },
+    {
+      "type": "maintenance",
+      "trial": 2,
+      "point_index": false,
+      "n": 1000000,
+      "flush_ns": 1060668689,
+      "compaction_build_ns": 699047119,
+      "compaction_commit_ns": 27912110,
+      "input_bytes": 322777528,
+      "output_bytes": 322914294,
+      "output_files": 77,
+      "point_resident_bytes": 0,
+      "verified_records": 1000000,
+      "errors": 0
+    }
+  ],
+  "max_rss_kib": 1019200,
+  "seconds": 7.958548069000244,
+  "start": {
+    "total": 2768831,
+    "idle": 2476070
+  },
+  "end": {
+    "total": 2769640,
+    "idle": 2476772
+  },
+  "cpu9_busy_percent": 13.226205191594564
+}

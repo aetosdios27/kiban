@@ -73,6 +73,10 @@ impl Backend for Embedded {
         Ok(serde_json::from_slice(&value)?)
     }
 
+    fn contains_key(&mut self, key: &[u8]) -> Result<bool> {
+        Ok(self.db.get(key)?.is_some())
+    }
+
     fn recent(&mut self, agent: u32, k: usize) -> Result<Vec<Memory>> {
         let start = format!("agent/{agent:04}/memory/");
         #[cfg(not(feature = "remix"))]

@@ -284,6 +284,7 @@ fn run_seed(seed: u64, mode: EngineMode) -> Result<Vec<DeviceImage>, String> {
         let mut options = super::compaction_tests::tiny_options();
         options.point_index = seed & 1 != 0;
         options.scan_prefix_len = if seed & 3 == 3 { 2 } else { 0 };
+        options.binary_fuse_filter = seed & 4 != 0;
         let mut db = mode
             .open(dir.path(), options.clone())
             .map_err(|e| format!("initial open: {e}"))?;
@@ -366,6 +367,7 @@ fn run_seed(seed: u64, mode: EngineMode) -> Result<Vec<DeviceImage>, String> {
             } else {
                 0
             };
+            options.binary_fuse_filter = !options.binary_fuse_filter;
             db = mode
                 .open(dir.path(), options.clone())
                 .map_err(|e| format!("{context}, crash reopen: {e}"))?;
