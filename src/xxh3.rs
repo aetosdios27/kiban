@@ -1,5 +1,5 @@
 //! Seed-zero, default-secret XXH3-64. Safe scalar port of xxHash v0.8.3,
-//! https://github.com/Cyan4973/xxHash/blob/v0.8.3/xxhash.h
+//! <https://github.com/Cyan4973/xxHash/blob/v0.8.3/xxhash.h>
 //! Copyright (c) 2012-2023 Yann Collet. BSD-2-Clause; see licenses/LICENSE.XXHash.
 //! Hash bytes and wrapping operations are part of SST filter revision 1.
 
