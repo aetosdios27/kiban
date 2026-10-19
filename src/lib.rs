@@ -38,6 +38,7 @@ pub(crate) mod engine_lock;
 pub mod file_cache;
 pub mod frame;
 pub mod governor;
+mod group_commit;
 pub mod limits;
 pub mod manifest;
 pub mod memtable;

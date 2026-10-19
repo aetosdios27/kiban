@@ -16,6 +16,7 @@ use crate::cache::BlockCache;
 use crate::engine_lock::ShardedRwLock;
 use crate::file_cache::TableFileCache;
 use crate::governor;
+use crate::group_commit::{DEFAULT_LIMITS, GroupQueue};
 use crate::manifest::{MANIFEST_NAME, Manifest, ManifestError, TableRef};
 use crate::memtable::{Entry as MemEntry, Memtable};
 use crate::sstable::{Kind, SstError, SstTable, TableBuilder};
@@ -76,6 +77,10 @@ pub const WAL_EXTENSION: &str = "wal";
 #[path = "audit_regression_tests.rs"]
 mod audit_regression_tests;
 
+#[cfg(test)]
+#[path = "group_commit_tests.rs"]
+mod group_commit_tests;
+
 #[derive(Debug)]
 pub enum DbError {
     InvalidArgument(String),
@@ -91,6 +96,24 @@ pub enum DbError {
     /// waiting on it — for backpressure (11.5), waiting for write room
     /// that will now never open up, since nothing is compacting anymore.
     Maintenance(MaintenanceError),
+}
+
+impl DbError {
+    /// An equivalent error for each member of a failed write group.
+    fn duplicate(&self) -> DbError {
+        let io_copy = |e: &io::Error| io::Error::new(e.kind(), e.to_string());
+        match self {
+            DbError::InvalidArgument(m) => DbError::InvalidArgument(m.clone()),
+            DbError::Locked => DbError::Locked,
+            DbError::SequenceExhausted => DbError::SequenceExhausted,
+            DbError::Io(e) => DbError::Io(io_copy(e)),
+            DbError::Corrupt(m) => DbError::Corrupt(m.clone()),
+            DbError::CommitFailed(e) => DbError::CommitFailed(io_copy(e)),
+            DbError::CommitAmbiguous(e) => DbError::CommitAmbiguous(io_copy(e)),
+            DbError::Poisoned(cause) => DbError::Poisoned(cause.clone()),
+            DbError::Maintenance(e) => DbError::Maintenance(e.clone()),
+        }
+    }
 }
 
 impl fmt::Display for DbError {
@@ -692,6 +715,54 @@ impl WriteBatch {
     }
 }
 
+/// One request in a durable write group (`SharedKiban::*_durable`).
+pub(crate) enum DurableOp {
+    Put(Vec<u8>, Vec<u8>),
+    Delete(Vec<u8>),
+    Batch(WriteBatch),
+}
+
+impl DurableOp {
+    fn sequence_count(&self) -> u64 {
+        match self {
+            Self::Put(..) | Self::Delete(_) => 1,
+            Self::Batch(batch) => batch.ops.len() as u64,
+        }
+    }
+
+    /// Approximate WAL payload bytes, used only to bound group size.
+    fn weight(&self) -> usize {
+        match self {
+            Self::Put(key, value) => key.len() + value.len() + 32,
+            Self::Delete(key) => key.len() + 32,
+            Self::Batch(batch) => {
+                batch
+                    .ops
+                    .iter()
+                    .map(|(_, key, value)| key.len() + value.len() + 16)
+                    .sum::<usize>()
+                    + 32
+            }
+        }
+    }
+}
+
+/// Test-only instants inside one group commit, where a model can pause a
+/// leader or capture the simulated device (a crash at that exact point).
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum GroupStage {
+    BeforeAppend,
+    AfterAppend,
+    AfterSync,
+    /// Request `n` was applied to the memtables; later ones were not.
+    Applied(usize),
+    Published,
+}
+
+#[cfg(test)]
+type GroupHook = StdArc<dyn Fn(GroupStage, &[DurableOp]) + Send + Sync>;
+
 /// The one frozen memtable phase 11.8 allows: not yet an SST, but its
 /// WAL number stays MANIFEST-live (and its file undeleted) until the
 /// flush that supersedes it with an SST commits. `memtable` is shared
@@ -719,6 +790,8 @@ pub struct Kiban {
     ownership: StdArc<crate::ownership::Ownership>,
     #[cfg(test)]
     batch_checkpoint: StdArc<ReadCheckpoint>,
+    #[cfg(test)]
+    group_hook: Mutex<Option<GroupHook>>,
     dir: PathBuf,
     options: KibanOptions,
     cache: StdArc<BlockCache>,
@@ -1149,6 +1222,8 @@ impl Kiban {
             ownership,
             #[cfg(test)]
             batch_checkpoint: StdArc::new(ReadCheckpoint::default()),
+            #[cfg(test)]
+            group_hook: Mutex::new(None),
             dir,
             options,
             cache,
@@ -1269,6 +1344,14 @@ impl Kiban {
         match &self.poisoned {
             Some(cause) => Err(DbError::Poisoned(cause.clone())),
             None => Ok(()),
+        }
+    }
+
+    #[cfg(test)]
+    fn group_hook(&self, stage: GroupStage, ops: &[DurableOp]) {
+        let hook = self.group_hook.lock().unwrap().clone();
+        if let Some(hook) = hook {
+            hook(stage, ops);
         }
     }
 
@@ -1407,10 +1490,114 @@ impl Kiban {
         Ok(())
     }
 
+    /// Group commit: appends every request to the WAL, issues ONE sync
+    /// covering all live generations, and only then publishes the requests
+    /// to the memtables in order. Nothing is visible or acknowledged before
+    /// the sync succeeds. Per-request outcomes are returned in request
+    /// order; a WAL append or sync failure poisons the engine and returns an
+    /// error covering the whole group (no request was published).
+    ///
+    /// Sequence numbers are assigned in request order from `last_sequence`,
+    /// which advances only after publication, so a failed group leaves the
+    /// in-memory sequence untouched. A request whose interval would overflow
+    /// fails alone with `SequenceExhausted`.
+    fn commit_group(&mut self, ops: &[DurableOp]) -> Result<Vec<Result<(), DbError>>, DbError> {
+        self.check_poisoned()?;
+        #[cfg(test)]
+        self.group_hook(GroupStage::BeforeAppend, ops);
+        let mut outcomes: Vec<Result<(), DbError>> = Vec::with_capacity(ops.len());
+        let mut firsts: Vec<Option<u64>> = Vec::with_capacity(ops.len());
+        let mut last = self.last_sequence;
+        for op in ops {
+            let count = op.sequence_count();
+            let interval = last
+                .checked_add(1)
+                .zip(last.checked_add(count))
+                .filter(|_| count > 0);
+            let Some((first, end)) = interval else {
+                outcomes.push(if count == 0 {
+                    Ok(())
+                } else {
+                    Err(DbError::SequenceExhausted)
+                });
+                firsts.push(None);
+                continue;
+            };
+            let appended = match op {
+                DurableOp::Put(key, value) => self.wal.put(first, key, value),
+                DurableOp::Delete(key) => self.wal.delete(first, key),
+                DurableOp::Batch(batch) => self.wal.append_batch(first, &batch.ops),
+            };
+            if let Err(e) = appended {
+                // A torn frame would hide later synced records at recovery.
+                self.poison(PoisonCause::WalAppendFailed(e.to_string()));
+                return Err(DbError::Poisoned(self.poisoned.clone().unwrap()));
+            }
+            last = end;
+            outcomes.push(Ok(()));
+            firsts.push(Some(first));
+        }
+        #[cfg(test)]
+        self.group_hook(GroupStage::AfterAppend, ops);
+        self.sync_wals()?;
+        #[cfg(test)]
+        self.group_hook(GroupStage::AfterSync, ops);
+        // One mirror guard for the whole group: a reader sees none of it or
+        // all of it, and a batch is never visible as a prefix.
+        let mut mirror = measured!(MemtableWrite, self.shared_memtable.write())
+            .expect("shared memtable poisoned");
+        #[cfg(test)]
+        let mut applied = 0;
+        for (op, first) in ops.iter().zip(&firsts) {
+            let Some(first) = *first else { continue };
+            match op {
+                DurableOp::Put(key, value) => {
+                    self.memtable.put(key, value, first);
+                    mirror.put(key, value, first);
+                }
+                DurableOp::Delete(key) => {
+                    self.memtable.delete(key, first);
+                    mirror.delete(key, first);
+                }
+                DurableOp::Batch(batch) => {
+                    for (i, (kind, key, value)) in batch.ops.iter().enumerate() {
+                        let seq = first + i as u64;
+                        match kind {
+                            Kind::Put => {
+                                self.memtable.put(key, value, seq);
+                                mirror.put(key, value, seq);
+                            }
+                            Kind::Tombstone => {
+                                self.memtable.delete(key, seq);
+                                mirror.delete(key, seq);
+                            }
+                        }
+                    }
+                }
+            }
+            #[cfg(test)]
+            {
+                applied += 1;
+                self.group_hook(GroupStage::Applied(applied - 1), ops);
+            }
+        }
+        self.last_sequence = last;
+        drop(mirror);
+        #[cfg(test)]
+        self.group_hook(GroupStage::Published, ops);
+        Ok(outcomes)
+    }
+
     /// Makes every accepted mutation durable, including the frozen WAL
     /// generation until its SST has been durably installed in the MANIFEST.
     pub fn sync(&mut self) -> Result<(), DbError> {
         self.check_poisoned()?;
+        self.sync_wals()
+    }
+
+    /// The one WAL durability barrier: every live generation, poisoning on
+    /// failure. Shared by `sync` and group commit.
+    fn sync_wals(&mut self) -> Result<(), DbError> {
         let result = self
             .immutable
             .as_mut()
@@ -5057,6 +5244,8 @@ pub struct SharedKiban {
     /// without going through `inner`.
     read_amp: StdArc<ReadAmpCounters>,
     maintenance: std::sync::Arc<Maintenance>,
+    /// Leader/follower queue shared by every clone; see `*_durable`.
+    group: StdArc<GroupQueue<DurableOp, Result<(), DbError>>>,
     #[cfg(test)]
     read_checkpoint: StdArc<ReadCheckpoint>,
 }
@@ -5130,6 +5319,7 @@ impl Clone for SharedKiban {
             read_view: self.read_view.clone(),
             read_amp: self.read_amp.clone(),
             maintenance: self.maintenance.clone(),
+            group: self.group.clone(),
             #[cfg(test)]
             read_checkpoint: self.read_checkpoint.clone(),
         }
@@ -5434,6 +5624,7 @@ impl SharedKiban {
             read_view,
             read_amp,
             maintenance,
+            group: StdArc::new(GroupQueue::new(DEFAULT_LIMITS)),
             #[cfg(test)]
             read_checkpoint: StdArc::new(ReadCheckpoint::default()),
         })
@@ -5687,6 +5878,74 @@ impl SharedKiban {
         crate::limits::mutation(key.as_ref(), b"")
             .map_err(|e| DbError::InvalidArgument(e.to_string()))?;
         self.mutate_with_write_room(|guard| guard.delete(key))
+    }
+
+    /// Durable `put`: returns only after the write is synced to the WAL, as
+    /// if `put` then `sync` ran, but concurrent callers share one sync.
+    ///
+    /// Callers queue; one becomes leader, appends every queued record, issues
+    /// a single fdatasync, then publishes the writes in queue order and wakes
+    /// the others. A lone caller leads its own group immediately. If the sync
+    /// fails every caller in the group gets the error, the engine poisons,
+    /// and no write of the group is visible. A durable write also makes all
+    /// earlier non-durable writes durable, as `sync` does.
+    pub fn put_durable(
+        &self,
+        key: impl AsRef<[u8]>,
+        value: impl AsRef<[u8]>,
+    ) -> Result<(), DbError> {
+        let (key, value) = (key.as_ref(), value.as_ref());
+        crate::limits::mutation(key, value).map_err(|e| DbError::InvalidArgument(e.to_string()))?;
+        self.commit_durable(DurableOp::Put(key.to_vec(), value.to_vec()))
+    }
+
+    /// Durable `delete`; see [`SharedKiban::put_durable`].
+    pub fn delete_durable(&self, key: impl AsRef<[u8]>) -> Result<(), DbError> {
+        let key = key.as_ref();
+        crate::limits::mutation(key, b"").map_err(|e| DbError::InvalidArgument(e.to_string()))?;
+        self.commit_durable(DurableOp::Delete(key.to_vec()))
+    }
+
+    /// Durable atomic batch; see [`SharedKiban::put_durable`]. The batch stays
+    /// one WAL record and is published atomically.
+    pub fn write_durable(&self, batch: WriteBatch) -> Result<(), DbError> {
+        crate::limits::batch(&batch.ops).map_err(|e| DbError::InvalidArgument(e.to_string()))?;
+        self.commit_durable(DurableOp::Batch(batch))
+    }
+
+    fn commit_durable(&self, op: DurableOp) -> Result<(), DbError> {
+        let weight = op.weight();
+        self.group.submit(
+            op,
+            weight,
+            |ops| self.lead_group(ops),
+            || Err(DbError::Corrupt("group commit leader panicked".to_string())),
+        )
+    }
+
+    /// Runs one group as leader under the same write-room rules as `put`.
+    fn lead_group(&self, ops: &[DurableOp]) -> Vec<Result<(), DbError>> {
+        let mut committed = None;
+        let status = self.mutate_with_write_room(|guard| {
+            committed = Some(guard.commit_group(ops)?);
+            Ok(())
+        });
+        match (status, committed) {
+            (Ok(()), Some(outcomes)) => outcomes,
+            // Durable and published, but the post-write freeze failed: report
+            // it to every writer, as a failing `put` would.
+            (Err(e), Some(outcomes)) => outcomes
+                .into_iter()
+                .map(|outcome| outcome.and_then(|()| Err(e.duplicate())))
+                .collect(),
+            (Ok(()), None) => unreachable!("room granted without running the commit"),
+            (Err(e), None) => ops.iter().map(|_| Err(e.duplicate())).collect(),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_group_hook(&self, hook: Option<GroupHook>) {
+        *self.write_lock().unwrap().group_hook.lock().unwrap() = hook;
     }
 
     /// Whether the shared engine is poisoned.
