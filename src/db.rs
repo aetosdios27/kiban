@@ -627,6 +627,29 @@ impl Default for KibanOptions {
 }
 
 impl KibanOptions {
+    /// Read-optimized profile for agent-memory style workloads: many small
+    /// records whose keys start with a fixed-length agent prefix, read by id
+    /// or as "the latest N for one agent".
+    ///
+    /// Enables the per-SST perfect-hash point index and the scan extension
+    /// keyed on the first `agent_prefix_len` key bytes (1..=24, checked at
+    /// open). This is the configuration measured in the head-to-head reports
+    /// against LMDB, SQLite and RocksDB (default RAM-sized cache,
+    /// `mmap_max_level` unset). Costs: about 9% more SST bytes and slower
+    /// flush/compaction builds; see `validation/pointindex-cost`.
+    ///
+    /// Not included, because each trades something the workload decides:
+    /// `mmap_max_level` (helps caches much smaller than the data, worsens
+    /// cold-read tails) and `binary_fuse_filter` (faster misses, slower hits
+    /// while a point index is also resident).
+    pub fn agent_memory(agent_prefix_len: usize) -> Self {
+        Self {
+            point_index: true,
+            scan_prefix_len: agent_prefix_len,
+            ..Self::default()
+        }
+    }
+
     /// Rejects configurations backpressure (11.5) or the file-cache
     /// bound (11.6) cannot reason about.
     fn validate(&self) -> Result<(), DbError> {

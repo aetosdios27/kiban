@@ -923,3 +923,52 @@ fn ph3_value_crc_and_scan_extension_together_match_model_and_detect_corruption()
         );
     }
 }
+
+#[test]
+fn agent_memory_profile_enables_point_index_and_prefix_scans_only() {
+    let profile = KibanOptions::agent_memory(4);
+    assert!(profile.point_index);
+    assert_eq!(profile.scan_prefix_len, 4);
+    let base = KibanOptions::default();
+    assert_eq!(profile.mmap_max_level, base.mmap_max_level);
+    assert_eq!(profile.binary_fuse_filter, base.binary_fuse_filter);
+    assert_eq!(profile.block_cache_bytes, base.block_cache_bytes);
+
+    let dir = TempDir::new("agent-memory-profile");
+    let mut db = Kiban::open_with_options(
+        dir.path(),
+        KibanOptions {
+            target_file_size: 16 * 1024,
+            ..KibanOptions::agent_memory(4)
+        },
+    )
+    .unwrap();
+    for agent in 0..3u8 {
+        for seq in 0..40u8 {
+            let mut key = vec![b'a', b'g', b'0' + agent, b'_'];
+            key.push(255 - seq);
+            db.put(key, vec![agent, seq]).unwrap();
+        }
+    }
+    db.flush_without_compaction().unwrap();
+    let latest = db
+        .prefix_values(b"ag1_", 5, |v| Ok::<_, DbError>(v.to_vec()))
+        .unwrap();
+    // Keys sort by descending sequence, so the newest five come first.
+    assert_eq!(
+        latest,
+        (35..40u8).rev().map(|s| vec![1, s]).collect::<Vec<_>>()
+    );
+    assert_eq!(db.get(b"ag2_\xff").unwrap(), Some(vec![2, 0]));
+    assert_eq!(db.get(b"ag9_\xff").unwrap(), None);
+}
+
+#[test]
+fn agent_memory_profile_rejects_an_out_of_range_prefix_length() {
+    for bad in [0usize, 25] {
+        let dir = TempDir::new("agent-memory-bad-prefix");
+        // 0 leaves the scan extension off, which is valid; 25 must be rejected.
+        let result = Kiban::open_with_options(dir.path(), KibanOptions::agent_memory(bad));
+        assert_eq!(result.is_err(), bad == 25, "prefix length {bad}");
+    }
+}
