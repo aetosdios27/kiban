@@ -5753,7 +5753,19 @@ impl SharedKiban {
                 if l0_ok && immutable_ok {
                     let mutate = mutate.take().expect("loop runs the mutation at most once");
                     mutate(&mut guard)?;
-                    let froze = guard.maybe_freeze()?;
+                    // The mutation is applied (and, for a durable group,
+                    // synced), so a failed freeze must not turn it into an
+                    // error: a retry would write it twice. The failure is
+                    // sticky instead, and the next write fails fast on it.
+                    let froze = match guard.maybe_freeze() {
+                        Ok(froze) => froze,
+                        Err(e) => {
+                            self.maintenance.fail(format!(
+                                "memtable freeze failed after a committed write: {e}"
+                            ));
+                            false
+                        }
+                    };
                     drop(guard);
                     if froze {
                         self.maintenance.wake();
@@ -5954,13 +5966,7 @@ impl SharedKiban {
             Ok(())
         });
         match (status, committed) {
-            (Ok(()), Some(outcomes)) => outcomes,
-            // Durable and published, but the post-write freeze failed: report
-            // it to every writer, as a failing `put` would.
-            (Err(e), Some(outcomes)) => outcomes
-                .into_iter()
-                .map(|outcome| outcome.and_then(|()| Err(e.duplicate())))
-                .collect(),
+            (_, Some(outcomes)) => outcomes,
             (Ok(()), None) => unreachable!("room granted without running the commit"),
             (Err(e), None) => ops.iter().map(|_| Err(e.duplicate())).collect(),
         }

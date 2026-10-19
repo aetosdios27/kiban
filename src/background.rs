@@ -349,6 +349,17 @@ impl Maintenance {
         self.condvar.notify_all();
     }
 
+    /// Marks maintenance failed from a foreground step (a memtable freeze
+    /// that could not complete). Later writes fail fast with this error.
+    pub(crate) fn fail(&self, msg: String) {
+        {
+            let mut s = self.state.lock().unwrap();
+            s.error.get_or_insert(MaintenanceError(msg));
+            s.progress_epoch += 1;
+        }
+        self.condvar.notify_all();
+    }
+
     /// The most recent background failure, if any. Also detects a
     /// worker thread that exited without being told to (a dead
     /// maintenance thread nobody asked to die is itself a failure).
