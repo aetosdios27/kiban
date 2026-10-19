@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generated_at": "2026-10-19T03:37:23+00:00",
+  "generated_at": "2026-10-19T09:11:23+00:00",
   "engine": {
     "version": "0.1.0",
     "commit": "67ab38d76e1b57013ca07a054015bdf7254755ca",
@@ -253,10 +253,11 @@
     "lib_tests": 403,
     "crash_seeds_per_pr": 128,
     "crashes_per_seed": 4,
-    "nightly_seeds_total": 1600000,
+    "nightly_seeds_total": 2400000,
     "nightly_run_ids": [
       "39015322052",
-      "39110250327"
+      "39110250327",
+      "39226971031"
     ]
   },
   "examples": {
