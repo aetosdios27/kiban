@@ -162,7 +162,10 @@ fn open_lmdb(path: &Path) -> Result<LmdbEngine> {
         .open_database(&txn, Some("memories"))?
         .ok_or("missing LMDB database")?;
     drop(txn);
-    Ok(LmdbEngine { env: Some(env), records })
+    Ok(LmdbEngine {
+        env: Some(env),
+        records,
+    })
 }
 
 fn prepare_lmdb(path: &Path, n: u64) -> Result<()> {
