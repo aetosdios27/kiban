@@ -4,6 +4,13 @@
 
 - `KibanOptions::agent_memory(prefix_len)`: one-call profile enabling the point index and
   prefix scan extension for agent-memory workloads.
+- Group commit hardening: a memtable freeze that fails after a group has committed no
+  longer reports an error for writes that are already durable and visible. The group is
+  acknowledged and the failure becomes the sticky maintenance error, so the next write
+  fails fast instead of a retry writing twice. Leadership hand-off and follower delivery
+  are panic-safe: followers that were not yet delivered are failed instead of left
+  waiting. New tests cover a failing WAL append, same-key arrival order within a group,
+  failed-sync sequence handling, and a panic between hand-off and delivery.
 - Atomic shared batch visibility and lifetime-held database ownership locks.
 - Checksummed, versioned MANIFEST envelope with legacy decoding; strict recovery
   identity/range checks and bounded, checked batch/SST/frame decoding.

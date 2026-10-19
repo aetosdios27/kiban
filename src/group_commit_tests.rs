@@ -761,3 +761,203 @@ fn group_commit_crash_long() {
     }
     eprintln!("checked {count} group-commit crash seeds from {start}");
 }
+
+// ------------------------------------------------- failure-path coverage
+
+/// Q1/Q2: a failed fdatasync after the frames were appended must not advance
+/// `last_sequence`, must not publish, and must poison. The appended frames may
+/// still replay on a process-level reopen (unacknowledged-but-survived).
+#[test]
+fn failed_group_sync_leaves_sequence_unadvanced_and_unacked_frames_may_replay() {
+    let dir = TempDir::new("gc-scratch-q1");
+    let db = SharedKiban::open_with_options(dir.path(), tiny()).unwrap();
+    db.put_durable(b"base", b"1").unwrap();
+    let before = db.write_lock().unwrap().last_sequence_for_test();
+    assert_eq!(before, 1);
+
+    // Op 0 is the BufWriter flush of the appended frames, op 1 the fdatasync.
+    sys::install_fault(1);
+    let failed = db.put_durable(b"unacked", b"v");
+    sys::clear_fault();
+    match &failed {
+        Err(DbError::Poisoned(PoisonCause::WalSyncFailed(_))) => {}
+        other => panic!("expected WalSyncFailed poison, got {other:?}"),
+    }
+    assert_eq!(
+        db.write_lock().unwrap().last_sequence_for_test(),
+        before,
+        "last_sequence must not advance for a failed group"
+    );
+    assert_eq!(db.get(b"unacked").unwrap(), None, "not published");
+    assert!(db.is_poisoned());
+    assert!(matches!(
+        db.put_durable(b"after", b"x"),
+        Err(DbError::Poisoned(_))
+    ));
+    drop(db);
+
+    // Frames were flushed to the OS before the failed fdatasync; a reopen in
+    // the same process replays them, which is the "not acknowledged, may
+    // survive" branch of the contract.
+    let mut reopened = Kiban::open_with_options(dir.path(), tiny()).unwrap();
+    eprintln!(
+        "reopened: last_sequence={} unacked={:?}",
+        reopened.last_sequence_for_test(),
+        reopened.get(b"unacked").unwrap()
+    );
+    let survived = reopened.get(b"unacked").unwrap();
+    assert!(matches!(survived.as_deref(), None | Some(b"v")));
+    if survived.is_some() {
+        assert!(
+            reopened.last_sequence_for_test() >= 2,
+            "recovery advanced past the appended frame"
+        );
+    }
+    let ls = reopened.last_sequence_for_test();
+    reopened.put(b"next", b"x").unwrap();
+    assert_eq!(
+        reopened.last_sequence_for_test(),
+        ls + 1,
+        "no sequence reuse after surviving frames"
+    );
+}
+
+/// Q1 (truncated branch): if the unacknowledged frames do not survive, their
+/// sequence numbers are reused by later writes. That is safe because the
+/// records are gone from disk and memory, and recovery never reuses the
+/// surviving prefix's numbers.
+#[test]
+fn lost_unacked_tail_after_failed_sync_frees_its_sequence_numbers() {
+    let dir = TempDir::new("gc-scratch-q1b");
+    let wal_path = dir.path().join("1.wal");
+    let db = SharedKiban::open_with_options(dir.path(), tiny()).unwrap();
+    db.put_durable(b"base", b"1").unwrap();
+    let synced_len = std::fs::metadata(&wal_path).unwrap().len();
+
+    sys::install_fault(1);
+    let _ = db.put_durable(b"gone", b"v");
+    sys::clear_fault();
+    drop(db);
+
+    // Simulate a torn/lost tail exactly as recovery would leave it.
+    let f = std::fs::OpenOptions::new()
+        .write(true)
+        .open(&wal_path)
+        .unwrap();
+    f.set_len(synced_len).unwrap();
+    f.sync_all().unwrap();
+    drop(f);
+
+    let mut reopened = Kiban::open_with_options(dir.path(), tiny()).unwrap();
+    assert_eq!(reopened.last_sequence_for_test(), 1);
+    assert_eq!(reopened.get(b"gone").unwrap(), None);
+    reopened.put(b"next", b"v").unwrap();
+    assert_eq!(
+        reopened.last_sequence_for_test(),
+        2,
+        "2 is reused only after it was lost"
+    );
+}
+
+/// Q6/M3 probe: a genuine WAL *append* failure (large record forces a write
+/// syscall inside `wal.put`, not inside sync) must poison. The existing
+/// `failed_group_sync_*` sweep only ever faults the sync phases, so this
+/// branch of `commit_group` is otherwise untested.
+#[test]
+fn failed_group_append_poisons_and_publishes_nothing() {
+    let dir = TempDir::new("gc-scratch-appendfail");
+    let db = SharedKiban::open_with_options(dir.path(), tiny()).unwrap();
+    let big = vec![7u8; 32 * 1024];
+    sys::install_fault(0); // the append's direct write syscall
+    let result = db.put_durable(b"big", &big);
+    sys::clear_fault();
+    eprintln!(
+        "append-failure result: {result:?}; poisoned={}",
+        db.is_poisoned()
+    );
+    assert!(db.is_poisoned(), "append failure must poison the engine");
+    assert!(matches!(result, Err(DbError::Poisoned(_))));
+    assert_eq!(db.get(b"big").unwrap(), None);
+}
+
+/// Q6/M5 probe: two requests in one group touching the same key must be
+/// published in arrival order (later request wins). No existing test builds a
+/// group with a repeated key, so a reversed publication loop goes unnoticed.
+#[test]
+fn group_publishes_same_key_requests_in_arrival_order() {
+    let dir = TempDir::new("gc-scratch-order");
+    let _device = DeviceGuard::new();
+    let db = SharedKiban::open_with_options(dir.path(), tiny()).unwrap();
+    // Group 0 (writer A, alone) blocks until two followers queue; A then
+    // finishes, B is promoted and takes group 1 containing B and C.
+    let entered = gather_hook(&db, 2, |_, _, _| {});
+    let device = sys::device_handle();
+    thread::scope(|scope| {
+        let (db_ref, device_a) = (&db, device.clone());
+        let a = scope.spawn(move || {
+            device_a.adopt();
+            db_ref.put_durable(b"a", b"A")
+        });
+        while !entered.load(Ordering::SeqCst) {
+            thread::yield_now();
+        }
+        let b = {
+            let (db_ref, device) = (&db, device.clone());
+            scope.spawn(move || {
+                device.adopt();
+                db_ref.put_durable(b"k", b"B")
+            })
+        };
+        while db.group.queued() < 1 {
+            thread::yield_now();
+        }
+        let c = {
+            let (db_ref, device) = (&db, device.clone());
+            scope.spawn(move || {
+                device.adopt();
+                db_ref.put_durable(b"k", b"C")
+            })
+        };
+        a.join().unwrap().unwrap();
+        b.join().unwrap().unwrap();
+        c.join().unwrap().unwrap();
+    });
+    db.set_group_hook(None);
+    assert_eq!(
+        db.get(b"k").unwrap(),
+        Some(b"C".to_vec()),
+        "the later request in the group must win"
+    );
+}
+
+/// A freeze failure after a group committed and synced must acknowledge the
+/// group (its writes are durable and visible, so an error would invite a
+/// duplicate retry) and fail later writes through the sticky maintenance
+/// error instead, without poisoning.
+#[test]
+fn freeze_failure_after_a_committed_group_acknowledges_and_fails_later_writes() {
+    let dir = TempDir::new("gc-freeze-fail");
+    let mut opts = tiny();
+    opts.write_buffer_bytes = 1;
+    let db = SharedKiban::open_with_options(dir.path(), opts).unwrap();
+
+    // Fresh db, one put: op 0 = WAL flush, op 1 = group fdatasync,
+    // op 2 = freeze's own (redundant) fdatasync, op 3 = new WAL's create_new.
+    sys::install_fault(3);
+    let result = db.put_durable(b"k", b"v");
+    sys::clear_fault();
+    result.expect("the group committed, so it is acknowledged");
+    assert!(
+        !db.is_poisoned(),
+        "freeze failure before the commit point must not poison"
+    );
+    assert_eq!(db.get(b"k").unwrap(), Some(b"v".to_vec()));
+    assert_eq!(db.write_lock().unwrap().last_sequence_for_test(), 1);
+    // The failure is sticky: the next write fails fast and is not applied.
+    assert!(matches!(
+        db.put_durable(b"k2", b"v2"),
+        Err(DbError::Maintenance(_))
+    ));
+    assert_eq!(db.get(b"k2").unwrap(), None);
+    assert_eq!(db.write_lock().unwrap().last_sequence_for_test(), 1);
+}

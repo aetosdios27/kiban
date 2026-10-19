@@ -144,7 +144,8 @@ impl<Req, Res> GroupQueue<Req, Res> {
             queue: self,
             slots,
             fail: &fail,
-            finished: false,
+            handed_off: false,
+            delivered: 0,
         };
         let mut results = commit(&mut reqs);
         assert_eq!(
@@ -185,24 +186,32 @@ impl<Req, Res> GroupQueue<Req, Res> {
     }
 }
 
-/// Completes a group exactly once, even if `commit` unwinds.
+/// Completes a group exactly once, even if `commit` unwinds, or if anything
+/// unwinds between handing off leadership and delivering the last follower:
+/// `Drop` fails every follower not yet delivered and hands off only if
+/// `finish` had not already.
 struct Leader<'a, Req, Res> {
     queue: &'a GroupQueue<Req, Res>,
     slots: Vec<Arc<Slot<Res>>>,
     fail: &'a dyn Fn() -> Res,
-    finished: bool,
+    handed_off: bool,
+    /// Followers (`slots[1..]`) already given their result.
+    delivered: usize,
 }
 
 impl<Req, Res> Leader<'_, Req, Res> {
     /// Hands off first so the next group's WAL work overlaps waking this
     /// group's followers, then delivers follower results. Returns our own.
     fn finish(&mut self, results: &mut Vec<Res>) -> Res {
-        self.finished = true;
-        self.queue.hand_off();
         let mut results = results.drain(..);
         let own = results.next().expect("leader result");
-        for (slot, result) in self.slots[1..].iter().zip(results) {
-            slot.set(SlotState::Done(result));
+        self.queue.hand_off();
+        self.handed_off = true;
+        #[cfg(all(test, not(feature = "loom")))]
+        tests::panic_after_hand_off_if_requested();
+        for result in results {
+            self.slots[1 + self.delivered].set(SlotState::Done(result));
+            self.delivered += 1;
         }
         own
     }
@@ -210,11 +219,10 @@ impl<Req, Res> Leader<'_, Req, Res> {
 
 impl<Req, Res> Drop for Leader<'_, Req, Res> {
     fn drop(&mut self) {
-        if self.finished {
-            return;
+        if !self.handed_off {
+            self.queue.hand_off();
         }
-        self.queue.hand_off();
-        for slot in &self.slots[1..] {
+        for slot in &self.slots[1 + self.delivered..] {
             slot.set(SlotState::Done((self.fail)()));
         }
     }
@@ -225,6 +233,19 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Barrier, Mutex as StdMutex};
+
+    thread_local! {
+        static PANIC_AFTER_HAND_OFF: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    }
+
+    /// Lets a test unwind inside `Leader::finish` after leadership moved on
+    /// and before any follower was delivered. Per thread: only the leader's
+    /// own commit closure arms it.
+    pub(super) fn panic_after_hand_off_if_requested() {
+        if PANIC_AFTER_HAND_OFF.with(|flag| flag.replace(false)) {
+            panic!("injected panic after hand_off");
+        }
+    }
 
     #[test]
     fn lone_caller_leads_its_own_group_of_one() {
@@ -408,6 +429,62 @@ mod tests {
         let mut outcomes = outcomes.into_inner().unwrap();
         outcomes.sort();
         assert_eq!(outcomes, vec![None, Some(99)]);
+        assert_eq!(queue.submit(3u32, 1, |g| g.to_vec(), || 99), 3);
+    }
+
+    #[test]
+    fn panic_after_hand_off_still_fails_undelivered_followers_and_frees_leadership() {
+        let queue = GroupQueue::new(DEFAULT_LIMITS);
+        let entered = Barrier::new(2);
+        let follower_outcomes = StdMutex::new(Vec::new());
+        let leader_outcome = StdMutex::new(None);
+        std::thread::scope(|scope| {
+            let queue = &queue;
+            let follower_outcomes = &follower_outcomes;
+            let leader_outcome = &leader_outcome;
+            // A holds leadership until B and C queue behind it; B then leads
+            // the group {B, C} and unwinds after handing off, with C
+            // undelivered.
+            scope.spawn(|| {
+                queue.submit(
+                    0u32,
+                    1,
+                    |g| {
+                        entered.wait();
+                        while queue.queued() < 2 {
+                            std::thread::yield_now();
+                        }
+                        g.to_vec()
+                    },
+                    || 99,
+                );
+            });
+            entered.wait();
+            for req in [1u32, 2] {
+                scope.spawn(move || {
+                    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        queue.submit(
+                            req,
+                            1,
+                            |g| {
+                                PANIC_AFTER_HAND_OFF.with(|flag| flag.set(true));
+                                g.to_vec()
+                            },
+                            || 99,
+                        )
+                    }));
+                    match outcome {
+                        Ok(value) => follower_outcomes.lock().unwrap().push(value),
+                        Err(_) => *leader_outcome.lock().unwrap() = Some(req),
+                    }
+                });
+            }
+        });
+        // One of B/C led and panicked; the other was a follower and must have
+        // been failed (99), not left waiting.
+        assert!(leader_outcome.into_inner().unwrap().is_some());
+        assert_eq!(follower_outcomes.into_inner().unwrap(), vec![99]);
+        // Leadership was released: the next caller leads again.
         assert_eq!(queue.submit(3u32, 1, |g| g.to_vec(), || 99), 3);
     }
 }
