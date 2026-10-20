@@ -487,9 +487,12 @@ pub struct KibanOptions {
     /// ancestors). If neither can be read, the default is 32 MiB. An explicit
     /// value, including zero to bypass admission, overrides this calculation.
     pub block_cache_bytes: usize,
-    /// Write optional format-4 per-SST perfect-hash point indexes. Readers
-    /// accept both formats regardless of this switch. Section residency shares
-    /// block_cache_bytes; denied admission falls back to sorted blocks.
+    /// Write format-4 per-SST perfect-hash point indexes (default `true`).
+    /// Readers accept both formats regardless of this switch. Section
+    /// residency shares block_cache_bytes; denied admission falls back to
+    /// sorted blocks. Format-4 tables are unreadable by binaries older than
+    /// the point-index release; set `false` and rewrite before downgrading.
+    /// Costs about 9% more SST bytes and slower flush/compaction builds.
     pub point_index: bool,
     /// Optional fixed-byte scan extractor (1..=24), built with PH3. Zero
     /// disables the scan extension. Bounds outside one prefix use sorted scans.
@@ -607,7 +610,7 @@ impl Default for KibanOptions {
             level_multiplier: 10,
             target_file_size: 4 * MIB,
             block_cache_bytes: crate::cache_budget::default_block_cache_bytes(),
-            point_index: false,
+            point_index: true,
             scan_prefix_len: 0,
             binary_fuse_filter: false,
             max_open_table_files: 128,
@@ -631,8 +634,8 @@ impl KibanOptions {
     /// records whose keys start with a fixed-length agent prefix, read by id
     /// or as "the latest N for one agent".
     ///
-    /// Enables the per-SST perfect-hash point index and the scan extension
-    /// keyed on the first `agent_prefix_len` key bytes (1..=24, checked at
+    /// Enables the scan extension (which needs the per-SST perfect-hash
+    /// point index, on by default) keyed on the first `agent_prefix_len` key bytes (1..=24, checked at
     /// open). This is the configuration measured in the head-to-head reports
     /// against LMDB, SQLite and RocksDB (default RAM-sized cache,
     /// `mmap_max_level` unset). Costs: about 9% more SST bytes and slower

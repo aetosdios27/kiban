@@ -99,14 +99,15 @@ can be read, the fallback is 32 MiB. This is a per-database budget; opening
 several databases multiplies it. Set `block_cache_bytes` explicitly to override
 it, including zero to disable block admission.
 
-`KibanOptions::point_index` is opt-in (`false` by default). It writes compact
+`KibanOptions::point_index` is on by default; set it to `false` to write plain
+sorted-block tables. It writes compact
 `KIBANPH3` sections with per-version value checksums in format-4 SSTs. Readers
 also accept PH2, flag-zero PH3, and format-3 tables. When the dataset exceeds the
 cache budget, resident locators can fetch and verify exact values through pread
 or the existing `mmap_max_level` option. Locator and full-data residency share
-the block-cache budget. Denied admission uses verified sorted blocks. Older
-engines may reject the new section feature; rewrite with the option off before
-downgrading. See the [encoding](validation/pointindex-cost/DESIGN.md) and
+the block-cache budget. Denied admission uses verified sorted blocks. Binaries
+older than the point-index release reject format-4 tables; set the option to
+`false` and rewrite (compaction or backup) before downgrading. See the [encoding](validation/pointindex-cost/DESIGN.md) and
 [small-cache validation](validation/smallcache/REPORT.md).
 
 ## Checkpoints, backups and inspection

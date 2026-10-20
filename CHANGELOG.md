@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Behavior change:** `KibanOptions::point_index` now defaults to `true`. New SSTs carry
+  the perfect-hash point index (format 4) and cached point reads are faster than LMDB.
+  Costs, measured in `validation/pointindex-cost`: flush builds about 1.36x and
+  compaction builds about 1.26x slower, about 9% more SST bytes, and index memory shared
+  with `block_cache_bytes`. Existing databases keep working (readers accept both formats;
+  tables are rewritten as compaction touches them). **Format-4 SSTs cannot be read by
+  binaries older than the point-index release**: set `point_index: false` and rewrite
+  (compact or backup) before downgrading. Validated by the crash-simulation suites at
+  20k seeds on this change and a 9M-seed-per-suite sweep on the preceding commit
+  (180 of 200 chunks, 0 failures; 20 chunks were interrupted by a system suspend).
 - `KibanOptions::agent_memory(prefix_len)`: one-call profile enabling the point index and
   prefix scan extension for agent-memory workloads.
 - Group commit hardening: a memtable freeze that fails after a group has committed no
