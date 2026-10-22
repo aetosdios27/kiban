@@ -572,3 +572,135 @@ mod loom_tests {
         );
     }
 }
+
+#[cfg(all(test, not(feature = "loom")))]
+mod qa_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    #[test]
+    fn qa_finish_delivers_each_slot_once_without_synthesizing_failures() {
+        let queue = GroupQueue::<u32, u32>::new(DEFAULT_LIMITS);
+        let own = Arc::new(Slot::new());
+        let follower = Arc::new(Slot::new());
+        let failures = AtomicUsize::new(0);
+        let fail = || {
+            failures.fetch_add(1, Ordering::SeqCst);
+            99
+        };
+        let mut leader = Leader {
+            queue: &queue,
+            slots: vec![own, follower.clone()],
+            fail: &fail,
+            handed_off: false,
+            delivered: 0,
+        };
+        assert_eq!(leader.finish(&mut vec![10, 20]), 10);
+        drop(leader);
+        // Inspect rather than wait, so a lost result fails immediately.
+        assert!(matches!(
+            *relock(follower.state.lock()),
+            SlotState::Done(20)
+        ));
+        assert_eq!(
+            failures.load(Ordering::SeqCst),
+            0,
+            "healthy completion must not produce a second failure result"
+        );
+        assert!(!relock(queue.state.lock()).leader_active);
+    }
+
+    #[test]
+    fn qa_detached_follower_still_completes_and_leadership_remains_available() {
+        let queue = Arc::new(GroupQueue::new(DEFAULT_LIMITS));
+        let (entered_send, entered_recv) = mpsc::channel();
+        let (release_send, release_recv) = mpsc::channel();
+        let (done_send, done_recv) = mpsc::channel();
+        let q = queue.clone();
+        let leader = std::thread::spawn(move || {
+            q.submit(
+                1,
+                1,
+                |g| {
+                    entered_send.send(()).unwrap();
+                    release_recv.recv_timeout(Duration::from_secs(10)).unwrap();
+                    g.to_vec()
+                },
+                || 99,
+            )
+        });
+        entered_recv.recv_timeout(Duration::from_secs(10)).unwrap();
+        let q = queue.clone();
+        let follower = std::thread::spawn(move || {
+            let result = q.submit(2, 1, |g| g.to_vec(), || 99);
+            done_send.send(result).unwrap();
+        });
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while queue.queued() != 1 {
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+        drop(follower); // Detaching a JoinHandle does not cancel a Rust thread.
+        release_send.send(()).unwrap();
+        assert_eq!(leader.join().unwrap(), 1);
+        assert_eq!(done_recv.recv_timeout(Duration::from_secs(10)).unwrap(), 2);
+        assert_eq!(queue.submit(3, 1, |g| g.to_vec(), || 99), 3);
+    }
+}
+
+#[cfg(all(test, feature = "loom"))]
+mod qa_loom_tests {
+    use super::*;
+    use loom::sync::atomic::{AtomicUsize, Ordering};
+    use loom::thread;
+
+    #[test]
+    fn loom_qa_guard_drop_completes_each_follower_and_promotes_only_front() {
+        let mut builder = loom::model::Builder::new();
+        builder.preemption_bound = Some(3);
+        builder.check(|| {
+            let queue = Arc::new(GroupQueue::<u32, u32>::new(DEFAULT_LIMITS));
+            let own = Arc::new(Slot::new());
+            let follower = Arc::new(Slot::new());
+            let next = Arc::new(Slot::new());
+            {
+                let mut state = relock(queue.state.lock());
+                state.leader_active = true;
+                state.queue.push_back(Entry {
+                    req: 3,
+                    bytes: 1,
+                    slot: next.clone(),
+                });
+            }
+            let failures = Arc::new(AtomicUsize::new(0));
+            let (q, f, slot, count) = (queue.clone(), follower.clone(), own, failures.clone());
+            let unwind = thread::spawn(move || {
+                let fail = || {
+                    count.fetch_add(1, Ordering::SeqCst);
+                    99
+                };
+                // Drop is precisely the path used on unwinding a commit.
+                drop(Leader {
+                    queue: &q,
+                    slots: vec![slot, f],
+                    fail: &fail,
+                    handed_off: false,
+                    delivered: 0,
+                });
+            });
+            let f = follower.clone();
+            let waiter = thread::spawn(move || assert!(matches!(f.wait(), SlotState::Done(99))));
+            assert!(matches!(next.wait(), SlotState::Lead));
+            unwind.join().unwrap();
+            waiter.join().unwrap();
+            assert_eq!(failures.load(Ordering::SeqCst), 1);
+            assert!(relock(queue.state.lock()).leader_active);
+            assert_eq!(queue.take_group().0, vec![3]);
+            queue.hand_off();
+            assert!(!relock(queue.state.lock()).leader_active);
+            assert!(matches!(*relock(next.state.lock()), SlotState::Waiting));
+        });
+    }
+}
