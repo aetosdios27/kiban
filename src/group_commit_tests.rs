@@ -439,6 +439,11 @@ fn plan_thread(rng: &mut sys::SplitMix64, thread: usize, count: usize) -> Vec<Th
                         .map(|j| (key(j), Some(value(rng, &format!("b{thread}.{op}.{j}")))))
                         .collect();
                     live.extend(entries.iter().map(|(k, _)| k.clone()));
+                    let mut entries = entries;
+                    let (key, value) = entries[0].clone();
+                    entries.insert(0, (key.clone(), Some(b"overwritten".to_vec())));
+                    entries.insert(1, (key.clone(), None));
+                    entries.push((key, value));
                     ThreadOp::Batch(entries)
                 }
                 _ => {
@@ -498,6 +503,7 @@ impl CrashAt {
 struct Captured {
     device: sys::DeviceSnapshot,
     acked: Vec<usize>,
+    synced: Vec<usize>,
     started: Vec<usize>,
     log: Vec<(usize, usize)>,
     group_len: usize,
@@ -509,6 +515,7 @@ struct Crash {
     groups: AtomicUsize,
     log: StdMutex<Vec<(usize, usize)>>,
     acked: Vec<AtomicUsize>,
+    synced: Vec<AtomicUsize>,
     started: Vec<AtomicUsize>,
     captured: StdMutex<Option<Captured>>,
     biggest_group: AtomicUsize,
@@ -520,12 +527,17 @@ impl Crash {
         if slot.is_some() {
             return;
         }
-        // Acknowledgements first: anything counted here was synced before
+        // Durability counts first: anything counted here was synced before
         // this device copy. Starts last: anything not counted had not begun.
         let acked: Vec<_> = self
             .acked
             .iter()
-            .map(|a| a.load(Ordering::SeqCst))
+            .map(|acked| acked.load(Ordering::SeqCst))
+            .collect();
+        let synced = self
+            .synced
+            .iter()
+            .map(|s| s.load(Ordering::SeqCst))
             .collect();
         let log = self.log.lock().unwrap().clone();
         let device = sys::snapshot_device();
@@ -537,6 +549,7 @@ impl Crash {
         *slot = Some(Captured {
             device,
             acked,
+            synced,
             started,
             log,
             group_len,
@@ -570,6 +583,7 @@ fn run_crash(seed: u64) -> Result<CrashOutcome, String> {
         groups: AtomicUsize::new(0),
         log: StdMutex::new(Vec::new()),
         acked: (0..writers).map(|_| AtomicUsize::new(0)).collect(),
+        synced: (0..writers).map(|_| AtomicUsize::new(0)).collect(),
         started: (0..writers).map(|_| AtomicUsize::new(0)).collect(),
         captured: StdMutex::new(None),
         biggest_group: AtomicUsize::new(0),
@@ -594,6 +608,13 @@ fn run_crash(seed: u64) -> Result<CrashOutcome, String> {
                 GroupStage::AfterAppend => {
                     let mut log = crash.log.lock().unwrap();
                     log.extend(ops.iter().filter_map(first_key).map(tag_of));
+                }
+                GroupStage::AfterSync => {
+                    // Sync is the persistence boundary, even if this leader
+                    // has not published or delivered any acknowledgement yet.
+                    for (t, op) in ops.iter().filter_map(first_key).map(tag_of) {
+                        crash.synced[t].fetch_max(op + 1, Ordering::SeqCst);
+                    }
                 }
                 _ => {}
             }
@@ -674,10 +695,11 @@ fn run_crash(seed: u64) -> Result<CrashOutcome, String> {
                 "thread {t}: recovered state is not any prefix of its operations (torn batch?)"
             ));
         };
-        if p < captured.acked[t] {
+        if p < captured.acked[t].max(captured.synced[t]) {
             return Err(format!(
-                "thread {t}: acknowledged {} operations but only {p} survived\nacked={:?} started={:?} log={:?} group_len={} recovered_keys={:?}\nplan0={:?}",
+                "thread {t}: acknowledged {} and synced {} operations but only {p} survived\nacked={:?} started={:?} log={:?} group_len={} recovered_keys={:?}\nplan0={:?}",
                 captured.acked[t],
+                captured.synced[t],
                 captured.acked,
                 captured.started,
                 captured.log,
@@ -961,3 +983,6 @@ fn freeze_failure_after_a_committed_group_acknowledges_and_fails_later_writes() 
     assert_eq!(db.get(b"k2").unwrap(), None);
     assert_eq!(db.write_lock().unwrap().last_sequence_for_test(), 1);
 }
+
+#[path = "group_commit_qa_tests.rs"]
+mod qa_tests;
