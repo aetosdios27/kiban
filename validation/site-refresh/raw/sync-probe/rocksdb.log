@@ -1,0 +1,12 @@
+{"backend":"rocksdb","binary_fuse_filter":false,"cache_bytes":449030336,"durable":true,"point_index":false,"type":"requested_config"}
+{"backend":"rocksdb","cache_bytes":449030336,"crate":"0.25.0","prefix_bytes":11,"state":{"live_files":[{"deletions":0,"entries":10000,"level":6,"name":"/000008.sst","size":3160878}],"rocksdb.block-cache-capacity":449030336,"rocksdb.block-cache-usage":87,"rocksdb.compaction-pending":0,"rocksdb.cur-size-all-mem-tables":2048,"rocksdb.estimate-pending-compaction-bytes":0,"rocksdb.mem-table-flush-pending":0,"rocksdb.num-running-compactions":0,"rocksdb.num-running-flushes":0},"sync":true,"tuning":{"block_size":16384,"disable_wal":false,"lz4":false,"mmap":false,"ribbon":true,"row_cache":false,"total_order":true},"type":"backend_config","version":"11.8.1"}
+rocksdb: remember 1000 verified calls
+rocksdb: recall-by-id 1000 verified calls
+rocksdb: recent-for-agent 1000 verified calls
+rocksdb: update 1000 verified calls
+rocksdb: mixed-90-10 1000 verified calls
+{"state":{"live_files":[{"deletions":0,"entries":1952,"level":0,"name":"/000020.sst","size":621482},{"deletions":0,"entries":10000,"level":6,"name":"/000008.sst","size":3160878}],"rocksdb.block-cache-capacity":449030336,"rocksdb.block-cache-usage":3199841,"rocksdb.compaction-pending":0,"rocksdb.cur-size-all-mem-tables":2048,"rocksdb.estimate-pending-compaction-bytes":0,"rocksdb.mem-table-flush-pending":0,"rocksdb.num-running-compactions":0,"rocksdb.num-running-flushes":0},"type":"rocksdb_settled"}
+{"backend":"rocksdb","binary_fuse_filter":false,"cache_bytes":449030336,"durable":true,"point_index":false,"type":"requested_config"}
+{"backend":"rocksdb","cache_bytes":449030336,"crate":"0.25.0","prefix_bytes":11,"state":{"live_files":[{"deletions":0,"entries":1952,"level":0,"name":"/000020.sst","size":621482},{"deletions":0,"entries":10000,"level":6,"name":"/000008.sst","size":3160878}],"rocksdb.block-cache-capacity":449030336,"rocksdb.block-cache-usage":4079,"rocksdb.compaction-pending":0,"rocksdb.cur-size-all-mem-tables":2048,"rocksdb.estimate-pending-compaction-bytes":0,"rocksdb.mem-table-flush-pending":0,"rocksdb.num-running-compactions":0,"rocksdb.num-running-flushes":0},"sync":true,"tuning":{"block_size":16384,"disable_wal":false,"lz4":false,"mmap":false,"ribbon":true,"row_cache":false,"total_order":true},"type":"backend_config","version":"11.8.1"}
+sync_probe fsync=6 fdatasync=2107 failures=0
+sync_probe fsync=0 fdatasync=0 failures=0

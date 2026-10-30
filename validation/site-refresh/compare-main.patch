@@ -1,0 +1,58 @@
+diff --git a/tools/compare/Cargo.lock b/tools/compare/Cargo.lock
+index 5268e846..e05f4f65 100644
+--- a/tools/compare/Cargo.lock
++++ b/tools/compare/Cargo.lock
+@@ -140,7 +140,6 @@ dependencies = [
+ [[package]]
+ name = "kiban"
+ version = "0.1.0"
+-source = "git+https://github.com/aetosdios27/kiban?rev=76d9d857c61bed3127fa3f7a2136701cd9b49380#76d9d857c61bed3127fa3f7a2136701cd9b49380"
+ 
+ [[package]]
+ name = "kiban-compare"
+diff --git a/tools/compare/Cargo.toml b/tools/compare/Cargo.toml
+index a295ab3d..3895f4f8 100644
+--- a/tools/compare/Cargo.toml
++++ b/tools/compare/Cargo.toml
+@@ -7,7 +7,7 @@ publish = false
+ [workspace]
+ 
+ [dependencies]
+-kiban = { git = "https://github.com/aetosdios27/kiban", rev = "76d9d857c61bed3127fa3f7a2136701cd9b49380" }
++kiban = { path = "../.." }
+ rocksdb = { version = "=0.25.0", default-features = false, features = ["snappy", "bindgen-runtime"] }
+ serde_json = "1"
+ 
+diff --git a/tools/compare/run.py b/tools/compare/run.py
+index 599becf2..1f9c267b 100644
+--- a/tools/compare/run.py
++++ b/tools/compare/run.py
+@@ -101,7 +101,7 @@ def main():
+         p.error('output and database roots must be separate')
+     a.output_root.mkdir(parents=True, exist_ok=False); a.data_root.mkdir(parents=True, exist_ok=True)
+     metadata = {'commit': capture(['git', 'rev-parse', 'HEAD'], repo), 'dirty': capture(['git', 'status', '--porcelain'], repo),
+-        'kiban_commit': '76d9d857c61bed3127fa3f7a2136701cd9b49380', 'plan': plan, 'commands': commands,
++        'kiban_commit': capture(['git', 'rev-parse', 'HEAD'], repo), 'plan': plan, 'commands': commands,
+         'rustc': capture(['rustc', '-Vv'], repo), 'os': capture(['uname', '-a'], repo),
+         'cpu': Path('/proc/cpuinfo').read_text(), 'initial_memory': Path('/proc/meminfo').read_text(),
+         'filesystem': capture(['findmnt', '-J', '-T', str(a.data_root.resolve())], repo),
+diff --git a/tools/compare/src/backend.rs b/tools/compare/src/backend.rs
+index 0b11caa5..100812e9 100644
+--- a/tools/compare/src/backend.rs
++++ b/tools/compare/src/backend.rs
+@@ -109,13 +109,13 @@ impl Engine {
+     }
+     pub fn delete(&self, key: &[u8]) -> io::Result<()> {
+         match self {
+-            Self::Kiban(db, ..) => db.delete(key),
++            Self::Kiban(db, ..) => db.delete(key).map_err(Into::into),
+             Self::Rocks { db, .. } => db.delete(key).map_err(io::Error::other),
+         }
+     }
+     pub fn sync(&self) -> io::Result<()> {
+         match self {
+-            Self::Kiban(db, ..) => db.sync(),
++            Self::Kiban(db, ..) => db.sync().map_err(Into::into),
+             Self::Rocks { db, .. } => db.flush_wal(true).map_err(io::Error::other),
+         }
+     }

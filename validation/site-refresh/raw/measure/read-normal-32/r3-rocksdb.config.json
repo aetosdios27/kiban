@@ -1,0 +1,19 @@
+{
+  "backend": "rocksdb",
+  "n": 1000000,
+  "operations": 100000,
+  "k": 10,
+  "seed": 20261016,
+  "db": "/home/aetos/.local/share/kiban-gates/site-refresh/target/rocksdb/data/1000000-rocksdb-ribbon-16384-none-normal",
+  "output": "/home/aetos/.local/share/kiban-gates/site-refresh/validation/site-refresh/raw/measure/read-normal-32/r3-rocksdb.jsonl",
+  "action": "read",
+  "layout": "normal",
+  "cache_mib": 32,
+  "point_index": false,
+  "durable": false,
+  "rocks": {
+    "block_size": 16384,
+    "ribbon": true,
+    "total_order": true
+  }
+}
