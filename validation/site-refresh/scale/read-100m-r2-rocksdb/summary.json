@@ -3,26 +3,26 @@
     "app_bytes": 0,
     "definitions": "SST bytes exclude WAL/MANIFEST; process write_bytes is Linux task I/O accounting, not device bytes; null means unobserved, not zero.",
     "process_write_amp": null,
-    "process_write_bytes": 552960,
+    "process_write_bytes": 610304,
     "sst_bytes_written": null,
     "sst_write_amp": null
   },
-  "close_s": 0.001163099,
-  "db_bytes": 144438618,
-  "durable_completion_ops_s": 303743.5515283649,
-  "elapsed_s": 329.225081862,
+  "close_s": 0.001026393,
+  "db_bytes": 144438626,
+  "durable_completion_ops_s": 285517.14206318464,
+  "elapsed_s": 350.241657794,
   "engine": "rocksdb",
-  "final_flush_s": 0.000025158,
-  "final_sync_flush_drain_s": 0.001087411,
-  "final_sync_s": 0.00001443,
+  "final_flush_s": 0.000019002,
+  "final_sync_flush_drain_s": 0.000558668,
+  "final_sync_s": 9.93e-6,
   "maintenance_settled": true,
   "max_l0": 1,
   "metrics": {
     "all_latency": {
-      "max_ns": 17781949,
-      "p50_ns": 1952,
-      "p95_ns": 77824,
-      "p999_ns": 172032,
+      "max_ns": 8148131,
+      "p50_ns": 1888,
+      "p95_ns": 83968,
+      "p999_ns": 167936,
       "p99_ns": 106496,
       "samples": 100000000
     },
@@ -30,17 +30,17 @@
     "misses": 0,
     "operations": 100000000,
     "read_latency": {
-      "max_ns": 17781949,
-      "p50_ns": 1952,
-      "p95_ns": 77824,
-      "p999_ns": 172032,
+      "max_ns": 8148131,
+      "p50_ns": 1888,
+      "p95_ns": 83968,
+      "p999_ns": 167936,
       "p99_ns": 106496,
       "samples": 100000000
     },
-    "read_ops_s": 303743.5648415044,
+    "read_ops_s": 285517.1501581246,
     "reads": 100000000,
     "sync_calls": 0,
-    "total_ops_s": 303743.5648415044,
+    "total_ops_s": 285517.1501581246,
     "write_latency": {
       "max_ns": 0,
       "p50_ns": null,
@@ -53,17 +53,17 @@
     "writes": 0
   },
   "peak_sampled_fds": 33,
-  "peak_sampled_rss": 37273600,
+  "peak_sampled_rss": 34914304,
   "profile": "matched",
   "stages": [
     {
-      "elapsed_s": 329.225081862,
+      "elapsed_s": 350.241657794,
       "metrics": {
         "all_latency": {
-          "max_ns": 17781949,
-          "p50_ns": 1952,
-          "p95_ns": 77824,
-          "p999_ns": 172032,
+          "max_ns": 8148131,
+          "p50_ns": 1888,
+          "p95_ns": 83968,
+          "p999_ns": 167936,
           "p99_ns": 106496,
           "samples": 100000000
         },
@@ -71,17 +71,17 @@
         "misses": 0,
         "operations": 100000000,
         "read_latency": {
-          "max_ns": 17781949,
-          "p50_ns": 1952,
-          "p95_ns": 77824,
-          "p999_ns": 172032,
+          "max_ns": 8148131,
+          "p50_ns": 1888,
+          "p95_ns": 83968,
+          "p999_ns": 167936,
           "p99_ns": 106496,
           "samples": 100000000
         },
-        "read_ops_s": 303743.5648415044,
+        "read_ops_s": 285517.1501581246,
         "reads": 100000000,
         "sync_calls": 0,
-        "total_ops_s": 303743.5648415044,
+        "total_ops_s": 285517.1501581246,
         "write_latency": {
           "max_ns": 0,
           "p50_ns": null,
@@ -104,7 +104,7 @@
     }
   ],
   "verification": {
-    "elapsed_s": 0.193008829,
+    "elapsed_s": 0.207287096,
     "enabled": true,
     "kind": "close/reopen/full ordered scan, exact key set, values and selected point reads",
     "verified_keys": 1000000

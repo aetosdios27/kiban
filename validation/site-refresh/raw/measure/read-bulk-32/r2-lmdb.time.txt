@@ -1,18 +1,18 @@
 	Command being timed: "taskset -c 10 /home/aetos/.local/share/kiban-gates/site-refresh/tools/agentbench/readpath/target/release/kiban-readbench /home/aetos/.local/share/kiban-gates/site-refresh/validation/site-refresh/raw/measure/read-bulk-32/r2-lmdb.config.json"
-	User time (seconds): 2.78
-	System time (seconds): 0.02
+	User time (seconds): 2.92
+	System time (seconds): 0.04
 	Percent of CPU this job got: 99%
-	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:02.81
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:02.98
 	Average shared text size (kbytes): 0
 	Average unshared data size (kbytes): 0
 	Average stack size (kbytes): 0
 	Average total size (kbytes): 0
-	Maximum resident set size (kbytes): 859288
+	Maximum resident set size (kbytes): 859196
 	Average resident set size (kbytes): 0
 	Major (requiring I/O) page faults: 0
-	Minor (reclaiming a frame) page faults: 10956
+	Minor (reclaiming a frame) page faults: 14101
 	Voluntary context switches: 3
-	Involuntary context switches: 43
+	Involuntary context switches: 174
 	Swaps: 0
 	File system inputs: 0
 	File system outputs: 24

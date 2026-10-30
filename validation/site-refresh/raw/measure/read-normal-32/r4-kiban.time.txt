@@ -1,18 +1,18 @@
 	Command being timed: "taskset -c 10 /home/aetos/.local/share/kiban-gates/site-refresh/tools/agentbench/readpath/target/release/kiban-readbench /home/aetos/.local/share/kiban-gates/site-refresh/validation/site-refresh/raw/measure/read-normal-32/r4-kiban.config.json"
-	User time (seconds): 3.30
-	System time (seconds): 0.05
+	User time (seconds): 3.49
+	System time (seconds): 0.08
 	Percent of CPU this job got: 99%
-	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:03.38
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:03.60
 	Average shared text size (kbytes): 0
 	Average unshared data size (kbytes): 0
 	Average stack size (kbytes): 0
 	Average total size (kbytes): 0
-	Maximum resident set size (kbytes): 418756
+	Maximum resident set size (kbytes): 406200
 	Average resident set size (kbytes): 0
 	Major (requiring I/O) page faults: 0
-	Minor (reclaiming a frame) page faults: 2881
-	Voluntary context switches: 7
-	Involuntary context switches: 48
+	Minor (reclaiming a frame) page faults: 6607
+	Voluntary context switches: 1
+	Involuntary context switches: 213
 	Swaps: 0
 	File system inputs: 0
 	File system outputs: 16

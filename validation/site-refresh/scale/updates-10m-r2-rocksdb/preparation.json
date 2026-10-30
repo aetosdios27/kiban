@@ -1,6 +1,6 @@
 {
-  "db_bytes": 14523088,
-  "elapsed_s": 0.085898392,
+  "db_bytes": 14523170,
+  "elapsed_s": 0.083857208,
   "engine": {
     "background_errors": 0,
     "compaction_count": null,
@@ -10,7 +10,7 @@
     "flush_count": null,
     "levels": [
       {
-        "bytes": 3716638,
+        "bytes": 3717525,
         "files": 2,
         "level": 0
       },
@@ -20,7 +20,7 @@
         "level": 1
       },
       {
-        "bytes": 10695718,
+        "bytes": 10694914,
         "files": 3,
         "level": 2
       },

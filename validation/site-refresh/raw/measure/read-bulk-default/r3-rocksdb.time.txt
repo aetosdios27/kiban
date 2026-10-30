@@ -1,18 +1,18 @@
 	Command being timed: "taskset -c 10 /home/aetos/.local/share/kiban-gates/site-refresh/tools/agentbench/readpath/target/release/kiban-readbench /home/aetos/.local/share/kiban-gates/site-refresh/validation/site-refresh/raw/measure/read-bulk-default/r3-rocksdb.config.json"
-	User time (seconds): 5.06
-	System time (seconds): 0.15
+	User time (seconds): 5.20
+	System time (seconds): 0.14
 	Percent of CPU this job got: 99%
-	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:05.24
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:05.37
 	Average shared text size (kbytes): 0
 	Average unshared data size (kbytes): 0
 	Average stack size (kbytes): 0
 	Average total size (kbytes): 0
-	Maximum resident set size (kbytes): 364204
+	Maximum resident set size (kbytes): 364008
 	Average resident set size (kbytes): 0
 	Major (requiring I/O) page faults: 0
-	Minor (reclaiming a frame) page faults: 81761
-	Voluntary context switches: 32
-	Involuntary context switches: 86
+	Minor (reclaiming a frame) page faults: 81885
+	Voluntary context switches: 30
+	Involuntary context switches: 432
 	Swaps: 0
 	File system inputs: 0
 	File system outputs: 480

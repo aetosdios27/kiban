@@ -1,6 +1,6 @@
 {
   "db_bytes": 85165,
-  "elapsed_s": 0.025636116,
+  "elapsed_s": 0.034608763,
   "engine": {
     "background_errors": 0,
     "compaction_count": null,

@@ -1,18 +1,18 @@
 	Command being timed: "taskset -c 10 /home/aetos/.local/share/kiban-gates/site-refresh/tools/agentbench/readpath/target/release/kiban-readbench /home/aetos/.local/share/kiban-gates/site-refresh/validation/site-refresh/raw/measure/read-bulk-default/r4-sqlite.config.json"
-	User time (seconds): 4.06
-	System time (seconds): 1.09
+	User time (seconds): 4.17
+	System time (seconds): 1.21
 	Percent of CPU this job got: 99%
-	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:05.18
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:05.41
 	Average shared text size (kbytes): 0
 	Average unshared data size (kbytes): 0
 	Average stack size (kbytes): 0
 	Average total size (kbytes): 0
-	Maximum resident set size (kbytes): 355260
+	Maximum resident set size (kbytes): 357180
 	Average resident set size (kbytes): 0
 	Major (requiring I/O) page faults: 0
-	Minor (reclaiming a frame) page faults: 6343
-	Voluntary context switches: 6
-	Involuntary context switches: 74
+	Minor (reclaiming a frame) page faults: 5933
+	Voluntary context switches: 4
+	Involuntary context switches: 826
 	Swaps: 0
 	File system inputs: 0
 	File system outputs: 112

@@ -2,8 +2,8 @@
 
 **Result:** at one commit, on the agent-memory workload, kiban leads every warm read
 against tuned RocksDB and SQLite with mmap. It leads LMDB except latest-ten at a 32 MiB
-cache. Durable writes tie RocksDB, and group commit ties RocksDB at 16 writers. RocksDB
-still finishes both long write runs about three times sooner and uses less memory and disk.
+cache. Single-writer durable writes tie RocksDB, and group commit edges it at 16 writers. RocksDB
+still finishes both long write-heavy runs about three times sooner and uses less memory and disk.
 
 These runs measure `3935977707444665a083ab2e6f9a7a914ea52d1b` with `KibanOptions::agent_memory`-equivalent settings
 (point index on, `scan_prefix_len = 18`). The earlier reports stay valid for their own
@@ -32,13 +32,13 @@ p50 and p99 in µs, or writes/s for the writer row. Normal layout, default cache
 
 | Row | kiban | RocksDB | ratio [range] | SQLite | ratio [range] | LMDB | ratio [range] |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| point read | 0.96 / 1.41 | 2.50 / 4.35 | 2.6 [2.364, 2.644] | 1.82 / 2.62 | 1.932 [1.727, 1.933] | 1.25 / 1.76 | 1.3 [1.182, 1.356] |
-| latest ten | 1.89 / 3.14 | 7.81 / 11.26 | 4.136 [4.068, 4.136] | 8.96 / 12.03 | 4.746 [4.61, 4.746] | 2.30 / 3.84 | 1.22 [1.22, 1.254] |
-| point read, small cache | 1.15 / 2.24 | 5.38 / 9.22 | 4.667 [4.556, 4.686] | 1.82 / 2.62 | 1.611 [1.556, 1.629] | 1.25 / 2.18 | 1.083 [1.083, 1.114] |
-| latest ten, small cache | 3.33 / 5.50 | 7.81 / 11.01 | 2.346 [2.259, 2.385] | 8.96 / 12.29 | 2.692 [2.593, 2.692] | 2.30 / 3.84 | 0.692 [0.667, 0.698] |
-| new record | 516 / 1,409 | 541 / 1,278 | 1.0 [0.846, 1.048] | 623 / 1,507 | 1.176 [1.026, 1.213] | 1,114 / 2,490 | 2.159 [1.949, 2.23] |
-| update | 524 / 1,278 | 541 / 2,949 | 0.938 [0.897, 1.079] | 516 / 1,409 | 1.0 [0.829, 1.029] | 1,147 / 2,294 | 2.188 [1.854, 2.222] |
-| 16 concurrent writers | 11,815 / 2,632 | 12,702 / 2,827 | 1.076 [0.493, 1.65] | 1,206 / 299,718 | 10.537 [4.794, 16.735] | — | — |
+| point read | 1.09 / 1.57 | 2.75 / 4.61 | 2.581 [2.389, 2.706] | 1.92 / 2.75 | 1.871 [1.556, 1.967] | 1.34 / 1.95 | 1.258 [1.083, 1.41] |
+| latest ten | 1.95 / 2.62 | 8.19 / 12.03 | 4.242 [4.066, 4.852] | 9.47 / 13.06 | 4.852 [4.485, 5.246] | 2.43 / 3.58 | 1.241 [1.182, 1.344] |
+| point read, small cache | 1.25 / 2.24 | 6.53 / 11.52 | 5.158 [4.533, 5.368] | 1.92 / 2.50 | 1.5 [1.289, 1.641] | 1.34 / 1.82 | 1.053 [0.911, 1.237] |
+| latest ten, small cache | 3.39 / 5.25 | 8.45 / 12.80 | 2.462 [2.357, 2.593] | 9.47 / 13.82 | 2.741 [2.642, 2.792] | 2.43 / 3.90 | 0.698 [0.685, 0.75] |
+| new record | 492 / 2,032 | 500 / 1,737 | 0.984 [0.931, 1.052] | 541 / 2,228 | 1.111 [1.1, 1.138] | 1,049 / 2,949 | 2.159 [2.133, 2.172] |
+| update | 500 / 1,704 | 483 / 1,540 | 1.0 [0.833, 1.065] | 492 / 1,507 | 1.0 [0.97, 1.065] | 1,081 / 2,949 | 2.169 [2.098, 2.258] |
+| 16 concurrent writers | 14,101 / 3,001 | 12,830 / 2,710 | 1.095 [1.087, 1.33] | 1,451 / 279,986 | 9.892 [9.718, 10.254] | — | — |
 
 ## Writer sweep
 
@@ -46,11 +46,11 @@ Median writes/s, p99 µs, and syncs per 4,000 writes.
 
 | Writers | kiban group | RocksDB | kiban ungrouped | SQLite |
 |---:|---:|---:|---:|---:|
-| 1 | 1,640 / 1,467 / 4,000 | 1,788 / 1,314 / 4,000 | 1,575 / 3,163 / 4,000 | 1,256 / 2,205 / 4,044 |
-| 2 | 2,341 / 3,008 / 2,679 | 2,897 / 1,596 / 2,355 | 1,695 / 5,425 / 4,000 | 1,201 / 22,077 / 4,038 |
-| 4 | 3,817 / 5,085 / 1,617 | 5,030 / 1,799 / 1,342 | 1,659 / 15,763 / 4,000 | 1,120 / 91,348 / 4,035 |
-| 8 | 7,281 / 2,734 / 901 | 7,425 / 2,681 / 867 | 1,566 / 46,799 / 4,000 | 1,189 / 124,489 / 4,035 |
-| 16 | 11,815 / 2,632 / 479 | 12,702 / 2,827 / 479 | 1,461 / 94,128 / 4,000 | 1,206 / 299,718 / 4,032 |
+| 1 | 1,655 / 1,983 / 4,000 | 1,788 / 1,614 / 4,000 | 1,754 / 1,464 / 4,000 | 1,399 / 2,142 / 4,044 |
+| 2 | 2,534 / 2,465 / 2,686 | 2,704 / 2,725 / 2,462 | 1,948 / 3,688 / 4,000 | 1,463 / 24,996 / 4,035 |
+| 4 | 4,066 / 2,936 / 1,616 | 4,652 / 2,736 / 1,400 | 1,897 / 9,555 / 4,000 | 1,436 / 58,384 / 4,035 |
+| 8 | 7,065 / 2,736 / 901 | 7,841 / 2,799 / 779 | 1,882 / 22,466 / 4,000 | 1,438 / 130,072 / 4,032 |
+| 16 | 14,101 / 3,001 / 480 | 12,830 / 2,710 / 482 | 1,836 / 44,352 / 4,000 | 1,451 / 279,986 / 4,032 |
 
 ## Long runs
 
@@ -58,9 +58,9 @@ Median ops/s of three trials, with the range.
 
 | Case | kiban | RocksDB |
 |---|---:|---:|
-| read-100m | 1,702,014 (1,690,541–1,740,310) | 267,466 (242,883–303,744) |
-| updates-10m | 355,844 (349,125–570,348) | 1,024,521 (1,001,280–1,046,301) |
-| write-10m | 78,364 (76,498–90,985) | 229,374 (191,395–249,189) |
+| read-100m | 1,743,364 (1,619,380–1,755,896) | 233,765 (223,640–285,517) |
+| updates-10m | 387,251 (371,227–602,969) | 1,025,096 (918,013–1,038,579) |
+| write-10m | 83,711 (82,640–163,261) | 285,817 (247,390–289,857) |
 
 ## Resources
 
@@ -68,28 +68,30 @@ Peak RSS and logical disk in MiB, 1M records, normal layout.
 
 | Engine | RSS | Disk |
 |---|---:|---:|
-| kiban | 451 | 352 |
-| rocksdb | 356 | 303 |
-| sqlite | 347 | 315 |
+| kiban | 450 | 352 |
+| rocksdb | 356 | 304 |
+| sqlite | 349 | 315 |
 | lmdb | 839 | 799 |
+
+## Point index cost at a small cache
+
+`read-100m` is lower than the v0.1.0 report on the same plan: kiban about 1.74M vs 2.90M
+ops/s. Mains power, the performance profile and CPU pinning do not change it. Rebuilding
+`tools/compare` with `point_index: false` and running the plan three more times gives
+3.71M–3.88M ops/s, p50 0.94–0.99 µs, and a 153 MB database, against 182 MB with the index.
+Raw summaries are in `point-index-probe/`. The default-on index therefore costs this
+33 MiB-cache workload more than half its throughput. The mechanism is not profiled.
 
 ## Deviations and limits
 
+- All accepted results ran on mains power with the `performance` platform profile, on a
+  shared laptop with a browser and video playback open.
 - RocksDB's screen was reused, not rerun. Its code did not change between campaigns.
-- The host is a shared laptop on `balanced`, with `powersave` and turbo enabled.
-- The system suspended from 15:54 to 15:58 during `read-bulk-32/r3-rocksdb`. That
-  scenario's bulk RocksDB rows (about 155 µs) are excluded from the board. They reflect
-  cache pressure on one large SST and would overstate the gap. The raw rows are retained.
-- Two long-run attempts were discarded: one interrupted by suspend, one on battery,
-  where the wall timeout stopped RocksDB. All accepted long runs ran on mains power.
-- Group commit throughput is about double the `validation/group-commit` report for every
-  engine, including SQLite and ungrouped kiban, so it reflects device sync time on this
-  interval, not an engine change. Spread at 16 writers is wide: kiban 6,348–13,662 and
-  RocksDB 5,496–12,877 writes/s.
-- `read-100m` is lower than the v0.1.0 report on the same plan: kiban 1.70M vs 2.90M ops/s
-  and RocksDB 267k vs 340k. Unpinned (1.64M) and physical-core (1.68M) kiban probes rule out
-  CPU pinning. kiban's read p50 rose from 1.2 to 2.0 µs and its database from 153 to 182 MB.
-  The cause is not isolated. The default point index under this plan's 33 MiB cache is a
-  candidate, not a finding.
+- The bulk 32 MiB RocksDB rows are excluded from the board. They reflect cache pressure on
+  one large SST and would overstate the gap. The raw rows are retained.
+- Earlier attempts were discarded: one interrupted by suspend, one on battery where the
+  wall timeout stopped RocksDB, and one complete run on the `balanced` profile.
+- The long runs have outlier trials: kiban `updates-10m` 602,969 and `write-10m` 163,261
+  ops/s against two trials near 380k and 83k. They are retained; medians are used.
 - Warm cache, one read worker, 200-byte text records. This says nothing about cold reads,
   many readers or data far larger than memory.
