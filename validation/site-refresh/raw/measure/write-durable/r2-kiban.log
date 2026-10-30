@@ -1,0 +1,9 @@
+{"backend":"kiban","binary_fuse_filter":false,"cache_bytes":449030336,"durable":true,"point_index":true,"type":"requested_config"}
+scan preparation ready=true ns=390289 stats=Some(RangeIndexStats { key_groups: 10000, prefixes: 64, direct_ten_prefixes: 64, resident_bytes: 103216, build_ns: 389429 })
+kiban: remember 1000 verified calls
+kiban: recall-by-id 1000 verified calls
+kiban: recent-for-agent 1000 verified calls
+kiban: update 1000 verified calls
+kiban: mixed-90-10 1000 verified calls
+{"backend":"kiban","binary_fuse_filter":false,"cache_bytes":449030336,"durable":true,"point_index":true,"type":"requested_config"}
+scan preparation ready=true ns=815824 stats=Some(RangeIndexStats { key_groups: 11952, prefixes: 64, direct_ten_prefixes: 64, resident_bytes: 129952, build_ns: 814949 })

@@ -1,0 +1,1 @@
+{"engine":"kiban","fdatasync":1617,"fsync":0,"max_us":6339.32,"mean_us":951.863,"mode":"group","msync":0,"ops_per_thread":1000,"p50_us":1064.941,"p99_us":2377.432,"probe":true,"sync_file_range":0,"threads":4,"throughput":4171.643959365685,"verified":true,"wall_s":0.9588546,"write_bytes":6623214,"write_calls":1617,"writes":4000}

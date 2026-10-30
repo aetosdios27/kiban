@@ -1,0 +1,1 @@
+{"engine":"rocksdb","fdatasync":864,"fsync":0,"max_us":12500.715,"mean_us":1185.117,"mode":"x","msync":0,"ops_per_thread":500,"p50_us":1103.492,"p99_us":7999.236,"probe":true,"sync_file_range":0,"threads":8,"throughput":6274.49734350802,"verified":true,"wall_s":0.637501266,"write_bytes":1368083,"write_calls":864,"writes":4000}

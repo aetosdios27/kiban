@@ -1,0 +1,18 @@
+{
+  "backend": "sqlite",
+  "n": 1000000,
+  "operations": 100000,
+  "k": 10,
+  "seed": 20261016,
+  "db": "/home/aetos/.local/share/kiban-gates/site-refresh/target/rocksdb/data/1000000-sqlite",
+  "output": "/home/aetos/.local/share/kiban-gates/site-refresh/validation/site-refresh/raw/measure/read-normal-32/r4-sqlite.jsonl",
+  "action": "read",
+  "layout": "normal",
+  "cache_mib": 32,
+  "point_index": false,
+  "durable": false,
+  "rocks": {},
+  "sqlite_layout": "rowid",
+  "sqlite_sync": "NORMAL",
+  "sqlite_mmap_bytes": 1073741824
+}

@@ -181,6 +181,24 @@
       "label": "C ABI",
       "status": "shipped",
       "link": "https://github.com/aetosdios27/kiban/pull/7"
+    },
+    {
+      "id": "group-commit",
+      "label": "Group commit",
+      "status": "shipped",
+      "link": "https://github.com/aetosdios27/kiban/pull/21"
+    },
+    {
+      "id": "point-index",
+      "label": "Perfect-hash point index",
+      "status": "shipped",
+      "link": "https://github.com/aetosdios27/kiban/pull/24"
+    },
+    {
+      "id": "agent-memory",
+      "label": "agent_memory profile",
+      "status": "shipped",
+      "link": "https://github.com/aetosdios27/kiban/pull/22"
     }
   ],
   "roadmap": [
@@ -197,7 +215,7 @@
     {
       "id": "write-path",
       "title": "Write path: group commit",
-      "status": "next"
+      "status": "done"
     },
     {
       "id": "transactions",
@@ -212,7 +230,7 @@
     {
       "id": "benchmarks",
       "title": "Published benchmarks",
-      "status": "planned"
+      "status": "done"
     }
   ],
   "local_sweeps": [],

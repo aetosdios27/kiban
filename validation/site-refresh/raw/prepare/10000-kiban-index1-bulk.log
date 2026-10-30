@@ -1,0 +1,6 @@
+{"backend":"kiban","binary_fuse_filter":false,"cache_bytes":449030336,"durable":false,"point_index":true,"type":"requested_config"}
+scan preparation ready=false ns=872 stats=None
+kiban: bulk preload 10000/10000
+{"backend":"kiban","binary_fuse_filter":false,"cache_bytes":449030336,"durable":false,"point_index":true,"type":"requested_config"}
+scan preparation ready=true ns=398504 stats=Some(RangeIndexStats { key_groups: 10000, prefixes: 64, direct_ten_prefixes: 64, resident_bytes: 103216, build_ns: 397666 })
+{"layout":{"0":[2]},"type":"prepared","verified_records":10000}
