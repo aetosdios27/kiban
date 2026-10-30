@@ -1,10 +1,10 @@
 {
   "schema": 1,
-  "generated_at": "2026-10-30T10:23:17+00:00",
+  "generated_at": "2026-10-30T18:02:44+00:00",
   "engine": {
     "version": "0.1.0",
-    "commit": "3935977707444665a083ab2e6f9a7a914ea52d1b",
-    "commit_date": "2026-10-22T06:27:54Z"
+    "commit": "d7cf450a0fb5f2f3695cb448dcc589dea1ab5375",
+    "commit_date": "2026-10-30T18:02:27Z"
   },
   "specs": [
     "Rust 2024",
@@ -188,6 +188,24 @@
       "label": "C ABI",
       "status": "shipped",
       "link": "https://github.com/aetosdios27/kiban/pull/7"
+    },
+    {
+      "id": "group-commit",
+      "label": "Group commit",
+      "status": "shipped",
+      "link": "https://github.com/aetosdios27/kiban/pull/21"
+    },
+    {
+      "id": "point-index",
+      "label": "Perfect-hash point index",
+      "status": "shipped",
+      "link": "https://github.com/aetosdios27/kiban/pull/24"
+    },
+    {
+      "id": "agent-memory",
+      "label": "agent_memory profile",
+      "status": "shipped",
+      "link": "https://github.com/aetosdios27/kiban/pull/22"
     }
   ],
   "roadmap": [
@@ -204,7 +222,7 @@
     {
       "id": "write-path",
       "title": "Write path: group commit",
-      "status": "next"
+      "status": "done"
     },
     {
       "id": "transactions",
@@ -219,7 +237,7 @@
     {
       "id": "benchmarks",
       "title": "Published benchmarks",
-      "status": "planned"
+      "status": "done"
     }
   ],
   "local_sweeps": [],
