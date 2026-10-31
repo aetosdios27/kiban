@@ -26,7 +26,7 @@ class ClaimsTests(unittest.TestCase):
     def test_repository_validates(self):
         claims, package, examples, metrics = facts.validate()
         self.assertEqual(claims, self.claims)
-        self.assertEqual(package["version"], "0.1.0")
+        self.assertEqual(package["version"], "0.2.0")
         self.assertEqual(set(examples), {"basic", "batch", "range", "snapshot", "shared", "python"})
         self.assertEqual(metrics, (128, 4))
 
