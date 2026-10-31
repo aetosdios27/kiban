@@ -1,10 +1,10 @@
 {
   "schema": 1,
-  "generated_at": "2026-10-31T09:59:19+00:00",
+  "generated_at": "2026-10-31T11:17:12+00:00",
   "engine": {
-    "version": "0.1.0",
-    "commit": "d7cf450a0fb5f2f3695cb448dcc589dea1ab5375",
-    "commit_date": "2026-10-30T18:02:27Z"
+    "version": "0.2.0",
+    "commit": "fd1b95c5c1586f766ec6fab4fdab29d8734e1e50",
+    "commit_date": "2026-10-31T16:46:56+05:30"
   },
   "specs": [
     "Rust 2024",
