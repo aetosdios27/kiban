@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.0 - 2026-10-31
+
 - **Behavior change:** `KibanOptions::point_index` now defaults to `true`. New SSTs carry
   the perfect-hash point index (format 4) and cached point reads are faster than LMDB.
   Costs, measured in `validation/pointindex-cost`: flush builds about 1.36x and

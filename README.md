@@ -1,20 +1,19 @@
 # Kiban
 
 Kiban is an embedded LSM-tree key-value storage engine written in Rust. It stores
-ordered byte keys and byte values and targets Linux. **v0.1.0 is an early public
+ordered byte keys and byte values and targets Linux. **v0.2.0 is an early public
 release**, with no pre-1.0 API or storage-format compatibility promise.
 
-See [architecture](ARCHITECTURE.md) for the current invariants and [unreleased
-changes](CHANGELOG.md) for audit repairs on `main` that are newer than v0.1.0.
+See [architecture](ARCHITECTURE.md) for the current invariants and [the changelog](CHANGELOG.md) for what changed in each release.
 
 ## Installation
 
 These are the release installation commands. Use the Git dependency after the
-`v0.1.0` tag is pushed:
+`v0.2.0` tag is pushed:
 
 ```toml
 [dependencies]
-kiban = { git = "https://github.com/aetosdios27/kiban", tag = "v0.1.0" }
+kiban = { git = "https://github.com/aetosdios27/kiban", tag = "v0.2.0" }
 ```
 
 Crates.io installation becomes available only after publication succeeds. Check
@@ -165,9 +164,10 @@ The [first scale report](validation/REPORT.md) is historical evidence from befor
 the correctness repairs; its numbers are not v0.1.0 performance results.
 
 The [foreground report](validation/FOREGROUND_REPORT.md) records the latest
-published optimization/endurance campaign, including an unresolved concurrency
-throughput decline. [Audit repair evidence](validation/AUDIT_REPAIRS.md) tracks
-subsequent fixes and their validation; the
+published optimization/endurance campaign, including a 35% concurrency throughput
+decline in one run. [Audit repair evidence](validation/AUDIT_REPAIRS.md) tracks
+subsequent fixes and their validation, including a rerun where that decline did not
+reproduce; its cause was never established. The
 [read-path and range-cache report](validation/RANGE_CACHE.md) covers the read-path
 rework, the optional range tier and their benchmarks. Historical measurements describe their
 recorded source revision; they are not automatic performance claims for `main`.
