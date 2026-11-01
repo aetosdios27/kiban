@@ -89,6 +89,8 @@ pub enum DbError {
     Io(io::Error),
     Corrupt(String),
     CommitFailed(io::Error),
+    /// The commit may or may not have taken effect. Reopen to learn what
+    /// survived: a blind retry could apply the operation twice.
     CommitAmbiguous(io::Error),
     /// The engine is in a poisoned state; this operation was refused.
     Poisoned(PoisonCause),
@@ -129,7 +131,7 @@ impl fmt::Display for DbError {
             }
             DbError::CommitAmbiguous(e) => write!(
                 f,
-                "manifest rename not known durable; recovery must resolve: {e}"
+                "commit outcome unknown; reopen to learn what survived: {e}"
             ),
             DbError::Poisoned(cause) => {
                 write!(
@@ -5957,7 +5959,11 @@ impl SharedKiban {
             op,
             weight,
             |ops| self.lead_group(ops),
-            || Err(DbError::Corrupt("group commit leader panicked".to_string())),
+            || {
+                Err(DbError::CommitAmbiguous(io::Error::other(
+                    "group commit leader panicked",
+                )))
+            },
         )
     }
 
