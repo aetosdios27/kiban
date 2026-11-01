@@ -1,0 +1,504 @@
+{
+  "/home/aetos/.t3/worktrees/kiban/t3-7d737093/target/rocksdb/data/1000000-rocksdb-bloom-4096-none-bulk": [
+    {
+      "deletions": 0,
+      "entries": 1000000,
+      "level": 6,
+      "name": "/000008.sst",
+      "size": 322340370
+    }
+  ],
+  "/home/aetos/.t3/worktrees/kiban/t3-7d737093/target/rocksdb/data/1000000-rocksdb-bloom-16384-none-bulk": [
+    {
+      "deletions": 0,
+      "entries": 1000000,
+      "level": 6,
+      "name": "/000008.sst",
+      "size": 318294085
+    }
+  ],
+  "/home/aetos/.t3/worktrees/kiban/t3-7d737093/target/rocksdb/data/1000000-rocksdb-ribbon-4096-none-bulk": [
+    {
+      "deletions": 0,
+      "entries": 1000000,
+      "level": 6,
+      "name": "/000008.sst",
+      "size": 321978163
+    }
+  ],
+  "/home/aetos/.t3/worktrees/kiban/t3-7d737093/target/rocksdb/data/1000000-rocksdb-ribbon-16384-none-bulk": [
+    {
+      "deletions": 0,
+      "entries": 1000000,
+      "level": 6,
+      "name": "/000008.sst",
+      "size": 317931878
+    }
+  ],
+  "/home/aetos/.t3/worktrees/kiban/t3-7d737093/target/rocksdb/data/1000000-rocksdb-bloom-4096-none-normal": [
+    {
+      "deletions": 0,
+      "entries": 211921,
+      "level": 6,
+      "name": "/000016.sst",
+      "size": 68227983
+    },
+    {
+      "deletions": 0,
+      "entries": 164050,
+      "level": 0,
+      "name": "/000018.sst",
+      "size": 52897785
+    },
+    {
+      "deletions": 0,
+      "entries": 211609,
+      "level": 6,
+      "name": "/000020.sst",
+      "size": 68228544
+    },
+    {
+      "deletions": 0,
+      "entries": 164057,
+      "level": 0,
+      "name": "/000021.sst",
+      "size": 52900544
+    },
+    {
+      "deletions": 0,
+      "entries": 14857,
+      "level": 0,
+      "name": "/000023.sst",
+      "size": 4792138
+    },
+    {
+      "deletions": 0,
+      "entries": 211597,
+      "level": 6,
+      "name": "/000024.sst",
+      "size": 68226278
+    },
+    {
+      "deletions": 0,
+      "entries": 21909,
+      "level": 6,
+      "name": "/000025.sst",
+      "size": 7063558
+    }
+  ],
+  "/home/aetos/.t3/worktrees/kiban/t3-7d737093/target/rocksdb/data/1000000-rocksdb-bloom-16384-none-normal": [
+    {
+      "deletions": 0,
+      "entries": 212584,
+      "level": 6,
+      "name": "/000016.sst",
+      "size": 67582999
+    },
+    {
+      "deletions": 0,
+      "entries": 164045,
+      "level": 0,
+      "name": "/000018.sst",
+      "size": 52235001
+    },
+    {
+      "deletions": 0,
+      "entries": 212259,
+      "level": 6,
+      "name": "/000019.sst",
+      "size": 67582105
+    },
+    {
+      "deletions": 0,
+      "entries": 212258,
+      "level": 6,
+      "name": "/000020.sst",
+      "size": 67581824
+    },
+    {
+      "deletions": 0,
+      "entries": 164054,
+      "level": 0,
+      "name": "/000022.sst",
+      "size": 52238065
+    },
+    {
+      "deletions": 0,
+      "entries": 19944,
+      "level": 6,
+      "name": "/000023.sst",
+      "size": 6351135
+    },
+    {
+      "deletions": 0,
+      "entries": 14856,
+      "level": 0,
+      "name": "/000025.sst",
+      "size": 4733046
+    }
+  ],
+  "/home/aetos/.t3/worktrees/kiban/t3-7d737093/target/rocksdb/data/1000000-rocksdb-ribbon-4096-none-normal": [
+    {
+      "deletions": 0,
+      "entries": 211921,
+      "level": 6,
+      "name": "/000016.sst",
+      "size": 68149924
+    },
+    {
+      "deletions": 0,
+      "entries": 211609,
+      "level": 6,
+      "name": "/000017.sst",
+      "size": 68150434
+    },
+    {
+      "deletions": 0,
+      "entries": 211597,
+      "level": 6,
+      "name": "/000018.sst",
+      "size": 68148208
+    },
+    {
+      "deletions": 0,
+      "entries": 21927,
+      "level": 6,
+      "name": "/000019.sst",
+      "size": 7061195
+    },
+    {
+      "deletions": 0,
+      "entries": 164056,
+      "level": 0,
+      "name": "/000021.sst",
+      "size": 52839273
+    },
+    {
+      "deletions": 0,
+      "entries": 164052,
+      "level": 0,
+      "name": "/000023.sst",
+      "size": 52837604
+    },
+    {
+      "deletions": 0,
+      "entries": 14838,
+      "level": 0,
+      "name": "/000025.sst",
+      "size": 4781178
+    }
+  ],
+  "/home/aetos/.t3/worktrees/kiban/t3-7d737093/target/rocksdb/data/1000000-rocksdb-ribbon-16384-none-normal": [
+    {
+      "deletions": 0,
+      "entries": 212584,
+      "level": 6,
+      "name": "/000016.sst",
+      "size": 67504552
+    },
+    {
+      "deletions": 0,
+      "entries": 212259,
+      "level": 6,
+      "name": "/000017.sst",
+      "size": 67503673
+    },
+    {
+      "deletions": 0,
+      "entries": 164053,
+      "level": 0,
+      "name": "/000019.sst",
+      "size": 52176841
+    },
+    {
+      "deletions": 0,
+      "entries": 212258,
+      "level": 6,
+      "name": "/000021.sst",
+      "size": 67503435
+    },
+    {
+      "deletions": 0,
+      "entries": 164048,
+      "level": 0,
+      "name": "/000022.sst",
+      "size": 52175328
+    },
+    {
+      "deletions": 0,
+      "entries": 19957,
+      "level": 6,
+      "name": "/000023.sst",
+      "size": 6347816
+    },
+    {
+      "deletions": 0,
+      "entries": 14841,
+      "level": 0,
+      "name": "/000025.sst",
+      "size": 4722632
+    }
+  ],
+  "/home/aetos/.t3/worktrees/kiban/t3-7d737093/target/rocksdb/data/1000000-kiban-index0-bulk": {
+    "0": [
+      2
+    ]
+  },
+  "/home/aetos/.t3/worktrees/kiban/t3-7d737093/target/rocksdb/data/1000000-kiban-index1-bulk": {
+    "0": [
+      2
+    ]
+  },
+  "/home/aetos/.t3/worktrees/kiban/t3-7d737093/target/rocksdb/data/1000000-rocksdb-ribbon-16384-lz4-bulk": [
+    {
+      "deletions": 0,
+      "entries": 1000000,
+      "level": 6,
+      "name": "/000008.sst",
+      "size": 228151583
+    }
+  ],
+  "/home/aetos/.t3/worktrees/kiban/t3-7d737093/target/rocksdb/data/1000000-kiban-index0-normal": {
+    "1": [
+      1092
+    ],
+    "2": [
+      983,
+      984,
+      985,
+      1089,
+      1090,
+      1091
+    ],
+    "3": [
+      85,
+      340,
+      501,
+      674,
+      848,
+      857,
+      993,
+      994,
+      995,
+      996,
+      997,
+      998,
+      999,
+      1000,
+      1001,
+      1002,
+      1003,
+      1004,
+      1005,
+      1006,
+      1007,
+      1008,
+      1009,
+      1010,
+      1011,
+      1021,
+      1022,
+      1023,
+      1024,
+      1025,
+      1026,
+      1027,
+      1028,
+      1029,
+      1030,
+      1031,
+      1032,
+      1033,
+      1034,
+      1035,
+      1036,
+      1037,
+      1038,
+      1039,
+      1040,
+      1041,
+      1042,
+      1043,
+      1044,
+      1045,
+      1046,
+      1047,
+      1048,
+      1049,
+      1050,
+      1051,
+      1052,
+      1053,
+      1054,
+      1055,
+      1056,
+      1057,
+      1058,
+      1059,
+      1060,
+      1061,
+      1062,
+      1063,
+      1064,
+      1065,
+      1066,
+      1067,
+      1068,
+      1069,
+      1070,
+      1071,
+      1072
+    ]
+  },
+  "/home/aetos/.t3/worktrees/kiban/t3-7d737093/target/rocksdb/data/1000000-kiban-index1-normal": {
+    "1": [
+      29047
+    ],
+    "2": [
+      25142,
+      25143,
+      25144,
+      29043,
+      29044,
+      29045,
+      29046
+    ],
+    "3": [
+      25319,
+      25320,
+      25369,
+      25370,
+      25371,
+      25372,
+      25373,
+      25374,
+      25375,
+      25376,
+      25742,
+      25743,
+      25744,
+      25745,
+      25746,
+      25747,
+      25748,
+      25749,
+      25750,
+      25751,
+      25752,
+      25753,
+      25754,
+      25755,
+      25756,
+      25757,
+      25758,
+      25759,
+      25760,
+      25761,
+      25762,
+      25763,
+      25764,
+      25765,
+      25766,
+      25767,
+      25768,
+      25769,
+      25770,
+      25771,
+      25772,
+      25773,
+      25774,
+      25775,
+      25776,
+      25777,
+      25778,
+      25779,
+      25780,
+      25781,
+      25782,
+      25783,
+      25784,
+      25785,
+      25786,
+      25787,
+      25788,
+      25789,
+      25790,
+      25791,
+      25792,
+      25793,
+      25794,
+      25795,
+      25796,
+      25797,
+      25798,
+      25799,
+      25800,
+      25801,
+      25802,
+      25803,
+      25804,
+      25805,
+      25806,
+      25807,
+      25808,
+      25809,
+      25810,
+      25811,
+      25812,
+      25813,
+      25814,
+      25815,
+      25816,
+      25817,
+      25818,
+      25819,
+      25820,
+      25821,
+      25822
+    ]
+  },
+  "/home/aetos/.t3/worktrees/kiban/t3-7d737093/target/rocksdb/data/1000000-rocksdb-ribbon-16384-lz4-normal": [
+    {
+      "deletions": 0,
+      "entries": 295732,
+      "level": 6,
+      "name": "/000016.sst",
+      "size": 67469199
+    },
+    {
+      "deletions": 0,
+      "entries": 295713,
+      "level": 6,
+      "name": "/000017.sst",
+      "size": 67471497
+    },
+    {
+      "deletions": 0,
+      "entries": 164047,
+      "level": 0,
+      "name": "/000019.sst",
+      "size": 37831381
+    },
+    {
+      "deletions": 0,
+      "entries": 65613,
+      "level": 6,
+      "name": "/000020.sst",
+      "size": 14970429
+    },
+    {
+      "deletions": 0,
+      "entries": 164048,
+      "level": 0,
+      "name": "/000022.sst",
+      "size": 37832095
+    },
+    {
+      "deletions": 0,
+      "entries": 14847,
+      "level": 0,
+      "name": "/000024.sst",
+      "size": 3426949
+    }
+  ]
+}

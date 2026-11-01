@@ -1,0 +1,53 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 1K of event 'cpu-clock:u'
+# Event count (approx.): 3801603176
+#
+# Overhead  Command           Shared Object         Symbol                                                                                                        
+# ........  ................  ....................  ..............................................................................................................
+#
+    18.34%  db::point_index   libc.so.6             [.] __memmove_avx_unaligned_erms
+     8.96%  db::point_index   libc.so.6             [.] _int_free_chunk
+     8.91%  db::point_index   after-test            [.] kiban::sstable::point::construct_with_bucket_size
+     8.33%  db::point_index   after-test            [.] kiban::crc32::pclmul::update
+     7.70%  db::point_index   libc.so.6             [.] __memset_avx2_unaligned_erms
+     4.85%  db::point_index   after-test            [.] <kiban::bloom::BloomFilter>::build_hashes
+     3.69%  db::point_index   libc.so.6             [.] _int_malloc
+     3.32%  db::point_index   libc.so.6             [.] __memcmp_avx2_movbe
+     3.27%  db::point_index   libc.so.6             [.] __libc_malloc2
+     2.69%  db::point_index   after-test            [.] <kiban::db::CompactionPlan>::build
+     2.48%  db::point_index   after-test            [.] <kiban::sstable::builder::TableBuilder>::add
+     2.32%  db::point_index   after-test            [.] kiban::sstable::point::compact::encode_with
+     2.21%  db::point_index   after-test            [.] <kiban::sstable::block::BlockBuilder>::add
+     2.21%  db::point_index   after-test            [.] kiban::sstable::block::visit_records::<<kiban::sstable::point::compact::CompactIndex>::validate<core::iter
+     1.90%  db::point_index   libc.so.6             [.] cfree@GLIBC_2.2.5
+     1.90%  db::point_index   libc.so.6             [.] realloc
+     1.63%  db::point_index   libc.so.6             [.] malloc
+     1.42%  db::point_index   after-test            [.] <kiban::sstable::block::BlockIter as core::iter::traits::iterator::Iterator>::next
+     1.21%  db::point_index   after-test            [.] <kiban::db::MergeCore>::pop_best
+     1.11%  db::point_index   after-test            [.] <kiban::db::MergeCore>::fill_heads
+     1.00%  db::point_index   libc.so.6             [.] unlink_chunk.isra.0
+     0.95%  db::point_index   after-test            [.] <kiban::sstable::point::PointBuilder>::add
+     0.95%  db::point_index   libc.so.6             [.] _int_free_create_chunk
+     0.84%  db::point_index   libc.so.6             [.] _int_free_merge_chunk
+     0.79%  db::point_index   after-test            [.] <kiban::sstable::reader::CompactionIter as core::iter::traits::iterator::Iterator>::next
+     0.74%  db::point_index   after-test            [.] __rustc::__rust_no_alloc_shim_is_unstable_v2
+     0.58%  db::point_index   after-test            [.] __rustc::__rust_dealloc
+     0.53%  db::point_index   after-test            [.] <alloc::raw_vec::RawVecInner>::try_allocate_in
+     0.47%  db::point_index   after-test            [.] __rustc::__rust_alloc
+     0.32%  db::point_index   after-test            [.] <alloc::raw_vec::RawVecInner<_>>::reserve::do_reserve_and_handle::<alloc::alloc::Global>
+     0.32%  db::point_index   after-test            [.] <alloc::vec::Vec<&[u8]> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<&[u8], core::iter::adapte
+     0.32%  db::point_index   after-test            [.] <alloc::vec::Vec<u64> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u64, core::iter::adapters::
+     0.32%  db::point_index   after-test            [.] <kiban::sstable::block::BlockData as core::ops::deref::Deref>::deref
+     0.32%  db::point_index   after-test            [.] __rustc::__rdl_alloc
+     0.32%  db::point_index   libc.so.6             [.] _int_realloc
+     0.26%  db::point_index   after-test            [.] <alloc::raw_vec::RawVecInner>::finish_grow
+     0.26%  db::point_index   after-test            [.] kiban::sstable::point::hash
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

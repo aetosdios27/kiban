@@ -1,0 +1,35 @@
+{
+  "status": "complete",
+  "queries_completed": 1000,
+  "comparison_eligible": false,
+  "reason": "HTTP memory diagnostic; not an engine comparison",
+  "parameters": {
+    "endpoint": "http://127.0.0.1:16971",
+    "server_pid": 500174,
+    "population": 1001000,
+    "agents": 64,
+    "queries": 1000,
+    "k": 10,
+    "rss_limit_mib": 6144,
+    "output": "/home/aetos/.t3/worktrees/kiban/t3-d4970700/target/enginebench-probes/http-memory-bm25-off/client"
+  },
+  "final": {
+    "queries_completed": 1000,
+    "elapsed_seconds": 17.707286766002653,
+    "server": {
+      "VmHWM": 4996468736,
+      "VmRSS": 4996468736,
+      "VmSwap": 0
+    },
+    "client": {
+      "VmHWM": 21676032,
+      "VmRSS": 21676032,
+      "VmSwap": 0
+    },
+    "load": [
+      2.5791015625,
+      2.203125,
+      2.11474609375
+    ]
+  }
+}

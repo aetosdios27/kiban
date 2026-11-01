@@ -1,0 +1,17 @@
+{
+  "binaries": {
+    "before": {
+      "path": "/home/aetos/.t3/worktrees/kiban/t3-c878dd21/target/read-path-tools/round2-default",
+      "sha256": "6d0e847003aac7335c46b55df122f2aee9a7428f3208b3d29a799317513ba15c"
+    },
+    "after": {
+      "path": "/home/aetos/.t3/worktrees/kiban/t3-c878dd21/target/read-path-tools/round2-inline-slots",
+      "sha256": "630f307b5a7e89b062bce696096af157c3a6a9ed244cdc157e78eca92b4d9aef"
+    }
+  },
+  "layout": "bulk",
+  "stage": 1,
+  "cache": 32,
+  "trials": 1,
+  "affinity": "3"
+}

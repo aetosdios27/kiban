@@ -1,0 +1,22 @@
+{
+  "cpu": 3,
+  "sibling": 4,
+  "build_cpus": "12-21",
+  "nice_build": 10,
+  "started": 1792277650.367866,
+  "load": [
+    5.765625,
+    6.2421875,
+    5.607421875
+  ],
+  "binaries": {
+    "before": {
+      "path": "/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/target/remix-bin/before",
+      "sha256": "64e1db72d018e3df7a062ea5cb5eb2f194a8317ed2af5e1574cbc50c3bc8ab77"
+    },
+    "after": {
+      "path": "/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/target/remix-bin/after",
+      "sha256": "88ba4a9ba0b2965a3b04cddbbf30e90d92c33da713d4a605defc0e5db7855042"
+    }
+  }
+}

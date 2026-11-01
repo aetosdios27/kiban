@@ -1,0 +1,3 @@
+   Compiling kiban v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-9b9cb0e0)
+   Compiling kiban-readbench v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-9b9cb0e0/tools/agentbench/readpath)
+    Finished `release` profile [optimized + debuginfo] target(s) in 25.97s

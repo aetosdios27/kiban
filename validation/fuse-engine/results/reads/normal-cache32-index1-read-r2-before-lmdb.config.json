@@ -1,0 +1,15 @@
+{
+  "backend": "lmdb",
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/target/fuse-engine/data/lmdb-normal-1000000",
+  "n": 1000000,
+  "operations": 100000,
+  "k": 10,
+  "seed": 20261016,
+  "output": "/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/validation/fuse-engine/results/reads/normal-cache32-index1-read-r2-before-lmdb.jsonl",
+  "action": "read",
+  "layout": "normal",
+  "cache_mib": 32,
+  "point_index": true,
+  "binary_fuse_filter": false,
+  "rocks": {}
+}

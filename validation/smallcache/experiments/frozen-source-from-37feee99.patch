@@ -1,0 +1,1916 @@
+diff --git a/src/cache.rs b/src/cache.rs
+index 49712e79..4a9489a1 100644
+--- a/src/cache.rs
++++ b/src/cache.rs
+@@ -100,6 +100,7 @@ pub struct BlockCache {
+     range: RangeCache,
+     /// Largest read-ahead window a sequential iterator may request.
+     readahead_bytes: u64,
++    compact_points: AtomicBool,
+ }
+ 
+ /// Raw counters for a [`BlockCache`] (phase 11.7, extended 11.17-F) —
+@@ -165,6 +166,7 @@ impl BlockCache {
+             // both; let small early windows merge up to one full window.
+             range: RangeCache::new(range_bytes, readahead_bytes as usize),
+             readahead_bytes,
++            compact_points: AtomicBool::new(false),
+         }
+     }
+ 
+@@ -180,6 +182,16 @@ impl BlockCache {
+         self.capacity
+     }
+ 
++    pub(crate) fn prefer_compact_points(&self) -> bool {
++        self.compact_points.load(Ordering::Relaxed)
++    }
++
++    /// Admission policy only: existing residents/snapshots keep their leases.
++    pub(crate) fn set_point_working_set(&self, bytes: u64) {
++        self.compact_points
++            .store(bytes > self.capacity as u64, Ordering::Relaxed);
++    }
++
+     pub fn resident_bytes(&self) -> usize {
+         let inner = self.inner.read().expect("block cache lock poisoned");
+         inner.bytes + inner.point_bytes
+diff --git a/src/db.rs b/src/db.rs
+index bd72ffa6..7365828c 100644
+--- a/src/db.rs
++++ b/src/db.rs
+@@ -228,6 +228,7 @@ pub(crate) struct Version {
+     pub(crate) tables: Vec<StdArc<TableEntry>>,
+     /// One entry per populated level >= 1, ascending by level.
+     levels: Vec<LevelIndex>,
++    l0_end: usize,
+ }
+ 
+ /// Key-ordered view of one level >= 1 of a `Version`.
+@@ -259,13 +260,19 @@ impl Version {
+             }
+             i = end;
+         }
+-        Version { id, tables, levels }
++        let l0_end = tables.partition_point(|table| table.level == 0);
++        Version {
++            id,
++            tables,
++            levels,
++            l0_end,
++        }
+     }
+ 
+     /// Merge only overlapping tables. Disjoint levels borrow their index
+     /// slices instead of allocating a temporary table list for each range.
+     fn table_sources<'a>(&'a self, start: &[u8], end: Option<&[u8]>) -> Vec<SourceHead<'a>> {
+-        let l0_end = self.tables.partition_point(|table| table.level == 0);
++        let l0_end = self.l0_end;
+         let mut sources = Vec::with_capacity(l0_end + self.levels.len());
+         let overlaps = |table: &TableEntry| {
+             table.last_key.as_slice() >= start
+@@ -312,7 +319,7 @@ impl Version {
+     }
+ 
+     pub(crate) fn l0_count(&self) -> usize {
+-        self.tables.iter().filter(|t| t.level == 0).count()
++        self.l0_end
+     }
+ 
+     #[allow(dead_code)]
+@@ -354,7 +361,7 @@ fn get_from_version_at(
+         Ok(())
+     };
+     let contains = |t: &TableEntry| key >= t.first_key.as_slice() && key <= t.last_key.as_slice();
+-    for entry in version.tables.iter().rev().filter(|t| t.level == 0) {
++    for entry in version.tables[..version.l0_end].iter().rev() {
+         read_amp.l0_tables_probed.increment();
+         probe(entry)?;
+     }
+@@ -1014,6 +1021,17 @@ impl Kiban {
+             wal_number = consolidated_number;
+         }
+ 
++        let mut point_working_set = 0u64;
++        for tref in &manifest.tables {
++            let path = dir.join(file_name(tref.number, SST_EXTENSION));
++            let lease = file_cache.acquire(tref.number, &path).map_err(|e| {
++                DbError::Corrupt(format!("table {} cannot be opened: {e}", tref.number))
++            })?;
++            point_working_set = point_working_set.saturating_add(lease.len().map_err(|e| {
++                DbError::Corrupt(format!("table {} length cannot be read: {e}", tref.number))
++            })?);
++        }
++        cache.set_point_working_set(point_working_set);
+         let mut tables = Vec::with_capacity(manifest.tables.len());
+         for tref in &manifest.tables {
+             let path = dir.join(file_name(tref.number, SST_EXTENSION));
+diff --git a/src/point_index_tests.rs b/src/point_index_tests.rs
+index 62e01c33..5962cc67 100644
+--- a/src/point_index_tests.rs
++++ b/src/point_index_tests.rs
+@@ -86,10 +86,13 @@ fn point_index_mixed_tables_resolve_by_sequence_across_overlapping_levels() {
+         (10, 0, true, 5, Kind::Put, b"stale".as_slice()),
+         (11, 1, false, 8, Kind::Put, b"middle".as_slice()),
+         (14, 1, true, 9, Kind::Put, b"legacy".as_slice()),
++        (15, 2, true, 11, Kind::Put, b"flag-zero".as_slice()),
+         (12, 1, true, 10, Kind::Tombstone, b"".as_slice()),
+         (13, 2, true, 12, Kind::Put, b"newest".as_slice()),
+     ] {
+-        let mut builder = if number == 14 {
++        let mut builder = if number == 15 {
++            TableBuilder::with_point_index_without_value_crc()
++        } else if number == 14 {
+             TableBuilder::with_legacy_point_index()
+         } else {
+             TableBuilder::with_point_index(indexed)
+@@ -122,6 +125,7 @@ fn point_index_mixed_tables_resolve_by_sequence_across_overlapping_levels() {
+         (8, Some(b"middle".as_slice())),
+         (9, Some(b"legacy".as_slice())),
+         (10, None),
++        (11, Some(b"flag-zero".as_slice())),
+         (12, Some(b"newest".as_slice())),
+     ] {
+         assert_eq!(
+@@ -136,6 +140,7 @@ fn point_index_every_section_and_footer_bit_flip_is_detected_with_or_without_adm
+     let dir = TempDir::new("point-bit-flips");
+     for mut builder in [
+         TableBuilder::with_legacy_point_index(),
++        TableBuilder::with_point_index_without_value_crc(),
+         TableBuilder::with_point_index(true),
+     ] {
+         builder.add(Kind::Put, b"a", b"one", 5).unwrap();
+@@ -245,10 +250,6 @@ fn point_index_maintenance_measurement() {
+     };
+     let n: u64 = n.parse().unwrap();
+     let profile = std::env::var_os("KIBAN_POINT_BENCH_PROFILE").is_some();
+-    let selected_trial = std::env::var("KIBAN_POINT_BENCH_TRIAL")
+-        .ok()
+-        .map(|trial| trial.parse::<usize>().unwrap());
+-    assert!(selected_trial.is_none_or(|trial| (1..=5).contains(&trial)));
+     assert!(
+         std::fs::read_to_string("/proc/self/status")
+             .unwrap()
+@@ -256,9 +257,6 @@ fn point_index_maintenance_measurement() {
+             .any(|line| line == "Cpus_allowed_list:\t8")
+     );
+     for trial in 0..5 {
+-        if selected_trial.is_some_and(|selected| selected != trial + 1) {
+-            continue;
+-        }
+         for indexed in if trial % 2 == 0 {
+             [false, true]
+         } else {
+diff --git a/src/sstable/builder.rs b/src/sstable/builder.rs
+index 08a2830e..61ebd282 100644
+--- a/src/sstable/builder.rs
++++ b/src/sstable/builder.rs
+@@ -56,6 +56,13 @@ impl TableBuilder {
+         }
+     }
+ 
++    #[cfg(test)]
++    pub(crate) fn with_point_index_without_value_crc() -> Self {
++        Self {
++            point: Some(PointBuilder::without_value_crc()),
++            ..Self::default()
++        }
++    }
+     #[cfg(test)]
+     pub(crate) fn with_legacy_point_index() -> Self {
+         Self {
+diff --git a/src/sstable/point.rs b/src/sstable/point.rs
+index 2cc5f94f..57510375 100644
+--- a/src/sstable/point.rs
++++ b/src/sstable/point.rs
+@@ -162,6 +162,7 @@ fn construct_with_bucket_size(
+ #[derive(Default)]
+ pub(super) struct PointBuilder {
+     arena: Vec<u8>,
++    checksums: Vec<u32>,
+     heads: Vec<usize>,
+     suffix_bytes: usize,
+     versions: usize,
+@@ -173,6 +174,8 @@ pub(super) struct PointBuilder {
+     last_value_offset: u64,
+     #[cfg(test)]
+     legacy: bool,
++    #[cfg(test)]
++    without_value_crc: bool,
+ }
+ impl PointBuilder {
+     pub(super) fn approximate_size(&self) -> usize {
+@@ -219,6 +222,7 @@ impl PointBuilder {
+         self.max_seq = self.max_seq.max(seq);
+         self.max_value_len = self.max_value_len.max(value.len() as u32);
+         self.versions += 1;
++        self.checksums.push(crate::crc32::crc32(value));
+         self.arena.extend_from_slice(&seq.to_le_bytes());
+         self.arena.push(kind.to_u8());
+         self.arena
+@@ -232,6 +236,13 @@ impl PointBuilder {
+         self.arena[patch..patch + 8].copy_from_slice(&value_offset.to_le_bytes());
+     }
+     #[cfg(test)]
++    pub(super) fn without_value_crc() -> Self {
++        Self {
++            without_value_crc: true,
++            ..Self::default()
++        }
++    }
++    #[cfg(test)]
+     pub(super) fn legacy() -> Self {
+         Self {
+             legacy: true,
+@@ -243,6 +254,10 @@ impl PointBuilder {
+         if self.legacy {
+             return self.finish_legacy();
+         }
++        #[cfg(test)]
++        if self.without_value_crc {
++            return compact::encode_without_crc(self);
++        }
+         compact::encode(self)
+     }
+     #[cfg(test)]
+@@ -504,7 +519,7 @@ impl LegacyIndex {
+     }
+ }
+ 
+-mod compact;
++pub(super) mod compact;
+ 
+ pub(super) enum PointIndex {
+     Legacy(LegacyIndex),
+diff --git a/src/sstable/point/compact.rs b/src/sstable/point/compact.rs
+index d3f3de67..823bfea6 100644
+--- a/src/sstable/point/compact.rs
++++ b/src/sstable/point/compact.rs
+@@ -1,6 +1,15 @@
+ //! KIBANPH3: anchored key suffixes and compact MVCC locators.
+ use super::*;
+ use crate::cache::{ArcBlock, BlockMeta};
++use std::sync::Arc;
++
++pub(in crate::sstable) struct ValueLocator {
++    pub kind: Kind,
++    pub seq: u64,
++    pub offset: usize,
++    pub len: usize,
++    pub checksum: u32,
++}
+ 
+ pub(super) const MAGIC: &[u8; 8] = b"KIBANPH3";
+ const HEADER: usize = 64;
+@@ -38,11 +47,13 @@ pub(super) struct Encoding {
+     count: usize,
+     seq: usize,
+     value: usize,
++    checksum: bool,
+ }
+ impl Encoding {
+     pub(super) fn for_builder(b: &PointBuilder) -> Self {
+         let mut result = Self {
+             address: 4,
++            checksum: true,
+             key: width(b.max_key_len as u64),
+             count: width(b.max_versions as u64),
+             seq: width(b.max_seq - b.min_seq),
+@@ -57,7 +68,7 @@ impl Encoding {
+         self.address + 2 * self.key + self.count
+     }
+     fn version(self) -> usize {
+-        self.seq + self.value + self.address
++        self.seq + self.value + self.address + usize::from(self.checksum) * 4
+     }
+     fn arena_len(self, b: &PointBuilder) -> usize {
+         b.heads.len() * self.key_header() + b.suffix_bytes + b.versions * self.version()
+@@ -78,6 +89,12 @@ pub(super) fn encode(builder: PointBuilder) -> Result<Vec<u8>, SstError> {
+     let encoding = Encoding::for_builder(&builder);
+     encode_with(builder, encoding)
+ }
++#[cfg(test)]
++pub(super) fn encode_without_crc(builder: PointBuilder) -> Result<Vec<u8>, SstError> {
++    let mut encoding = Encoding::for_builder(&builder);
++    encoding.checksum = false;
++    encode_with(builder, encoding)
++}
+ fn encode_with(builder: PointBuilder, encoding: Encoding) -> Result<Vec<u8>, SstError> {
+     let keys: Vec<_> = builder
+         .heads
+@@ -88,6 +105,7 @@ fn encode_with(builder: PointBuilder, encoding: Encoding) -> Result<Vec<u8>, Sst
+     let mut arena = Vec::with_capacity(encoding.arena_len(&builder));
+     let mut heads = Vec::with_capacity(keys.len());
+     let mut anchor = 0;
++    let mut checksums = builder.checksums.iter();
+     for (i, &key) in keys.iter().enumerate() {
+         let shared = if i.is_multiple_of(GROUP) {
+             0
+@@ -122,6 +140,10 @@ fn encode_with(builder: PointBuilder, encoding: Encoding) -> Result<Vec<u8>, Sst
+                 u64_at(&builder.arena, pos + 13),
+                 encoding.address,
+             );
++            let checksum = *checksums.next().expect("one CRC per version");
++            if encoding.checksum {
++                arena.extend_from_slice(&checksum.to_le_bytes());
++            }
+             pos += 21;
+         }
+     }
+@@ -138,7 +160,7 @@ fn encode_with(builder: PointBuilder, encoding: Encoding) -> Result<Vec<u8>, Sst
+         encoding.count,
+         encoding.seq,
+         encoding.value,
+-        0,
++        usize::from(encoding.checksum),
+     ] {
+         bytes.extend_from_slice(&(w as u32).to_le_bytes());
+     }
+@@ -167,6 +189,7 @@ pub(in crate::sstable) struct CompactIndex {
+     buckets: usize,
+     arena: usize,
+     encoding: Encoding,
++    packed: bool,
+     _reservation: ResidentReservation,
+ }
+ impl CompactIndex {
+@@ -175,6 +198,18 @@ impl CompactIndex {
+         data: ArcBlock,
+         reservation: ResidentReservation,
+         blocks: impl IntoIterator<Item = (u64, u64)>,
++    ) -> Result<Self, SstError> {
++        let mut result = Self::header(bytes, data, reservation)?;
++        let data = result.data.clone();
++        result.validate(blocks, data.len(), |offset, len| {
++            Ok(std::borrow::Cow::Borrowed(&data[offset..offset + len]))
++        })?;
++        Ok(result)
++    }
++    fn header(
++        bytes: ArcBlock,
++        data: ArcBlock,
++        reservation: ResidentReservation,
+     ) -> Result<Self, SstError> {
+         super::super::reader::verify_trailer(&bytes, "point index")?;
+         if bytes.len() < HEADER + 5 || &bytes[..8] != MAGIC {
+@@ -191,6 +226,7 @@ impl CompactIndex {
+             count: u32_at(&bytes, 40) as usize,
+             seq: u32_at(&bytes, 44) as usize,
+             value: u32_at(&bytes, 48) as usize,
++            checksum: u32_at(&bytes, 52) & 1 != 0,
+         };
+         let min_seq = u64_at(&bytes, 56);
+         if count == 0
+@@ -201,7 +237,7 @@ impl CompactIndex {
+             || !matches!(encoding.count, 1 | 2 | 4)
+             || !matches!(encoding.seq, 1 | 2 | 4 | 8)
+             || !matches!(encoding.value, 2 | 4)
+-            || u32_at(&bytes, 52) != 0
++            || u32_at(&bytes, 52) & !1 != 0
+             || buckets
+                 .checked_mul(4)
+                 .and_then(|n| HEADER.checked_add(n))
+@@ -215,7 +251,7 @@ impl CompactIndex {
+         {
+             return Err(bad("invalid compact dimensions"));
+         }
+-        let mut result = Self {
++        Ok(Self {
+             bytes,
+             data,
+             blocks: Vec::new(),
+@@ -225,22 +261,94 @@ impl CompactIndex {
+             buckets,
+             arena,
+             encoding,
++            packed: false,
+             _reservation: reservation,
+-        };
+-        result.validate(blocks)?;
+-        Ok(result)
++        })
++    }
++    // PH3's disk encoding is unchanged. Only its validated in-memory hash tables
++    // omit fingerprints (full key equality remains mandatory) and use u24 pilots.
++    pub(in crate::sstable) fn locator_bytes(
++        header: &[u8],
++        len: u64,
++        data_len: u64,
++    ) -> Option<usize> {
++        if header.len() < HEADER
++            || &header[..8] != MAGIC
++            || u32_at(header, 52) != 1
++            || usize::try_from(data_len).is_err()
++        {
++            return None;
++        }
++        let n = u32_at(header, 16) as u64;
++        let b = u32_at(header, 20) as u64;
++        if n >= 1 << 23 || b != n.div_ceil(2) {
++            return None;
++        }
++        usize::try_from(len.checked_sub(b + 2 * n)?).ok()
++    }
++    pub(in crate::sstable) fn decode_locators<'a>(
++        bytes: ArcBlock,
++        data_len: usize,
++        reservation: ResidentReservation,
++        blocks: impl IntoIterator<Item = (u64, u64)>,
++        read: impl FnMut(usize, usize) -> Result<std::borrow::Cow<'a, [u8]>, SstError>,
++    ) -> Result<Option<Self>, SstError> {
++        let mut result = Self::header(bytes, Arc::from([]), reservation)?;
++        if !result.encoding.checksum || result.count >= 1 << 23 {
++            return Err(bad("unsupported locator admission"));
++        }
++        if (0..result.buckets).any(|b| u32_at(&result.bytes, HEADER + b * 4) & !DIRECT >= 1 << 23) {
++            return Ok(None);
++        }
++        result.validate(blocks, data_len, read)?;
++        let mut packed = Vec::with_capacity(result.bytes.len() - result.buckets - 2 * result.count);
++        packed.extend_from_slice(&result.bytes[..HEADER]);
++        for b in 0..result.buckets {
++            let p = u32_at(&result.bytes, HEADER + b * 4);
++            let p = (p & !DIRECT) | ((p & DIRECT) >> 8);
++            packed.extend_from_slice(&p.to_le_bytes()[..3]);
++        }
++        let slots = HEADER + result.buckets * 4;
++        for i in 0..result.count {
++            let at = slots + i * (result.encoding.address + 2);
++            packed.extend_from_slice(&result.bytes[at..at + result.encoding.address]);
++        }
++        let arena = packed.len();
++        packed.extend_from_slice(&result.bytes[result.arena..]);
++        result.arena = arena;
++        result.bytes = packed.into();
++        result.blocks.clear();
++        result.blocks.shrink_to_fit();
++        result.packed = true;
++        Ok(Some(result))
+     }
+     #[inline(always)]
+     fn slot(&self, h: u64) -> usize {
+-        let pilot = u32_at(&self.bytes, HEADER + bucket(h, self.buckets) * 4);
++        let pilot = if self.packed {
++            let at = HEADER + bucket(h, self.buckets) * 3;
++            let p = u32::from_le_bytes([self.bytes[at], self.bytes[at + 1], self.bytes[at + 2], 0]);
++            (p & 0x7f_ffff) | ((p & 0x80_0000) << 8)
++        } else {
++            u32_at(&self.bytes, HEADER + bucket(h, self.buckets) * 4)
++        };
+         let at = if pilot & DIRECT != 0 {
+             (pilot & !DIRECT) as usize
+         } else {
+             position(h, pilot, self.count)
+         };
+-        HEADER + self.buckets * 4 + at * (self.encoding.address + 2)
++        if self.packed {
++            HEADER + self.buckets * 3 + at * self.encoding.address
++        } else {
++            HEADER + self.buckets * 4 + at * (self.encoding.address + 2)
++        }
+     }
+-    fn validate(&mut self, blocks: impl IntoIterator<Item = (u64, u64)>) -> Result<(), SstError> {
++
++    fn validate<'a>(
++        &mut self,
++        blocks: impl IntoIterator<Item = (u64, u64)>,
++        data_len: usize,
++        mut read: impl FnMut(usize, usize) -> Result<std::borrow::Cow<'a, [u8]>, SstError>,
++    ) -> Result<(), SstError> {
+         let e = self.encoding;
+         for b in 0..self.buckets {
+             let pilot = u32_at(&self.bytes, HEADER + b * 4);
+@@ -264,17 +372,16 @@ impl CompactIndex {
+         for (offset, len) in blocks {
+             let offset = usize::try_from(offset).map_err(|_| bad("data offset overflow"))?;
+             let len = usize::try_from(len).map_err(|_| bad("data length overflow"))?;
+-            if offset != data_end
+-                || offset
+-                    .checked_add(len)
+-                    .is_none_or(|end| end > self.data.len())
+-            {
++            if offset != data_end || offset.checked_add(len).is_none_or(|end| end > data_len) {
+                 return Err(bad("invalid compact backing bounds"));
+             }
+-            let raw = &self.data[offset..offset + len];
+-            let meta = super::super::block::VerifiedBlock::verify(raw)?;
++            let raw = read(offset, len)?;
++            if raw.len() != len {
++                return Err(bad("short backing read"));
++            }
++            let meta = super::super::block::VerifiedBlock::verify(&raw)?;
+             super::super::block::visit_records(
+-                raw,
++                &raw,
+                 &meta,
+                 &mut key,
+                 |kind, seq, key, value_offset, value_len| {
+@@ -354,6 +461,12 @@ impl CompactIndex {
+                     {
+                         return Err(bad("compact locator disagrees with sorted record"));
+                     }
++                    if e.checksum
++                        && u32_at(&self.bytes, pos + e.seq + e.value + e.address)
++                            != crate::crc32::crc32(&raw[value_offset..value_offset + value_len])
++                    {
++                        return Err(bad("value checksum disagrees with sorted record"));
++                    }
+                     pos += e.version();
+                     remaining -= 1;
+                     last_seq = Some(seq);
+@@ -363,7 +476,7 @@ impl CompactIndex {
+             verified_blocks.push((offset, len, meta));
+             data_end = offset + len;
+         }
+-        if data_end != self.data.len() || pos != end || remaining != 0 || groups != self.count {
++        if data_end != data_len || pos != end || remaining != 0 || groups != self.count {
+             return Err(bad("compact and sorted coverage differ"));
+         }
+         self.blocks = verified_blocks;
+@@ -381,6 +494,17 @@ impl CompactIndex {
+         )
+     }
+     pub(super) fn get(&self, key: &[u8], limit: Option<u64>) -> Option<Found> {
++        self.locate(key, limit).map(|v| Found {
++            kind: v.kind,
++            seq: v.seq,
++            value: self.data[v.offset..v.offset + v.len].to_vec(),
++        })
++    }
++    pub(in crate::sstable) fn locate(
++        &self,
++        key: &[u8],
++        limit: Option<u64>,
++    ) -> Option<ValueLocator> {
+         let e = self.encoding;
+         // Constant widths remove repeated decoder dispatch from the common
+         // single-version layout. All encodings share the same lookup body.
+@@ -394,6 +518,7 @@ impl CompactIndex {
+                     count: 1,
+                     seq: 2,
+                     value: 2,
++                    checksum: e.checksum,
+                 },
+             ),
+             (4, 1, 1, 4, 2) => self.get_encoded(
+@@ -405,16 +530,17 @@ impl CompactIndex {
+                     count: 1,
+                     seq: 4,
+                     value: 2,
++                    checksum: e.checksum,
+                 },
+             ),
+             _ => self.get_encoded(key, limit, e),
+         }
+     }
+     #[inline(always)]
+-    fn get_encoded(&self, key: &[u8], limit: Option<u64>, e: Encoding) -> Option<Found> {
++    fn get_encoded(&self, key: &[u8], limit: Option<u64>, e: Encoding) -> Option<ValueLocator> {
+         let h = hash(key, self.seed);
+         let slot = self.slot(h);
+-        if uint(&self.bytes, slot + e.address, 2) != fingerprint(h) as u64 {
++        if !self.packed && uint(&self.bytes, slot + e.address, 2) != fingerprint(h) as u64 {
+             return None;
+         }
+         let mut pos = self.arena + uint(&self.bytes, slot, e.address) as usize;
+@@ -441,10 +567,16 @@ impl CompactIndex {
+                 };
+                 let offset = uint(&self.bytes, pos + e.seq + e.value, e.address) as usize;
+                 let len = (value & !e.tombstone()) as usize;
+-                return Some(Found {
++                return Some(ValueLocator {
+                     kind,
+                     seq,
+-                    value: self.data[offset..offset + len].to_vec(),
++                    offset,
++                    len,
++                    checksum: if e.checksum {
++                        u32_at(&self.bytes, pos + e.seq + e.value + e.address)
++                    } else {
++                        0
++                    },
+                 });
+             }
+             pos += e.version();
+@@ -555,6 +687,7 @@ mod tests {
+                 count: u32_at(&f.bytes, 40) as usize,
+                 seq: u32_at(&f.bytes, 44) as usize,
+                 value: u32_at(&f.bytes, 48) as usize,
++                checksum: true,
+             };
+             for at in [
+                 16,
+@@ -612,6 +745,73 @@ mod tests {
+         }
+     }
+     #[test]
++    fn locator_crc_fields_and_budget_are_validated_before_admission() {
++        for width in [4, 8] {
++            for corrupt in [false, true] {
++                let mut f = compact_fixture(width);
++                if corrupt {
++                    let arena = u64_at(&f.bytes, 24) as usize;
++                    let e = Encoding {
++                        address: width,
++                        key: 2,
++                        count: 1,
++                        seq: 1,
++                        value: 2,
++                        checksum: true,
++                    };
++                    // The first key is empty; corrupt its first value CRC and
++                    // recompute the section CRC to exercise semantic validation.
++                    let crc_at = arena + e.key_header() + e.seq + e.value + e.address;
++                    f.bytes[crc_at] ^= 1;
++                    let end = f.bytes.len() - 4;
++                    let crc = crate::crc32::crc32(&f.bytes[..end]);
++                    f.bytes[end..].copy_from_slice(&crc.to_le_bytes());
++                }
++                let charge = CompactIndex::locator_bytes(
++                    &f.bytes,
++                    f.bytes.len() as u64,
++                    f.data.len() as u64,
++                )
++                .unwrap();
++                let cache = Arc::new(BlockCache::new(charge));
++                let reservation = cache.reserve_point(charge).unwrap();
++                let point = CompactIndex::decode_locators(
++                    f.bytes.into(),
++                    f.data.len(),
++                    reservation,
++                    f.blocks,
++                    |offset, len| Ok(std::borrow::Cow::Borrowed(&f.data[offset..offset + len])),
++                );
++                if corrupt {
++                    assert!(point.is_err());
++                    assert_eq!(cache.stats().point_index_bytes, 0);
++                } else {
++                    let point = point.unwrap().unwrap();
++                    assert_eq!(point.bytes.len(), charge);
++                    let v = point.locate(b"", Some(7)).unwrap();
++                    assert_eq!(
++                        v.checksum,
++                        crate::crc32::crc32(&f.data[v.offset..v.offset + v.len])
++                    );
++                    assert_eq!(cache.stats().point_index_bytes, charge);
++                    drop(point);
++                    assert_eq!(cache.stats().point_index_bytes, 0);
++                }
++            }
++        }
++    }
++    #[test]
++    fn locator_admission_respects_address_space_and_legacy_verification() {
++        let mut f = compact_fixture(4);
++        f.bytes[52..56].copy_from_slice(&0u32.to_le_bytes());
++        assert!(CompactIndex::locator_bytes(&f.bytes, f.bytes.len() as u64, 1).is_none());
++        f.bytes[52..56].copy_from_slice(&1u32.to_le_bytes());
++        assert_eq!(
++            CompactIndex::locator_bytes(&f.bytes, f.bytes.len() as u64, u64::MAX).is_some(),
++            usize::try_from(u64::MAX).is_ok()
++        );
++    }
++    #[test]
+     fn compact_point_fingerprint_collision_still_compares_complete_key() {
+         let mut table = super::super::super::TableBuilder::with_point_index(true);
+         table.add(Kind::Put, b"present", b"secret", 1).unwrap();
+diff --git a/src/sstable/reader.rs b/src/sstable/reader.rs
+index 532169db..08941dd8 100644
+--- a/src/sstable/reader.rs
++++ b/src/sstable/reader.rs
+@@ -13,7 +13,7 @@ use std::sync::Arc;
+ 
+ use super::block::{BlockIter, VerifiedBlock};
+ use super::builder::{FOOTER_LEN, FORMAT_VERSION, MAGIC, POINT_FOOTER_EXTRA, POINT_FORMAT_VERSION};
+-use super::point::PointIndex;
++use super::point::{PointIndex, compact::CompactIndex};
+ use super::separator::Separator;
+ use super::{Kind, SstError};
+ use crate::bloom::BloomFilter;
+@@ -128,6 +128,7 @@ pub struct SstTable {
+     index: Vec<IndexEntry>,
+     filter: BloomFilter,
+     point: Option<Box<PointIndex>>,
++    locators: Option<Box<CompactIndex>>,
+     first_key: Vec<u8>,
+     last_key: Vec<u8>,
+     block_cache: Arc<BlockCache>,
+@@ -266,12 +267,26 @@ impl SstTable {
+             &index_raw,
+             point_range.map_or(filter_offset, |(offset, _)| offset),
+         )?;
++        let mut locators = None;
+         let point = if let Some((offset, len)) = point_range {
+             let lease = file_cache.acquire(number, path).map_err(open_err)?;
+-            let resident = offset
+-                .checked_add(len)
+-                .and_then(|n| usize::try_from(n).ok())
+-                .and_then(|n| block_cache.reserve_point(n));
++            let resident = (!block_cache.prefer_compact_points())
++                .then(|| {
++                    offset
++                        .checked_add(len)
++                        .and_then(|n| usize::try_from(n).ok())
++                        .and_then(|n| block_cache.reserve_point(n))
++                })
++                .flatten();
++            let header = lease
++                .read_range_at(path, offset, len.min(64))
++                .map_err(|e| bad(e.to_string()))?;
++            let locator_reservation = if resident.is_none() {
++                CompactIndex::locator_bytes(&header, len, offset)
++                    .and_then(|n| block_cache.reserve_point(n))
++            } else {
++                None
++            };
+             if let Some(reservation) = resident {
+                 let raw = lease
+                     .read_shared_range_at(path, offset, len)
+@@ -285,6 +300,24 @@ impl SstTable {
+                     reservation,
+                     index.iter().map(|entry| (entry.offset, entry.len)),
+                 )?))
++            } else if let Some(reservation) = locator_reservation {
++                let raw = lease
++                    .read_shared_range_at(path, offset, len)
++                    .map_err(|e| bad(e.to_string()))?;
++                locators = CompactIndex::decode_locators(
++                    raw,
++                    usize::try_from(offset).map_err(|_| bad("backing offset overflow".into()))?,
++                    reservation,
++                    index.iter().map(|entry| (entry.offset, entry.len)),
++                    |start, amount| {
++                        lease
++                            .read_range_at(path, start as u64, amount as u64)
++                            .map(std::borrow::Cow::Owned)
++                            .map_err(|e| bad(e.to_string()))
++                    },
++                )?
++                .map(Box::new);
++                None
+             } else {
+                 let header = lease
+                     .read_range_at(path, offset, 8)
+@@ -332,6 +365,7 @@ impl SstTable {
+             index,
+             filter,
+             point,
++            locators,
+             first_key: Vec::new(),
+             last_key: Vec::new(),
+             block_cache,
+@@ -544,10 +578,34 @@ impl SstTable {
+     /// Point lookup. Returns the newest version of `key` whose sequence
+     /// number does not exceed `limit`, or `None` when provably absent.
+     pub fn get(&self, key: &[u8], limit: Option<u64>) -> Result<Option<Found>, SstError> {
+-        // Resident point indexes reject misses with a fingerprint and full-key check.
+         if let Some(point) = &self.point {
+             return Ok(point.get(key, limit));
+         }
++        if let Some(locators) = &self.locators {
++            let Some(v) = locators.locate(key, limit) else {
++                return Ok(None);
++            };
++            let value = if let Some(m) = &self.mmap {
++                m.as_slice()[v.offset..v.offset + v.len].to_vec()
++            } else {
++                let lease = self
++                    .file_cache
++                    .acquire(self.number, &self.path)
++                    .map_err(|e| SstError::Corrupt(format!("point file cannot be opened: {e}")))?;
++                lease
++                    .read_range_at(&self.path, v.offset as u64, v.len as u64)
++                    .map_err(|e| SstError::Corrupt(format!("point value read failed: {e}")))?
++            };
++            // Verify the owned copy, not the mutable file page that supplied it.
++            if crc32::crc32(&value) != v.checksum {
++                return Err(SstError::Corrupt("point value checksum mismatch".into()));
++            }
++            return Ok(Some(Found {
++                kind: v.kind,
++                seq: v.seq,
++                value,
++            }));
++        }
+         if !self.filter.may_contain(key) {
+             return Ok(None);
+         }
+@@ -1250,3 +1308,148 @@ mod mmap_tests {
+         }
+     }
+ }
++
++#[cfg(test)]
++mod compact_point_tests {
++    use super::*;
++    use crate::sstable::TableBuilder;
++    use crate::testutil::TempDir;
++    use std::os::unix::fs::FileExt;
++
++    fn fixture(path: &Path, mapped: bool) -> SstTable {
++        let mut builder = TableBuilder::with_point_index(true);
++        builder.add(Kind::Put, b"", b"empty", 1).unwrap();
++        for id in 0..97 {
++            let key = [b"\0prefix/".as_slice(), &(id as u64).to_be_bytes(), b"\xff"].concat();
++            for seq in (1..=40).rev() {
++                let (kind, value) = if seq == 40 {
++                    (Kind::Tombstone, Vec::new())
++                } else {
++                    (Kind::Put, vec![(id + seq) as u8; 200])
++                };
++                builder.add(kind, &key, &value, seq as u64).unwrap();
++            }
++        }
++        let file = path.join("1.sst");
++        crate::atomic::commit_file(&file, &builder.finish().unwrap()).unwrap();
++        let cache = Arc::new(BlockCache::new(256 * 1024));
++        cache.set_point_working_set(u64::MAX);
++        let table =
++            SstTable::open(1, &file, cache, Arc::new(TableFileCache::new(2)), mapped).unwrap();
++        assert!(table.locators.is_some());
++        assert!(table.point.is_none());
++        table
++    }
++
++    #[test]
++    fn compact_locators_preserve_versions_full_keys_and_cache_budget() {
++        for mapped in [false, true] {
++            let dir = TempDir::new("compact-versions");
++            let table = fixture(dir.path(), mapped);
++            assert_eq!(table.get(b"", None).unwrap().unwrap().value, b"empty");
++            for id in 0..97u64 {
++                let key = [b"\0prefix/".as_slice(), &id.to_be_bytes(), b"\xff"].concat();
++                assert_eq!(
++                    table.get(&key, None).unwrap().unwrap().kind,
++                    Kind::Tombstone
++                );
++                for seq in [1, 17, 39] {
++                    let found = table.get(&key, Some(seq)).unwrap().unwrap();
++                    assert_eq!(found.seq, seq);
++                    assert_eq!(found.value, vec![(id + seq) as u8; 200]);
++                }
++                assert!(table.get(&key, Some(0)).unwrap().is_none());
++            }
++            for id in 0..100_000u64 {
++                assert!(table.get(&id.to_be_bytes(), None).unwrap().is_none());
++            }
++            assert!(table.block_cache.stats().point_index_bytes > 0);
++            assert!(table.block_cache.resident_bytes() <= table.block_cache.capacity());
++            let before = table.block_cache.stats();
++            table.get(b"", None).unwrap();
++            assert_eq!(before.misses, table.block_cache.stats().misses);
++            let cache = table.block_cache.clone();
++            drop(table);
++            assert_eq!(cache.stats().point_index_bytes, 0);
++        }
++    }
++
++    #[test]
++    fn compact_values_recheck_corruption_after_open_for_pread_and_mapping() {
++        for mapped in [false, true] {
++            let dir = TempDir::new("compact-value-corruption");
++            let table = fixture(dir.path(), mapped);
++            let locator = table.locators.as_ref().unwrap().locate(b"", None).unwrap();
++            let file = std::fs::OpenOptions::new()
++                .write(true)
++                .open(dir.path().join("1.sst"))
++                .unwrap();
++            file.write_all_at(b"X", locator.offset as u64).unwrap();
++            file.sync_all().unwrap();
++            for _ in 0..2 {
++                assert!(matches!(table.get(b"", None), Err(SstError::Corrupt(_))));
++            }
++        }
++    }
++
++    #[test]
++    fn compact_pread_reports_short_reads_as_corruption() {
++        let dir = TempDir::new("compact-short-read");
++        let table = fixture(dir.path(), false);
++        let locator = table.locators.as_ref().unwrap().locate(b"", None).unwrap();
++        std::fs::OpenOptions::new()
++            .write(true)
++            .open(dir.path().join("1.sst"))
++            .unwrap()
++            .set_len(locator.offset as u64 + 1)
++            .unwrap();
++        assert!(matches!(table.get(b"", None), Err(SstError::Corrupt(_))));
++    }
++
++    #[test]
++    fn compact_open_rejects_corrupt_sorted_bytes_before_publishing_locators() {
++        let dir = TempDir::new("compact-open-corruption");
++        let table = fixture(dir.path(), false);
++        let offset = table
++            .locators
++            .as_ref()
++            .unwrap()
++            .locate(b"", None)
++            .unwrap()
++            .offset;
++        drop(table);
++        let path = dir.path().join("1.sst");
++        std::fs::OpenOptions::new()
++            .write(true)
++            .open(&path)
++            .unwrap()
++            .write_all_at(b"X", offset as u64)
++            .unwrap();
++        for mapped in [false, true] {
++            let cache = Arc::new(BlockCache::new(256 * 1024));
++            cache.set_point_working_set(u64::MAX);
++            assert!(matches!(
++                SstTable::open(1, &path, cache, Arc::new(TableFileCache::new(2)), mapped),
++                Err(SstError::Corrupt(_))
++            ));
++        }
++    }
++
++    #[test]
++    fn compact_mapping_survives_unlink_with_concurrent_reads() {
++        let dir = TempDir::new("compact-unlink-concurrent");
++        let table = fixture(dir.path(), true);
++        assert!(table.mmap.is_some());
++        std::fs::remove_file(dir.path().join("1.sst")).unwrap();
++        std::thread::scope(|scope| {
++            for _ in 0..4 {
++                let table = &table;
++                scope.spawn(move || {
++                    for _ in 0..1000 {
++                        assert_eq!(table.get(b"", None).unwrap().unwrap().value, b"empty");
++                    }
++                });
++            }
++        });
++    }
++}
+diff --git a/tools/agentbench/readpath/Cargo.lock b/tools/agentbench/readpath/Cargo.lock
+index 0414aac3..cd835eef 100644
+--- a/tools/agentbench/readpath/Cargo.lock
++++ b/tools/agentbench/readpath/Cargo.lock
+@@ -30,12 +30,6 @@ dependencies = [
+  "serde_core",
+ ]
+ 
+-[[package]]
+-name = "bumpalo"
+-version = "3.20.3"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
+-
+ [[package]]
+ name = "byteorder"
+ version = "1.5.0"
+@@ -44,11 +38,10 @@ checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
+ 
+ [[package]]
+ name = "cc"
+-version = "1.8.0"
++version = "1.2.19"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "6651c9ed80effdc7db0ff72512157f901af5e3549e341e24b1dd4887d836d838"
++checksum = "8e3a13707ac958681c13b39b458c073d0d9bc8a22cb1b2f4c8e55eb72c13f362"
+ dependencies = [
+- "find-msvc-tools",
+  "shlex",
+ ]
+ 
+@@ -100,7 +93,7 @@ checksum = "97369cbbc041bc366949bc74d34658d6cda5621039731c6310521892a3a20ae0"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 2.0.104",
++ "syn",
+ ]
+ 
+ [[package]]
+@@ -112,30 +105,6 @@ dependencies = [
+  "phf",
+ ]
+ 
+-[[package]]
+-name = "fallible-iterator"
+-version = "0.3.0"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "2acce4a10f12dc2fb14a218589d4f1f62ef011b2d0cc4b3cb1bba8e94da14649"
+-
+-[[package]]
+-name = "fallible-streaming-iterator"
+-version = "0.1.9"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
+-
+-[[package]]
+-name = "find-msvc-tools"
+-version = "0.1.14"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "aedcfb3409746eddb02b9e19ebda1c3394f759a152e48ee875a0844d1b955484"
+-
+-[[package]]
+-name = "foldhash"
+-version = "0.2.0"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
+-
+ [[package]]
+ name = "form_urlencoded"
+ version = "1.2.1"
+@@ -156,33 +125,6 @@ dependencies = [
+  "version_check",
+ ]
+ 
+-[[package]]
+-name = "hashbrown"
+-version = "0.16.1"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
+-dependencies = [
+- "foldhash",
+-]
+-
+-[[package]]
+-name = "hashbrown"
+-version = "0.17.1"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
+-dependencies = [
+- "foldhash",
+-]
+-
+-[[package]]
+-name = "hashlink"
+-version = "0.12.2"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "a596f1b20ed2cc5ecac41a164aaebc7258057060f06c0cf7a2ba3991ee7990fb"
+-dependencies = [
+- "hashbrown 0.17.1",
+-]
+-
+ [[package]]
+ name = "heed-traits"
+ version = "0.20.0"
+@@ -338,7 +280,7 @@ checksum = "1ec89e9337638ecdc08744df490b221a7399bf8d164eb52a665454e60e075ad6"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 2.0.104",
++ "syn",
+ ]
+ 
+ [[package]]
+@@ -368,16 +310,6 @@ version = "1.0.15"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
+ 
+-[[package]]
+-name = "js-sys"
+-version = "0.3.106"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "7883d941dae510fb2d978fc3fe018c71c9e2892fd38854de3e8b92c2e5ad9cc5"
+-dependencies = [
+- "cfg-if",
+- "wasm-bindgen",
+-]
+-
+ [[package]]
+ name = "kiban"
+ version = "0.1.0"
+@@ -390,7 +322,6 @@ dependencies = [
+  "heed3",
+  "kiban",
+  "mimalloc",
+- "rusqlite",
+  "serde",
+  "serde_json",
+ ]
+@@ -411,17 +342,6 @@ dependencies = [
+  "libc",
+ ]
+ 
+-[[package]]
+-name = "libsqlite3-sys"
+-version = "0.38.2"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "f1d20bef17f513b9b3004532233187769cd072d790971f4e4da0e346eb6401e8"
+-dependencies = [
+- "cc",
+- "pkg-config",
+- "vcpkg",
+-]
+-
+ [[package]]
+ name = "litemap"
+ version = "0.7.4"
+@@ -506,7 +426,7 @@ dependencies = [
+  "phf_shared",
+  "proc-macro2",
+  "quote",
+- "syn 2.0.104",
++ "syn",
+ ]
+ 
+ [[package]]
+@@ -518,12 +438,6 @@ dependencies = [
+  "siphasher",
+ ]
+ 
+-[[package]]
+-name = "pkg-config"
+-version = "0.3.34"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
+-
+ [[package]]
+ name = "proc-macro2"
+ version = "1.0.95"
+@@ -557,37 +471,6 @@ version = "0.6.4"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
+ 
+-[[package]]
+-name = "rsqlite-vfs"
+-version = "0.1.1"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "c51c9ae4df8a7fba42103df5c621fa3c37eccf3a3c650879e90fc48b11cc192c"
+-dependencies = [
+- "hashbrown 0.16.1",
+- "thiserror",
+-]
+-
+-[[package]]
+-name = "rusqlite"
+-version = "0.40.2"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "23f2a97da3e3873c73cb2a2e71b35c40ff95e0b1eefa8d72d8499a6928c3b5b3"
+-dependencies = [
+- "bitflags",
+- "fallible-iterator",
+- "fallible-streaming-iterator",
+- "hashlink",
+- "libsqlite3-sys",
+- "smallvec",
+- "sqlite-wasm-rs",
+-]
+-
+-[[package]]
+-name = "rustversion"
+-version = "1.0.23"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
+-
+ [[package]]
+ name = "ryu"
+ version = "1.0.20"
+@@ -621,7 +504,7 @@ checksum = "d540f220d3187173da220f885ab66608367b6574e925011a9353e4badda91d79"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 2.0.104",
++ "syn",
+ ]
+ 
+ [[package]]
+@@ -638,9 +521,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "shlex"
+-version = "2.0.1"
++version = "1.3.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
++checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
+ 
+ [[package]]
+ name = "siphasher"
+@@ -654,18 +537,6 @@ version = "1.14.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "7fcf8323ef1faaee30a44a340193b1ac6814fd9b7b4e88e9d4519a3e4abe1cfd"
+ 
+-[[package]]
+-name = "sqlite-wasm-rs"
+-version = "0.5.5"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "dc3efc0da82635d7e1ced0053bbbfa8c7ab9645d0bf36ceb4f7127bb85315d75"
+-dependencies = [
+- "cc",
+- "js-sys",
+- "rsqlite-vfs",
+- "wasm-bindgen",
+-]
+-
+ [[package]]
+ name = "stable_deref_trait"
+ version = "1.2.0"
+@@ -683,17 +554,6 @@ dependencies = [
+  "unicode-ident",
+ ]
+ 
+-[[package]]
+-name = "syn"
+-version = "3.0.9"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "d78c8dee4c7bf0e14673097256fed6142ce9d3b85a408189d07482442145823b"
+-dependencies = [
+- "proc-macro2",
+- "quote",
+- "unicode-ident",
+-]
+-
+ [[package]]
+ name = "synchronoise"
+ version = "1.0.1"
+@@ -711,27 +571,7 @@ checksum = "c8af7666ab7b6390ab78131fb5b0fce11d6b7a6951602017c35fa82800708971"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 2.0.104",
+-]
+-
+-[[package]]
+-name = "thiserror"
+-version = "2.0.21"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "09e52cb86a36cede5cb101bf8908837b3e4c6e5e59fe7fd85c23fb56200d189e"
+-dependencies = [
+- "thiserror-impl",
+-]
+-
+-[[package]]
+-name = "thiserror-impl"
+-version = "2.0.21"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "fe5197923287db20a58125f0bc85c062f7f2c892de97b18c356f9efb14b28524"
+-dependencies = [
+- "proc-macro2",
+- "quote",
+- "syn 3.0.9",
++ "syn",
+ ]
+ 
+ [[package]]
+@@ -779,63 +619,12 @@ version = "1.0.4"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
+ 
+-[[package]]
+-name = "vcpkg"
+-version = "0.2.15"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
+-
+ [[package]]
+ name = "version_check"
+ version = "0.9.5"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+ 
+-[[package]]
+-name = "wasm-bindgen"
+-version = "0.2.129"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "9bb54f33acc68fd454578d9820b0bde1a1a3d17aa17bb7b6595806d02886d409"
+-dependencies = [
+- "cfg-if",
+- "once_cell",
+- "rustversion",
+- "wasm-bindgen-macro",
+- "wasm-bindgen-shared",
+-]
+-
+-[[package]]
+-name = "wasm-bindgen-macro"
+-version = "0.2.129"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "2e29d0c35b16e224a7eeb5cd2d25e3e1968fbd65604117b44d3b789d00ee8535"
+-dependencies = [
+- "quote",
+- "wasm-bindgen-macro-support",
+-]
+-
+-[[package]]
+-name = "wasm-bindgen-macro-support"
+-version = "0.2.129"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "6f501a8bc3719dba86ef8ae4728879c08001bea749eb1333ac5b91e040e2a6b7"
+-dependencies = [
+- "bumpalo",
+- "proc-macro2",
+- "quote",
+- "syn 3.0.9",
+- "wasm-bindgen-shared",
+-]
+-
+-[[package]]
+-name = "wasm-bindgen-shared"
+-version = "0.2.129"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "23f0c9c52aa7cd7d77769a4cfe2a9adb1b331f489a41d912ce14513d5ab995c6"
+-dependencies = [
+- "unicode-ident",
+-]
+-
+ [[package]]
+ name = "winapi"
+ version = "0.3.9"
+@@ -890,7 +679,7 @@ checksum = "2380878cad4ac9aac1e2435f3eb4020e8374b5f13c296cb75b4620ff8e229154"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 2.0.104",
++ "syn",
+  "synstructure",
+ ]
+ 
+@@ -911,7 +700,7 @@ checksum = "595eed982f7d355beb85837f651fa22e90b3c044842dc7f2c2842c086f295808"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 2.0.104",
++ "syn",
+  "synstructure",
+ ]
+ 
+@@ -934,5 +723,5 @@ checksum = "6eafa6dfb17584ea3e2bd6e76e0cc15ad7af12b09abdd1ca55961bed9b1063c6"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+- "syn 2.0.104",
++ "syn",
+ ]
+diff --git a/tools/agentbench/readpath/Cargo.toml b/tools/agentbench/readpath/Cargo.toml
+index b20fb314..845b645e 100644
+--- a/tools/agentbench/readpath/Cargo.toml
++++ b/tools/agentbench/readpath/Cargo.toml
+@@ -13,7 +13,6 @@ mimalloc = "=0.1.48"
+ serde = { version = "1", features = ["derive"] }
+ serde_json = "1"
+ crc32fast = "=1.5.0"
+-rusqlite = { version = "=0.40.2", features = ["bundled"] }
+ 
+ [profile.release]
+ opt-level = 2
+diff --git a/tools/agentbench/readpath/src/main.rs b/tools/agentbench/readpath/src/main.rs
+index 159c4040..9c57d0e5 100644
+--- a/tools/agentbench/readpath/src/main.rs
++++ b/tools/agentbench/readpath/src/main.rs
+@@ -24,7 +24,6 @@ mod random;
+ #[path = "../../src/runner.rs"]
+ #[allow(dead_code)]
+ mod runner;
+-mod sqlite;
+ 
+ use api::{Backend, Result};
+ use kiban::db::{Kiban, KibanOptions};
+@@ -77,21 +76,6 @@ struct Options {
+     durable: bool,
+     #[serde(default)]
+     micro: String,
+-    #[serde(default)]
+-    sqlite_layout: sqlite::Layout,
+-    #[serde(default)]
+-    sqlite_sync: sqlite::Sync,
+-    #[serde(default)]
+-    sqlite_mmap_bytes: u64,
+-}
+-
+-impl Options {
+-    fn cache_bytes(&self) -> usize {
+-        self.cache_mib.map_or_else(
+-            || KibanOptions::default().block_cache_bytes,
+-            |mib| mib * 1024 * 1024,
+-        )
+-    }
+ }
+ 
+ fn one_reader() -> usize {
+@@ -99,35 +83,21 @@ fn one_reader() -> usize {
+ }
+ 
+ fn open(o: &Options) -> Result<Box<dyn Backend>> {
+-    eprintln!(
+-        "{}",
+-        json!({"type":"requested_config", "backend":o.suite.backend,
+-        "cache_bytes":o.cache_bytes(),"point_index":o.point_index,"durable":o.durable})
+-    );
+     Ok(match o.suite.backend.as_str() {
+-        "kiban" => Box::new(backend::Embedded::with_options_and_durability(
++        "kiban" => Box::new(backend::Embedded::with_options(
+             &o.suite.db,
+             KibanOptions {
+                 point_index: o.point_index,
+-                block_cache_bytes: o.cache_bytes(),
++                block_cache_bytes: o.cache_mib.map_or_else(
++                    || KibanOptions::default().block_cache_bytes,
++                    |mib| mib * 1024 * 1024,
++                ),
+                 mmap_max_level: o.mmap_max_level,
+                 ..KibanOptions::default()
+             },
+-            o.durable,
+         )?) as Box<dyn Backend>,
+-        "lmdb" => {
+-            let (db, details) = backend::Lmdb::open(
+-                &o.suite.db,
+-                if o.durable { Mode::Durable } else { Mode::Fast },
+-            )?;
+-            eprintln!(
+-                "{}",
+-                json!({"type":"backend_config","backend":"lmdb","details":details})
+-            );
+-            Box::new(db)
+-        }
+-        "sqlite" => Box::new(sqlite::Sqlite::open(o)?),
+-        _ => return Err("only kiban/lmdb/sqlite supported".into()),
++        "lmdb" => Box::new(backend::Lmdb::open(&o.suite.db, Mode::Fast)?.0),
++        _ => return Err("only kiban/lmdb supported".into()),
+     })
+ }
+ 
+@@ -291,15 +261,12 @@ fn reads(o: &Options) -> Result<()> {
+                 ),
+             )?;
+         }
+-        runner::verify_initial(b.as_mut(), c)?;
+         runner::emit(
+             &mut out,
+             &json!({"type":"complete","verified_records":c.n,"errors":0,"timed_writes":0,"layout":before,"proc_status":std::fs::read_to_string("/proc/self/status")?}),
+         )?;
+     }
+-    if o.action == "profile" {
+-        runner::verify_initial(b.as_mut(), c)?;
+-    }
++    runner::verify_initial(b.as_mut(), c)?;
+     drop(b);
+     if layout(c)? != before {
+         return Err("read-only suite changed layout".into());
+@@ -309,7 +276,18 @@ fn reads(o: &Options) -> Result<()> {
+ 
+ fn writes(o: &Options) -> Result<()> {
+     let c = &o.suite;
+-    let mut b = open(o)?;
++    let mut b: Box<dyn Backend> = if c.backend == "kiban" {
++        Box::new(backend::Embedded::with_options_and_durability(
++            &c.db,
++            KibanOptions {
++                point_index: o.point_index,
++                ..KibanOptions::default()
++            },
++            o.durable,
++        )?)
++    } else {
++        Box::new(backend::Lmdb::open(&c.db, if o.durable { Mode::Durable } else { Mode::Fast })?.0)
++    };
+     runner::verify_initial(b.as_mut(), c)?;
+     let mut out = std::io::BufWriter::new(
+         std::fs::OpenOptions::new()
+@@ -317,22 +295,43 @@ fn writes(o: &Options) -> Result<()> {
+             .create_new(true)
+             .open(&c.output)?,
+     );
+-    let plan = runner::Plan {
+-        base_population: c.n,
+-        insertions: c.operations,
+-        write_operations: c.operations,
+-    };
+-    runner::suite_plan(b.as_mut(), c, plan, &mut out)?;
+-    drop(b);
+-    let mut b = open(o)?;
+-    runner::verify_persisted_plan(b.as_mut(), c, plan, &mut out)?;
+-    runner::emit(
++    runner::suite_plan(
++        b.as_mut(),
++        c,
++        runner::Plan {
++            base_population: c.n,
++            insertions: c.operations,
++            write_operations: c.operations,
++        },
+         &mut out,
+-        &json!({"type":"resources",
+-        "proc_status":std::fs::read_to_string("/proc/self/status")?}),
+     )
+ }
+ 
++fn inspect(o: &Options) -> Result<()> {
++    let started = Instant::now();
++    let db = kiban::db::SharedKiban::open_with_options(
++        &o.suite.db,
++        KibanOptions {
++            block_cache_bytes: o.cache_mib.map_or_else(
++                || KibanOptions::default().block_cache_bytes,
++                |mib| mib << 20,
++            ),
++            mmap_max_level: o.mmap_max_level,
++            ..KibanOptions::default()
++        },
++    )?;
++    let open_ns = started.elapsed().as_nanos();
++    let stats = db.stats()?;
++    let cache = stats.block_cache;
++    assert!(cache.resident_bytes <= cache.capacity_bytes);
++    let row = json!({"type":"inspection", "open_ns":open_ns,
++        "capacity_bytes":cache.capacity_bytes, "resident_bytes":cache.resident_bytes,
++        "point_index_bytes":cache.point_index_bytes, "resident_entries":cache.resident_entries,
++        "proc_status":std::fs::read_to_string("/proc/self/status")?});
++    std::fs::write(&o.suite.output, format!("{row}\n"))?;
++    Ok(())
++}
++
+ fn run() -> Result<()> {
+     let path = std::env::args()
+         .nth(1)
+@@ -349,19 +348,12 @@ fn run() -> Result<()> {
+         return Err("invalid readbench options".into());
+     }
+     match o.action.as_str() {
+-        "metadata" => {
+-            println!(
+-                "{}",
+-                json!({"default_cache_bytes":KibanOptions::default().block_cache_bytes,
+-                "sqlite_version":rusqlite::version(), "sqlite_version_number":rusqlite::version_number()})
+-            );
+-            Ok(())
+-        }
+         "prepare" => prepare(&o),
+         "read" | "profile" => reads(&o),
+         "write" => writes(&o),
+         "cold" => cold::run(&o),
+         "micro" => micro::run(&o),
++        "inspect" => inspect(&o),
+         _ => Err("unknown action".into()),
+     }
+ }
+@@ -410,9 +402,6 @@ mod tests {
+                     stage: 0,
+                     durable: false,
+                     micro: String::new(),
+-                    sqlite_layout: sqlite::Layout::default(),
+-                    sqlite_sync: sqlite::Sync::default(),
+-                    sqlite_mmap_bytes: 0,
+                 };
+                 prepare(&o)?;
+                 reads(&o)?;
+diff --git a/tools/agentbench/readpath/src/micro.rs b/tools/agentbench/readpath/src/micro.rs
+index 3dfb9e2d..12e50d13 100644
+--- a/tools/agentbench/readpath/src/micro.rs
++++ b/tools/agentbench/readpath/src/micro.rs
+@@ -231,6 +231,9 @@ pub(super) fn run(o: &Options) -> Result<()> {
+                 let e = &index[i];
+                 black_box(VerifiedBlock::verify(&table[e.offset..e.offset + e.len])?);
+             }
++            "crc-value" => {
++                black_box(kiban::crc32::crc32(black_box(&values[at])));
++            }
+             "crc-scalar" | "crc-hardware" => {
+                 let e = &index[i];
+                 let data = &table[e.offset..e.offset + e.len - 4];
+diff --git a/tools/agentbench/readpath/src/sqlite.rs b/tools/agentbench/readpath/src/sqlite.rs
+deleted file mode 100644
+index 66129868..00000000
+--- a/tools/agentbench/readpath/src/sqlite.rs
++++ /dev/null
+@@ -1,344 +0,0 @@
+-//! SQLite baselines: integer rowid plus recent index, or clustered WITHOUT ROWID.
+-//! One connection is owned by the calling worker; no connection is shared.
+-use crate::{
+-    Options,
+-    api::{Backend, Result},
+-    model::{AGENTS, Memory},
+-};
+-use rusqlite::{Connection, OpenFlags, Row, params};
+-use serde::{Deserialize, Serialize};
+-use serde_json::json;
+-
+-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+-#[serde(rename_all = "lowercase")]
+-pub enum Layout {
+-    #[default]
+-    Rowid,
+-    Clustered,
+-}
+-
+-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
+-#[serde(rename_all = "UPPERCASE")]
+-pub enum Sync {
+-    Off,
+-    #[default]
+-    Normal,
+-    Full,
+-}
+-
+-impl Sync {
+-    fn number(self) -> i64 {
+-        match self {
+-            Self::Off => 0,
+-            Self::Normal => 1,
+-            Self::Full => 2,
+-        }
+-    }
+-}
+-
+-pub struct Sqlite {
+-    connection: Connection,
+-    layout: Layout,
+-}
+-
+-fn decode(row: &Row<'_>) -> rusqlite::Result<Memory> {
+-    let bytes = row.get_ref(0)?.as_blob()?;
+-    serde_json::from_slice(bytes).map_err(|e| {
+-        rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Blob, Box::new(e))
+-    })
+-}
+-
+-impl Sqlite {
+-    pub(super) fn open(o: &Options) -> Result<Self> {
+-        std::fs::create_dir_all(&o.suite.db)?;
+-        let connection = Connection::open_with_flags(
+-            o.suite.db.join("memories.sqlite3"),
+-            OpenFlags::SQLITE_OPEN_READ_WRITE
+-                | OpenFlags::SQLITE_OPEN_CREATE
+-                | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+-        )?;
+-        connection.set_prepared_statement_cache_capacity(16);
+-        connection.pragma_update(None, "page_size", 4096)?;
+-        let mode: String = connection.query_row("PRAGMA journal_mode=WAL", [], |r| r.get(0))?;
+-        if mode != "wal" {
+-            return Err("SQLite refused WAL".into());
+-        }
+-        connection.pragma_update(None, "synchronous", o.sqlite_sync.number())?;
+-        // Positive cache_size counts pages: match the engine budget within one page.
+-        connection.pragma_update(None, "cache_size", (o.cache_bytes() / 4096) as i64)?;
+-        connection.pragma_update(None, "mmap_size", i64::try_from(o.sqlite_mmap_bytes)?)?;
+-        connection.pragma_update(None, "wal_autocheckpoint", 1000)?;
+-        connection.pragma_update(None, "temp_store", "MEMORY")?;
+-        let schema = match o.sqlite_layout {
+-            Layout::Rowid => {
+-                "CREATE TABLE IF NOT EXISTS memories(\
+-                id INTEGER PRIMARY KEY, agent INTEGER NOT NULL, value BLOB NOT NULL);\
+-                CREATE INDEX IF NOT EXISTS memories_recent ON memories(agent, id DESC);"
+-            }
+-            Layout::Clustered => {
+-                "CREATE TABLE IF NOT EXISTS memories(\
+-                agent INTEGER NOT NULL, ts INTEGER NOT NULL, value BLOB NOT NULL,\
+-                PRIMARY KEY(agent, ts DESC)) WITHOUT ROWID;"
+-            }
+-        };
+-        connection.execute_batch(schema)?;
+-        let actual_schema = connection
+-            .prepare("SELECT sql FROM sqlite_schema WHERE name='memories'")?
+-            .query_row([], |r| r.get::<_, String>(0))?;
+-        if actual_schema.contains("WITHOUT ROWID") != (o.sqlite_layout == Layout::Clustered) {
+-            return Err("SQLite fixture layout differs from requested layout".into());
+-        }
+-        let mut pragmas = serde_json::Map::new();
+-        for name in [
+-            "synchronous",
+-            "cache_size",
+-            "page_size",
+-            "mmap_size",
+-            "wal_autocheckpoint",
+-            "temp_store",
+-            "locking_mode",
+-            "journal_mode",
+-        ] {
+-            let value = connection.query_row(&format!("PRAGMA {name}"), [], |r| {
+-                Ok(match r.get_ref(0)? {
+-                    rusqlite::types::ValueRef::Integer(n) => json!(n),
+-                    rusqlite::types::ValueRef::Text(s) => json!(String::from_utf8_lossy(s)),
+-                    _ => serde_json::Value::Null,
+-                })
+-            })?;
+-            pragmas.insert(name.into(), value);
+-        }
+-        if pragmas["synchronous"] != json!(o.sqlite_sync.number())
+-            || pragmas["cache_size"] != json!(o.cache_bytes() / 4096)
+-            || pragmas["page_size"] != json!(4096)
+-            || pragmas["mmap_size"].as_u64().unwrap_or(0) < o.sqlite_mmap_bytes
+-        {
+-            return Err("SQLite effective pragmas differ from requested configuration".into());
+-        }
+-        let compile_options = connection
+-            .prepare("PRAGMA compile_options")?
+-            .query_map([], |r| r.get::<_, String>(0))?
+-            .collect::<rusqlite::Result<Vec<_>>>()?;
+-        let source_id: String =
+-            connection.query_row("SELECT sqlite_source_id()", [], |r| r.get(0))?;
+-        let point = match o.sqlite_layout {
+-            Layout::Rowid => "EXPLAIN QUERY PLAN SELECT value FROM memories WHERE id=1",
+-            Layout::Clustered => {
+-                "EXPLAIN QUERY PLAN SELECT value FROM memories WHERE agent=1 AND ts=1"
+-            }
+-        };
+-        let recent = match o.sqlite_layout {
+-            Layout::Rowid => {
+-                "EXPLAIN QUERY PLAN SELECT value FROM memories WHERE agent=1 ORDER BY id DESC LIMIT 10"
+-            }
+-            Layout::Clustered => {
+-                "EXPLAIN QUERY PLAN SELECT value FROM memories WHERE agent=1 ORDER BY ts DESC LIMIT 10"
+-            }
+-        };
+-        let mut plans = Vec::new();
+-        for sql in [point, recent] {
+-            plans.push(
+-                connection
+-                    .prepare(sql)?
+-                    .query_map([], |r| r.get::<_, String>(3))?
+-                    .collect::<rusqlite::Result<Vec<_>>>()?,
+-            );
+-        }
+-        eprintln!(
+-            "{}",
+-            json!({"type":"backend_config", "backend":"sqlite", "sqlite_version":rusqlite::version(),
+-            "sqlite_source_id":source_id,"rusqlite":"0.40.2","compile_options":compile_options,
+-            "layout":o.sqlite_layout,"schema":schema,"pragmas":pragmas,"query_plans":plans,
+-            "target_cache_bytes":o.cache_bytes(),"effective_cache_bytes":(o.cache_bytes()/4096)*4096})
+-        );
+-        Ok(Self {
+-            connection,
+-            layout: o.sqlite_layout,
+-        })
+-    }
+-
+-    fn insert_sql(&self) -> &'static str {
+-        match self.layout {
+-            Layout::Rowid => "INSERT INTO memories(id, agent, value) VALUES(?1, ?2, ?3)",
+-            Layout::Clustered => "INSERT INTO memories(ts, agent, value) VALUES(?1, ?2, ?3)",
+-        }
+-    }
+-}
+-
+-impl Backend for Sqlite {
+-    fn bulk_load(&mut self, n: u64, seed: u64) -> Result<()> {
+-        let sql = self.insert_sql();
+-        if self.layout == Layout::Rowid {
+-            self.connection
+-                .execute_batch("DROP INDEX memories_recent")?;
+-        }
+-        let txn = self.connection.transaction()?;
+-        {
+-            let mut statement = txn.prepare_cached(sql)?;
+-            // Match each table's primary order, just as the LSM bulk flush
+-            // sorts its keys. Preparation order is outside all call timers.
+-            let ids: Box<dyn Iterator<Item = u64>> = match self.layout {
+-                Layout::Rowid => Box::new(0..n),
+-                Layout::Clustered => Box::new((0..AGENTS.min(n)).flat_map(|agent| {
+-                    let count = (n - 1 - agent) / AGENTS + 1;
+-                    (0..count).rev().map(move |seq| agent + seq * AGENTS)
+-                })),
+-            };
+-            for id in ids {
+-                let memory = Memory::new(id, 0, seed);
+-                statement.execute(params![
+-                    id as i64,
+-                    memory.agent,
+-                    serde_json::to_vec(&memory)?
+-                ])?;
+-            }
+-        }
+-        txn.commit()?;
+-        if self.layout == Layout::Rowid {
+-            self.connection
+-                .execute_batch("CREATE INDEX memories_recent ON memories(agent, id DESC)")?;
+-        }
+-        self.connection.execute_batch("ANALYZE")?;
+-        Ok(())
+-    }
+-
+-    fn put(&mut self, memory: &Memory, insert: bool) -> Result<()> {
+-        let value = serde_json::to_vec(memory)?;
+-        // An implicit transaction commits this single mutation before returning.
+-        // Update only the payload: creation sequence and agent are immutable.
+-        let changed = if insert {
+-            self.connection
+-                .prepare_cached(self.insert_sql())?
+-                .execute(params![memory.created_at as i64, memory.agent, value])?
+-        } else {
+-            let sql = match self.layout {
+-                Layout::Rowid => "UPDATE memories SET value=?3 WHERE id=?1 AND agent=?2",
+-                Layout::Clustered => "UPDATE memories SET value=?3 WHERE ts=?1 AND agent=?2",
+-            };
+-            self.connection.prepare_cached(sql)?.execute(params![
+-                memory.created_at as i64,
+-                memory.agent,
+-                value
+-            ])?
+-        };
+-        if changed != 1 {
+-            return Err("SQLite mutation did not affect exactly one row".into());
+-        }
+-        Ok(())
+-    }
+-
+-    fn get(&mut self, id: u64) -> Result<Memory> {
+-        let memory = match self.layout {
+-            Layout::Rowid => self
+-                .connection
+-                .prepare_cached("SELECT value FROM memories WHERE id=?1")?
+-                .query_row([id as i64], decode)?,
+-            Layout::Clustered => self
+-                .connection
+-                .prepare_cached("SELECT value FROM memories WHERE agent=?1 AND ts=?2")?
+-                .query_row(params![(id % AGENTS) as u32, id as i64], decode)?,
+-        };
+-        Ok(memory)
+-    }
+-
+-    fn recent(&mut self, agent: u32, k: usize) -> Result<Vec<Memory>> {
+-        let sql = match self.layout {
+-            Layout::Rowid => "SELECT value FROM memories WHERE agent=?1 ORDER BY id DESC LIMIT ?2",
+-            Layout::Clustered => {
+-                "SELECT value FROM memories WHERE agent=?1 ORDER BY ts DESC LIMIT ?2"
+-            }
+-        };
+-        let mut statement = self.connection.prepare_cached(sql)?;
+-        Ok(statement
+-            .query_map(params![agent, k as i64], decode)?
+-            .collect::<rusqlite::Result<Vec<_>>>()?)
+-    }
+-
+-    fn finish(&mut self) -> Result<()> {
+-        // Outside operation timers, persist relaxed-mode writes and include
+-        // checkpoint cost in the reported completion time.
+-        self.connection.pragma_update(None, "synchronous", 2)?;
+-        let (busy, _, _): (i64, i64, i64) =
+-            self.connection
+-                .query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |r| {
+-                    Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+-                })?;
+-        if busy != 0 {
+-            return Err("SQLite checkpoint was busy".into());
+-        }
+-        let integrity: String = self
+-            .connection
+-            .query_row("PRAGMA integrity_check", [], |r| r.get(0))?;
+-        if integrity != "ok" {
+-            return Err(format!("SQLite integrity: {integrity}").into());
+-        }
+-        Ok(())
+-    }
+-}
+-
+-#[cfg(test)]
+-mod tests {
+-    use super::*;
+-    use crate::{Config, prepare, reads, writes};
+-
+-    #[test]
+-    fn layouts_and_sync_modes_preserve_payloads_and_commits() -> Result<()> {
+-        let root = std::env::temp_dir().join(format!("readbench-sqlite-{}", std::process::id()));
+-        std::fs::create_dir_all(&root)?;
+-        for layout in [Layout::Rowid, Layout::Clustered] {
+-            for sync in [Sync::Off, Sync::Normal, Sync::Full] {
+-                let label = format!("{layout:?}-{sync:?}");
+-                let o = Options {
+-                    suite: Config {
+-                        backend: "sqlite".into(),
+-                        db: root.join(&label),
+-                        endpoint: String::new(),
+-                        n: 640,
+-                        operations: 100,
+-                        k: 10,
+-                        seed: 20261016,
+-                        output: root.join(format!("{label}-read.jsonl")),
+-                        verify_only: false,
+-                    },
+-                    action: "read".into(),
+-                    layout: "bulk".into(),
+-                    cache_mib: Some(32),
+-                    mmap_max_level: None,
+-                    readers: 1,
+-                    point_index: false,
+-                    stage: 0,
+-                    durable: false,
+-                    micro: String::new(),
+-                    sqlite_layout: layout,
+-                    sqlite_sync: sync,
+-                    sqlite_mmap_bytes: 1024 * 1024 * 1024,
+-                };
+-                prepare(&o)?;
+-                reads(&o)?;
+-                let mut w = o;
+-                w.suite.output = root.join(format!("{label}-write.jsonl"));
+-                writes(&w)?;
+-                let rows: Vec<serde_json::Value> = std::fs::read_to_string(&w.suite.output)?
+-                    .lines()
+-                    .map(serde_json::from_str)
+-                    .collect::<std::result::Result<_, _>>()?;
+-                assert_eq!(rows[5]["verified_records"], 740);
+-                assert_eq!(rows[6]["type"], "reopen_verified");
+-                let mut db = Sqlite::open(&w)?;
+-                assert!(db.put(&Memory::new(0, 0, w.suite.seed), true).is_err());
+-                assert!(db.put(&Memory::new(9999, 0, w.suite.seed), false).is_err());
+-                db.put(&Memory::new(5, 999, w.suite.seed), false)?;
+-                db.finish()?;
+-                drop(db);
+-                assert!(
+-                    reads(&w)
+-                        .unwrap_err()
+-                        .to_string()
+-                        .contains("value mismatch")
+-                );
+-            }
+-        }
+-        std::fs::remove_dir_all(root)?;
+-        Ok(())
+-    }
+-}

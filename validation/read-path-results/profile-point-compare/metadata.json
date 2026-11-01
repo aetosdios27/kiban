@@ -1,0 +1,16 @@
+{
+  "binaries": {
+    "before": {
+      "path": "/home/aetos/.t3/worktrees/kiban/t3-53ad0f47/target/read-path-tools/kiban-readbench-range-alloc-final",
+      "sha256": "9afa6c894677e7f940e4984b199fb09a601caa6ae829c37d66268d2c563c4867"
+    },
+    "after": {
+      "path": "/home/aetos/.t3/worktrees/kiban/t3-53ad0f47/target/read-path-tools/kiban-readbench-point-compare",
+      "sha256": "56c75e66c0eec9cb861a3d17953defeb8ae6c6bca4f4bef6e12e4d5cb9f98572"
+    }
+  },
+  "layout": "bulk",
+  "stage": 1,
+  "trials": 3,
+  "affinity": "3"
+}

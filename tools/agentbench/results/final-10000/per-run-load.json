@@ -1,0 +1,422 @@
+[
+  {
+    "trial": 1,
+    "backend": "kiban",
+    "file": "r1-kiban.jsonl",
+    "start_epoch": 1792160245.9882004,
+    "end_epoch": 1792160258.629589,
+    "samples": 13,
+    "duration_seconds": 12.641388654708862,
+    "largest_sample_gap_seconds": 1.0003280639648438,
+    "coverage": "sampled throughout",
+    "load": [
+      {
+        "median": 1.37158203125,
+        "min": 1.31640625,
+        "max": 1.50244140625
+      },
+      {
+        "median": 10.35595703125,
+        "min": 10.2333984375,
+        "max": 10.4970703125
+      },
+      {
+        "median": 20.42626953125,
+        "min": 20.33251953125,
+        "max": 20.52587890625
+      }
+    ]
+  },
+  {
+    "trial": 1,
+    "backend": "helix-floor",
+    "file": "r1-helix-floor.jsonl",
+    "start_epoch": 1792160262.5181391,
+    "end_epoch": 1792160263.5426376,
+    "samples": 2,
+    "duration_seconds": 1.024498462677002,
+    "largest_sample_gap_seconds": 1.0001471042633057,
+    "coverage": "sampled throughout",
+    "load": [
+      {
+        "median": 1.78271484375,
+        "min": 1.78271484375,
+        "max": 1.78271484375
+      },
+      {
+        "median": 10.146484375,
+        "min": 10.146484375,
+        "max": 10.146484375
+      },
+      {
+        "median": 20.25,
+        "min": 20.25,
+        "max": 20.25
+      }
+    ]
+  },
+  {
+    "trial": 1,
+    "backend": "helix",
+    "file": "r1-helix.jsonl",
+    "start_epoch": 1792160264.5195394,
+    "end_epoch": 1792160355.905563,
+    "samples": 92,
+    "duration_seconds": 91.38602375984192,
+    "largest_sample_gap_seconds": 1.0008330345153809,
+    "coverage": "sampled throughout",
+    "load": [
+      {
+        "median": 2.3974609375,
+        "min": 1.78271484375,
+        "max": 3.1181640625
+      },
+      {
+        "median": 9.14306640625,
+        "min": 8.3359375,
+        "max": 10.146484375
+      },
+      {
+        "median": 19.4326171875,
+        "min": 18.6728515625,
+        "max": 20.25
+      }
+    ]
+  },
+  {
+    "trial": 2,
+    "backend": "kiban",
+    "file": "r2-kiban.jsonl",
+    "start_epoch": 1792160359.8768291,
+    "end_epoch": 1792160372.5677326,
+    "samples": 13,
+    "duration_seconds": 12.690903425216675,
+    "largest_sample_gap_seconds": 1.0003290176391602,
+    "coverage": "sampled throughout",
+    "load": [
+      {
+        "median": 2.81591796875,
+        "min": 2.67041015625,
+        "max": 3.05908203125
+      },
+      {
+        "median": 8.072265625,
+        "min": 7.95458984375,
+        "max": 8.296875
+      },
+      {
+        "median": 18.4208984375,
+        "min": 18.3271484375,
+        "max": 18.6044921875
+      }
+    ]
+  },
+  {
+    "trial": 2,
+    "backend": "helix-floor",
+    "file": "r2-helix-floor.jsonl",
+    "start_epoch": 1792160376.3972404,
+    "end_epoch": 1792160377.5717835,
+    "samples": 2,
+    "duration_seconds": 1.1745431423187256,
+    "largest_sample_gap_seconds": 1.000204086303711,
+    "coverage": "sampled throughout",
+    "load": [
+      {
+        "median": 2.45654296875,
+        "min": 2.45654296875,
+        "max": 2.45654296875
+      },
+      {
+        "median": 7.822265625,
+        "min": 7.822265625,
+        "max": 7.822265625
+      },
+      {
+        "median": 18.228515625,
+        "min": 18.228515625,
+        "max": 18.228515625
+      }
+    ]
+  },
+  {
+    "trial": 2,
+    "backend": "helix",
+    "file": "r2-helix.jsonl",
+    "start_epoch": 1792160378.3994884,
+    "end_epoch": 1792160470.288727,
+    "samples": 92,
+    "duration_seconds": 91.88923859596252,
+    "largest_sample_gap_seconds": 1.001129150390625,
+    "coverage": "sampled throughout",
+    "load": [
+      {
+        "median": 3.03857421875,
+        "min": 2.45654296875,
+        "max": 3.37841796875
+      },
+      {
+        "median": 7.2236328125,
+        "min": 6.6953125,
+        "max": 7.822265625
+      },
+      {
+        "median": 17.533203125,
+        "min": 16.865234375,
+        "max": 18.228515625
+      }
+    ]
+  },
+  {
+    "trial": 3,
+    "backend": "kiban",
+    "file": "r3-kiban.jsonl",
+    "start_epoch": 1792160473.8143055,
+    "end_epoch": 1792160489.7019246,
+    "samples": 16,
+    "duration_seconds": 15.887619018554688,
+    "largest_sample_gap_seconds": 1.0008418560028076,
+    "coverage": "sampled throughout",
+    "load": [
+      {
+        "median": 3.239990234375,
+        "min": 3.1591796875,
+        "max": 3.5224609375
+      },
+      {
+        "median": 6.544189453125,
+        "min": 6.52197265625,
+        "max": 6.6171875
+      },
+      {
+        "median": 16.679443359375,
+        "min": 16.59033203125,
+        "max": 16.78515625
+      }
+    ]
+  },
+  {
+    "trial": 3,
+    "backend": "helix-floor",
+    "file": "r3-helix-floor.jsonl",
+    "start_epoch": 1792160493.3474126,
+    "end_epoch": 1792160494.3109715,
+    "samples": 1,
+    "duration_seconds": 0.9635589122772217,
+    "largest_sample_gap_seconds": 0.9630124568939209,
+    "coverage": "sampled throughout",
+    "load": [
+      {
+        "median": 4.20166015625,
+        "min": 4.20166015625,
+        "max": 4.20166015625
+      },
+      {
+        "median": 6.61328125,
+        "min": 6.61328125,
+        "max": 6.61328125
+      },
+      {
+        "median": 16.5654296875,
+        "min": 16.5654296875,
+        "max": 16.5654296875
+      }
+    ]
+  },
+  {
+    "trial": 3,
+    "backend": "helix",
+    "file": "r3-helix.jsonl",
+    "start_epoch": 1792160494.3484921,
+    "end_epoch": 1792160591.838964,
+    "samples": 98,
+    "duration_seconds": 97.49047183990479,
+    "largest_sample_gap_seconds": 1.0005359649658203,
+    "coverage": "sampled throughout",
+    "load": [
+      {
+        "median": 4.8349609375,
+        "min": 4.20166015625,
+        "max": 5.8525390625
+      },
+      {
+        "median": 6.51416015625,
+        "min": 6.18212890625,
+        "max": 6.67578125
+      },
+      {
+        "median": 16.05126953125,
+        "min": 15.39697265625,
+        "max": 16.5654296875
+      }
+    ]
+  },
+  {
+    "trial": 4,
+    "backend": "kiban",
+    "file": "r4-kiban.jsonl",
+    "start_epoch": 1792160595.7296195,
+    "end_epoch": 1792160608.9801385,
+    "samples": 14,
+    "duration_seconds": 13.250519037246704,
+    "largest_sample_gap_seconds": 1.0004100799560547,
+    "coverage": "sampled throughout",
+    "load": [
+      {
+        "median": 4.44189453125,
+        "min": 4.34814453125,
+        "max": 4.6396484375
+      },
+      {
+        "median": 6.09375,
+        "min": 6.05859375,
+        "max": 6.18212890625
+      },
+      {
+        "median": 15.26904296875,
+        "min": 15.20849609375,
+        "max": 15.39697265625
+      }
+    ]
+  },
+  {
+    "trial": 4,
+    "backend": "helix-floor",
+    "file": "r4-helix-floor.jsonl",
+    "start_epoch": 1792160613.2513685,
+    "end_epoch": 1792160614.6731963,
+    "samples": 2,
+    "duration_seconds": 1.421827793121338,
+    "largest_sample_gap_seconds": 1.0003628730773926,
+    "coverage": "sampled throughout",
+    "load": [
+      {
+        "median": 4.64697265625,
+        "min": 4.64697265625,
+        "max": 4.64697265625
+      },
+      {
+        "median": 6.07470703125,
+        "min": 6.07470703125,
+        "max": 6.07470703125
+      },
+      {
+        "median": 15.1640625,
+        "min": 15.1640625,
+        "max": 15.1640625
+      }
+    ]
+  },
+  {
+    "trial": 4,
+    "backend": "helix",
+    "file": "r4-helix.jsonl",
+    "start_epoch": 1792160615.2539256,
+    "end_epoch": 1792160713.6042032,
+    "samples": 99,
+    "duration_seconds": 98.35027766227722,
+    "largest_sample_gap_seconds": 1.0010430812835693,
+    "coverage": "sampled throughout",
+    "load": [
+      {
+        "median": 5.572265625,
+        "min": 4.32421875,
+        "max": 5.93310546875
+      },
+      {
+        "median": 6.150390625,
+        "min": 5.77734375,
+        "max": 6.2978515625
+      },
+      {
+        "median": 14.7275390625,
+        "min": 14.14013671875,
+        "max": 15.18505859375
+      }
+    ]
+  },
+  {
+    "trial": 5,
+    "backend": "kiban",
+    "file": "r5-kiban.jsonl",
+    "start_epoch": 1792160717.6231031,
+    "end_epoch": 1792160730.787378,
+    "samples": 14,
+    "duration_seconds": 13.16427493095398,
+    "largest_sample_gap_seconds": 1.0003600120544434,
+    "coverage": "sampled throughout",
+    "load": [
+      {
+        "median": 3.89892578125,
+        "min": 3.66650390625,
+        "max": 3.9775390625
+      },
+      {
+        "median": 5.63623046875,
+        "min": 5.55908203125,
+        "max": 5.68115234375
+      },
+      {
+        "median": 14.00439453125,
+        "min": 13.93408203125,
+        "max": 14.06396484375
+      }
+    ]
+  },
+  {
+    "trial": 5,
+    "backend": "helix-floor",
+    "file": "r5-helix-floor.jsonl",
+    "start_epoch": 1792160735.1568944,
+    "end_epoch": 1792160735.89143,
+    "samples": 1,
+    "duration_seconds": 0.7345354557037354,
+    "largest_sample_gap_seconds": 0.7338118553161621,
+    "coverage": "sampled throughout",
+    "load": [
+      {
+        "median": 3.853515625,
+        "min": 3.853515625,
+        "max": 3.853515625
+      },
+      {
+        "median": 5.56640625,
+        "min": 5.56640625,
+        "max": 5.56640625
+      },
+      {
+        "median": 13.89111328125,
+        "min": 13.89111328125,
+        "max": 13.89111328125
+      }
+    ]
+  },
+  {
+    "trial": 5,
+    "backend": "helix",
+    "file": "r5-helix.jsonl",
+    "start_epoch": 1792160736.1585617,
+    "end_epoch": 1792160812.53421,
+    "samples": 77,
+    "duration_seconds": 76.37564826011658,
+    "largest_sample_gap_seconds": 1.0005569458007812,
+    "coverage": "sampled throughout",
+    "load": [
+      {
+        "median": 3.19482421875,
+        "min": 2.57080078125,
+        "max": 3.705078125
+      },
+      {
+        "median": 5.18603515625,
+        "min": 4.765625,
+        "max": 5.5068359375
+      },
+      {
+        "median": 13.41943359375,
+        "min": 12.92041015625,
+        "max": 13.8271484375
+      }
+    ]
+  }
+]

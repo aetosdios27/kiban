@@ -1,0 +1,22 @@
+bulk-index1-cache32-readers1-durable0-r1-before-kiban
+bulk-index1-cache32-readers1-durable0-r1-before-lmdb
+bulk-index1-cache32-readers1-durable0-r1-rebased-kiban
+bulk-index1-cache32-readers1-durable0-r1-rebased-lmdb
+bulk-index1-cache32-readers1-durable0-r2-rebased-kiban
+bulk-index1-cache32-readers1-durable0-r2-rebased-lmdb
+bulk-index1-cache32-readers1-durable0-r2-before-kiban
+bulk-index1-cache32-readers1-durable0-r2-before-lmdb
+bulk-index1-cache32-readers1-durable0-r3-before-kiban
+bulk-index1-cache32-readers1-durable0-r3-before-lmdb
+bulk-index1-cache32-readers1-durable0-r3-rebased-kiban
+bulk-index1-cache32-readers1-durable0-r3-rebased-lmdb
+bulk-index1-cache32-readers1-durable0-r4-rebased-kiban
+bulk-index1-cache32-readers1-durable0-r4-rebased-lmdb
+bulk-index1-cache32-readers1-durable0-r4-before-kiban
+bulk-index1-cache32-readers1-durable0-r4-before-lmdb
+bulk-index1-cache32-readers1-durable0-r5-before-kiban
+bulk-index1-cache32-readers1-durable0-r5-before-lmdb
+bulk-index1-cache32-readers1-durable0-r5-rebased-kiban
+bulk-index1-cache32-readers1-durable0-r5-rebased-lmdb
+Validated 20 commands and 2 scenario/workload groups.
+done

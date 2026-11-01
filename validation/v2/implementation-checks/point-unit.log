@@ -1,0 +1,12 @@
+   Compiling kiban v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-a7586988)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.43s
+     Running unittests src/lib.rs (target/debug/deps/kiban-60f9814aeb7cdf24)
+
+running 4 tests
+test sstable::point::corruption_tests::malformed_checksummed_point_records_are_rejected_and_release_budget ... ok
+test sstable::point::tests::point_index_roundtrip_versions_and_binary_keys ... ok
+test sstable::point::tests::point_index_bijection_property ... ok
+test sstable::point::corruption_tests::matching_fingerprint_for_absent_key_requires_full_key_comparison ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 337 filtered out; finished in 0.02s
+

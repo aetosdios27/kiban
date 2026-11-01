@@ -1,0 +1,27 @@
+{
+  "read": "ribbon-16384-total",
+  "write": "ribbon-16384-total",
+  "scores_seconds": {
+    "read": {
+      "bloom-4096-prefix": 5.632817015748759e-06,
+      "bloom-4096-total": 5.252733734580901e-06,
+      "bloom-16384-prefix": 5.506388370408876e-06,
+      "bloom-16384-total": 5.252053317487128e-06,
+      "ribbon-4096-prefix": 5.707919723789216e-06,
+      "ribbon-4096-total": 5.40503893172875e-06,
+      "ribbon-16384-prefix": 5.5870697546587185e-06,
+      "ribbon-16384-total": 5.1789498080831625e-06
+    },
+    "write": {
+      "bloom-4096-prefix": 4.008516395089938e-05,
+      "bloom-4096-total": 4.090292951791233e-05,
+      "bloom-16384-prefix": 3.949604500823627e-05,
+      "bloom-16384-total": 4.025678307511714e-05,
+      "ribbon-4096-prefix": 4.167968335933081e-05,
+      "ribbon-4096-total": 4.4199613857849516e-05,
+      "ribbon-16384-prefix": 4.106733013912636e-05,
+      "ribbon-16384-total": 3.948971071880755e-05
+    }
+  },
+  "rule": "For reads and writes separately, minimize the equal-workload geometric mean of five-trial medians of mean call seconds. Reads include both operations, both layouts and both cache budgets; writes include remember/update/mixed in fast and durable. Select one whole configuration per family; ties break by candidate label. Optional mmap and row-cache rows are omitted. LZ4 is separately labeled, uses the frozen winner, and never enters selection. No-WAL uses the write winner."
+}

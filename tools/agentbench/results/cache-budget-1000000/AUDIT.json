@@ -1,0 +1,20 @@
+{
+  "complete_trials": 15,
+  "timed_read_calls": 4500000,
+  "timed_writes": 0,
+  "independent_reopen_records_verified": 15000000,
+  "full_base_state_passes_before_and_after_reads": 4,
+  "counter_replay": "12 excluded SharedKiban replays; 100000 point-cache probes per W2/W5-key stage; unchanged SST identities/levels",
+  "failed_timed_median_load_gates": 8,
+  "load_coverage": "all passed",
+  "errors": 0,
+  "new_binary_sha256": "430dd88de23c22b1491153ebe45d2671e6777d9055113f82f0cdaa4a5087edb7",
+  "original_binary_sha256": "d3901e63d7dd7b24529c5d2768762ae3d8ff40a6d7439a3d264d40d45e1c84ce",
+  "source_snapshots_and_current_compiled_inputs": "verified",
+  "w2_gap_closure_512_by_cycle_percent": [
+    80.59701492537313,
+    85.92592592592592,
+    83.82352941176471
+  ],
+  "preliminary": true
+}

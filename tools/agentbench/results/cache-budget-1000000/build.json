@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "cargo",
+    "build",
+    "--release",
+    "--locked",
+    "--manifest-path",
+    "tools/agentbench/engine/Cargo.toml",
+    "--bin",
+    "kiban-cachebench"
+  ],
+  "exit_code": 0,
+  "binary_sha256": "430dd88de23c22b1491153ebe45d2671e6777d9055113f82f0cdaa4a5087edb7",
+  "measurement_rebuilds": 0,
+  "scope": "Final release build after development smoke/tests, reused for every measured trial",
+  "environment": {}
+}

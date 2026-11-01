@@ -1,0 +1,124 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 1K of event 'cpu_core/cycles/u'
+# Event count (approx.): 13456869937
+#
+# Overhead  Command  Shared Object  Symbol
+# ........  .......  .............  ........................................................................................................................................................................
+#
+    51.64%  after    after          [.] kiban::db::get_from_version_at::{closure#0}
+            |
+            |--4.55%--kiban::sstable::point::compact::uint (inlined)
+            |          <kiban::sstable::point::compact::CompactIndex>::get_encoded (inlined)
+            |          <kiban::sstable::point::compact::CompactIndex>::get (inlined)
+            |          <kiban::sstable::point::PointIndex>::get (inlined)
+            |          <kiban::sstable::reader::SstTable>::get (inlined)
+            |          kiban::db::get_from_version_at::{closure#0}
+            |          kiban::db::get_from_version_at (inlined)
+            |          <kiban::db::Kiban>::get::<alloc::string::String>
+            |
+            |--4.41%--<core::result::Result<&[u8; 2], core::array::TryFromSliceError>>::copied (inlined)
+            |          <[u8; 2] as core::convert::TryFrom<&[u8]>>::try_from (inlined)
+            |          <&[u8] as core::convert::TryInto<[u8; 2]>>::try_into (inlined)
+            |          kiban::sstable::point::compact::uint (inlined)
+            |          <kiban::sstable::point::compact::CompactIndex>::get_encoded (inlined)
+            |          <kiban::sstable::point::compact::CompactIndex>::get (inlined)
+            |          <kiban::sstable::point::PointIndex>::get (inlined)
+            |          <kiban::sstable::reader::SstTable>::get (inlined)
+            |          kiban::db::get_from_version_at::{closure#0}
+            |          kiban::db::get_from_version_at (inlined)
+            |          <kiban::db::Kiban>::get::<alloc::string::String>
+            |
+            |--4.28%--<kiban::sstable::point::compact::CompactIndex>::slot (inlined)
+            |          <kiban::sstable::point::compact::CompactIndex>::get_encoded (inlined)
+            |          <kiban::sstable::point::compact::CompactIndex>::get (inlined)
+            |          <kiban::sstable::point::PointIndex>::get (inlined)
+            |          <kiban::sstable::reader::SstTable>::get (inlined)
+            |          kiban::db::get_from_version_at::{closure#0}
+            |          kiban::db::get_from_version_at (inlined)
+            |          <kiban::db::Kiban>::get::<alloc::string::String>
+            |
+            |--2.29%--<kiban::bloom::BloomFilter>::get_bit (inlined)
+            |          <kiban::bloom::BloomFilter>::may_contain::{closure#0} (inlined)
+            |          core::iter::traits::iterator::Iterator::all::check::<u32, <kiban::bloom::BloomFilter>::may_contain::{closure#0}>::{closure#0} (inlined)
+            |          <core::ops::range::Range<u32> as core::iter::traits::iterator::Iterator>::try_fold::<(), core::iter::traits::iterator::Iterator::all::check<u32, <kiban::bloom::BloomFilter>::may_contain::{closure#0}>::{closure#0}, core::ops::control_flow::ControlFlow<()>> (inlined)
+            |          <core::ops::range::Range<u32> as core::iter::traits::iterator::Iterator>::all::<<kiban::bloom::BloomFilter>::may_contain::{closure#0}> (inlined)
+            |          <kiban::bloom::BloomFilter>::may_contain (inlined)
+            |          <kiban::sstable::reader::SstTable>::get (inlined)
+            |          kiban::db::get_from_version_at::{closure#0}
+            |
+            |--0.67%--kiban::bloom::fnv1a_64 (inlined)
+            |          <kiban::bloom::BloomFilter>::may_contain (inlined)
+            |          <kiban::sstable::reader::SstTable>::get (inlined)
+            |          kiban::db::get_from_version_at::{closure#0}
+            |
+             --0.52%--<kiban::sstable::point::compact::CompactIndex>::get_encoded (inlined)
+                       <kiban::sstable::point::compact::CompactIndex>::get (inlined)
+                       <kiban::sstable::point::PointIndex>::get (inlined)
+                       <kiban::sstable::reader::SstTable>::get (inlined)
+                       kiban::db::get_from_version_at::{closure#0}
+                       kiban::db::get_from_version_at (inlined)
+                       <kiban::db::Kiban>::get::<alloc::string::String>
+
+    21.67%  after    libc.so.6      [.] __memmove_avx_unaligned_erms
+            |
+            ---__memmove_avx_unaligned_erms
+               |
+                --7.40%--core::ptr::copy_nonoverlapping::<u8> (inlined)
+                          |
+                           --7.20%--<*const u8>::copy_to_nonoverlapping (inlined)
+                                     <u8 as <[_]>::to_vec_in::ConvertVec>::to_vec::<alloc::alloc::Global> (inlined)
+                                     <[u8]>::to_vec_in::<alloc::alloc::Global> (inlined)
+                                     <[u8]>::to_vec (inlined)
+                                     <kiban::sstable::point::compact::CompactIndex>::get_encoded (inlined)
+                                     <kiban::sstable::point::compact::CompactIndex>::get (inlined)
+                                     <kiban::sstable::point::PointIndex>::get (inlined)
+                                     <kiban::sstable::reader::SstTable>::get (inlined)
+                                     kiban::db::get_from_version_at::{closure#0}
+                                     kiban::db::get_from_version_at (inlined)
+                                     <kiban::db::Kiban>::get::<alloc::string::String>
+
+     4.05%  after    after          [.] <serde_json::read::SliceRead>::skip_to_escape
+            |
+             --0.78%--<serde_json::read::SliceRead>::skip_to_escape
+
+     2.66%  after    after          [.] serde_json::de::from_trait::<serde_json::read::SliceRead, kiban_readbench::model::Memory>
+     2.52%  after    after          [.] core::str::converts::from_utf8
+            |
+             --0.58%--core::str::validations::run_utf8_validation (inlined)
+                       core::str::converts::from_utf8
+
+     2.13%  after    libc.so.6      [.] __memcmp_avx2_movbe
+            |
+            ---__memcmp_avx2_movbe
+               |
+                --0.65%--<u8 as core::slice::cmp::SlicePartialEq<u8>>::equal_same_length (inlined)
+                          <[u8] as core::cmp::PartialEq>::eq (inlined)
+                          <[u8] as core::cmp::PartialEq>::ne (inlined)
+                          <kiban::sstable::point::compact::CompactIndex>::get_encoded (inlined)
+                          <kiban::sstable::point::compact::CompactIndex>::get (inlined)
+                          <kiban::sstable::point::PointIndex>::get (inlined)
+                          <kiban::sstable::reader::SstTable>::get (inlined)
+                          kiban::db::get_from_version_at::{closure#0}
+                          kiban::db::get_from_version_at (inlined)
+                          <kiban::db::Kiban>::get::<alloc::string::String>
+
+     1.54%  after    after          [.] <serde_json::read::SliceRead as serde_json::read::Read>::parse_str
+     1.38%  after    after          [.] <u64>::_fmt_inner
+     1.31%  after    after          [.] <serde_json::de::MapAccess<_> as serde_core::de::MapAccess>::next_key_seed::has_next_key::<serde_json::read::SliceRead>
+     1.04%  after    after          [.] _mi_page_malloc
+     1.04%  after    after          [.] <kiban::db::Kiban>::get::<alloc::string::String>
+     0.89%  after    after          [.] <serde_json::de::Deserializer<serde_json::read::SliceRead>>::parse_integer
+     0.87%  after    after          [.] <core::fmt::Formatter>::pad_integral
+     0.85%  after    after          [.] mi_heap_malloc_aligned_at
+     0.80%  after    after          [.] alloc::fmt::format::format_inner
+     0.63%  after    after          [.] core::fmt::write
+     0.57%  after    after          [.] <kiban_readbench::embedded::Embedded as kiban_readbench::api::Backend>::get
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

@@ -1,0 +1,15 @@
+    Checking kiban v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-c878dd21)
+    Checking kiban-readbench v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-c878dd21/tools/agentbench/readpath)
+error: manual implementation of `.is_multiple_of()`
+  --> src/cold.rs:67:39
+   |
+67 |     if !matches!(o.readers, 1 | 4) || c.operations % o.readers as u64 != 0 {
+   |                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: replace with: `!c.operations.is_multiple_of(o.readers as u64)`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#manual_is_multiple_of
+   = note: `-D clippy::manual-is-multiple-of` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::manual_is_multiple_of)]`
+
+error: could not compile `kiban-readbench` (bin "kiban-readbench") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `kiban-readbench` (bin "kiban-readbench" test) due to 1 previous error

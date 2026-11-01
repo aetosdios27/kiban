@@ -1,0 +1,32 @@
+   Compiling kiban v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-a7586988)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.35s
+     Running unittests src/lib.rs (target/debug/deps/kiban-60f9814aeb7cdf24)
+
+running 24 tests
+test cache::point_reservation_tests::point_reservations_share_global_capacity_and_release_on_drop ... ok
+test db::correctness_tests::point_and_scan_agree_on_many_versions_after_flush_and_reopen ... ok
+test cache::point_reservation_tests::concurrent_section_admission_and_block_insertion_keep_capacity ... ok
+test db::flush_tests::crash_after_commit_point_but_before_wal_deletion ... ok
+test db::flush_tests::crash_before_commit_point_loses_nothing_and_sweeps_orphan ... ok
+test db::correctness_tests::point_selection_uses_sequence_not_file_or_level_order ... ok
+test db::correctness_tests::point_scan_and_snapshots_agree_through_overlapping_generations_and_compaction ... ok
+test db::point_index_tests::point_index_maintenance_measurement ... ignored, CPU-8 maintenance benchmark; KIBAN_POINT_BENCH_N controls population
+test db::point_index_tests::point_index_mixed_tables_resolve_by_sequence_across_overlapping_levels ... ok
+test db::point_index_tests::point_index_presence_is_independent_of_writer_switch_and_cache_admission ... ok
+test db::background_tests::point_reads_and_scans_agree_through_shared_kiban_under_compaction ... ok
+test db::scan_tests::point_gets_agree_with_scan_contents ... ok
+test db::shared_tests::read_amp_counters_reflect_resolution_points ... ok
+test db::point_index_tests::point_index_every_section_and_footer_bit_flip_is_detected_with_or_without_admission ... ok
+test sstable::block::tests::restart_points_exist_every_interval_entries ... ok
+test sstable::point::corruption_tests::in_range_wrong_value_locator_and_backing_bit_flip_are_rejected ... ok
+test sstable::point::corruption_tests::malformed_checksummed_point_records_are_rejected_and_release_budget ... ok
+test sstable::point::corruption_tests::matching_fingerprint_for_absent_key_requires_full_key_comparison ... ok
+test sstable::point::tests::on_disk_bucket_reduction_uses_all_64_hash_bits ... ok
+test db::snapshot_tests::snapshot_scan_matches_point_reads_at_same_boundary ... ok
+test sstable::point::tests::point_index_roundtrip_versions_and_binary_keys ... ok
+test sstable::point::tests::point_index_bijection_property ... ok
+test db::point_index_tests::point_index_conversion_reserves_outputs_for_full_key_expansion ... ok
+test db::point_index_tests::point_index_randomized_mixed_formats_snapshots_and_compaction_match_model ... ok
+
+test result: ok. 23 passed; 0 failed; 1 ignored; 0 measured; 319 filtered out; finished in 0.76s
+

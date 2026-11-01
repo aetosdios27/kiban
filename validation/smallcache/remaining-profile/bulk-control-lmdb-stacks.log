@@ -1,0 +1,11 @@
+Events disabled
+Events enabled
+Events disabled
+{"digest":353027,"errors":0,"ns":1522880001,"operations":1000000,"type":"profile"}
+[ perf record: Woken up 2712 times to write data ]
+Warning:
+Processed 8078 events and lost 35 chunks!
+
+Check IO/CPU overload!
+
+[ perf record: Captured and wrote 42.424 MB /home/aetos/.t3/worktrees/kiban/t3-9b9cb0e0/validation/smallcache/remaining-profile/bulk-control-lmdb-stacks.data (5277 samples) ]

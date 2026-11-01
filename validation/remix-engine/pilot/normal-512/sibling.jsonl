@@ -1,0 +1,4 @@
+{"name": "1000000-normal-512-r1-before-kiban", "start": {"total": 1918457, "idle": 1605799}, "end": {"total": 1919088, "idle": 1606318}, "busy_fraction": 0.17749603803486524}
+{"name": "1000000-normal-512-r1-before-lmdb", "start": {"total": 1919089, "idle": 1606319}, "end": {"total": 1919513, "idle": 1606699}, "busy_fraction": 0.10377358490566035}
+{"name": "1000000-normal-512-r1-after-kiban", "start": {"total": 1919513, "idle": 1606699}, "end": {"total": 1920020, "idle": 1607147}, "busy_fraction": 0.11637080867850103}
+{"name": "1000000-normal-512-r1-after-lmdb", "start": {"total": 1920020, "idle": 1607147}, "end": {"total": 1920435, "idle": 1607509}, "busy_fraction": 0.12771084337349392}

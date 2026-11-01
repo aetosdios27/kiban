@@ -1,0 +1,72 @@
+bulk-cache32-before-kiban
+Warning:
+Processed 5626 events and lost 34 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 5626 events and lost 34 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 5626 events and lost 34 chunks!
+
+Check IO/CPU overload!
+
+bulk-cache32-before-lmdb
+bulk-cache32-rebased-kiban
+Warning:
+Processed 5475 events and lost 29 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 5475 events and lost 29 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 5475 events and lost 29 chunks!
+
+Check IO/CPU overload!
+
+bulk-cache32-rebased-lmdb
+bulk-cacheNone-rebased-kiban
+bulk-cacheNone-rebased-lmdb
+bulk-cacheNone-before-kiban
+bulk-cacheNone-before-lmdb
+bulk-cache512-before-kiban
+Warning:
+Processed 5596 events and lost 31 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 5596 events and lost 31 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 5596 events and lost 31 chunks!
+
+Check IO/CPU overload!
+
+bulk-cache512-before-lmdb
+bulk-cache512-rebased-kiban
+Warning:
+Processed 5335 events and lost 28 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 5335 events and lost 28 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 5335 events and lost 28 chunks!
+
+Check IO/CPU overload!
+
+bulk-cache512-rebased-lmdb

@@ -1,0 +1,15 @@
+{
+  "backend": "lmdb",
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-9b9cb0e0/target/smallcache/data/write-bulk-index0-cache32-readers1-durable1-r1-after-lmdb",
+  "n": 10000,
+  "operations": 10000,
+  "k": 10,
+  "seed": 20261016,
+  "output": "/home/aetos/.t3/worktrees/kiban/t3-9b9cb0e0/validation/smallcache/final-write/bulk-index0-cache32-readers1-durable1-r1-after-lmdb.jsonl",
+  "action": "write",
+  "layout": "bulk",
+  "cache_mib": 32,
+  "point_index": false,
+  "readers": 1,
+  "durable": true
+}

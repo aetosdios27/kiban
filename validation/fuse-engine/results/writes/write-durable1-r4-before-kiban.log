@@ -1,0 +1,7 @@
+{"backend":"kiban","binary_fuse_filter":false,"cache_bytes":449030592,"durable":true,"point_index":false,"type":"requested_config"}
+kiban: remember 10000 verified calls
+kiban: recall-by-id 10000 verified calls
+kiban: recent-for-agent 10000 verified calls
+kiban: update 10000 verified calls
+kiban: mixed-90-10 10000 verified calls
+{"backend":"kiban","binary_fuse_filter":false,"cache_bytes":449030592,"durable":true,"point_index":false,"type":"requested_config"}

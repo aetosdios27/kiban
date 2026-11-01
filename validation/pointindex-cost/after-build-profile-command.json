@@ -1,0 +1,33 @@
+{
+  "command": [
+    "taskset",
+    "-c",
+    "8",
+    "/home/aetos/dev/personal/kiban/target/profiler/usr/bin/perf",
+    "record",
+    "-m",
+    "32",
+    "-e",
+    "cpu-clock:u",
+    "-F",
+    "499",
+    "--call-graph",
+    "dwarf,4096",
+    "--user-callchains",
+    "--control",
+    "fifo:/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-cost/perf-04_ack7m/ctl,/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-cost/perf-04_ack7m/ack",
+    "-D",
+    "-1",
+    "-o",
+    "/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-cost/after-build.perf.data",
+    "--",
+    "/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-cost/bin/after-test",
+    "point_index_maintenance_measurement",
+    "--ignored",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "code": 0,
+  "clock_ticks_per_second": 100,
+  "binary_sha256": "531d1932962a9291e5a3e5f7d096c11bb951024ff14a2b1282a356abc9701fe7"
+}

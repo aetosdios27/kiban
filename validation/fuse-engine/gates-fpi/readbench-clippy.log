@@ -1,0 +1,5 @@
+   Compiling bindgen v0.72.1
+   Compiling librocksdb-sys v0.19.0+11.8.1
+    Checking rocksdb v0.25.0
+    Checking kiban-readbench v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/tools/agentbench/readpath)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4m 37s

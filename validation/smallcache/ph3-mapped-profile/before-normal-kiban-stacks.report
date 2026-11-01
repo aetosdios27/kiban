@@ -1,0 +1,96 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 282
+#
+# Samples: 9K of event 'cpu_core/cycles/u'
+# Event count (approx.): 9248000000
+#
+# Overhead  Command  Shared Object     Symbol                                                                                                                                                                  
+# ........  .......  ................  ........................................................................................................................................................................
+#
+    22.98%  before   libc.so.6         [.] __memmove_avx_unaligned_erms
+            |
+            ---__memmove_avx_unaligned_erms
+
+    21.25%  before   before            [.] kiban::db::get_from_version_at::{closure#0}
+    10.19%  before   libc.so.6         [.] __memcmp_avx2_movbe
+            |
+            ---__memcmp_avx2_movbe
+
+     7.14%  before   before            [.] <kiban::db::Kiban>::get::<alloc::string::String>
+     5.70%  before   before            [.] kiban::crc32::pclmul::update
+     4.36%  before   before            [.] <kiban::cache::BlockCache>::insert
+     4.20%  before   before            [.] <kiban::sstable::reader::SstTable>::read_block
+     1.81%  before   before            [.] <serde_json::read::SliceRead>::skip_to_escape
+     1.43%  before   before            [.] serde_json::de::from_trait::<serde_json::read::SliceRead, kiban_readbench::model::Memory>
+     1.38%  before   before            [.] <kiban::sstable::block::VerifiedBlock>::verify
+     1.28%  before   before            [.] <kiban::sstable::block::VerifiedBlock>::get
+     1.19%  before   before            [.] <std::hash::random::RandomState as core::hash::BuildHasher>::hash_one::<&(u64, u64)>
+     1.18%  before   before            [.] <<kiban::cache::BlockCache>::get_or_load::RemoveOnDrop as core::ops::drop::Drop>::drop
+     1.15%  before   before            [.] <serde_json::read::SliceRead as serde_json::read::Read>::parse_str
+     1.09%  before   before            [.] <std::hash::random::DefaultHasher as core::hash::Hasher>::write.243
+     1.08%  before   before            [.] <kiban::cache::BlockCache>::get
+     1.06%  before   before            [.] core::str::converts::from_utf8
+     0.81%  before   before            [.] _mi_page_malloc
+     0.74%  before   before            [.] <u64>::_fmt_inner
+     0.67%  before   [unknown]         [k] 0xffffffff98200080
+            |          
+             --0.66%--syscall
+
+     0.65%  before   before            [.] <serde_json::de::MapAccess<_> as serde_core::de::MapAccess>::next_key_seed::has_next_key::<serde_json::read::SliceRead>
+     0.63%  before   before            [.] mi_heap_malloc_aligned_at
+     0.61%  before   before            [.] <kiban::sstable::point::PointIndex>::slot
+     0.50%  before   before            [.] mi_free
+     0.48%  before   before            [.] <serde_json::de::Deserializer<serde_json::read::SliceRead>>::parse_integer
+     0.45%  before   before            [.] <kiban_readbench::embedded::Embedded as kiban_readbench::api::Backend>::get
+     0.43%  before   before            [.] alloc::fmt::format::format_inner
+     0.41%  before   before            [.] kiban_readbench::profile
+     0.40%  before   before            [.] core::fmt::write
+     0.39%  before   before            [.] kiban::sstable::block::header_at
+     0.38%  before   before            [.] <alloc::sync::Arc<kiban::cache::InFlight>>::drop_slow
+     0.30%  before   before            [.] <alloc::string::String as core::fmt::Write>::write_str.16
+     0.28%  before   before            [.] <core::fmt::Formatter>::pad_integral
+     0.28%  before   before            [.] mi_page_queue_enqueue_from_ex.constprop.0
+     0.24%  before   before            [.] _mi_malloc_generic
+     0.23%  before   before            [.] kiban::sstable::block::seek_restart_index
+     0.23%  before   before            [.] mi_heap_malloc_zero_aligned_at_generic
+     0.22%  before   before            [.] <alloc::sync::Arc<[u8]>>::drop_slow
+     0.22%  before   before            [.] mi_find_page
+     0.21%  before   before            [.] _mi_page_free_collect
+     0.18%  before   before            [.] _mi_page_bin
+     0.17%  before   before            [.] <core::marker::PhantomData<alloc::string::String> as serde_core::de::DeserializeSeed>::deserialize::<&mut serde_json::de::Deserializer<serde_json::read::SliceRead>>
+     0.13%  before   before            [.] _mi_heap_realloc_zero
+     0.12%  before   before            [.] <core::marker::PhantomData<u64> as serde_core::de::DeserializeSeed>::deserialize::<&mut serde_json::de::Deserializer<serde_json::read::SliceRead>>
+     0.12%  before   before            [.] <hashbrown::map::HashMap<(u64, u64), alloc::sync::Arc<kiban::cache::InFlight>, std::hash::random::RandomState>>::insert
+     0.10%  before   before            [.] <u64 as core::fmt::Display>::fmt
+     0.09%  before   before            [.] <alloc::raw_vec::RawVecInner>::finish_grow
+     0.09%  before   before            [.] _mi_bin
+     0.08%  before   before            [.] <alloc::raw_vec::RawVecInner<_>>::reserve::do_reserve_and_handle::<alloc::alloc::Global>
+     0.08%  before   before            [.] <u32 as serde_core::de::Deserialize>::deserialize::<&mut serde_json::de::Deserializer<serde_json::read::SliceRead>>
+     0.08%  before   before            [.] mi_malloc_aligned
+     0.06%  before   before            [.] <alloc::raw_vec::RawVecInner<_>>::reserve::do_reserve_and_handle::<alloc::alloc::Global>
+     0.06%  before   before            [.] <alloc::string::String as core::fmt::Write>::write_char.17
+     0.06%  before   before            [.] <core::fmt::Formatter>::pad_integral::write_prefix
+     0.06%  before   before            [.] <serde_json::de::Deserializer<serde_json::read::SliceRead>>::end_map
+     0.06%  before   before            [.] mi_free_generic_local.isra.0
+     0.05%  before   libc.so.6         [.] syscall
+     0.03%  before   before            [.] <alloc::raw_vec::RawVecInner>::finish_grow
+     0.03%  before   before            [.] _mi_page_unfull
+     0.03%  before   before            [.] mi_heap_collect_ex
+     0.02%  before   before            [.] mi_realloc_aligned
+     0.01%  before   before            [.] <kiban::sstable::reader::SstTable>::get::{closure#1}
+     0.01%  before   before            [.] _mi_arena_field_cursor_init
+     0.01%  before   before            [.] _mi_heap_delayed_free_partial
+     0.01%  before   before            [.] _mi_prim_clock_now
+     0.01%  before   before            [.] memcpy@plt
+     0.01%  before   before            [.] mi_heap_realloc_aligned
+     0.01%  before   before            [.] mi_option_get_clamp
+     0.01%  before   before            [.] mi_stats_add.constprop.0
+     0.01%  before   libc.so.6         [.] clock_gettime@@GLIBC_2.17
+     0.01%  before   [unknown]         [k] 0xffffffff982015f0
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

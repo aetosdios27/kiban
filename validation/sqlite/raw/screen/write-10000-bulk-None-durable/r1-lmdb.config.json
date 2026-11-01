@@ -1,0 +1,17 @@
+{
+  "backend": "lmdb",
+  "n": 10000,
+  "operations": 1000,
+  "k": 10,
+  "seed": 20261016,
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-59b24bda/target/sqlite/data/write-trial",
+  "output": "/home/aetos/.t3/worktrees/kiban/t3-59b24bda/validation/sqlite/raw/screen/write-10000-bulk-None-durable/r1-lmdb.jsonl",
+  "action": "write",
+  "layout": "bulk",
+  "cache_mib": null,
+  "point_index": false,
+  "durable": true,
+  "sqlite_layout": "rowid",
+  "sqlite_sync": "FULL",
+  "sqlite_mmap_bytes": 0
+}

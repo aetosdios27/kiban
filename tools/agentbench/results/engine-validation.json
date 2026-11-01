@@ -1,0 +1,128 @@
+{
+  "core": [
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "--locked"
+      ],
+      "exit_code": 0,
+      "seconds": 3.697338342666626
+    },
+    {
+      "argv": [
+        "cargo",
+        "fmt",
+        "--check"
+      ],
+      "exit_code": 0,
+      "seconds": 0.3146491050720215
+    },
+    {
+      "argv": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--all-targets",
+        "--workspace",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "seconds": 0.10377192497253418
+    },
+    {
+      "argv": [
+        "cargo",
+        "deny",
+        "--locked",
+        "check"
+      ],
+      "exit_code": 0,
+      "seconds": 1.1207196712493896
+    },
+    {
+      "argv": [
+        "python3",
+        "tools/site_facts.py",
+        "validate"
+      ],
+      "exit_code": 0,
+      "seconds": 0.13043522834777832
+    }
+  ],
+  "harness": [
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "--release",
+        "--locked",
+        "--manifest-path",
+        "tools/agentbench/engine/Cargo.toml"
+      ],
+      "exit_code": 0,
+      "seconds": 0.32552027702331543
+    },
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--manifest-path",
+        "tools/agentbench/Cargo.toml"
+      ],
+      "exit_code": 0,
+      "seconds": 7.460784435272217
+    },
+    {
+      "argv": [
+        "cargo",
+        "fmt",
+        "--manifest-path",
+        "tools/agentbench/engine/Cargo.toml",
+        "--check"
+      ],
+      "exit_code": 0,
+      "seconds": 0.049925804138183594
+    },
+    {
+      "argv": [
+        "cargo",
+        "clippy",
+        "--release",
+        "--locked",
+        "--manifest-path",
+        "tools/agentbench/engine/Cargo.toml",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "seconds": 0.1875438690185547
+    },
+    {
+      "argv": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/agentbench",
+        "-p",
+        "test_*.py"
+      ],
+      "exit_code": 0,
+      "seconds": 2.015439510345459
+    }
+  ],
+  "core_unit_tests": 320,
+  "core_integration_tests": 11,
+  "core_ignored_stress_tests": 5,
+  "engine_rust_tests": 5,
+  "original_harness_rust_tests": 4,
+  "python_harness_tests": 13,
+  "binary_sha256": "d3901e63d7dd7b24529c5d2768762ae3d8ff40a6d7439a3d264d40d45e1c84ce"
+}

@@ -1,0 +1,64 @@
+before-bulk-kiban
+Warning:
+Processed 15700 events and lost 66 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 15700 events and lost 66 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 15700 events and lost 66 chunks!
+
+Check IO/CPU overload!
+
+before-bulk-lmdb
+Warning:
+Processed 8147 events and lost 40 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 8147 events and lost 40 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 8147 events and lost 40 chunks!
+
+Check IO/CPU overload!
+
+before-normal-kiban
+Warning:
+Processed 15951 events and lost 66 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 15951 events and lost 66 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 15951 events and lost 66 chunks!
+
+Check IO/CPU overload!
+
+before-normal-lmdb
+Warning:
+Processed 8308 events and lost 35 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 8308 events and lost 35 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 8308 events and lost 35 chunks!
+
+Check IO/CPU overload!
+

@@ -1,0 +1,16 @@
+
+running 1 test
+test db::point_index_tests::point_index_maintenance_measurement ... {"type":"maintenance","trial":1,"point_index":false,"n":1000000,"flush_ns":931113345,"compaction_build_ns":808543643,"compaction_commit_ns":4954101,"input_bytes":322946108,"output_bytes":322951967,"output_files":77,"point_resident_bytes":0,"verified_records":1000000,"errors":0}
+{"type":"maintenance","trial":1,"point_index":true,"n":1000000,"flush_ns":4218631906,"compaction_build_ns":2233341321,"compaction_commit_ns":27462142,"input_bytes":352383746,"output_bytes":352432249,"output_files":84,"point_resident_bytes":185435868,"verified_records":1000000,"errors":0}
+{"type":"maintenance","trial":2,"point_index":true,"n":1000000,"flush_ns":4190734390,"compaction_build_ns":950730496,"compaction_commit_ns":24091184,"input_bytes":352383746,"output_bytes":352432249,"output_files":84,"point_resident_bytes":185435868,"verified_records":1000000,"errors":0}
+{"type":"maintenance","trial":2,"point_index":false,"n":1000000,"flush_ns":2446109384,"compaction_build_ns":712451527,"compaction_commit_ns":3001404,"input_bytes":322946108,"output_bytes":322951967,"output_files":77,"point_resident_bytes":0,"verified_records":1000000,"errors":0}
+{"type":"maintenance","trial":3,"point_index":false,"n":1000000,"flush_ns":3399495571,"compaction_build_ns":1013022277,"compaction_commit_ns":2636201,"input_bytes":322946108,"output_bytes":322951967,"output_files":77,"point_resident_bytes":0,"verified_records":1000000,"errors":0}
+{"type":"maintenance","trial":3,"point_index":true,"n":1000000,"flush_ns":1411356568,"compaction_build_ns":2376016141,"compaction_commit_ns":22143037,"input_bytes":352383746,"output_bytes":352432249,"output_files":84,"point_resident_bytes":185435868,"verified_records":1000000,"errors":0}
+{"type":"maintenance","trial":4,"point_index":true,"n":1000000,"flush_ns":4355407705,"compaction_build_ns":814240594,"compaction_commit_ns":25613033,"input_bytes":352383746,"output_bytes":352432249,"output_files":84,"point_resident_bytes":185435868,"verified_records":1000000,"errors":0}
+{"type":"maintenance","trial":4,"point_index":false,"n":1000000,"flush_ns":2925759223,"compaction_build_ns":557807723,"compaction_commit_ns":2246509,"input_bytes":322946108,"output_bytes":322951967,"output_files":77,"point_resident_bytes":0,"verified_records":1000000,"errors":0}
+{"type":"maintenance","trial":5,"point_index":false,"n":1000000,"flush_ns":1204730232,"compaction_build_ns":575902006,"compaction_commit_ns":2498036,"input_bytes":322946108,"output_bytes":322951967,"output_files":77,"point_resident_bytes":0,"verified_records":1000000,"errors":0}
+{"type":"maintenance","trial":5,"point_index":true,"n":1000000,"flush_ns":3015678539,"compaction_build_ns":2122661517,"compaction_commit_ns":26332609,"input_bytes":352383746,"output_bytes":352432249,"output_files":84,"point_resident_bytes":185435868,"verified_records":1000000,"errors":0}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 350 filtered out; finished in 56.16s
+

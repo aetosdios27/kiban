@@ -1,0 +1,14 @@
+{
+  "backend": "kiban",
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-a7586988/target/v2-final-data/write-False-r1-after-kiban",
+  "n": 10000,
+  "operations": 1000,
+  "k": 10,
+  "seed": 20261016,
+  "output": "/home/aetos/.t3/worktrees/kiban/t3-a7586988/validation/v2/writes/fast/10000-bulk-32-r1-after-kiban.jsonl",
+  "action": "write",
+  "layout": "bulk",
+  "cache_mib": 32,
+  "point_index": true,
+  "durable": false
+}

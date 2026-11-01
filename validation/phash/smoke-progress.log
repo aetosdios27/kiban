@@ -1,0 +1,12 @@
+bulk-r1-hit-0-lmdb
+Traceback (most recent call last):
+  File "/home/aetos/.t3/worktrees/kiban/t3-a7da9487/tools/agentbench/phash/run.py", line 54, in <module>
+    if __name__=='__main__': main()
+                             ~~~~^^
+  File "/home/aetos/.t3/worktrees/kiban/t3-a7da9487/tools/agentbench/phash/run.py", line 44, in main
+    subprocess.run(args,check=True,env=env,stdout=out,stderr=err)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.14/subprocess.py", line 578, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['taskset', '-c', '8', '/home/aetos/.t3/worktrees/kiban/t3-53ad0f47/target/read-path-tools/root/usr/bin/perf', 'stat', '-x', ';', '-e', 'cpu_core/cycles/u,cpu_core/instructions/u,cpu_core/LLC-load-misses/u,cpu_core/dTLB-load-misses/u', '-o', 'validation/phash/smoke/bulk-r1-hit-0-lmdb.stat', '--control', 'fifo:/tmp/phash-perf-je_gm2pp/ctl,/tmp/phash-perf-je_gm2pp/ack', '-D', '-1', '--', 'taskset', '-c', '8', '/home/aetos/.t3/worktrees/kiban/t3-a7da9487/tools/agentbench/phash/target/release/kiban-phash', 'lmdb', '/home/aetos/.t3/worktrees/kiban/t3-53ad0f47/target/read-path-data/lmdb-1000000-bulk', 'hit', '10000']' returned non-zero exit status 1.

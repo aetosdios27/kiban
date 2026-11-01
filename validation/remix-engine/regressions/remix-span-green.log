@@ -1,0 +1,13 @@
+   Compiling kiban v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.56s
+     Running unittests src/lib.rs (target/debug/deps/kiban-60f9814aeb7cdf24)
+
+running 5 tests
+test db::point_index_tests::remix_memtable_handoff_respects_remaining_source_span ... ok
+test db::point_index_tests::remix_mixed_formats_and_cache_reservations ... ok
+test db::point_index_tests::remix_scan_corruption_and_checksummed_bad_locators_are_rejected ... ok
+test db::point_index_tests::remix_duplicate_anchor_boundaries_and_ph3_anchor_groups ... ok
+test db::point_index_tests::remix_ranges_match_model_across_versions_memtables_and_bounds ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 2.02s
+

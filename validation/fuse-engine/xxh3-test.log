@@ -1,0 +1,9 @@
+   Compiling kiban v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-c0aaa680)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 21.52s
+     Running unittests src/lib.rs (target/debug/deps/kiban-60f9814aeb7cdf24)
+
+running 1 test
+test xxh3::tests::reference_vectors_all_lengths_and_boundaries ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 355 filtered out; finished in 1.20s
+

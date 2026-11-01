@@ -1,0 +1,26 @@
+start test
+end test: 0 (9.3s)
+start release
+end release: 0 (14.7s)
+start clippy
+end clippy: 0 (0.1s)
+start fmt
+end fmt: 0 (0.4s)
+start fixed
+end fixed: 0 (0.5s)
+start long-20000-each
+end long-20000-each: 0 (144.5s)
+start loom
+end loom: 0 (30.1s)
+start site-facts
+end site-facts: 0 (0.2s)
+start readbench-clippy
+end readbench-clippy: 0 (232.9s)
+start readbench-remix-clippy
+end readbench-remix-clippy: 0 (1.0s)
+start readbench-remix-test
+end readbench-remix-test: 0 (246.0s)
+start readbench-test
+end readbench-test: 0 (11.8s)
+start readbench-fmt
+end readbench-fmt: 0 (0.1s)

@@ -1,0 +1,62 @@
+{
+  "before": {
+    "command": [
+      "taskset",
+      "-c",
+      "12-21",
+      "nice",
+      "-n",
+      "10",
+      "rustc",
+      "--edition=2024",
+      "-Copt-level=2",
+      "-Clto",
+      "-Ccodegen-units=1",
+      "-Cpanic=abort",
+      "-Adead_code",
+      "/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/tools/agentbench/readpath/remix_range.rs",
+      "-Ldependency=/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/target/remix-before-src/tools/agentbench/readpath/target/release/deps",
+      "-o",
+      "/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/target/remix-bin/before-range",
+      "--extern",
+      "kiban=/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/target/remix-before-src/tools/agentbench/readpath/target/release/deps/libkiban-8d2d01163a1e320b.rlib",
+      "--extern",
+      "serde=/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/target/remix-before-src/tools/agentbench/readpath/target/release/deps/libserde-05fcc3622346c73d.rlib",
+      "--extern",
+      "serde_json=/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/target/remix-before-src/tools/agentbench/readpath/target/release/deps/libserde_json-a7dea2613801ffc2.rlib",
+      "--extern",
+      "mimalloc=/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/target/remix-before-src/tools/agentbench/readpath/target/release/deps/libmimalloc-66b677c062f4090f.rlib"
+    ],
+    "sha256": "f29eaf76f45bb4889aca0c593b3a25c490bbe2ebc84e13606be63a0e211ae70e"
+  },
+  "after": {
+    "command": [
+      "taskset",
+      "-c",
+      "12-21",
+      "nice",
+      "-n",
+      "10",
+      "rustc",
+      "--edition=2024",
+      "-Copt-level=2",
+      "-Clto",
+      "-Ccodegen-units=1",
+      "-Cpanic=abort",
+      "-Adead_code",
+      "/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/tools/agentbench/readpath/remix_range.rs",
+      "-Ldependency=/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/tools/agentbench/readpath/target/release/deps",
+      "-o",
+      "/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/target/remix-bin/after-range",
+      "--extern",
+      "kiban=/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/tools/agentbench/readpath/target/release/deps/libkiban-dcf400b9fb951f26.rlib",
+      "--extern",
+      "serde=/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/tools/agentbench/readpath/target/release/deps/libserde-05fcc3622346c73d.rlib",
+      "--extern",
+      "serde_json=/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/tools/agentbench/readpath/target/release/deps/libserde_json-a7dea2613801ffc2.rlib",
+      "--extern",
+      "mimalloc=/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/tools/agentbench/readpath/target/release/deps/libmimalloc-66b677c062f4090f.rlib"
+    ],
+    "sha256": "023e8fee92a93f4693fd833e14bec92a901dbfe8dd1d9aea8b155f1d53b61605"
+  }
+}

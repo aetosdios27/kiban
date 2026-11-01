@@ -1,0 +1,18 @@
+{
+  "reason": "Normal-layout screen has paired point p50/p99 ratios 1.000/1.000 and normalized p99 1.089. Prefetch is not a consistent win. Reject it and retain the already complete direct-index matrix.",
+  "stopped": [
+    {
+      "pid": 360068,
+      "args": [
+        "python3",
+        "tools/agentbench/readpath/pointindex_latency.py",
+        "--before",
+        "target/pointindex-latency/ph2-readbench",
+        "--after",
+        "target/pointindex-latency/prefetch",
+        "--out",
+        "validation/pointindex-cost/latency/final"
+      ]
+    }
+  ]
+}

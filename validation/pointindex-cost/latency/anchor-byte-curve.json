@@ -1,0 +1,56 @@
+[
+  {
+    "layout": "bulk",
+    "group": 1024,
+    "point_bytes": 31101232,
+    "point_bytes_per_key": 31.101232,
+    "projected_sst_bytes": 360945109,
+    "overhead_percent": 9.429084615986461,
+    "latency_measured": false
+  },
+  {
+    "layout": "bulk",
+    "group": 512,
+    "point_bytes": 30479576,
+    "point_bytes_per_key": 30.479576,
+    "projected_sst_bytes": 360323453,
+    "overhead_percent": 9.240614831163763,
+    "latency_measured": false
+  },
+  {
+    "layout": "bulk",
+    "group": 256,
+    "point_bytes": 30096493,
+    "point_bytes_per_key": 30.096493,
+    "projected_sst_bytes": 359940370,
+    "overhead_percent": 9.124474118970461,
+    "latency_measured": false
+  },
+  {
+    "layout": "normal",
+    "group": 1024,
+    "point_bytes": 31622158,
+    "point_bytes_per_key": 31.622158,
+    "projected_sst_bytes": 361480243,
+    "overhead_percent": 9.58846524274013,
+    "latency_measured": false
+  },
+  {
+    "layout": "normal",
+    "group": 512,
+    "point_bytes": 30745621,
+    "point_bytes_per_key": 30.745621,
+    "projected_sst_bytes": 360603706,
+    "overhead_percent": 9.322729157798747,
+    "latency_measured": false
+  },
+  {
+    "layout": "normal",
+    "group": 256,
+    "point_bytes": 30170334,
+    "point_bytes_per_key": 30.170334,
+    "projected_sst_bytes": 360028419,
+    "overhead_percent": 9.148321785266077,
+    "latency_measured": false
+  }
+]

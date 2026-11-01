@@ -1,0 +1,6 @@
+{
+  "reason": "Coordinator nice 10 plus child nice increment 10 made gate children nice 19. Interrupted to repeat all gates at effective nice 10.",
+  "exit_code": 143,
+  "correctness_failures": 0,
+  "replacement": "../rebased-checks"
+}

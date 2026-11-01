@@ -1,0 +1,125 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 96
+#
+# Samples: 4K of event 'cpu_core/cycles/u'
+# Event count (approx.): 4517000000
+#
+# Overhead  Command  Shared Object     Symbol                                                                                                                                                                  
+# ........  .......  ................  ........................................................................................................................................................................
+#
+    37.83%  ph3      ph3               [.] <kiban::sstable::point::compact::CompactIndex>::locate
+            |          
+            |--3.96%--kiban::sstable::point::compact::uint (inlined)
+            |          <kiban::sstable::point::compact::CompactIndex>::get_encoded (inlined)
+            |          <kiban::sstable::point::compact::CompactIndex>::locate
+            |          <kiban::sstable::reader::SstTable>::get (inlined)
+            |          kiban::db::get_from_version_at::{closure#0}
+            |          
+            |--3.59%--<kiban::sstable::point::compact::CompactIndex>::get_encoded (inlined)
+            |          <kiban::sstable::point::compact::CompactIndex>::locate
+            |          |          
+            |           --3.32%--0x56
+            |          
+             --3.25%--<kiban::sstable::point::compact::CompactIndex>::slot (inlined)
+                       <kiban::sstable::point::compact::CompactIndex>::get_encoded (inlined)
+                       <kiban::sstable::point::compact::CompactIndex>::locate
+                       |          
+                        --3.01%--0x56
+
+    21.32%  ph3      libc.so.6         [.] __memmove_avx_unaligned_erms
+            |
+            ---__memmove_avx_unaligned_erms
+               |          
+                --5.87%--core::ptr::copy_nonoverlapping::<u8> (inlined)
+                          |          
+                           --5.82%--<*const u8>::copy_to_nonoverlapping (inlined)
+                                     <u8 as <[_]>::to_vec_in::ConvertVec>::to_vec::<alloc::alloc::Global> (inlined)
+                                     <[u8]>::to_vec_in::<alloc::alloc::Global> (inlined)
+                                     <[u8]>::to_vec (inlined)
+                                     <kiban::sstable::reader::SstTable>::get (inlined)
+                                     kiban::db::get_from_version_at::{closure#0}
+
+     8.37%  ph3      libc.so.6         [.] __memcmp_avx2_movbe
+            |
+            ---__memcmp_avx2_movbe
+               |          
+               |--1.57%--<u8 as core::slice::cmp::SliceOrd>::compare (inlined)
+               |          |          
+               |           --1.15%--<u8 as core::slice::cmp::SliceChain>::chaining_lt (inlined)
+               |                     <[u8] as core::cmp::PartialOrd>::__chaining_lt (inlined)
+               |                     <[u8] as core::cmp::PartialOrd>::lt (inlined)
+               |                     <&[u8] as core::cmp::PartialOrd>::lt (inlined)
+               |                     kiban::db::get_from_version_at::{closure#2} (inlined)
+               |                     <[usize]>::partition_point::<kiban::db::get_from_version_at::{closure#2}>::{closure#0} (inlined)
+               |                     <[usize]>::binary_search_by::<<[usize]>::partition_point<kiban::db::get_from_version_at::{closure#2}>::{closure#0}> (inlined)
+               |                     <[usize]>::partition_point::<kiban::db::get_from_version_at::{closure#2}> (inlined)
+               |                     kiban::db::get_from_version_at (inlined)
+               |                     <kiban::db::Kiban>::get::<alloc::string::String>
+               |          
+                --0.75%--<u8 as core::slice::cmp::SlicePartialEq<u8>>::equal_same_length (inlined)
+                          <[u8] as core::cmp::PartialEq>::eq (inlined)
+                          <[u8] as core::cmp::PartialEq>::ne (inlined)
+                          <kiban::sstable::point::compact::CompactIndex>::get_encoded (inlined)
+                          <kiban::sstable::point::compact::CompactIndex>::locate
+                          <kiban::sstable::reader::SstTable>::get (inlined)
+                          kiban::db::get_from_version_at::{closure#0}
+
+     6.86%  ph3      ph3               [.] <kiban::db::Kiban>::get::<alloc::string::String>
+     4.18%  ph3      ph3               [.] <serde_json::read::SliceRead>::skip_to_escape
+            |          
+             --0.71%--<serde_json::read::SliceRead>::skip_to_escape
+
+     2.50%  ph3      ph3               [.] core::str::converts::from_utf8
+            |          
+             --0.62%--core::str::validations::run_utf8_validation (inlined)
+                       core::str::converts::from_utf8
+
+     2.35%  ph3      ph3               [.] kiban::crc32::pclmul::update
+     2.01%  ph3      ph3               [.] serde_json::de::from_trait::<serde_json::read::SliceRead, kiban_readbench::model::Memory>
+     1.99%  ph3      ph3               [.] <serde_json::read::SliceRead as serde_json::read::Read>::parse_str
+     1.15%  ph3      ph3               [.] <u64>::_fmt_inner
+     1.13%  ph3      ph3               [.] <kiban_readbench::embedded::Embedded as kiban_readbench::api::Backend>::get
+     1.13%  ph3      ph3               [.] <serde_json::de::Deserializer<serde_json::read::SliceRead>>::parse_integer
+     0.89%  ph3      ph3               [.] <serde_json::de::MapAccess<_> as serde_core::de::MapAccess>::next_key_seed::has_next_key::<serde_json::read::SliceRead>
+     0.82%  ph3      ph3               [.] _mi_page_malloc
+     0.82%  ph3      ph3               [.] alloc::fmt::format::format_inner
+     0.62%  ph3      ph3               [.] mi_heap_malloc_aligned_at
+     0.60%  ph3      ph3               [.] <core::marker::PhantomData<alloc::string::String> as serde_core::de::DeserializeSeed>::deserialize::<&mut serde_json::de::Deserializer<serde_json::read::SliceRead>>
+     0.51%  ph3      ph3               [.] mi_free
+     0.49%  ph3      ph3               [.] <core::fmt::Formatter>::pad_integral
+     0.46%  ph3      ph3               [.] <alloc::string::String as core::fmt::Write>::write_str.16
+     0.44%  ph3      ph3               [.] kiban_readbench::profile
+     0.38%  ph3      ph3               [.] _mi_heap_realloc_zero
+     0.29%  ph3      ph3               [.] <core::marker::PhantomData<u64> as serde_core::de::DeserializeSeed>::deserialize::<&mut serde_json::de::Deserializer<serde_json::read::SliceRead>>
+     0.29%  ph3      ph3               [.] core::fmt::write
+     0.27%  ph3      ph3               [.] <u64 as core::fmt::Display>::fmt
+     0.24%  ph3      ph3               [.] <alloc::string::String as core::fmt::Write>::write_char.17
+     0.24%  ph3      ph3               [.] kiban::db::get_from_version_at::{closure#0}
+     0.22%  ph3      ph3               [.] _mi_page_retire
+     0.18%  ph3      ph3               [.] <u32 as serde_core::de::Deserialize>::deserialize::<&mut serde_json::de::Deserializer<serde_json::read::SliceRead>>
+     0.13%  ph3      ph3               [.] _mi_page_bin
+     0.13%  ph3      ph3               [.] _mi_page_free_collect
+     0.13%  ph3      ph3               [.] mi_find_page
+     0.13%  ph3      ph3               [.] mi_heap_malloc_zero_aligned_at_generic
+     0.13%  ph3      ph3               [.] mi_realloc_aligned
+     0.11%  ph3      ph3               [.] <alloc::raw_vec::RawVecInner>::finish_grow
+     0.11%  ph3      ph3               [.] kiban::crc32::update
+     0.11%  ph3      ph3               [.] mi_malloc_aligned
+     0.09%  ph3      ph3               [.] <core::fmt::Formatter>::pad_integral::write_prefix
+     0.07%  ph3      ph3               [.] <serde_json::de::Deserializer<serde_json::read::SliceRead>>::end_map
+     0.04%  ph3      ph3               [.] <alloc::raw_vec::RawVecInner<_>>::reserve::do_reserve_and_handle::<alloc::alloc::Global>
+     0.04%  ph3      ph3               [.] memcpy@plt
+     0.04%  ph3      ph3               [.] mi_heap_collect_ex
+     0.02%  ph3      ph3               [.] _mi_bin
+     0.02%  ph3      ph3               [.] _mi_heap_delayed_free_partial
+     0.02%  ph3      ph3               [.] _mi_malloc_generic
+     0.02%  ph3      ph3               [.] mi_heap_realloc_aligned
+     0.02%  ph3      ph3               [.] mi_stat_count_add_mt.part.0
+     0.02%  ph3      [unknown]         [k] 0xffffffff98201630
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

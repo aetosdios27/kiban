@@ -1,0 +1,11 @@
+{
+  "head": "72e057a0f4886f48633f50999b0a6d632b2120c1",
+  "cpu": "12,13,14,15,16,17,18,19,20,21",
+  "nice": 10,
+  "coordinator_nice": 10,
+  "nice_increment": 0,
+  "quick": false,
+  "seeds_per_suite": 20000,
+  "seed_start": 0,
+  "started": 1792283508.278664
+}

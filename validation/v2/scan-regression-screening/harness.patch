@@ -1,0 +1,92 @@
+diff --git a/tools/agentbench/readpath/src/main.rs b/tools/agentbench/readpath/src/main.rs
+index dd0711ad..20fc59c9 100644
+--- a/tools/agentbench/readpath/src/main.rs
++++ b/tools/agentbench/readpath/src/main.rs
+@@ -64,6 +64,10 @@ struct Options {
+     layout: String,
+     cache_mib: usize,
+     #[serde(default)]
++    point_index: bool,
++    #[serde(default)]
++    default_cache: bool,
++    #[serde(default)]
+     stage: u64,
+     #[serde(default)]
+     durable: bool,
+@@ -76,7 +80,12 @@ fn open(o: &Options) -> Result<Box<dyn Backend>> {
+         "kiban" => Box::new(backend::Embedded::with_options(
+             &o.suite.db,
+             KibanOptions {
+-                block_cache_bytes: o.cache_mib * 1024 * 1024,
++                point_index: o.point_index,
++                block_cache_bytes: if o.default_cache {
++                    KibanOptions::default().block_cache_bytes
++                } else {
++                    o.cache_mib * 1024 * 1024
++                },
+                 ..KibanOptions::default()
+             },
+         )?) as Box<dyn Backend>,
+@@ -105,7 +114,13 @@ fn prepare(o: &Options) -> Result<()> {
+     if c.backend == "kiban" && o.layout == "normal" {
+         // Direct Kiban leaves flush policy to its caller. Flush at its default
+         // write-buffer budget and let flush run the normal compaction picker.
+-        let mut db = Kiban::open(&c.db)?;
++        let mut db = Kiban::open_with_options(
++            &c.db,
++            KibanOptions {
++                point_index: o.point_index,
++                ..KibanOptions::default()
++            },
++        )?;
+         let mut bytes = 0;
+         for id in 0..c.n {
+             let memory = model::Memory::new(id, 0, c.seed);
+@@ -255,7 +270,14 @@ fn reads(o: &Options) -> Result<()> {
+ fn writes(o: &Options) -> Result<()> {
+     let c = &o.suite;
+     let mut b: Box<dyn Backend> = if c.backend == "kiban" {
+-        Box::new(backend::Embedded::with_durability(&c.db, o.durable)?)
++        Box::new(backend::Embedded::with_options_and_durability(
++            &c.db,
++            KibanOptions {
++                point_index: o.point_index,
++                ..KibanOptions::default()
++            },
++            o.durable,
++        )?)
+     } else {
+         Box::new(backend::Lmdb::open(&c.db, if o.durable { Mode::Durable } else { Mode::Fast })?.0)
+     };
+@@ -340,6 +362,8 @@ mod tests {
+                     action: "read".into(),
+                     layout: shape.into(),
+                     cache_mib: 32,
++                    point_index: true,
++                    default_cache: false,
+                     stage: 0,
+                     durable: false,
+                     micro: String::new(),
+diff --git a/tools/agentbench/src/embedded.rs b/tools/agentbench/src/embedded.rs
+index cb7752e0..80f3ee5f 100644
+--- a/tools/agentbench/src/embedded.rs
++++ b/tools/agentbench/src/embedded.rs
+@@ -24,9 +24,17 @@ impl Embedded {
+ 
+     #[allow(dead_code)] // Optional cache diagnosis binary; original harness keeps defaults.
+     pub fn with_options(path: &Path, options: kiban::db::KibanOptions) -> Result<Self> {
++        Self::with_options_and_durability(path, options, false)
++    }
++
++    pub fn with_options_and_durability(
++        path: &Path,
++        options: kiban::db::KibanOptions,
++        durable: bool,
++    ) -> Result<Self> {
+         Ok(Self {
+             db: Kiban::open_with_options(path, options)?,
+-            durable: false,
++            durable,
+         })
+     }
+ }

@@ -1,0 +1,1237 @@
+{
+  "status": "complete",
+  "errors": 0,
+  "runs": [
+    {
+      "name": "n10000-durable-r1-kiban",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 1,
+      "mode": "durable",
+      "backend": "kiban",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-durable-r1-kiban.jsonl",
+      "disk": {
+        "apparent_bytes": 7956602,
+        "allocated_bytes": 7966720,
+        "files": 5
+      },
+      "load_summary": {
+        "start_epoch": 1792166308.46688,
+        "end_epoch": 1792166320.2354465,
+        "samples": 61,
+        "largest_sample_gap_seconds": 0.2004225254058838,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.15087890625,
+            "min": 2.138671875,
+            "max": 2.3681640625
+          },
+          {
+            "median": 1.76123046875,
+            "min": 1.7568359375,
+            "max": 1.8154296875
+          },
+          {
+            "median": 1.99951171875,
+            "min": 1.9990234375,
+            "max": 2.01611328125
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n10000-durable-r1-helix",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 1,
+      "mode": "durable",
+      "backend": "helix",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-durable-r1-helix.jsonl",
+      "disk": {
+        "apparent_bytes": 14869120,
+        "allocated_bytes": 14860288,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792166320.9226346,
+        "end_epoch": 1792166365.9898212,
+        "samples": 226,
+        "largest_sample_gap_seconds": 0.2006843090057373,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.60986328125,
+            "min": 2.3681640625,
+            "max": 2.93994140625
+          },
+          {
+            "median": 1.939208984375,
+            "min": 1.8154296875,
+            "max": 1.95458984375
+          },
+          {
+            "median": 2.0517578125,
+            "min": 2.01611328125,
+            "max": 2.05908203125
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n10000-durable-r1-lmdb",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 1,
+      "mode": "durable",
+      "backend": "lmdb",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-durable-r1-lmdb.jsonl",
+      "disk": {
+        "apparent_bytes": 16536192,
+        "allocated_bytes": 16527360,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792166366.7078276,
+        "end_epoch": 1792166404.2105439,
+        "samples": 189,
+        "largest_sample_gap_seconds": 0.20066308975219727,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.5283203125,
+            "min": 2.3369140625,
+            "max": 3.2880859375
+          },
+          {
+            "median": 1.96435546875,
+            "min": 1.94580078125,
+            "max": 2.1796875
+          },
+          {
+            "median": 2.05615234375,
+            "min": 2.04931640625,
+            "max": 2.1240234375
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n10000-fast-r1-kiban",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 1,
+      "mode": "fast",
+      "backend": "kiban",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-fast-r1-kiban.jsonl",
+      "disk": {
+        "apparent_bytes": 7956602,
+        "allocated_bytes": 7966720,
+        "files": 5
+      },
+      "load_summary": {
+        "start_epoch": 1792166404.560426,
+        "end_epoch": 1792166404.7645764,
+        "samples": 3,
+        "largest_sample_gap_seconds": 0.1213982105255127,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 3.0830078125,
+            "min": 3.0830078125,
+            "max": 3.0830078125
+          },
+          {
+            "median": 2.15966796875,
+            "min": 2.15966796875,
+            "max": 2.15966796875
+          },
+          {
+            "median": 2.11767578125,
+            "min": 2.11767578125,
+            "max": 2.11767578125
+          }
+        ]
+      },
+      "preliminary": true
+    },
+    {
+      "name": "n10000-fast-r1-helix",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 1,
+      "mode": "fast",
+      "backend": "helix",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-fast-r1-helix.jsonl",
+      "disk": {
+        "apparent_bytes": 14869120,
+        "allocated_bytes": 14860288,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792166405.1770048,
+        "end_epoch": 1792166407.6133037,
+        "samples": 14,
+        "largest_sample_gap_seconds": 0.20048141479492188,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 3.0830078125,
+            "min": 3.0830078125,
+            "max": 3.0830078125
+          },
+          {
+            "median": 2.15966796875,
+            "min": 2.15966796875,
+            "max": 2.15966796875
+          },
+          {
+            "median": 2.11767578125,
+            "min": 2.11767578125,
+            "max": 2.11767578125
+          }
+        ]
+      },
+      "preliminary": true
+    },
+    {
+      "name": "n10000-fast-r1-lmdb",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 1,
+      "mode": "fast",
+      "backend": "lmdb",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-fast-r1-lmdb.jsonl",
+      "disk": {
+        "apparent_bytes": 16536192,
+        "allocated_bytes": 16527360,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792166407.9513562,
+        "end_epoch": 1792166408.2578678,
+        "samples": 3,
+        "largest_sample_gap_seconds": 0.155472993850708,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 3.0830078125,
+            "min": 3.0830078125,
+            "max": 3.0830078125
+          },
+          {
+            "median": 2.15966796875,
+            "min": 2.15966796875,
+            "max": 2.15966796875
+          },
+          {
+            "median": 2.11767578125,
+            "min": 2.11767578125,
+            "max": 2.11767578125
+          }
+        ]
+      },
+      "preliminary": true
+    },
+    {
+      "name": "n10000-durable-r2-kiban",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 2,
+      "mode": "durable",
+      "backend": "kiban",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-durable-r2-kiban.jsonl",
+      "disk": {
+        "apparent_bytes": 7956602,
+        "allocated_bytes": 7966720,
+        "files": 5
+      },
+      "load_summary": {
+        "start_epoch": 1792166408.7217207,
+        "end_epoch": 1792166420.6509318,
+        "samples": 61,
+        "largest_sample_gap_seconds": 0.20059990882873535,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.84912109375,
+            "min": 2.8359375,
+            "max": 2.94140625
+          },
+          {
+            "median": 2.13818359375,
+            "min": 2.12353515625,
+            "max": 2.16943359375
+          },
+          {
+            "median": 2.11083984375,
+            "min": 2.10595703125,
+            "max": 2.12109375
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n10000-durable-r2-helix",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 2,
+      "mode": "durable",
+      "backend": "helix",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-durable-r2-helix.jsonl",
+      "disk": {
+        "apparent_bytes": 14869120,
+        "allocated_bytes": 14860288,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792166421.4577382,
+        "end_epoch": 1792166470.556026,
+        "samples": 247,
+        "largest_sample_gap_seconds": 0.20062661170959473,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.6240234375,
+            "min": 2.3740234375,
+            "max": 2.94140625
+          },
+          {
+            "median": 2.13037109375,
+            "min": 2.1044921875,
+            "max": 2.1982421875
+          },
+          {
+            "median": 2.1083984375,
+            "min": 2.099609375,
+            "max": 2.13037109375
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n10000-durable-r2-lmdb",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 2,
+      "mode": "durable",
+      "backend": "lmdb",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-durable-r2-lmdb.jsonl",
+      "disk": {
+        "apparent_bytes": 16536192,
+        "allocated_bytes": 16527360,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792166471.2698684,
+        "end_epoch": 1792166505.65281,
+        "samples": 174,
+        "largest_sample_gap_seconds": 0.20059514045715332,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.50927734375,
+            "min": 2.31103515625,
+            "max": 2.60107421875
+          },
+          {
+            "median": 2.17578125,
+            "min": 2.15673828125,
+            "max": 2.19677734375
+          },
+          {
+            "median": 2.12353515625,
+            "min": 2.1181640625,
+            "max": 2.130859375
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n10000-fast-r2-kiban",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 2,
+      "mode": "fast",
+      "backend": "kiban",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-fast-r2-kiban.jsonl",
+      "disk": {
+        "apparent_bytes": 7956602,
+        "allocated_bytes": 7966720,
+        "files": 5
+      },
+      "load_summary": {
+        "start_epoch": 1792166506.114712,
+        "end_epoch": 1792166506.3241024,
+        "samples": 3,
+        "largest_sample_gap_seconds": 0.12440299987792969,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.31103515625,
+            "min": 2.31103515625,
+            "max": 2.31103515625
+          },
+          {
+            "median": 2.15673828125,
+            "min": 2.15673828125,
+            "max": 2.15673828125
+          },
+          {
+            "median": 2.1181640625,
+            "min": 2.1181640625,
+            "max": 2.1181640625
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n10000-fast-r2-helix",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 2,
+      "mode": "fast",
+      "backend": "helix",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-fast-r2-helix.jsonl",
+      "disk": {
+        "apparent_bytes": 14869120,
+        "allocated_bytes": 14860288,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792166506.746081,
+        "end_epoch": 1792166508.703813,
+        "samples": 12,
+        "largest_sample_gap_seconds": 0.20059442520141602,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.31103515625,
+            "min": 2.20556640625,
+            "max": 2.31103515625
+          },
+          {
+            "median": 2.15673828125,
+            "min": 2.13720703125,
+            "max": 2.15673828125
+          },
+          {
+            "median": 2.1181640625,
+            "min": 2.11181640625,
+            "max": 2.1181640625
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n10000-fast-r2-lmdb",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 2,
+      "mode": "fast",
+      "backend": "lmdb",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-fast-r2-lmdb.jsonl",
+      "disk": {
+        "apparent_bytes": 16536192,
+        "allocated_bytes": 16527360,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792166509.1176407,
+        "end_epoch": 1792166509.4266367,
+        "samples": 3,
+        "largest_sample_gap_seconds": 0.16399860382080078,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.20556640625,
+            "min": 2.20556640625,
+            "max": 2.20556640625
+          },
+          {
+            "median": 2.13720703125,
+            "min": 2.13720703125,
+            "max": 2.13720703125
+          },
+          {
+            "median": 2.11181640625,
+            "min": 2.11181640625,
+            "max": 2.11181640625
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n10000-durable-r3-kiban",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 3,
+      "mode": "durable",
+      "backend": "kiban",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-durable-r3-kiban.jsonl",
+      "disk": {
+        "apparent_bytes": 7956602,
+        "allocated_bytes": 7966720,
+        "files": 5
+      },
+      "load_summary": {
+        "start_epoch": 1792166510.0188894,
+        "end_epoch": 1792166523.0939054,
+        "samples": 67,
+        "largest_sample_gap_seconds": 0.20058631896972656,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.18896484375,
+            "min": 2.09375,
+            "max": 2.20556640625
+          },
+          {
+            "median": 2.134765625,
+            "min": 2.11572265625,
+            "max": 2.13720703125
+          },
+          {
+            "median": 2.11083984375,
+            "min": 2.1044921875,
+            "max": 2.11181640625
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n10000-durable-r3-helix",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 3,
+      "mode": "durable",
+      "backend": "helix",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-durable-r3-helix.jsonl",
+      "disk": {
+        "apparent_bytes": 14869120,
+        "allocated_bytes": 14860288,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792166523.7314208,
+        "end_epoch": 1792166571.722775,
+        "samples": 241,
+        "largest_sample_gap_seconds": 0.20057296752929688,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.0859375,
+            "min": 1.98681640625,
+            "max": 2.548828125
+          },
+          {
+            "median": 2.11376953125,
+            "min": 2.08984375,
+            "max": 2.20458984375
+          },
+          {
+            "median": 2.103515625,
+            "min": 2.0947265625,
+            "max": 2.1318359375
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n10000-durable-r3-lmdb",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 3,
+      "mode": "durable",
+      "backend": "lmdb",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-durable-r3-lmdb.jsonl",
+      "disk": {
+        "apparent_bytes": 16536192,
+        "allocated_bytes": 16527360,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792166572.7251446,
+        "end_epoch": 1792166606.3947816,
+        "samples": 170,
+        "largest_sample_gap_seconds": 0.20064592361450195,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.51123046875,
+            "min": 2.21533203125,
+            "max": 2.60498046875
+          },
+          {
+            "median": 2.23095703125,
+            "min": 2.1533203125,
+            "max": 2.244140625
+          },
+          {
+            "median": 2.1416015625,
+            "min": 2.11572265625,
+            "max": 2.146484375
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n10000-fast-r3-kiban",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 3,
+      "mode": "fast",
+      "backend": "kiban",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-fast-r3-kiban.jsonl",
+      "disk": {
+        "apparent_bytes": 7956602,
+        "allocated_bytes": 7966720,
+        "files": 5
+      },
+      "load_summary": {
+        "start_epoch": 1792166606.7613497,
+        "end_epoch": 1792166606.9626164,
+        "samples": 3,
+        "largest_sample_gap_seconds": 0.12505125999450684,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.51123046875,
+            "min": 2.51123046875,
+            "max": 2.51123046875
+          },
+          {
+            "median": 2.2353515625,
+            "min": 2.2353515625,
+            "max": 2.2353515625
+          },
+          {
+            "median": 2.14453125,
+            "min": 2.14453125,
+            "max": 2.14453125
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n10000-fast-r3-helix",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 3,
+      "mode": "fast",
+      "backend": "helix",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-fast-r3-helix.jsonl",
+      "disk": {
+        "apparent_bytes": 14869120,
+        "allocated_bytes": 14860288,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792166607.3781576,
+        "end_epoch": 1792166609.2579517,
+        "samples": 11,
+        "largest_sample_gap_seconds": 0.20040321350097656,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.51123046875,
+            "min": 2.39013671875,
+            "max": 2.51123046875
+          },
+          {
+            "median": 2.2353515625,
+            "min": 2.21435546875,
+            "max": 2.2353515625
+          },
+          {
+            "median": 2.14453125,
+            "min": 2.13818359375,
+            "max": 2.14453125
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n10000-fast-r3-lmdb",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 3,
+      "mode": "fast",
+      "backend": "lmdb",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-fast-r3-lmdb.jsonl",
+      "disk": {
+        "apparent_bytes": 16536192,
+        "allocated_bytes": 16527360,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792166609.5679865,
+        "end_epoch": 1792166609.8717446,
+        "samples": 3,
+        "largest_sample_gap_seconds": 0.1609961986541748,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.39013671875,
+            "min": 2.39013671875,
+            "max": 2.39013671875
+          },
+          {
+            "median": 2.21435546875,
+            "min": 2.21435546875,
+            "max": 2.21435546875
+          },
+          {
+            "median": 2.13818359375,
+            "min": 2.13818359375,
+            "max": 2.13818359375
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n10000-durable-r4-kiban",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 4,
+      "mode": "durable",
+      "backend": "kiban",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-durable-r4-kiban.jsonl",
+      "disk": {
+        "apparent_bytes": 7956602,
+        "allocated_bytes": 7966720,
+        "files": 5
+      },
+      "load_summary": {
+        "start_epoch": 1792166610.3023324,
+        "end_epoch": 1792166623.0274806,
+        "samples": 66,
+        "largest_sample_gap_seconds": 0.20078158378601074,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.6796875,
+            "min": 2.39013671875,
+            "max": 2.70556640625
+          },
+          {
+            "median": 2.27734375,
+            "min": 2.21435546875,
+            "max": 2.28955078125
+          },
+          {
+            "median": 2.1591796875,
+            "min": 2.13818359375,
+            "max": 2.1640625
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n10000-durable-r4-helix",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 4,
+      "mode": "durable",
+      "backend": "helix",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-durable-r4-helix.jsonl",
+      "disk": {
+        "apparent_bytes": 14869120,
+        "allocated_bytes": 14860288,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792166623.8662827,
+        "end_epoch": 1792166671.1483562,
+        "samples": 238,
+        "largest_sample_gap_seconds": 0.20076417922973633,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.76513671875,
+            "min": 2.64111328125,
+            "max": 2.990234375
+          },
+          {
+            "median": 2.3359375,
+            "min": 2.31298828125,
+            "max": 2.3916015625
+          },
+          {
+            "median": 2.18310546875,
+            "min": 2.17333984375,
+            "max": 2.20263671875
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n10000-durable-r4-lmdb",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 4,
+      "mode": "durable",
+      "backend": "lmdb",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-durable-r4-lmdb.jsonl",
+      "disk": {
+        "apparent_bytes": 16536192,
+        "allocated_bytes": 16527360,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792166671.8542907,
+        "end_epoch": 1792166705.5222545,
+        "samples": 170,
+        "largest_sample_gap_seconds": 0.20057940483093262,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.69677734375,
+            "min": 2.47412109375,
+            "max": 2.9833984375
+          },
+          {
+            "median": 2.388671875,
+            "min": 2.3525390625,
+            "max": 2.42626953125
+          },
+          {
+            "median": 2.2080078125,
+            "min": 2.197265625,
+            "max": 2.2177734375
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n10000-fast-r4-kiban",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 4,
+      "mode": "fast",
+      "backend": "kiban",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-fast-r4-kiban.jsonl",
+      "disk": {
+        "apparent_bytes": 7956602,
+        "allocated_bytes": 7966720,
+        "files": 5
+      },
+      "load_summary": {
+        "start_epoch": 1792166705.8765738,
+        "end_epoch": 1792166706.0846047,
+        "samples": 3,
+        "largest_sample_gap_seconds": 0.12540459632873535,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.47412109375,
+            "min": 2.47412109375,
+            "max": 2.47412109375
+          },
+          {
+            "median": 2.3525390625,
+            "min": 2.3525390625,
+            "max": 2.3525390625
+          },
+          {
+            "median": 2.1982421875,
+            "min": 2.1982421875,
+            "max": 2.1982421875
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n10000-fast-r4-helix",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 4,
+      "mode": "fast",
+      "backend": "helix",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-fast-r4-helix.jsonl",
+      "disk": {
+        "apparent_bytes": 14869120,
+        "allocated_bytes": 14860288,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792166706.4969108,
+        "end_epoch": 1792166708.7565749,
+        "samples": 13,
+        "largest_sample_gap_seconds": 0.20044827461242676,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.47412109375,
+            "min": 2.43603515625,
+            "max": 2.47412109375
+          },
+          {
+            "median": 2.3525390625,
+            "min": 2.3466796875,
+            "max": 2.3525390625
+          },
+          {
+            "median": 2.1982421875,
+            "min": 2.19677734375,
+            "max": 2.1982421875
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n10000-fast-r4-lmdb",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 4,
+      "mode": "fast",
+      "backend": "lmdb",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-fast-r4-lmdb.jsonl",
+      "disk": {
+        "apparent_bytes": 16536192,
+        "allocated_bytes": 16527360,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792166709.0729642,
+        "end_epoch": 1792166709.3867579,
+        "samples": 3,
+        "largest_sample_gap_seconds": 0.1586284637451172,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.43603515625,
+            "min": 2.43603515625,
+            "max": 2.43603515625
+          },
+          {
+            "median": 2.3466796875,
+            "min": 2.3466796875,
+            "max": 2.3466796875
+          },
+          {
+            "median": 2.19677734375,
+            "min": 2.19677734375,
+            "max": 2.19677734375
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n10000-durable-r5-kiban",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 5,
+      "mode": "durable",
+      "backend": "kiban",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-durable-r5-kiban.jsonl",
+      "disk": {
+        "apparent_bytes": 7956602,
+        "allocated_bytes": 7966720,
+        "files": 5
+      },
+      "load_summary": {
+        "start_epoch": 1792166709.831363,
+        "end_epoch": 1792166722.9068906,
+        "samples": 68,
+        "largest_sample_gap_seconds": 0.20049118995666504,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.6416015625,
+            "min": 2.43603515625,
+            "max": 2.91064453125
+          },
+          {
+            "median": 2.39111328125,
+            "min": 2.3466796875,
+            "max": 2.451171875
+          },
+          {
+            "median": 2.2119140625,
+            "min": 2.19677734375,
+            "max": 2.232421875
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n10000-durable-r5-helix",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 5,
+      "mode": "durable",
+      "backend": "helix",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-durable-r5-helix.jsonl",
+      "disk": {
+        "apparent_bytes": 14869120,
+        "allocated_bytes": 14860288,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792166723.7470424,
+        "end_epoch": 1792166775.3213956,
+        "samples": 259,
+        "largest_sample_gap_seconds": 0.20051836967468262,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.92626953125,
+            "min": 2.80810546875,
+            "max": 3.318359375
+          },
+          {
+            "median": 2.52294921875,
+            "min": 2.50634765625,
+            "max": 2.55908203125
+          },
+          {
+            "median": 2.26611328125,
+            "min": 2.2587890625,
+            "max": 2.2802734375
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n10000-durable-r5-lmdb",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 5,
+      "mode": "durable",
+      "backend": "lmdb",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-durable-r5-lmdb.jsonl",
+      "disk": {
+        "apparent_bytes": 16536192,
+        "allocated_bytes": 16527360,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792166776.0157354,
+        "end_epoch": 1792166809.65762,
+        "samples": 170,
+        "largest_sample_gap_seconds": 0.2008063793182373,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.76416015625,
+            "min": 2.65625,
+            "max": 2.943359375
+          },
+          {
+            "median": 2.52197265625,
+            "min": 2.51123046875,
+            "max": 2.5771484375
+          },
+          {
+            "median": 2.27685546875,
+            "min": 2.27099609375,
+            "max": 2.298828125
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n10000-fast-r5-kiban",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 5,
+      "mode": "fast",
+      "backend": "kiban",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-fast-r5-kiban.jsonl",
+      "disk": {
+        "apparent_bytes": 7956602,
+        "allocated_bytes": 7966720,
+        "files": 5
+      },
+      "load_summary": {
+        "start_epoch": 1792166809.973009,
+        "end_epoch": 1792166810.1781354,
+        "samples": 3,
+        "largest_sample_gap_seconds": 0.12392044067382812,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.943359375,
+            "min": 2.943359375,
+            "max": 2.943359375
+          },
+          {
+            "median": 2.5771484375,
+            "min": 2.5771484375,
+            "max": 2.5771484375
+          },
+          {
+            "median": 2.298828125,
+            "min": 2.298828125,
+            "max": 2.298828125
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n10000-fast-r5-helix",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 5,
+      "mode": "fast",
+      "backend": "helix",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-fast-r5-helix.jsonl",
+      "disk": {
+        "apparent_bytes": 14869120,
+        "allocated_bytes": 14860288,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792166810.5922277,
+        "end_epoch": 1792166812.752049,
+        "samples": 13,
+        "largest_sample_gap_seconds": 0.20051026344299316,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.943359375,
+            "min": 2.943359375,
+            "max": 2.943359375
+          },
+          {
+            "median": 2.5771484375,
+            "min": 2.5771484375,
+            "max": 2.5771484375
+          },
+          {
+            "median": 2.298828125,
+            "min": 2.298828125,
+            "max": 2.298828125
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "n10000-fast-r5-lmdb",
+      "n": 10000,
+      "operations": 10000,
+      "trial": 5,
+      "mode": "fast",
+      "backend": "lmdb",
+      "write_operations": 10000,
+      "final_population": 20000,
+      "file": "n10000-fast-r5-lmdb.jsonl",
+      "disk": {
+        "apparent_bytes": 16536192,
+        "allocated_bytes": 16527360,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792166813.179517,
+        "end_epoch": 1792166813.495162,
+        "samples": 3,
+        "largest_sample_gap_seconds": 0.16790413856506348,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.943359375,
+            "min": 2.943359375,
+            "max": 2.943359375
+          },
+          {
+            "median": 2.5771484375,
+            "min": 2.5771484375,
+            "max": 2.5771484375
+          },
+          {
+            "median": 2.298828125,
+            "min": 2.298828125,
+            "max": 2.298828125
+          }
+        ]
+      },
+      "preliminary": false
+    }
+  ],
+  "preliminary": true
+}

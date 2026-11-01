@@ -1,0 +1,121 @@
+{
+  "core": [
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "--locked"
+      ],
+      "exit_code": 0,
+      "seconds": 2.3721656799316406
+    },
+    {
+      "argv": [
+        "cargo",
+        "fmt",
+        "--check"
+      ],
+      "exit_code": 0,
+      "seconds": 0.2399289608001709
+    },
+    {
+      "argv": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--all-targets",
+        "--workspace",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "seconds": 0.08924508094787598
+    },
+    {
+      "argv": [
+        "cargo",
+        "deny",
+        "--locked",
+        "check"
+      ],
+      "exit_code": 0,
+      "seconds": 1.0475964546203613
+    },
+    {
+      "argv": [
+        "python3",
+        "tools/site_facts.py",
+        "validate"
+      ],
+      "exit_code": 0,
+      "seconds": 0.0990149974822998
+    }
+  ],
+  "harness": [
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "--release",
+        "--locked",
+        "--manifest-path",
+        "tools/agentbench/engine/Cargo.toml"
+      ],
+      "exit_code": 0,
+      "seconds": 30.605583667755127
+    },
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--manifest-path",
+        "tools/agentbench/Cargo.toml"
+      ],
+      "exit_code": 0,
+      "seconds": 0.5395209789276123
+    },
+    {
+      "argv": [
+        "cargo",
+        "clippy",
+        "--release",
+        "--locked",
+        "--manifest-path",
+        "tools/agentbench/engine/Cargo.toml",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "seconds": 0.5036704540252686
+    },
+    {
+      "argv": [
+        "cargo",
+        "fmt",
+        "--manifest-path",
+        "tools/agentbench/engine/Cargo.toml",
+        "--check"
+      ],
+      "exit_code": 0,
+      "seconds": 0.05368638038635254
+    },
+    {
+      "argv": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/agentbench",
+        "-p",
+        "test_*.py"
+      ],
+      "exit_code": 0,
+      "seconds": 2.027937412261963
+    }
+  ]
+}

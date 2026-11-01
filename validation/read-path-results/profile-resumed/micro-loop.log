@@ -1,0 +1,4 @@
+Events disabled
+Events enabled
+Events disabled
+{"errors":0,"name":"loop","ns":2345204,"ns_per_op":2.345204,"operations":1000000,"type":"micro"}

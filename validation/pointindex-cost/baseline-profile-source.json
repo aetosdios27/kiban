@@ -1,0 +1,7 @@
+{
+  "commit": "06a457dbfe24aabe1e33a3763e1ac0e1a8d73e05",
+  "benchmark_sha256": "6151fcd930087f69ae1e4b46ea7f074831c25885a6955b52a0d5fe8d2c4bf2f9",
+  "claim": "Only benchmark phase CPU ticks and perf FIFO controls differ from main; engine source is archived unchanged.",
+  "binary_path": "/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-cost/bin/before-profile-test",
+  "binary_sha256": "a6e6a98045300ad12ea5b4fc49b7bcae8d11aeef281cb6120f1e5cdbcb05a6a3"
+}

@@ -1,0 +1,14 @@
+   Compiling kiban v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-c0aaa680)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.86s
+     Running unittests src/lib.rs (target/debug/deps/kiban-60f9814aeb7cdf24)
+
+running 5 tests
+test db::fuse_filter_tests::fuse_single_key_and_duplicate_versions_preserve_sequence_and_tombstone ... ok
+test db::tests::corrupted_manifest_refuses_to_open ... ok
+kiban: engine POISONED — mutations refused until reopen: commit ambiguity: injected i/o failure
+test db::backpressure_tests::poisoning_wakes_a_stalled_writer_and_refuses_mutation ... ok
+test db::fuse_filter_tests::fuse_filter_every_header_payload_and_trailer_bit_flip_is_detected_before_lookup ... ok
+test db::fuse_filter_tests::fuse_mixed_formats_versions_tombstones_snapshots_compaction_match_unfiltered_scan ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 354 filtered out; finished in 0.87s
+

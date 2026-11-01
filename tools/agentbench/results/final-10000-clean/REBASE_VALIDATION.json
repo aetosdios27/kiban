@@ -1,0 +1,31 @@
+{
+  "origin_main": "3a4fd9f636c1c1e061940b70a42b90e2b28a7c08",
+  "measured_input_files": 49,
+  "unchanged_measured_input_files": 47,
+  "changed_input_files": [
+    "Cargo.toml",
+    "Cargo.lock"
+  ],
+  "manifest_only_addition": {
+    "workspace": {
+      "members": [
+        "crates/kiban-ffi"
+      ],
+      "default-members": [
+        "."
+      ],
+      "resolver": "3"
+    }
+  },
+  "lock_only_addition": [
+    {
+      "name": "kiban-ffi",
+      "version": "0.1.0",
+      "dependencies": [
+        "kiban"
+      ]
+    }
+  ],
+  "upstream_engine_src_diff": [],
+  "note": "Measurement preceded rebase. Upstream added the FFI workspace and lock entry; all engine, benchmark and Helix source inputs remain byte-identical. Original manifest snapshots/hashes are retained in the full local result directory."
+}

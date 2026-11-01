@@ -1,0 +1,19 @@
+diff --git a/src/sstable/point/compact.rs b/src/sstable/point/compact.rs
+index d3f3de67..9682c2bc 100644
+--- a/src/sstable/point/compact.rs
++++ b/src/sstable/point/compact.rs
+@@ -418,6 +418,14 @@ impl CompactIndex {
+             return None;
+         }
+         let mut pos = self.arena + uint(&self.bytes, slot, e.address) as usize;
++        #[cfg(target_arch = "x86_64")]
++        // SAFETY: admission validated every slot's record address in this immutable arena.
++        unsafe {
++            core::arch::x86_64::_mm_prefetch(
++                self.bytes.as_ptr().add(pos).cast(),
++                core::arch::x86_64::_MM_HINT_T0,
++            );
++        }
+         let anchor = self.arena + uint(&self.bytes, pos, e.address) as usize;
+         let shared = uint(&self.bytes, pos + e.address, e.key) as usize;
+         let suffix = uint(&self.bytes, pos + e.address + e.key, e.key) as usize;

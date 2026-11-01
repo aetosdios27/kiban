@@ -1,0 +1,14 @@
+{
+  "backend": "lmdb",
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/target/remix-data/before/lmdb-1000000-bulk",
+  "n": 1000000,
+  "operations": 1000000,
+  "k": 10,
+  "seed": 20261016,
+  "output": "",
+  "action": "profile",
+  "layout": "bulk",
+  "cache_mib": 512,
+  "point_index": true,
+  "stage": 2
+}

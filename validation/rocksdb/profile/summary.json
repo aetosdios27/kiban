@@ -1,0 +1,102 @@
+[
+  {
+    "name": "kiban-index0-stage1",
+    "per_op": {
+      "cpu_core/cycles/u": 6988.692767,
+      "cpu_core/instructions/u": 8333.166188,
+      "cpu_core/LLC-load-misses/u": 9.232876,
+      "cpu_core/branch-misses/u": 2.814153,
+      "cpu_core/dTLB-load-misses/u": 1.728545
+    }
+  },
+  {
+    "name": "kiban-index0-stage2",
+    "per_op": {
+      "cpu_core/cycles/u": 11582.24816,
+      "cpu_core/instructions/u": 49119.522938,
+      "cpu_core/LLC-load-misses/u": 0.041075,
+      "cpu_core/branch-misses/u": 12.386094,
+      "cpu_core/dTLB-load-misses/u": 0.120172
+    }
+  },
+  {
+    "name": "kiban-index1-stage1",
+    "per_op": {
+      "cpu_core/cycles/u": 3717.898384,
+      "cpu_core/instructions/u": 5640.87305,
+      "cpu_core/LLC-load-misses/u": 7.959487,
+      "cpu_core/branch-misses/u": 0.739906,
+      "cpu_core/dTLB-load-misses/u": 0.13392
+    }
+  },
+  {
+    "name": "kiban-index1-stage2",
+    "per_op": {
+      "cpu_core/cycles/u": 11314.656893,
+      "cpu_core/instructions/u": 48449.887328,
+      "cpu_core/LLC-load-misses/u": 0.008068,
+      "cpu_core/branch-misses/u": 13.096676,
+      "cpu_core/dTLB-load-misses/u": 0.15286
+    }
+  },
+  {
+    "name": "lmdb-stage1",
+    "per_op": {
+      "cpu_core/cycles/u": 5481.400588,
+      "cpu_core/instructions/u": 7897.377881,
+      "cpu_core/LLC-load-misses/u": 12.096436,
+      "cpu_core/branch-misses/u": 10.070133,
+      "cpu_core/dTLB-load-misses/u": 2.002418
+    }
+  },
+  {
+    "name": "lmdb-stage2",
+    "per_op": {
+      "cpu_core/cycles/u": 9365.535228,
+      "cpu_core/instructions/u": 42346.462625,
+      "cpu_core/LLC-load-misses/u": 0.006832,
+      "cpu_core/branch-misses/u": 14.572547,
+      "cpu_core/dTLB-load-misses/u": 0.065617
+    }
+  },
+  {
+    "name": "rocksdb-lz4-stage1",
+    "per_op": {
+      "cpu_core/cycles/u": 9858.032815,
+      "cpu_core/instructions/u": 18624.04811,
+      "cpu_core/LLC-load-misses/u": 8.845472,
+      "cpu_core/branch-misses/u": 16.508166,
+      "cpu_core/dTLB-load-misses/u": 4.530775
+    }
+  },
+  {
+    "name": "rocksdb-lz4-stage2",
+    "per_op": {
+      "cpu_core/cycles/u": 20578.313143,
+      "cpu_core/instructions/u": 69187.179141,
+      "cpu_core/LLC-load-misses/u": 0.010949,
+      "cpu_core/branch-misses/u": 26.770118,
+      "cpu_core/dTLB-load-misses/u": 0.223488
+    }
+  },
+  {
+    "name": "rocksdb-stage1",
+    "per_op": {
+      "cpu_core/cycles/u": 10622.486155,
+      "cpu_core/instructions/u": 18619.625371,
+      "cpu_core/LLC-load-misses/u": 10.788247,
+      "cpu_core/branch-misses/u": 16.654831,
+      "cpu_core/dTLB-load-misses/u": 4.650019
+    }
+  },
+  {
+    "name": "rocksdb-stage2",
+    "per_op": {
+      "cpu_core/cycles/u": 20775.930797,
+      "cpu_core/instructions/u": 69032.095585,
+      "cpu_core/LLC-load-misses/u": 0.01729,
+      "cpu_core/branch-misses/u": 26.966304,
+      "cpu_core/dTLB-load-misses/u": 0.211681
+    }
+  }
+]

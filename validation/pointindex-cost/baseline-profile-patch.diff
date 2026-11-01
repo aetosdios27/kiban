@@ -1,0 +1,96 @@
+--- main/src/point_index_tests.rs
++++ profile/src/point_index_tests.rs
+@@ -202,6 +202,26 @@
+     assert_eq!(after.misses, before.misses);
+ }
+ 
++// Diagnostic only: keep this outside the measured wall-clock intervals.
++fn maintenance_cpu_ticks() -> u64 {
++    let stat = std::fs::read_to_string("/proc/thread-self/stat").unwrap();
++    let mut fields = stat.rsplit_once(')').unwrap().1.split_whitespace();
++    let user: u64 = fields.nth(11).unwrap().parse().unwrap();
++    user + fields.next().unwrap().parse::<u64>().unwrap()
++}
++
++fn maintenance_perf_control(command: &str) {
++    if let Some(path) = std::env::var_os("READBENCH_PERF_CTL") {
++        use std::io::{BufRead, Write};
++        let ack = std::fs::File::open(std::env::var_os("READBENCH_PERF_ACK").unwrap()).unwrap();
++        let mut ctl = std::fs::OpenOptions::new().write(true).open(path).unwrap();
++        writeln!(ctl, "{command}").unwrap();
++        let mut reply = String::new();
++        std::io::BufReader::new(ack).read_line(&mut reply).unwrap();
++        assert_eq!(reply.trim(), "ack");
++    }
++}
++
+ /// Run the already-built release test executable under taskset -c 8 with
+ /// KIBAN_POINT_BENCH_N set. These measurements isolate flush and compaction
+ /// BUILD from memtable fill. CI's `--ignored` stress job runs without the
+@@ -214,6 +234,7 @@
+         return;
+     };
+     let n: u64 = n.parse().unwrap();
++    let profile = std::env::var_os("KIBAN_POINT_BENCH_PROFILE").is_some();
+     assert!(
+         std::fs::read_to_string("/proc/self/status")
+             .unwrap()
+@@ -237,20 +258,57 @@
+                 for id in part * (n / 2)..(part + 1) * (n / 2) {
+                     db.put(id.to_be_bytes(), vec![id as u8; 296]).unwrap();
+                 }
++                let cpu = profile.then(maintenance_cpu_ticks);
+                 let tick = std::time::Instant::now();
+                 db.flush_without_compaction().unwrap();
+-                flush_ns += tick.elapsed().as_nanos();
++                let elapsed = tick.elapsed().as_nanos();
++                flush_ns += elapsed;
++                if let Some(cpu) = cpu {
++                    println!(
++                        "{{\"type\":\"profile_phase\",\"phase\":\"flush\",\"trial\":{},\"indexed\":{},\"cpu_ticks\":{},\"wall_ns\":{}}}",
++                        trial + 1,
++                        indexed,
++                        maintenance_cpu_ticks() - cpu,
++                        elapsed
++                    );
++                }
+             }
+             let input_bytes: u64 = db.version.tables.iter().map(|t| t.size).sum();
+             let plan = db.plan_compaction_at_level(0).unwrap();
++            let cpu = profile.then(maintenance_cpu_ticks);
++            if profile {
++                maintenance_perf_control("enable");
++            }
+             let tick = std::time::Instant::now();
+             let outputs = plan.build().unwrap();
+             let build_ns = tick.elapsed().as_nanos();
++            if profile {
++                maintenance_perf_control("disable");
++            }
++            if let Some(cpu) = cpu {
++                println!(
++                    "{{\"type\":\"profile_phase\",\"phase\":\"build\",\"trial\":{},\"indexed\":{},\"cpu_ticks\":{},\"wall_ns\":{}}}",
++                    trial + 1,
++                    indexed,
++                    maintenance_cpu_ticks() - cpu,
++                    build_ns
++                );
++            }
+             let output_bytes: u64 = outputs.iter().map(|t| t.size).sum();
+             let output_files = outputs.len();
++            let cpu = profile.then(maintenance_cpu_ticks);
+             let tick = std::time::Instant::now();
+             db.commit_compaction(plan, outputs).unwrap();
+             let commit_ns = tick.elapsed().as_nanos();
++            if let Some(cpu) = cpu {
++                println!(
++                    "{{\"type\":\"profile_phase\",\"phase\":\"commit\",\"trial\":{},\"indexed\":{},\"cpu_ticks\":{},\"wall_ns\":{}}}",
++                    trial + 1,
++                    indexed,
++                    maintenance_cpu_ticks() - cpu,
++                    commit_ns
++                );
++            }
+             for id in 0..n {
+                 assert_eq!(
+                     db.get(id.to_be_bytes()).unwrap().unwrap(),

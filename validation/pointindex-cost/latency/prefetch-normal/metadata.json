@@ -1,0 +1,28 @@
+{
+  "binaries": {
+    "before": {
+      "path": "/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-latency/direct",
+      "sha256": "a72bb498f75e12586a0b5b7e2f149b30999317682c71447d209b2a431a8368cc"
+    },
+    "after": {
+      "path": "/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-latency/prefetch",
+      "sha256": "520120360d7f8820a7d869564eb1cce0ba166346523371344f486dd1e2aab5c9"
+    }
+  },
+  "cpu": 8,
+  "sibling": 9,
+  "layouts": [
+    "normal"
+  ],
+  "caches": [
+    "default"
+  ],
+  "trials": 5,
+  "operations": 100000,
+  "started": 1792273916.3042872,
+  "load": [
+    3.30908203125,
+    4.41552734375,
+    4.810546875
+  ]
+}

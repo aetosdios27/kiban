@@ -1,0 +1,24 @@
+{
+  "checks": {
+    "test.log": {
+      "sha256": "3588c008d4655a72e4ff7ee1166562613ab3359f3bc2bd0bc71fd60376a4ccab",
+      "mtime_ns": 1792276488808815038
+    },
+    "clippy.log": {
+      "sha256": "b5b8770d1b529f0c7347af978af7b2cc7a4d0cb816b1135d5b80139d7ad3d051",
+      "mtime_ns": 1792276488944816481
+    },
+    "fmt.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mtime_ns": 1792276488952816565
+    },
+    "final-build.log": {
+      "sha256": "6903e81247cf2cc3de52bceda85055cad8d1597a1255e8549dda2ba095aedf18",
+      "mtime_ns": 1792276489151818677
+    }
+  },
+  "all_completed_before_first_preparation": true,
+  "first_preparation_started": 1792276489.7376122,
+  "affinity": "12-21",
+  "nice": 10
+}

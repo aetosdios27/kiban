@@ -379,6 +379,24 @@ pub fn power_loss_seeded(seed: u64) {
     });
 }
 
+/// A frozen copy of the simulated device: the instant of a crash that a
+/// concurrent test wants to replay after the live run finishes.
+#[cfg(test)]
+pub(crate) struct DeviceSnapshot(Device);
+
+/// Copies the whole device (volatile overlays and pending namespace changes
+/// included), atomically with respect to every other thread's I/O.
+#[cfg(test)]
+pub(crate) fn snapshot_device() -> DeviceSnapshot {
+    DeviceSnapshot(with_sim(|device| device.clone()).expect("device simulation active"))
+}
+
+/// Replaces the device state with `snapshot`; follow with `power_loss_seeded`.
+#[cfg(test)]
+pub(crate) fn restore_device(snapshot: DeviceSnapshot) {
+    with_sim(|device| *device = snapshot.0);
+}
+
 /// What survives of one file's unsynced bytes for tear decision `r`.
 fn tear(overlay: &[u8], r: u64) -> Vec<u8> {
     const SECTOR: usize = 512;

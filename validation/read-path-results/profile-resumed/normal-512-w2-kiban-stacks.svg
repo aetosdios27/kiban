@@ -1,0 +1,491 @@
+<?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg version="1.1" width="1200" height="390" onload="init(evt)" viewBox="0 0 1200 390" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:fg="http://github.com/jonhoo/inferno"><!--Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples.--><!--NOTES: --><defs><linearGradient id="background" y1="0" y2="1" x1="0" x2="0"><stop stop-color="#eeeeee" offset="5%"/><stop stop-color="#eeeeb0" offset="95%"/></linearGradient></defs><style type="text/css">
+text { font-family:monospace; font-size:12px }
+#title { text-anchor:middle; font-size:17px; }
+#matched { text-anchor:end; }
+#search { text-anchor:end; opacity:0.1; cursor:pointer; }
+#search:hover, #search.show { opacity:1; }
+#subtitle { text-anchor:middle; font-color:rgb(160,160,160); }
+#unzoom { cursor:pointer; }
+#frames > *:hover { stroke:black; stroke-width:0.5; cursor:pointer; }
+.hide { display:none; }
+.parent { opacity:0.5; }
+</style><script type="text/ecmascript"><![CDATA[
+        var nametype = 'Function:';
+        var fontsize = 12;
+        var fontwidth = 0.59;
+        var xpad = 10;
+        var inverted = false;
+        var searchcolor = 'rgb(230,0,230)';
+        var fluiddrawing = true;
+        var truncate_text_right = false;
+    ]]><![CDATA["use strict";
+var details, searchbtn, unzoombtn, matchedtxt, svg, searching, frames, known_font_width;
+function init(evt) {
+    details = document.getElementById("details").firstChild;
+    searchbtn = document.getElementById("search");
+    unzoombtn = document.getElementById("unzoom");
+    matchedtxt = document.getElementById("matched");
+    svg = document.getElementsByTagName("svg")[0];
+    frames = document.getElementById("frames");
+    known_font_width = get_monospace_width(frames);
+    total_samples = parseInt(frames.attributes.total_samples.value);
+    searching = 0;
+
+    // Use GET parameters to restore a flamegraph's state.
+    var restore_state = function() {
+        var params = get_params();
+        if (params.x && params.y)
+            zoom(find_group(document.querySelector('[*|x="' + params.x + '"][y="' + params.y + '"]')));
+        if (params.s)
+            search(params.s);
+    };
+
+    if (fluiddrawing) {
+        // Make width dynamic so the SVG fits its parent's width.
+        svg.removeAttribute("width");
+        // Edge requires us to have a viewBox that gets updated with size changes.
+        var isEdge = /Edge\/\d./i.test(navigator.userAgent);
+        if (!isEdge) {
+            svg.removeAttribute("viewBox");
+        }
+        var update_for_width_change = function() {
+            if (isEdge) {
+                svg.attributes.viewBox.value = "0 0 " + svg.width.baseVal.value + " " + svg.height.baseVal.value;
+            }
+
+            // Keep consistent padding on left and right of frames container.
+            frames.attributes.width.value = svg.width.baseVal.value - xpad * 2;
+
+            // Text truncation needs to be adjusted for the current width.
+            update_text_for_elements(frames.children);
+
+            // Keep search elements at a fixed distance from right edge.
+            var svgWidth = svg.width.baseVal.value;
+            searchbtn.attributes.x.value = svgWidth - xpad;
+            matchedtxt.attributes.x.value = svgWidth - xpad;
+        };
+        window.addEventListener('resize', function() {
+            update_for_width_change();
+        });
+        // This needs to be done asynchronously for Safari to work.
+        setTimeout(function() {
+            unzoom();
+            update_for_width_change();
+            restore_state();
+        }, 0);
+    } else {
+        restore_state();
+    }
+}
+// event listeners
+window.addEventListener("click", function(e) {
+    var target = find_group(e.target);
+    if (target) {
+        if (target.nodeName == "a") {
+            if (e.ctrlKey === false) return;
+            e.preventDefault();
+        }
+        if (target.classList.contains("parent")) unzoom();
+        zoom(target);
+
+        // set parameters for zoom state
+        var el = target.querySelector("rect");
+        if (el && el.attributes && el.attributes.y && el.attributes["fg:x"]) {
+            var params = get_params()
+            params.x = el.attributes["fg:x"].value;
+            params.y = el.attributes.y.value;
+            history.replaceState(null, null, parse_params(params));
+        }
+    }
+    else if (e.target.id == "unzoom") {
+        unzoom();
+
+        // remove zoom state
+        var params = get_params();
+        if (params.x) delete params.x;
+        if (params.y) delete params.y;
+        history.replaceState(null, null, parse_params(params));
+    }
+    else if (e.target.id == "search") search_prompt();
+}, false)
+// mouse-over for info
+// show
+window.addEventListener("mouseover", function(e) {
+    var target = find_group(e.target);
+    if (target) details.nodeValue = nametype + " " + g_to_text(target);
+}, false)
+// clear
+window.addEventListener("mouseout", function(e) {
+    var target = find_group(e.target);
+    if (target) details.nodeValue = ' ';
+}, false)
+// ctrl-F for search
+window.addEventListener("keydown",function (e) {
+    if (e.keyCode === 114 || (e.ctrlKey && e.keyCode === 70)) {
+        e.preventDefault();
+        search_prompt();
+    }
+}, false)
+// functions
+function get_params() {
+    var params = {};
+    var paramsarr = window.location.search.substr(1).split('&');
+    for (var i = 0; i < paramsarr.length; ++i) {
+        var tmp = paramsarr[i].split("=");
+        if (!tmp[0] || !tmp[1]) continue;
+        params[tmp[0]]  = decodeURIComponent(tmp[1]);
+    }
+    return params;
+}
+function parse_params(params) {
+    var uri = "?";
+    for (var key in params) {
+        uri += key + '=' + encodeURIComponent(params[key]) + '&';
+    }
+    if (uri.slice(-1) == "&")
+        uri = uri.substring(0, uri.length - 1);
+    if (uri == '?')
+        uri = window.location.href.split('?')[0];
+    return uri;
+}
+function find_child(node, selector) {
+    var children = node.querySelectorAll(selector);
+    if (children.length) return children[0];
+    return;
+}
+function find_group(node) {
+    var parent = node.parentElement;
+    if (!parent) return;
+    if (parent.id == "frames") return node;
+    return find_group(parent);
+}
+function orig_save(e, attr, val) {
+    if (e.attributes["fg:orig_" + attr] != undefined) return;
+    if (e.attributes[attr] == undefined) return;
+    if (val == undefined) val = e.attributes[attr].value;
+    e.setAttribute("fg:orig_" + attr, val);
+}
+function orig_load(e, attr) {
+    if (e.attributes["fg:orig_"+attr] == undefined) return;
+    e.attributes[attr].value = e.attributes["fg:orig_" + attr].value;
+    e.removeAttribute("fg:orig_" + attr);
+}
+function g_to_text(e) {
+    var text = find_child(e, "title").firstChild.nodeValue;
+    return (text)
+}
+function g_to_func(e) {
+    var func = g_to_text(e);
+    // if there's any manipulation we want to do to the function
+    // name before it's searched, do it here before returning.
+    return (func);
+}
+function get_monospace_width(frames) {
+    // Given the id="frames" element, return the width of text characters if
+    // this is a monospace font, otherwise return 0.
+    text = find_child(frames.children[0], "text");
+    originalContent = text.textContent;
+    text.textContent = "!";
+    bangWidth = text.getComputedTextLength();
+    text.textContent = "W";
+    wWidth = text.getComputedTextLength();
+    text.textContent = originalContent;
+    if (bangWidth === wWidth) {
+        return bangWidth;
+    } else {
+        return 0;
+    }
+}
+function update_text_for_elements(elements) {
+    // In order to render quickly in the browser, you want to do one pass of
+    // reading attributes, and one pass of mutating attributes. See
+    // https://web.dev/avoid-large-complex-layouts-and-layout-thrashing/ for details.
+
+    // Fall back to inefficient calculation, if we're variable-width font.
+    // TODO This should be optimized somehow too.
+    if (known_font_width === 0) {
+        for (var i = 0; i < elements.length; i++) {
+            update_text(elements[i]);
+        }
+        return;
+    }
+
+    var textElemNewAttributes = [];
+    for (var i = 0; i < elements.length; i++) {
+        var e = elements[i];
+        var r = find_child(e, "rect");
+        var t = find_child(e, "text");
+        var w = parseFloat(r.attributes.width.value) * frames.attributes.width.value / 100 - 3;
+        var txt = find_child(e, "title").textContent.replace(/\([^(]*\)$/,"");
+        var newX = format_percent((parseFloat(r.attributes.x.value) + (100 * 3 / frames.attributes.width.value)));
+
+        // Smaller than this size won't fit anything
+        if (w < 2 * known_font_width) {
+            textElemNewAttributes.push([newX, ""]);
+            continue;
+        }
+
+        // Fit in full text width
+        if (txt.length * known_font_width < w) {
+            textElemNewAttributes.push([newX, txt]);
+            continue;
+        }
+
+        var substringLength = Math.floor(w / known_font_width) - 2;
+        if (truncate_text_right) {
+            // Truncate the right side of the text.
+            textElemNewAttributes.push([newX, txt.substring(0, substringLength) + ".."]);
+            continue;
+        } else {
+            // Truncate the left side of the text.
+            textElemNewAttributes.push([newX, ".." + txt.substring(txt.length - substringLength, txt.length)]);
+            continue;
+        }
+    }
+
+    console.assert(textElemNewAttributes.length === elements.length, "Resize failed, please file a bug at https://github.com/jonhoo/inferno/");
+
+    // Now that we know new textContent, set it all in one go so we don't refresh a bazillion times.
+    for (var i = 0; i < elements.length; i++) {
+        var e = elements[i];
+        var values = textElemNewAttributes[i];
+        var t = find_child(e, "text");
+        t.attributes.x.value = values[0];
+        t.textContent = values[1];
+    }
+}
+
+function update_text(e) {
+    var r = find_child(e, "rect");
+    var t = find_child(e, "text");
+    var w = parseFloat(r.attributes.width.value) * frames.attributes.width.value / 100 - 3;
+    var txt = find_child(e, "title").textContent.replace(/\([^(]*\)$/,"");
+    t.attributes.x.value = format_percent((parseFloat(r.attributes.x.value) + (100 * 3 / frames.attributes.width.value)));
+
+    // Smaller than this size won't fit anything
+    if (w < 2 * fontsize * fontwidth) {
+        t.textContent = "";
+        return;
+    }
+    t.textContent = txt;
+    // Fit in full text width
+    if (t.getComputedTextLength() < w)
+        return;
+    if (truncate_text_right) {
+        // Truncate the right side of the text.
+        for (var x = txt.length - 2; x > 0; x--) {
+            if (t.getSubStringLength(0, x + 2) <= w) {
+                t.textContent = txt.substring(0, x) + "..";
+                return;
+            }
+        }
+    } else {
+        // Truncate the left side of the text.
+        for (var x = 2; x < txt.length; x++) {
+            if (t.getSubStringLength(x - 2, txt.length) <= w) {
+                t.textContent = ".." + txt.substring(x, txt.length);
+                return;
+            }
+        }
+    }
+    t.textContent = "";
+}
+// zoom
+function zoom_reset(e) {
+    if (e.tagName == "rect") {
+        e.attributes.x.value = format_percent(100 * parseInt(e.attributes["fg:x"].value) / total_samples);
+        e.attributes.width.value = format_percent(100 * parseInt(e.attributes["fg:w"].value) / total_samples);
+    }
+    if (e.childNodes == undefined) return;
+    for(var i = 0, c = e.childNodes; i < c.length; i++) {
+        zoom_reset(c[i]);
+    }
+}
+function zoom_child(e, x, zoomed_width_samples) {
+    if (e.tagName == "text") {
+        var parent_x = parseFloat(find_child(e.parentNode, "rect[x]").attributes.x.value);
+        e.attributes.x.value = format_percent(parent_x + (100 * 3 / frames.attributes.width.value));
+    } else if (e.tagName == "rect") {
+        e.attributes.x.value = format_percent(100 * (parseInt(e.attributes["fg:x"].value) - x) / zoomed_width_samples);
+        e.attributes.width.value = format_percent(100 * parseInt(e.attributes["fg:w"].value) / zoomed_width_samples);
+    }
+    if (e.childNodes == undefined) return;
+    for(var i = 0, c = e.childNodes; i < c.length; i++) {
+        zoom_child(c[i], x, zoomed_width_samples);
+    }
+}
+function zoom_parent(e) {
+    if (e.attributes) {
+        if (e.attributes.x != undefined) {
+            e.attributes.x.value = "0.0%";
+        }
+        if (e.attributes.width != undefined) {
+            e.attributes.width.value = "100.0%";
+        }
+    }
+    if (e.childNodes == undefined) return;
+    for(var i = 0, c = e.childNodes; i < c.length; i++) {
+        zoom_parent(c[i]);
+    }
+}
+function zoom(node) {
+    var attr = find_child(node, "rect").attributes;
+    var width = parseInt(attr["fg:w"].value);
+    var xmin = parseInt(attr["fg:x"].value);
+    var xmax = xmin + width;
+    var ymin = parseFloat(attr.y.value);
+    unzoombtn.classList.remove("hide");
+    var el = frames.children;
+    var to_update_text = [];
+    for (var i = 0; i < el.length; i++) {
+        var e = el[i];
+        var a = find_child(e, "rect").attributes;
+        var ex = parseInt(a["fg:x"].value);
+        var ew = parseInt(a["fg:w"].value);
+        // Is it an ancestor
+        if (!inverted) {
+            var upstack = parseFloat(a.y.value) > ymin;
+        } else {
+            var upstack = parseFloat(a.y.value) < ymin;
+        }
+        if (upstack) {
+            // Direct ancestor
+            if (ex <= xmin && (ex+ew) >= xmax) {
+                e.classList.add("parent");
+                zoom_parent(e);
+                to_update_text.push(e);
+            }
+            // not in current path
+            else
+                e.classList.add("hide");
+        }
+        // Children maybe
+        else {
+            // no common path
+            if (ex < xmin || ex >= xmax) {
+                e.classList.add("hide");
+            }
+            else {
+                zoom_child(e, xmin, width);
+                to_update_text.push(e);
+            }
+        }
+    }
+    update_text_for_elements(to_update_text);
+}
+function unzoom() {
+    unzoombtn.classList.add("hide");
+    var el = frames.children;
+    for(var i = 0; i < el.length; i++) {
+        el[i].classList.remove("parent");
+        el[i].classList.remove("hide");
+        zoom_reset(el[i]);
+    }
+    update_text_for_elements(el);
+}
+// search
+function reset_search() {
+    var el = document.querySelectorAll("#frames rect");
+    for (var i = 0; i < el.length; i++) {
+        orig_load(el[i], "fill")
+    }
+    var params = get_params();
+    delete params.s;
+    history.replaceState(null, null, parse_params(params));
+}
+function search_prompt() {
+    if (!searching) {
+        var term = prompt("Enter a search term (regexp " +
+            "allowed, eg: ^ext4_)", "");
+        if (term != null) {
+            search(term)
+        }
+    } else {
+        reset_search();
+        searching = 0;
+        searchbtn.classList.remove("show");
+        searchbtn.firstChild.nodeValue = "Search"
+        matchedtxt.classList.add("hide");
+        matchedtxt.firstChild.nodeValue = ""
+    }
+}
+function search(term) {
+    var re = new RegExp(term);
+    var el = frames.children;
+    var matches = new Object();
+    var maxwidth = 0;
+    for (var i = 0; i < el.length; i++) {
+        var e = el[i];
+        // Skip over frames which are either not visible, or below the zoomed-to frame
+        if (e.classList.contains("hide") || e.classList.contains("parent")) {
+            continue;
+        }
+        var func = g_to_func(e);
+        var rect = find_child(e, "rect");
+        if (func == null || rect == null)
+            continue;
+        // Save max width. Only works as we have a root frame
+        var w = parseInt(rect.attributes["fg:w"].value);
+        if (w > maxwidth)
+            maxwidth = w;
+        if (func.match(re)) {
+            // highlight
+            var x = parseInt(rect.attributes["fg:x"].value);
+            orig_save(rect, "fill");
+            rect.attributes.fill.value = searchcolor;
+            // remember matches
+            if (matches[x] == undefined) {
+                matches[x] = w;
+            } else {
+                if (w > matches[x]) {
+                    // overwrite with parent
+                    matches[x] = w;
+                }
+            }
+            searching = 1;
+        }
+    }
+    if (!searching)
+        return;
+    var params = get_params();
+    params.s = term;
+    history.replaceState(null, null, parse_params(params));
+
+    searchbtn.classList.add("show");
+    searchbtn.firstChild.nodeValue = "Reset Search";
+    // calculate percent matched, excluding vertical overlap
+    var count = 0;
+    var lastx = -1;
+    var lastw = 0;
+    var keys = Array();
+    for (k in matches) {
+        if (matches.hasOwnProperty(k))
+            keys.push(k);
+    }
+    // sort the matched frames by their x location
+    // ascending, then width descending
+    keys.sort(function(a, b){
+        return a - b;
+    });
+    // Step through frames saving only the biggest bottom-up frames
+    // thanks to the sort order. This relies on the tree property
+    // where children are always smaller than their parents.
+    for (var k in keys) {
+        var x = parseInt(keys[k]);
+        var w = matches[keys[k]];
+        if (x >= lastx + lastw) {
+            count += w;
+            lastx = x;
+            lastw = w;
+        }
+    }
+    // display matched percent
+    matchedtxt.classList.remove("hide");
+    var pct = 100 * count / maxwidth;
+    if (pct != 100) pct = pct.toFixed(1);
+    matchedtxt.firstChild.nodeValue = "Matched: " + pct + "%";
+}
+function format_percent(n) {
+    return n.toFixed(4) + "%";
+}
+]]></script><rect x="0" y="0" width="100%" height="390" fill="url(#background)"/><text id="title" fill="rgb(0,0,0)" x="50.0000%" y="24.00">normal-512-w2-kiban-stacks</text><text id="details" fill="rgb(0,0,0)" x="10" y="373.00"> </text><text id="unzoom" class="hide" fill="rgb(0,0,0)" x="10" y="24.00">Reset Zoom</text><text id="search" fill="rgb(0,0,0)" x="1190" y="24.00">Search</text><text id="matched" fill="rgb(0,0,0)" x="1190" y="373.00"> </text><svg id="frames" x="10" width="1180" total_samples="3250000000"><g><title>&lt;alloc::raw_vec::RawVecInner&gt;::finish_grow (500,000 samples, 0.02%)</title><rect x="0.0000%" y="309" width="0.0154%" height="15" fill="rgb(227,0,7)" fg:x="0" fg:w="500000"/><text x="0.2500%" y="319.50"></text></g><g><title>&lt;alloc::alloc::Global as core::alloc::Allocator&gt;::grow (500,000 samples, 0.02%)</title><rect x="0.0000%" y="293" width="0.0154%" height="15" fill="rgb(217,0,24)" fg:x="0" fg:w="500000"/><text x="0.2500%" y="303.50"></text></g><g><title>&lt;alloc::alloc::Global&gt;::grow_impl (500,000 samples, 0.02%)</title><rect x="0.0000%" y="277" width="0.0154%" height="15" fill="rgb(221,193,54)" fg:x="0" fg:w="500000"/><text x="0.2500%" y="287.50"></text></g><g><title>&lt;alloc::alloc::Global&gt;::grow_impl_runtime (500,000 samples, 0.02%)</title><rect x="0.0000%" y="261" width="0.0154%" height="15" fill="rgb(248,212,6)" fg:x="0" fg:w="500000"/><text x="0.2500%" y="271.50"></text></g><g><title>alloc::alloc::realloc_nonnull (500,000 samples, 0.02%)</title><rect x="0.0000%" y="245" width="0.0154%" height="15" fill="rgb(208,68,35)" fg:x="0" fg:w="500000"/><text x="0.2500%" y="255.50"></text></g><g><title>__rustc::__rust_realloc (500,000 samples, 0.02%)</title><rect x="0.0000%" y="229" width="0.0154%" height="15" fill="rgb(232,128,0)" fg:x="0" fg:w="500000"/><text x="0.2500%" y="239.50"></text></g><g><title>&lt;mimalloc::MiMalloc as core::alloc::global::GlobalAlloc&gt;::realloc (500,000 samples, 0.02%)</title><rect x="0.0000%" y="213" width="0.0154%" height="15" fill="rgb(207,160,47)" fg:x="0" fg:w="500000"/><text x="0.2500%" y="223.50"></text></g><g><title>mi_free (500,000 samples, 0.02%)</title><rect x="0.0000%" y="197" width="0.0154%" height="15" fill="rgb(228,23,34)" fg:x="0" fg:w="500000"/><text x="0.2500%" y="207.50"></text></g><g><title>_mi_segment_page_of (500,000 samples, 0.02%)</title><rect x="0.0000%" y="181" width="0.0154%" height="15" fill="rgb(218,30,26)" fg:x="0" fg:w="500000"/><text x="0.2500%" y="191.50"></text></g><g><title>mi_slice_first (500,000 samples, 0.02%)</title><rect x="0.0000%" y="165" width="0.0154%" height="15" fill="rgb(220,122,19)" fg:x="0" fg:w="500000"/><text x="0.2500%" y="175.50"></text></g><g><title>&lt;alloc::vec::Vec&lt;u8&gt;&gt;::set_len (500,000 samples, 0.02%)</title><rect x="0.0154%" y="277" width="0.0154%" height="15" fill="rgb(250,228,42)" fg:x="500000" fg:w="500000"/><text x="0.2654%" y="287.50"></text></g><g><title>&lt;alloc::string::String as core::fmt::Write&gt;::write_char.15 (1,500,000 samples, 0.05%)</title><rect x="0.0154%" y="309" width="0.0462%" height="15" fill="rgb(240,193,28)" fg:x="500000" fg:w="1500000"/><text x="0.2654%" y="319.50"></text></g><g><title>&lt;alloc::string::String&gt;::push (1,500,000 samples, 0.05%)</title><rect x="0.0154%" y="293" width="0.0462%" height="15" fill="rgb(216,20,37)" fg:x="500000" fg:w="1500000"/><text x="0.2654%" y="303.50"></text></g><g><title>&lt;char&gt;::len_utf8 (1,000,000 samples, 0.03%)</title><rect x="0.0308%" y="277" width="0.0308%" height="15" fill="rgb(206,188,39)" fg:x="1000000" fg:w="1000000"/><text x="0.2808%" y="287.50"></text></g><g><title>core::char::methods::len_utf8 (1,000,000 samples, 0.03%)</title><rect x="0.0308%" y="261" width="0.0308%" height="15" fill="rgb(217,207,13)" fg:x="1000000" fg:w="1000000"/><text x="0.2808%" y="271.50"></text></g><g><title>&lt;core::marker::PhantomData&lt;alloc::string::String&gt; as serde_core::de::DeserializeSeed&gt;::deserialize::&lt;&amp;mut serde_json::de::Deserializer&lt;serde_json::read::SliceRead&gt;&gt; (1,000,000 samples, 0.03%)</title><rect x="0.0615%" y="309" width="0.0308%" height="15" fill="rgb(231,73,38)" fg:x="2000000" fg:w="1000000"/><text x="0.3115%" y="319.50"></text></g><g><title>&lt;alloc::string::String as serde_core::de::Deserialize&gt;::deserialize::&lt;&amp;mut serde_json::de::Deserializer&lt;serde_json::read::SliceRead&gt;&gt; (500,000 samples, 0.02%)</title><rect x="0.0769%" y="293" width="0.0154%" height="15" fill="rgb(225,20,46)" fg:x="2500000" fg:w="500000"/><text x="0.3269%" y="303.50"></text></g><g><title>&lt;&amp;mut serde_json::de::Deserializer&lt;serde_json::read::SliceRead&gt; as serde_core::de::Deserializer&gt;::deserialize_string::&lt;serde_core::de::impls::StringVisitor&gt; (500,000 samples, 0.02%)</title><rect x="0.0769%" y="277" width="0.0154%" height="15" fill="rgb(210,31,41)" fg:x="2500000" fg:w="500000"/><text x="0.3269%" y="287.50"></text></g><g><title>&lt;&amp;mut serde_json::de::Deserializer&lt;serde_json::read::SliceRead&gt; as serde_core::de::Deserializer&gt;::deserialize_str::&lt;serde_core::de::impls::StringVisitor&gt; (500,000 samples, 0.02%)</title><rect x="0.0769%" y="261" width="0.0154%" height="15" fill="rgb(221,200,47)" fg:x="2500000" fg:w="500000"/><text x="0.3269%" y="271.50"></text></g><g><title>&lt;serde_json::read::SliceRead as serde_json::read::Read&gt;::parse_str (500,000 samples, 0.02%)</title><rect x="0.0769%" y="245" width="0.0154%" height="15" fill="rgb(226,26,5)" fg:x="2500000" fg:w="500000"/><text x="0.3269%" y="255.50"></text></g><g><title>&lt;serde_json::read::SliceRead&gt;::parse_str_bytes::&lt;str, serde_json::read::as_str&lt;serde_json::read::SliceRead&gt;&gt; (500,000 samples, 0.02%)</title><rect x="0.0769%" y="229" width="0.0154%" height="15" fill="rgb(249,33,26)" fg:x="2500000" fg:w="500000"/><text x="0.3269%" y="239.50"></text></g><g><title>&lt;alloc::string::String as core::convert::AsRef&lt;[u8]&gt;&gt;::as_ref (500,000 samples, 0.02%)</title><rect x="0.0923%" y="293" width="0.0154%" height="15" fill="rgb(235,183,28)" fg:x="3000000" fg:w="500000"/><text x="0.3423%" y="303.50"></text></g><g><title>&lt;alloc::string::String&gt;::as_bytes (500,000 samples, 0.02%)</title><rect x="0.0923%" y="277" width="0.0154%" height="15" fill="rgb(221,5,38)" fg:x="3000000" fg:w="500000"/><text x="0.3423%" y="287.50"></text></g><g><title>&lt;alloc::vec::Vec&lt;u8&gt;&gt;::as_slice (500,000 samples, 0.02%)</title><rect x="0.0923%" y="261" width="0.0154%" height="15" fill="rgb(247,18,42)" fg:x="3000000" fg:w="500000"/><text x="0.3423%" y="271.50"></text></g><g><title>&lt;alloc::vec::Vec&lt;u8&gt;&gt;::as_ptr (500,000 samples, 0.02%)</title><rect x="0.0923%" y="245" width="0.0154%" height="15" fill="rgb(241,131,45)" fg:x="3000000" fg:w="500000"/><text x="0.3423%" y="255.50"></text></g><g><title>&lt;alloc::raw_vec::RawVec&lt;u8&gt;&gt;::ptr (500,000 samples, 0.02%)</title><rect x="0.0923%" y="229" width="0.0154%" height="15" fill="rgb(249,31,29)" fg:x="3000000" fg:w="500000"/><text x="0.3423%" y="239.50"></text></g><g><title>&lt;alloc::raw_vec::RawVecInner&gt;::ptr::&lt;u8&gt; (500,000 samples, 0.02%)</title><rect x="0.0923%" y="213" width="0.0154%" height="15" fill="rgb(225,111,53)" fg:x="3000000" fg:w="500000"/><text x="0.3423%" y="223.50"></text></g><g><title>&lt;alloc::raw_vec::RawVecInner&gt;::non_null::&lt;u8&gt; (500,000 samples, 0.02%)</title><rect x="0.0923%" y="197" width="0.0154%" height="15" fill="rgb(238,160,17)" fg:x="3000000" fg:w="500000"/><text x="0.3423%" y="207.50"></text></g><g><title>&lt;kiban::counter::Counter&gt;::increment (1,000,000 samples, 0.03%)</title><rect x="0.1077%" y="293" width="0.0308%" height="15" fill="rgb(214,148,48)" fg:x="3500000" fg:w="1000000"/><text x="0.3577%" y="303.50"></text></g><g><title>&lt;core::sync::atomic::Atomic&lt;u64&gt;&gt;::fetch_add (1,000,000 samples, 0.03%)</title><rect x="0.1077%" y="277" width="0.0308%" height="15" fill="rgb(232,36,49)" fg:x="3500000" fg:w="1000000"/><text x="0.3577%" y="287.50"></text></g><g><title>core::sync::atomic::atomic_add::&lt;u64, u64&gt; (1,000,000 samples, 0.03%)</title><rect x="0.1077%" y="261" width="0.0308%" height="15" fill="rgb(209,103,24)" fg:x="3500000" fg:w="1000000"/><text x="0.3577%" y="271.50"></text></g><g><title>core::ptr::drop_glue::&lt;alloc::string::String&gt; (500,000 samples, 0.02%)</title><rect x="0.1385%" y="293" width="0.0154%" height="15" fill="rgb(229,88,8)" fg:x="4500000" fg:w="500000"/><text x="0.3885%" y="303.50"></text></g><g><title>core::ptr::drop_glue::&lt;alloc::vec::Vec&lt;u8&gt;&gt; (500,000 samples, 0.02%)</title><rect x="0.1385%" y="277" width="0.0154%" height="15" fill="rgb(213,181,19)" fg:x="4500000" fg:w="500000"/><text x="0.3885%" y="287.50"></text></g><g><title>core::ptr::drop_glue::&lt;alloc::raw_vec::RawVec&lt;u8&gt;&gt; (500,000 samples, 0.02%)</title><rect x="0.1385%" y="261" width="0.0154%" height="15" fill="rgb(254,191,54)" fg:x="4500000" fg:w="500000"/><text x="0.3885%" y="271.50"></text></g><g><title>&lt;alloc::raw_vec::RawVec&lt;u8&gt; as core::ops::drop::Drop&gt;::drop (500,000 samples, 0.02%)</title><rect x="0.1385%" y="245" width="0.0154%" height="15" fill="rgb(241,83,37)" fg:x="4500000" fg:w="500000"/><text x="0.3885%" y="255.50"></text></g><g><title>&lt;alloc::raw_vec::RawVecInner&gt;::deallocate (500,000 samples, 0.02%)</title><rect x="0.1385%" y="229" width="0.0154%" height="15" fill="rgb(233,36,39)" fg:x="4500000" fg:w="500000"/><text x="0.3885%" y="239.50"></text></g><g><title>&lt;alloc::raw_vec::RawVecInner&gt;::current_memory (500,000 samples, 0.02%)</title><rect x="0.1385%" y="213" width="0.0154%" height="15" fill="rgb(226,3,54)" fg:x="4500000" fg:w="500000"/><text x="0.3885%" y="223.50"></text></g><g><title>&lt;&amp;[u8] as core::cmp::PartialOrd&gt;::lt (4,500,000 samples, 0.14%)</title><rect x="0.1846%" y="213" width="0.1385%" height="15" fill="rgb(245,192,40)" fg:x="6000000" fg:w="4500000"/><text x="0.4346%" y="223.50"></text></g><g><title>&lt;[u8] as core::cmp::PartialOrd&gt;::lt (4,500,000 samples, 0.14%)</title><rect x="0.1846%" y="197" width="0.1385%" height="15" fill="rgb(238,167,29)" fg:x="6000000" fg:w="4500000"/><text x="0.4346%" y="207.50"></text></g><g><title>&lt;[u8] as core::cmp::PartialOrd&gt;::__chaining_lt (4,500,000 samples, 0.14%)</title><rect x="0.1846%" y="181" width="0.1385%" height="15" fill="rgb(232,182,51)" fg:x="6000000" fg:w="4500000"/><text x="0.4346%" y="191.50"></text></g><g><title>&lt;u8 as core::slice::cmp::SliceChain&gt;::chaining_lt (4,500,000 samples, 0.14%)</title><rect x="0.1846%" y="165" width="0.1385%" height="15" fill="rgb(231,60,39)" fg:x="6000000" fg:w="4500000"/><text x="0.4346%" y="175.50"></text></g><g><title>&lt;u8 as core::slice::cmp::SliceOrd&gt;::compare (4,500,000 samples, 0.14%)</title><rect x="0.1846%" y="149" width="0.1385%" height="15" fill="rgb(208,69,12)" fg:x="6000000" fg:w="4500000"/><text x="0.4346%" y="159.50"></text></g><g><title>__memcmp_avx2_movbe (4,500,000 samples, 0.14%)</title><rect x="0.1846%" y="133" width="0.1385%" height="15" fill="rgb(235,93,37)" fg:x="6000000" fg:w="4500000"/><text x="0.4346%" y="143.50"></text></g><g><title>&lt;alloc::vec::Vec&lt;alloc::sync::Arc&lt;kiban::db::TableEntry&gt;&gt; as core::ops::index::Index&lt;usize&gt;&gt;::index (1,000,000 samples, 0.03%)</title><rect x="0.3231%" y="213" width="0.0308%" height="15" fill="rgb(213,116,39)" fg:x="10500000" fg:w="1000000"/><text x="0.5731%" y="223.50"></text></g><g><title>&lt;[alloc::sync::Arc&lt;kiban::db::TableEntry&gt;] as core::ops::index::Index&lt;usize&gt;&gt;::index (1,000,000 samples, 0.03%)</title><rect x="0.3231%" y="197" width="0.0308%" height="15" fill="rgb(222,207,29)" fg:x="10500000" fg:w="1000000"/><text x="0.5731%" y="207.50"></text></g><g><title>&lt;usize as core::slice::index::SliceIndex&lt;[alloc::sync::Arc&lt;kiban::db::TableEntry&gt;]&gt;&gt;::index (1,000,000 samples, 0.03%)</title><rect x="0.3231%" y="181" width="0.0308%" height="15" fill="rgb(206,96,30)" fg:x="10500000" fg:w="1000000"/><text x="0.5731%" y="191.50"></text></g><g><title>&lt;[usize]&gt;::partition_point::&lt;kiban::db::get_from_version_at::{closure#3}&gt; (11,000,000 samples, 0.34%)</title><rect x="0.1538%" y="277" width="0.3385%" height="15" fill="rgb(218,138,4)" fg:x="5000000" fg:w="11000000"/><text x="0.4038%" y="287.50"></text></g><g><title>&lt;[usize]&gt;::binary_search_by::&lt;&lt;[usize]&gt;::partition_point&lt;kiban::db::get_from_version_at::{closure#3}&gt;::{closure#0}&gt; (11,000,000 samples, 0.34%)</title><rect x="0.1538%" y="261" width="0.3385%" height="15" fill="rgb(250,191,14)" fg:x="5000000" fg:w="11000000"/><text x="0.4038%" y="271.50"></text></g><g><title>&lt;[usize]&gt;::partition_point::&lt;kiban::db::get_from_version_at::{closure#3}&gt;::{closure#0} (10,500,000 samples, 0.32%)</title><rect x="0.1692%" y="245" width="0.3231%" height="15" fill="rgb(239,60,40)" fg:x="5500000" fg:w="10500000"/><text x="0.4192%" y="255.50"></text></g><g><title>kiban::db::get_from_version_at::{closure#3} (10,500,000 samples, 0.32%)</title><rect x="0.1692%" y="229" width="0.3231%" height="15" fill="rgb(206,27,48)" fg:x="5500000" fg:w="10500000"/><text x="0.4192%" y="239.50"></text></g><g><title>&lt;alloc::vec::Vec&lt;u8&gt;&gt;::as_slice (4,500,000 samples, 0.14%)</title><rect x="0.3538%" y="213" width="0.1385%" height="15" fill="rgb(225,35,8)" fg:x="11500000" fg:w="4500000"/><text x="0.6038%" y="223.50"></text></g><g><title>&lt;alloc::vec::Vec&lt;u8&gt;&gt;::as_ptr (1,500,000 samples, 0.05%)</title><rect x="0.4462%" y="197" width="0.0462%" height="15" fill="rgb(250,213,24)" fg:x="14500000" fg:w="1500000"/><text x="0.6962%" y="207.50"></text></g><g><title>&lt;alloc::raw_vec::RawVec&lt;u8&gt;&gt;::ptr (1,500,000 samples, 0.05%)</title><rect x="0.4462%" y="181" width="0.0462%" height="15" fill="rgb(247,123,22)" fg:x="14500000" fg:w="1500000"/><text x="0.6962%" y="191.50"></text></g><g><title>&lt;alloc::raw_vec::RawVecInner&gt;::ptr::&lt;u8&gt; (1,500,000 samples, 0.05%)</title><rect x="0.4462%" y="165" width="0.0462%" height="15" fill="rgb(231,138,38)" fg:x="14500000" fg:w="1500000"/><text x="0.6962%" y="175.50"></text></g><g><title>&lt;alloc::raw_vec::RawVecInner&gt;::non_null::&lt;u8&gt; (1,500,000 samples, 0.05%)</title><rect x="0.4462%" y="149" width="0.0462%" height="15" fill="rgb(231,145,46)" fg:x="14500000" fg:w="1500000"/><text x="0.6962%" y="159.50"></text></g><g><title>&lt;alloc::vec::Vec&lt;alloc::sync::Arc&lt;kiban::db::TableEntry&gt;&gt; as core::ops::index::Index&lt;usize&gt;&gt;::index (500,000 samples, 0.02%)</title><rect x="0.4923%" y="277" width="0.0154%" height="15" fill="rgb(251,118,11)" fg:x="16000000" fg:w="500000"/><text x="0.7423%" y="287.50"></text></g><g><title>&lt;[alloc::sync::Arc&lt;kiban::db::TableEntry&gt;] as core::ops::index::Index&lt;usize&gt;&gt;::index (500,000 samples, 0.02%)</title><rect x="0.4923%" y="261" width="0.0154%" height="15" fill="rgb(217,147,25)" fg:x="16000000" fg:w="500000"/><text x="0.7423%" y="271.50"></text></g><g><title>&lt;usize as core::slice::index::SliceIndex&lt;[alloc::sync::Arc&lt;kiban::db::TableEntry&gt;]&gt;&gt;::index (500,000 samples, 0.02%)</title><rect x="0.4923%" y="245" width="0.0154%" height="15" fill="rgb(247,81,37)" fg:x="16000000" fg:w="500000"/><text x="0.7423%" y="255.50"></text></g><g><title>&lt;core::slice::iter::Iter&lt;alloc::sync::Arc&lt;kiban::db::TableEntry&gt;&gt; as core::iter::traits::double_ended::DoubleEndedIterator&gt;::next_back (1,500,000 samples, 0.05%)</title><rect x="0.5077%" y="213" width="0.0462%" height="15" fill="rgb(209,12,38)" fg:x="16500000" fg:w="1500000"/><text x="0.7577%" y="223.50"></text></g><g><title>&lt;core::ptr::non_null::NonNull&lt;alloc::sync::Arc&lt;kiban::db::TableEntry&gt;&gt; as core::cmp::PartialEq&gt;::eq (1,500,000 samples, 0.05%)</title><rect x="0.5077%" y="197" width="0.0462%" height="15" fill="rgb(227,1,9)" fg:x="16500000" fg:w="1500000"/><text x="0.7577%" y="207.50"></text></g><g><title>&lt;core::iter::adapters::filter::Filter&lt;core::iter::adapters::rev::Rev&lt;core::slice::iter::Iter&lt;alloc::sync::Arc&lt;kiban::db::TableEntry&gt;&gt;&gt;, kiban::db::get_from_version_at::{closure#2}&gt; as core::iter::traits::iterator::Iterator&gt;::next (2,000,000 samples, 0.06%)</title><rect x="0.5077%" y="277" width="0.0615%" height="15" fill="rgb(248,47,43)" fg:x="16500000" fg:w="2000000"/><text x="0.7577%" y="287.50"></text></g><g><title>&lt;core::iter::adapters::rev::Rev&lt;core::slice::iter::Iter&lt;alloc::sync::Arc&lt;kiban::db::TableEntry&gt;&gt;&gt; as core::iter::traits::iterator::Iterator&gt;::find::&lt;&amp;mut kiban::db::get_from_version_at::{closure#2}&gt; (2,000,000 samples, 0.06%)</title><rect x="0.5077%" y="261" width="0.0615%" height="15" fill="rgb(221,10,30)" fg:x="16500000" fg:w="2000000"/><text x="0.7577%" y="271.50"></text></g><g><title>&lt;core::slice::iter::Iter&lt;alloc::sync::Arc&lt;kiban::db::TableEntry&gt;&gt; as core::iter::traits::double_ended::DoubleEndedIterator&gt;::rfind::&lt;&amp;mut kiban::db::get_from_version_at::{closure#2}&gt; (2,000,000 samples, 0.06%)</title><rect x="0.5077%" y="245" width="0.0615%" height="15" fill="rgb(210,229,1)" fg:x="16500000" fg:w="2000000"/><text x="0.7577%" y="255.50"></text></g><g><title>&lt;core::slice::iter::Iter&lt;alloc::sync::Arc&lt;kiban::db::TableEntry&gt;&gt; as core::iter::traits::double_ended::DoubleEndedIterator&gt;::try_rfold::&lt;(), core::iter::traits::double_ended::DoubleEndedIterator::rfind::check&lt;&amp;alloc::sync::Arc&lt;kiban::db::TableEntry&gt;, &amp;mut kiban::db::get_from_version_at::{closure#2}&gt;::{closure#0}, core::ops::control_flow::ControlFlow&lt;&amp;alloc::sync::Arc&lt;kiban::db::TableEntry&gt;&gt;&gt; (2,000,000 samples, 0.06%)</title><rect x="0.5077%" y="229" width="0.0615%" height="15" fill="rgb(222,148,37)" fg:x="16500000" fg:w="2000000"/><text x="0.7577%" y="239.50"></text></g><g><title>core::iter::traits::double_ended::DoubleEndedIterator::rfind::check::&lt;&amp;alloc::sync::Arc&lt;kiban::db::TableEntry&gt;, &amp;mut kiban::db::get_from_version_at::{closure#2}&gt;::{closure#0} (500,000 samples, 0.02%)</title><rect x="0.5538%" y="213" width="0.0154%" height="15" fill="rgb(234,67,33)" fg:x="18000000" fg:w="500000"/><text x="0.8038%" y="223.50"></text></g><g><title>&lt;&amp;mut kiban::db::get_from_version_at::{closure#2} as core::ops::function::FnMut&lt;(&amp;&amp;alloc::sync::Arc&lt;kiban::db::TableEntry&gt;,)&gt;&gt;::call_mut (500,000 samples, 0.02%)</title><rect x="0.5538%" y="197" width="0.0154%" height="15" fill="rgb(247,98,35)" fg:x="18000000" fg:w="500000"/><text x="0.8038%" y="207.50"></text></g><g><title>kiban::db::get_from_version_at::{closure#2} (500,000 samples, 0.02%)</title><rect x="0.5538%" y="181" width="0.0154%" height="15" fill="rgb(247,138,52)" fg:x="18000000" fg:w="500000"/><text x="0.8038%" y="191.50"></text></g><g><title>&lt;alloc::sync::Arc&lt;kiban::db::TableEntry&gt; as core::ops::deref::Deref&gt;::deref (500,000 samples, 0.02%)</title><rect x="0.5538%" y="165" width="0.0154%" height="15" fill="rgb(213,79,30)" fg:x="18000000" fg:w="500000"/><text x="0.8038%" y="175.50"></text></g><g><title>&lt;alloc::sync::Arc&lt;kiban::db::TableEntry&gt;&gt;::inner (500,000 samples, 0.02%)</title><rect x="0.5538%" y="149" width="0.0154%" height="15" fill="rgb(246,177,23)" fg:x="18000000" fg:w="500000"/><text x="0.8038%" y="159.50"></text></g><g><title>&lt;core::ptr::non_null::NonNull&lt;alloc::sync::ArcInner&lt;kiban::db::TableEntry&gt;&gt;&gt;::as_ref (500,000 samples, 0.02%)</title><rect x="0.5538%" y="133" width="0.0154%" height="15" fill="rgb(230,62,27)" fg:x="18000000" fg:w="500000"/><text x="0.8038%" y="143.50"></text></g><g><title>&lt;kiban::counter::Counter&gt;::increment (500,000 samples, 0.02%)</title><rect x="0.5692%" y="277" width="0.0154%" height="15" fill="rgb(216,154,8)" fg:x="18500000" fg:w="500000"/><text x="0.8192%" y="287.50"></text></g><g><title>&lt;core::sync::atomic::Atomic&lt;u64&gt;&gt;::fetch_add (500,000 samples, 0.02%)</title><rect x="0.5692%" y="261" width="0.0154%" height="15" fill="rgb(244,35,45)" fg:x="18500000" fg:w="500000"/><text x="0.8192%" y="271.50"></text></g><g><title>core::sync::atomic::atomic_add::&lt;u64, u64&gt; (500,000 samples, 0.02%)</title><rect x="0.5692%" y="245" width="0.0154%" height="15" fill="rgb(251,115,12)" fg:x="18500000" fg:w="500000"/><text x="0.8192%" y="255.50"></text></g><g><title>&lt;&amp;[u8] as core::cmp::PartialOrd&gt;::ge (2,500,000 samples, 0.08%)</title><rect x="0.5846%" y="261" width="0.0769%" height="15" fill="rgb(240,54,50)" fg:x="19000000" fg:w="2500000"/><text x="0.8346%" y="271.50"></text></g><g><title>&lt;[u8] as core::cmp::PartialOrd&gt;::ge (2,500,000 samples, 0.08%)</title><rect x="0.5846%" y="245" width="0.0769%" height="15" fill="rgb(233,84,52)" fg:x="19000000" fg:w="2500000"/><text x="0.8346%" y="255.50"></text></g><g><title>&lt;[u8] as core::cmp::PartialOrd&gt;::__chaining_ge (2,500,000 samples, 0.08%)</title><rect x="0.5846%" y="229" width="0.0769%" height="15" fill="rgb(207,117,47)" fg:x="19000000" fg:w="2500000"/><text x="0.8346%" y="239.50"></text></g><g><title>&lt;u8 as core::slice::cmp::SliceChain&gt;::chaining_ge (2,500,000 samples, 0.08%)</title><rect x="0.5846%" y="213" width="0.0769%" height="15" fill="rgb(249,43,39)" fg:x="19000000" fg:w="2500000"/><text x="0.8346%" y="223.50"></text></g><g><title>&lt;u8 as core::slice::cmp::SliceOrd&gt;::compare (2,500,000 samples, 0.08%)</title><rect x="0.5846%" y="197" width="0.0769%" height="15" fill="rgb(209,38,44)" fg:x="19000000" fg:w="2500000"/><text x="0.8346%" y="207.50"></text></g><g><title>__memcmp_avx2_movbe (2,000,000 samples, 0.06%)</title><rect x="0.6000%" y="181" width="0.0615%" height="15" fill="rgb(236,212,23)" fg:x="19500000" fg:w="2000000"/><text x="0.8500%" y="191.50"></text></g><g><title>&lt;&amp;[u8] as core::cmp::PartialOrd&gt;::le (500,000 samples, 0.02%)</title><rect x="0.6615%" y="261" width="0.0154%" height="15" fill="rgb(242,79,21)" fg:x="21500000" fg:w="500000"/><text x="0.9115%" y="271.50"></text></g><g><title>&lt;[u8] as core::cmp::PartialOrd&gt;::le (500,000 samples, 0.02%)</title><rect x="0.6615%" y="245" width="0.0154%" height="15" fill="rgb(211,96,35)" fg:x="21500000" fg:w="500000"/><text x="0.9115%" y="255.50"></text></g><g><title>&lt;[u8] as core::cmp::PartialOrd&gt;::__chaining_le (500,000 samples, 0.02%)</title><rect x="0.6615%" y="229" width="0.0154%" height="15" fill="rgb(253,215,40)" fg:x="21500000" fg:w="500000"/><text x="0.9115%" y="239.50"></text></g><g><title>&lt;u8 as core::slice::cmp::SliceChain&gt;::chaining_le (500,000 samples, 0.02%)</title><rect x="0.6615%" y="213" width="0.0154%" height="15" fill="rgb(211,81,21)" fg:x="21500000" fg:w="500000"/><text x="0.9115%" y="223.50"></text></g><g><title>&lt;u8 as core::slice::cmp::SliceOrd&gt;::compare (500,000 samples, 0.02%)</title><rect x="0.6615%" y="197" width="0.0154%" height="15" fill="rgb(208,190,38)" fg:x="21500000" fg:w="500000"/><text x="0.9115%" y="207.50"></text></g><g><title>__memcmp_avx2_movbe (500,000 samples, 0.02%)</title><rect x="0.6615%" y="181" width="0.0154%" height="15" fill="rgb(235,213,38)" fg:x="21500000" fg:w="500000"/><text x="0.9115%" y="191.50"></text></g><g><title>&lt;kiban::db::Kiban&gt;::get::&lt;alloc::string::String&gt; (21,000,000 samples, 0.65%)</title><rect x="0.0923%" y="309" width="0.6462%" height="15" fill="rgb(237,122,38)" fg:x="3000000" fg:w="21000000"/><text x="0.3423%" y="319.50"></text></g><g><title>kiban::db::get_from_version_at (19,000,000 samples, 0.58%)</title><rect x="0.1538%" y="293" width="0.5846%" height="15" fill="rgb(244,218,35)" fg:x="5000000" fg:w="19000000"/><text x="0.4038%" y="303.50"></text></g><g><title>kiban::db::get_from_version_at::{closure#1} (5,000,000 samples, 0.15%)</title><rect x="0.5846%" y="277" width="0.1538%" height="15" fill="rgb(240,68,47)" fg:x="19000000" fg:w="5000000"/><text x="0.8346%" y="287.50"></text></g><g><title>&lt;alloc::vec::Vec&lt;u8&gt;&gt;::as_slice (2,000,000 samples, 0.06%)</title><rect x="0.6769%" y="261" width="0.0615%" height="15" fill="rgb(210,16,53)" fg:x="22000000" fg:w="2000000"/><text x="0.9269%" y="271.50"></text></g><g><title>&lt;alloc::vec::Vec&lt;u8&gt;&gt;::as_ptr (1,000,000 samples, 0.03%)</title><rect x="0.7077%" y="245" width="0.0308%" height="15" fill="rgb(235,124,12)" fg:x="23000000" fg:w="1000000"/><text x="0.9577%" y="255.50"></text></g><g><title>&lt;alloc::raw_vec::RawVec&lt;u8&gt;&gt;::ptr (1,000,000 samples, 0.03%)</title><rect x="0.7077%" y="229" width="0.0308%" height="15" fill="rgb(224,169,11)" fg:x="23000000" fg:w="1000000"/><text x="0.9577%" y="239.50"></text></g><g><title>&lt;alloc::raw_vec::RawVecInner&gt;::ptr::&lt;u8&gt; (1,000,000 samples, 0.03%)</title><rect x="0.7077%" y="213" width="0.0308%" height="15" fill="rgb(250,166,2)" fg:x="23000000" fg:w="1000000"/><text x="0.9577%" y="223.50"></text></g><g><title>&lt;alloc::raw_vec::RawVecInner&gt;::non_null::&lt;u8&gt; (1,000,000 samples, 0.03%)</title><rect x="0.7077%" y="197" width="0.0308%" height="15" fill="rgb(242,216,29)" fg:x="23000000" fg:w="1000000"/><text x="0.9577%" y="207.50"></text></g><g><title>&lt;kiban::sstable::block::VerifiedBlock&gt;::get (1,000,000 samples, 0.03%)</title><rect x="0.7385%" y="309" width="0.0308%" height="15" fill="rgb(230,116,27)" fg:x="24000000" fg:w="1000000"/><text x="0.9885%" y="319.50"></text></g><g><title>&lt;alloc::vec::Vec&lt;u8&gt;&gt;::extend_from_slice (500,000 samples, 0.02%)</title><rect x="0.7538%" y="293" width="0.0154%" height="15" fill="rgb(228,99,48)" fg:x="24500000" fg:w="500000"/><text x="1.0038%" y="303.50"></text></g><g><title>&lt;alloc::vec::Vec&lt;u8&gt; as alloc::vec::spec_extend::SpecExtend&lt;&amp;u8, core::slice::iter::Iter&lt;u8&gt;&gt;&gt;::spec_extend (500,000 samples, 0.02%)</title><rect x="0.7538%" y="277" width="0.0154%" height="15" fill="rgb(253,11,6)" fg:x="24500000" fg:w="500000"/><text x="1.0038%" y="287.50"></text></g><g><title>&lt;alloc::vec::Vec&lt;u8&gt;&gt;::append_elements (500,000 samples, 0.02%)</title><rect x="0.7538%" y="261" width="0.0154%" height="15" fill="rgb(247,143,39)" fg:x="24500000" fg:w="500000"/><text x="1.0038%" y="271.50"></text></g><g><title>core::ptr::copy_nonoverlapping::&lt;u8&gt; (500,000 samples, 0.02%)</title><rect x="0.7538%" y="245" width="0.0154%" height="15" fill="rgb(236,97,10)" fg:x="24500000" fg:w="500000"/><text x="1.0038%" y="255.50"></text></g><g><title>__memmove_avx_unaligned_erms (500,000 samples, 0.02%)</title><rect x="0.7538%" y="229" width="0.0154%" height="15" fill="rgb(233,208,19)" fg:x="24500000" fg:w="500000"/><text x="1.0038%" y="239.50"></text></g><g><title>&lt;serde_json::read::SliceRead as serde_json::read::Read&gt;::parse_str (500,000 samples, 0.02%)</title><rect x="0.7692%" y="309" width="0.0154%" height="15" fill="rgb(216,164,2)" fg:x="25000000" fg:w="500000"/><text x="1.0192%" y="319.50"></text></g><g><title>&lt;&amp;[u8] as core::convert::TryInto&lt;[u8: 8]&gt;&gt;::try_into (500,000 samples, 0.02%)</title><rect x="0.9231%" y="293" width="0.0154%" height="15" fill="rgb(220,129,5)" fg:x="30000000" fg:w="500000"/><text x="1.1731%" y="303.50"></text></g><g><title>&lt;[u8: 8] as core::convert::TryFrom&lt;&amp;[u8]&gt;&gt;::try_from (500,000 samples, 0.02%)</title><rect x="0.9231%" y="277" width="0.0154%" height="15" fill="rgb(242,17,10)" fg:x="30000000" fg:w="500000"/><text x="1.1731%" y="287.50"></text></g><g><title>&lt;core::result::Result&lt;&amp;[u8: 8], core::array::TryFromSliceError&gt;&gt;::copied (500,000 samples, 0.02%)</title><rect x="0.9231%" y="261" width="0.0154%" height="15" fill="rgb(242,107,0)" fg:x="30000000" fg:w="500000"/><text x="1.1731%" y="271.50"></text></g><g><title>&lt;serde_json::read::SliceRead&gt;::skip_to_escape (5,500,000 samples, 0.17%)</title><rect x="0.7846%" y="309" width="0.1692%" height="15" fill="rgb(251,28,31)" fg:x="25500000" fg:w="5500000"/><text x="1.0346%" y="319.50"></text></g><g><title>&lt;u64&gt;::wrapping_sub (500,000 samples, 0.02%)</title><rect x="0.9385%" y="293" width="0.0154%" height="15" fill="rgb(233,223,10)" fg:x="30500000" fg:w="500000"/><text x="1.1885%" y="303.50"></text></g><g><title>&lt;kiban::cache::CachedBlock as core::clone::Clone&gt;::clone (13,500,000 samples, 0.42%)</title><rect x="0.9538%" y="277" width="0.4154%" height="15" fill="rgb(215,21,27)" fg:x="31000000" fg:w="13500000"/><text x="1.2038%" y="287.50"></text></g><g><title>&lt;alloc::sync::Arc&lt;[u8]&gt; as core::clone::Clone&gt;::clone (13,500,000 samples, 0.42%)</title><rect x="0.9538%" y="261" width="0.4154%" height="15" fill="rgb(232,23,21)" fg:x="31000000" fg:w="13500000"/><text x="1.2038%" y="271.50"></text></g><g><title>&lt;hashbrown::control::group::sse2::Group&gt;::match_tag (3,500,000 samples, 0.11%)</title><rect x="1.3692%" y="197" width="0.1077%" height="15" fill="rgb(244,5,23)" fg:x="44500000" fg:w="3500000"/><text x="1.6192%" y="207.50"></text></g><g><title>core::core_arch::x86::sse2::_mm_movemask_epi8 (3,500,000 samples, 0.11%)</title><rect x="1.3692%" y="181" width="0.1077%" height="15" fill="rgb(226,81,46)" fg:x="44500000" fg:w="3500000"/><text x="1.6192%" y="191.50"></text></g><g><title>&lt;std::collections::hash::map::HashMap&lt;(u64, u64), kiban::cache::Entry&gt;&gt;::get::&lt;(u64, u64)&gt; (15,000,000 samples, 0.46%)</title><rect x="1.3692%" y="277" width="0.4615%" height="15" fill="rgb(247,70,30)" fg:x="44500000" fg:w="15000000"/><text x="1.6192%" y="287.50"></text></g><g><title>&lt;hashbrown::map::HashMap&lt;(u64, u64), kiban::cache::Entry, std::hash::random::RandomState&gt;&gt;::get::&lt;(u64, u64)&gt; (15,000,000 samples, 0.46%)</title><rect x="1.3692%" y="261" width="0.4615%" height="15" fill="rgb(212,68,19)" fg:x="44500000" fg:w="15000000"/><text x="1.6192%" y="271.50"></text></g><g><title>&lt;hashbrown::raw::RawTable&lt;((u64, u64), kiban::cache::Entry)&gt;&gt;::get::&lt;hashbrown::map::equivalent_key&lt;(u64, u64), (u64, u64), kiban::cache::Entry&gt;::{closure#0}&gt; (15,000,000 samples, 0.46%)</title><rect x="1.3692%" y="245" width="0.4615%" height="15" fill="rgb(240,187,13)" fg:x="44500000" fg:w="15000000"/><text x="1.6192%" y="255.50"></text></g><g><title>&lt;hashbrown::raw::RawTable&lt;((u64, u64), kiban::cache::Entry)&gt;&gt;::find::&lt;hashbrown::map::equivalent_key&lt;(u64, u64), (u64, u64), kiban::cache::Entry&gt;::{closure#0}&gt; (15,000,000 samples, 0.46%)</title><rect x="1.3692%" y="229" width="0.4615%" height="15" fill="rgb(223,113,26)" fg:x="44500000" fg:w="15000000"/><text x="1.6192%" y="239.50"></text></g><g><title>&lt;hashbrown::raw::RawTableInner&gt;::find_inner (15,000,000 samples, 0.46%)</title><rect x="1.3692%" y="213" width="0.4615%" height="15" fill="rgb(206,192,2)" fg:x="44500000" fg:w="15000000"/><text x="1.6192%" y="223.50"></text></g><g><title>&lt;hashbrown::raw::RawTable&lt;((u64, u64), kiban::cache::Entry)&gt;&gt;::find::&lt;hashbrown::map::equivalent_key&lt;(u64, u64), (u64, u64), kiban::cache::Entry&gt;::{closure#0}&gt;::{closure#0} (11,500,000 samples, 0.35%)</title><rect x="1.4769%" y="197" width="0.3538%" height="15" fill="rgb(241,108,4)" fg:x="48000000" fg:w="11500000"/><text x="1.7269%" y="207.50"></text></g><g><title>hashbrown::map::equivalent_key::&lt;(u64, u64), (u64, u64), kiban::cache::Entry&gt;::{closure#0} (11,500,000 samples, 0.35%)</title><rect x="1.4769%" y="181" width="0.3538%" height="15" fill="rgb(247,173,49)" fg:x="48000000" fg:w="11500000"/><text x="1.7269%" y="191.50"></text></g><g><title>&lt;(u64, u64) as hashbrown::Equivalent&lt;(u64, u64)&gt;&gt;::equivalent (11,500,000 samples, 0.35%)</title><rect x="1.4769%" y="165" width="0.3538%" height="15" fill="rgb(224,114,35)" fg:x="48000000" fg:w="11500000"/><text x="1.7269%" y="175.50"></text></g><g><title>&lt;&amp;(u64, u64) as core::cmp::PartialEq&gt;::eq (11,500,000 samples, 0.35%)</title><rect x="1.4769%" y="149" width="0.3538%" height="15" fill="rgb(245,159,27)" fg:x="48000000" fg:w="11500000"/><text x="1.7269%" y="159.50"></text></g><g><title>&lt;(u64, u64) as core::cmp::PartialEq&gt;::eq (11,500,000 samples, 0.35%)</title><rect x="1.4769%" y="133" width="0.3538%" height="15" fill="rgb(245,172,44)" fg:x="48000000" fg:w="11500000"/><text x="1.7269%" y="143.50"></text></g><g><title>&lt;u64 as core::cmp::PartialEq&gt;::eq (11,500,000 samples, 0.35%)</title><rect x="1.4769%" y="117" width="0.3538%" height="15" fill="rgb(236,23,11)" fg:x="48000000" fg:w="11500000"/><text x="1.7269%" y="127.50"></text></g><g><title>&lt;std::sync::poison::rwlock::RwLock&lt;kiban::cache::Inner&gt;&gt;::read (500,000 samples, 0.02%)</title><rect x="1.8308%" y="277" width="0.0154%" height="15" fill="rgb(205,117,38)" fg:x="59500000" fg:w="500000"/><text x="2.0808%" y="287.50"></text></g><g><title>&lt;std::sys::sync::rwlock::futex::RwLock&gt;::read (500,000 samples, 0.02%)</title><rect x="1.8308%" y="261" width="0.0154%" height="15" fill="rgb(237,72,25)" fg:x="59500000" fg:w="500000"/><text x="2.0808%" y="271.50"></text></g><g><title>&lt;kiban::cache::BlockCache&gt;::get (30,000,000 samples, 0.92%)</title><rect x="0.9538%" y="293" width="0.9231%" height="15" fill="rgb(244,70,9)" fg:x="31000000" fg:w="30000000"/><text x="1.2038%" y="303.50"></text></g><g><title>core::ptr::drop_glue::&lt;std::sync::poison::rwlock::RwLockReadGuard&lt;kiban::cache::Inner&gt;&gt; (1,000,000 samples, 0.03%)</title><rect x="1.8462%" y="277" width="0.0308%" height="15" fill="rgb(217,125,39)" fg:x="60000000" fg:w="1000000"/><text x="2.0962%" y="287.50"></text></g><g><title>&lt;std::sync::poison::rwlock::RwLockReadGuard&lt;kiban::cache::Inner&gt; as core::ops::drop::Drop&gt;::drop (1,000,000 samples, 0.03%)</title><rect x="1.8462%" y="261" width="0.0308%" height="15" fill="rgb(235,36,10)" fg:x="60000000" fg:w="1000000"/><text x="2.0962%" y="271.50"></text></g><g><title>&lt;std::sys::sync::rwlock::futex::RwLock&gt;::read_unlock (1,000,000 samples, 0.03%)</title><rect x="1.8462%" y="245" width="0.0308%" height="15" fill="rgb(251,123,47)" fg:x="60000000" fg:w="1000000"/><text x="2.0962%" y="255.50"></text></g><g><title>&lt;&amp;[u8] as core::cmp::PartialEq&gt;::eq (5,500,000 samples, 0.17%)</title><rect x="1.8769%" y="277" width="0.1692%" height="15" fill="rgb(221,13,13)" fg:x="61000000" fg:w="5500000"/><text x="2.1269%" y="287.50"></text></g><g><title>&lt;[u8] as core::cmp::PartialEq&gt;::eq (5,500,000 samples, 0.17%)</title><rect x="1.8769%" y="261" width="0.1692%" height="15" fill="rgb(238,131,9)" fg:x="61000000" fg:w="5500000"/><text x="2.1269%" y="271.50"></text></g><g><title>&lt;u8 as core::slice::cmp::SlicePartialEq&lt;u8&gt;&gt;::equal_same_length (5,000,000 samples, 0.15%)</title><rect x="1.8923%" y="245" width="0.1538%" height="15" fill="rgb(211,50,8)" fg:x="61500000" fg:w="5000000"/><text x="2.1423%" y="255.50"></text></g><g><title>__memcmp_avx2_movbe (4,000,000 samples, 0.12%)</title><rect x="1.9231%" y="229" width="0.1231%" height="15" fill="rgb(245,182,24)" fg:x="62500000" fg:w="4000000"/><text x="2.1731%" y="239.50"></text></g><g><title>&lt;&amp;[u8] as core::cmp::PartialOrd&gt;::gt (1,000,000 samples, 0.03%)</title><rect x="2.0462%" y="277" width="0.0308%" height="15" fill="rgb(242,14,37)" fg:x="66500000" fg:w="1000000"/><text x="2.2962%" y="287.50"></text></g><g><title>&lt;[u8] as core::cmp::PartialOrd&gt;::gt (1,000,000 samples, 0.03%)</title><rect x="2.0462%" y="261" width="0.0308%" height="15" fill="rgb(246,228,12)" fg:x="66500000" fg:w="1000000"/><text x="2.2962%" y="271.50"></text></g><g><title>&lt;[u8] as core::cmp::PartialOrd&gt;::__chaining_gt (1,000,000 samples, 0.03%)</title><rect x="2.0462%" y="245" width="0.0308%" height="15" fill="rgb(213,55,15)" fg:x="66500000" fg:w="1000000"/><text x="2.2962%" y="255.50"></text></g><g><title>&lt;u8 as core::slice::cmp::SliceChain&gt;::chaining_gt (1,000,000 samples, 0.03%)</title><rect x="2.0462%" y="229" width="0.0308%" height="15" fill="rgb(209,9,3)" fg:x="66500000" fg:w="1000000"/><text x="2.2962%" y="239.50"></text></g><g><title>&lt;u8 as core::slice::cmp::SliceOrd&gt;::compare (1,000,000 samples, 0.03%)</title><rect x="2.0462%" y="213" width="0.0308%" height="15" fill="rgb(230,59,30)" fg:x="66500000" fg:w="1000000"/><text x="2.2962%" y="223.50"></text></g><g><title>__memcmp_avx2_movbe (500,000 samples, 0.02%)</title><rect x="2.0615%" y="197" width="0.0154%" height="15" fill="rgb(209,121,21)" fg:x="67000000" fg:w="500000"/><text x="2.3115%" y="207.50"></text></g><g><title>&lt;kiban::sstable::block::VerifiedBlock&gt;::header (500,000 samples, 0.02%)</title><rect x="2.0769%" y="277" width="0.0154%" height="15" fill="rgb(220,109,13)" fg:x="67500000" fg:w="500000"/><text x="2.3269%" y="287.50"></text></g><g><title>&lt;kiban::sstable::block::VerifiedBlock&gt;::get (7,500,000 samples, 0.23%)</title><rect x="1.8769%" y="293" width="0.2308%" height="15" fill="rgb(232,18,1)" fg:x="61000000" fg:w="7500000"/><text x="2.1269%" y="303.50"></text></g><g><title>&lt;kiban::sstable::block::VerifiedBlock&gt;::restart_offset (500,000 samples, 0.02%)</title><rect x="2.0923%" y="277" width="0.0154%" height="15" fill="rgb(215,41,42)" fg:x="68000000" fg:w="500000"/><text x="2.3423%" y="287.50"></text></g><g><title>kiban::sstable::block::restart_offset_of (500,000 samples, 0.02%)</title><rect x="2.0923%" y="261" width="0.0154%" height="15" fill="rgb(224,123,36)" fg:x="68000000" fg:w="500000"/><text x="2.3423%" y="271.50"></text></g><g><title>&lt;&amp;[u8] as core::convert::TryInto&lt;[u8: 4]&gt;&gt;::try_into (500,000 samples, 0.02%)</title><rect x="2.0923%" y="245" width="0.0154%" height="15" fill="rgb(240,125,3)" fg:x="68000000" fg:w="500000"/><text x="2.3423%" y="255.50"></text></g><g><title>&lt;[u8: 4] as core::convert::TryFrom&lt;&amp;[u8]&gt;&gt;::try_from (500,000 samples, 0.02%)</title><rect x="2.0923%" y="229" width="0.0154%" height="15" fill="rgb(205,98,50)" fg:x="68000000" fg:w="500000"/><text x="2.3423%" y="239.50"></text></g><g><title>&lt;core::result::Result&lt;&amp;[u8: 4], core::array::TryFromSliceError&gt;&gt;::copied (500,000 samples, 0.02%)</title><rect x="2.0923%" y="213" width="0.0154%" height="15" fill="rgb(205,185,37)" fg:x="68000000" fg:w="500000"/><text x="2.3423%" y="223.50"></text></g><g><title>&lt;u64 as core::fmt::Display&gt;::fmt (500,000 samples, 0.02%)</title><rect x="2.1077%" y="133" width="0.0154%" height="15" fill="rgb(238,207,15)" fg:x="68500000" fg:w="500000"/><text x="2.3577%" y="143.50"></text></g><g><title>&lt;core::fmt::Formatter&gt;::pad_integral (500,000 samples, 0.02%)</title><rect x="2.1077%" y="117" width="0.0154%" height="15" fill="rgb(213,199,42)" fg:x="68500000" fg:w="500000"/><text x="2.3577%" y="127.50"></text></g><g><title>&lt;core::fmt::Formatter&gt;::pad_integral::write_prefix (500,000 samples, 0.02%)</title><rect x="2.1077%" y="101" width="0.0154%" height="15" fill="rgb(235,201,11)" fg:x="68500000" fg:w="500000"/><text x="2.3577%" y="111.50"></text></g><g><title>alloc::fmt::format::format_inner (1,000,000 samples, 0.03%)</title><rect x="2.1077%" y="213" width="0.0308%" height="15" fill="rgb(207,46,11)" fg:x="68500000" fg:w="1000000"/><text x="2.3577%" y="223.50"></text></g><g><title>&lt;alloc::string::String as core::fmt::Write&gt;::write_fmt (1,000,000 samples, 0.03%)</title><rect x="2.1077%" y="197" width="0.0308%" height="15" fill="rgb(241,35,35)" fg:x="68500000" fg:w="1000000"/><text x="2.3577%" y="207.50"></text></g><g><title>&lt;&amp;mut alloc::string::String as core::fmt::Write::write_fmt::SpecWriteFmt&gt;::spec_write_fmt (1,000,000 samples, 0.03%)</title><rect x="2.1077%" y="181" width="0.0308%" height="15" fill="rgb(243,32,47)" fg:x="68500000" fg:w="1000000"/><text x="2.3577%" y="191.50"></text></g><g><title>core::fmt::write (1,000,000 samples, 0.03%)</title><rect x="2.1077%" y="165" width="0.0308%" height="15" fill="rgb(247,202,23)" fg:x="68500000" fg:w="1000000"/><text x="2.3577%" y="175.50"></text></g><g><title>&lt;core::fmt::rt::Argument&gt;::fmt (1,000,000 samples, 0.03%)</title><rect x="2.1077%" y="149" width="0.0308%" height="15" fill="rgb(219,102,11)" fg:x="68500000" fg:w="1000000"/><text x="2.3577%" y="159.50"></text></g><g><title>&lt;u64&gt;::_fmt_inner (500,000 samples, 0.02%)</title><rect x="2.1231%" y="133" width="0.0154%" height="15" fill="rgb(243,110,44)" fg:x="69000000" fg:w="500000"/><text x="2.3731%" y="143.50"></text></g><g><title>&lt;kiban_readbench::embedded::Embedded as kiban_readbench::api::Backend&gt;::get (1,500,000 samples, 0.05%)</title><rect x="2.1077%" y="293" width="0.0462%" height="15" fill="rgb(222,74,54)" fg:x="68500000" fg:w="1500000"/><text x="2.3577%" y="303.50"></text></g><g><title>kiban_readbench::model::key (1,500,000 samples, 0.05%)</title><rect x="2.1077%" y="277" width="0.0462%" height="15" fill="rgb(216,99,12)" fg:x="68500000" fg:w="1500000"/><text x="2.3577%" y="287.50"></text></g><g><title>alloc::fmt::format (1,500,000 samples, 0.05%)</title><rect x="2.1077%" y="261" width="0.0462%" height="15" fill="rgb(226,22,26)" fg:x="68500000" fg:w="1500000"/><text x="2.3577%" y="271.50"></text></g><g><title>&lt;core::option::Option&lt;&amp;str&gt;&gt;::map_or_else::&lt;alloc::string::String, alloc::fmt::format::{closure#0}, &lt;str as alloc::borrow::ToOwned&gt;::to_owned&gt; (1,500,000 samples, 0.05%)</title><rect x="2.1077%" y="245" width="0.0462%" height="15" fill="rgb(217,163,10)" fg:x="68500000" fg:w="1500000"/><text x="2.3577%" y="255.50"></text></g><g><title>alloc::fmt::format::{closure#0} (1,500,000 samples, 0.05%)</title><rect x="2.1077%" y="229" width="0.0462%" height="15" fill="rgb(213,25,53)" fg:x="68500000" fg:w="1500000"/><text x="2.3577%" y="239.50"></text></g><g><title>mi_malloc_aligned (500,000 samples, 0.02%)</title><rect x="2.1385%" y="213" width="0.0154%" height="15" fill="rgb(252,105,26)" fg:x="69500000" fg:w="500000"/><text x="2.3885%" y="223.50"></text></g><g><title>mi_prim_get_default_heap (500,000 samples, 0.02%)</title><rect x="2.1385%" y="197" width="0.0154%" height="15" fill="rgb(220,39,43)" fg:x="69500000" fg:w="500000"/><text x="2.3885%" y="207.50"></text></g><g><title>&lt;serde_json::de::MapAccess&lt;_&gt; as serde_core::de::MapAccess&gt;::next_key_seed::has_next_key::&lt;serde_json::read::SliceRead&gt; (500,000 samples, 0.02%)</title><rect x="2.1538%" y="293" width="0.0154%" height="15" fill="rgb(229,68,48)" fg:x="70000000" fg:w="500000"/><text x="2.4038%" y="303.50"></text></g><g><title>&lt;serde_json::de::Deserializer&lt;serde_json::read::SliceRead&gt;&gt;::parse_whitespace (500,000 samples, 0.02%)</title><rect x="2.1538%" y="277" width="0.0154%" height="15" fill="rgb(252,8,32)" fg:x="70000000" fg:w="500000"/><text x="2.4038%" y="287.50"></text></g><g><title>&lt;serde_json::read::SliceRead as serde_json::read::Read&gt;::parse_str (1,000,000 samples, 0.03%)</title><rect x="2.1692%" y="293" width="0.0308%" height="15" fill="rgb(223,20,43)" fg:x="70500000" fg:w="1000000"/><text x="2.4192%" y="303.50"></text></g><g><title>&lt;serde_json::read::SliceRead&gt;::parse_str_bytes::&lt;str, serde_json::read::as_str&lt;serde_json::read::SliceRead&gt;&gt; (1,000,000 samples, 0.03%)</title><rect x="2.1692%" y="277" width="0.0308%" height="15" fill="rgb(229,81,49)" fg:x="70500000" fg:w="1000000"/><text x="2.4192%" y="287.50"></text></g><g><title>&lt;serde_json::read::SliceRead&gt;::skip_to_escape (1,000,000 samples, 0.03%)</title><rect x="2.1692%" y="261" width="0.0308%" height="15" fill="rgb(236,28,36)" fg:x="70500000" fg:w="1000000"/><text x="2.4192%" y="271.50"></text></g><g><title>&lt;&amp;[u8] as core::convert::TryInto&lt;[u8: 8]&gt;&gt;::try_into (500,000 samples, 0.02%)</title><rect x="2.1846%" y="245" width="0.0154%" height="15" fill="rgb(249,185,26)" fg:x="71000000" fg:w="500000"/><text x="2.4346%" y="255.50"></text></g><g><title>&lt;[u8: 8] as core::convert::TryFrom&lt;&amp;[u8]&gt;&gt;::try_from (500,000 samples, 0.02%)</title><rect x="2.1846%" y="229" width="0.0154%" height="15" fill="rgb(249,174,33)" fg:x="71000000" fg:w="500000"/><text x="2.4346%" y="239.50"></text></g><g><title>&lt;core::result::Result&lt;&amp;[u8: 8], core::array::TryFromSliceError&gt;&gt;::copied (500,000 samples, 0.02%)</title><rect x="2.1846%" y="213" width="0.0154%" height="15" fill="rgb(233,201,37)" fg:x="71000000" fg:w="500000"/><text x="2.4346%" y="223.50"></text></g><g><title>__memcmp_avx2_movbe (500,000 samples, 0.02%)</title><rect x="2.2000%" y="293" width="0.0154%" height="15" fill="rgb(221,78,26)" fg:x="71500000" fg:w="500000"/><text x="2.4500%" y="303.50"></text></g><g><title>kiban::sstable::block::header_at (22,500,000 samples, 0.69%)</title><rect x="2.2154%" y="293" width="0.6923%" height="15" fill="rgb(250,127,30)" fg:x="72000000" fg:w="22500000"/><text x="2.4654%" y="303.50"></text></g><g><title>&lt;&amp;[u8] as core::convert::TryInto&lt;[u8: 4]&gt;&gt;::try_into (8,000,000 samples, 0.25%)</title><rect x="2.6615%" y="277" width="0.2462%" height="15" fill="rgb(230,49,44)" fg:x="86500000" fg:w="8000000"/><text x="2.9115%" y="287.50"></text></g><g><title>&lt;[u8: 4] as core::convert::TryFrom&lt;&amp;[u8]&gt;&gt;::try_from (8,000,000 samples, 0.25%)</title><rect x="2.6615%" y="261" width="0.2462%" height="15" fill="rgb(229,67,23)" fg:x="86500000" fg:w="8000000"/><text x="2.9115%" y="271.50"></text></g><g><title>&lt;core::result::Result&lt;&amp;[u8: 4], core::array::TryFromSliceError&gt;&gt;::copied (8,000,000 samples, 0.25%)</title><rect x="2.6615%" y="245" width="0.2462%" height="15" fill="rgb(249,83,47)" fg:x="86500000" fg:w="8000000"/><text x="2.9115%" y="255.50"></text></g><g><title>&lt;core::result::Result&lt;alloc::string::String, serde_json::error::Error&gt; as core::ops::try_trait::Try&gt;::branch (500,000 samples, 0.02%)</title><rect x="2.9077%" y="229" width="0.0154%" height="15" fill="rgb(215,43,3)" fg:x="94500000" fg:w="500000"/><text x="3.1577%" y="239.50"></text></g><g><title>&lt;core::result::Result&lt;u32, serde_json::error::Error&gt; as core::ops::try_trait::Try&gt;::branch (500,000 samples, 0.02%)</title><rect x="2.9231%" y="229" width="0.0154%" height="15" fill="rgb(238,154,13)" fg:x="95000000" fg:w="500000"/><text x="3.1731%" y="239.50"></text></g><g><title>&lt;&lt;kiban_readbench::model::Memory as serde_core::de::Deserialize&gt;::deserialize::__FieldVisitor as serde_core::de::Visitor&gt;::visit_str::&lt;serde_json::error::Error&gt; (500,000 samples, 0.02%)</title><rect x="2.9538%" y="133" width="0.0154%" height="15" fill="rgb(219,56,2)" fg:x="96000000" fg:w="500000"/><text x="3.2038%" y="143.50"></text></g><g><title>&lt;str as core::cmp::PartialEq&gt;::eq (500,000 samples, 0.02%)</title><rect x="2.9538%" y="117" width="0.0154%" height="15" fill="rgb(233,0,4)" fg:x="96000000" fg:w="500000"/><text x="3.2038%" y="127.50"></text></g><g><title>&lt;&amp;[u8] as core::cmp::PartialEq&gt;::eq (500,000 samples, 0.02%)</title><rect x="2.9538%" y="101" width="0.0154%" height="15" fill="rgb(235,30,7)" fg:x="96000000" fg:w="500000"/><text x="3.2038%" y="111.50"></text></g><g><title>&lt;[u8] as core::cmp::PartialEq&gt;::eq (500,000 samples, 0.02%)</title><rect x="2.9538%" y="85" width="0.0154%" height="15" fill="rgb(250,79,13)" fg:x="96000000" fg:w="500000"/><text x="3.2038%" y="95.50"></text></g><g><title>&lt;u8 as core::slice::cmp::SlicePartialEq&lt;u8&gt;&gt;::equal_same_length (500,000 samples, 0.02%)</title><rect x="2.9538%" y="69" width="0.0154%" height="15" fill="rgb(211,146,34)" fg:x="96000000" fg:w="500000"/><text x="3.2038%" y="79.50"></text></g><g><title>&lt;&lt;kiban_readbench::model::Memory as serde_core::de::Deserialize&gt;::deserialize::__Visitor as serde_core::de::Visitor&gt;::visit_map::&lt;serde_json::de::MapAccess&lt;serde_json::read::SliceRead&gt;&gt; (2,500,000 samples, 0.08%)</title><rect x="2.9077%" y="245" width="0.0769%" height="15" fill="rgb(228,22,38)" fg:x="94500000" fg:w="2500000"/><text x="3.1577%" y="255.50"></text></g><g><title>&lt;serde_json::de::MapAccess&lt;serde_json::read::SliceRead&gt; as serde_core::de::MapAccess&gt;::next_key::&lt;&lt;kiban_readbench::model::Memory as serde_core::de::Deserialize&gt;::deserialize::__Field&gt; (1,500,000 samples, 0.05%)</title><rect x="2.9385%" y="229" width="0.0462%" height="15" fill="rgb(235,168,5)" fg:x="95500000" fg:w="1500000"/><text x="3.1885%" y="239.50"></text></g><g><title>&lt;serde_json::de::MapAccess&lt;serde_json::read::SliceRead&gt; as serde_core::de::MapAccess&gt;::next_key_seed::&lt;core::marker::PhantomData&lt;&lt;kiban_readbench::model::Memory as serde_core::de::Deserialize&gt;::deserialize::__Field&gt;&gt; (1,500,000 samples, 0.05%)</title><rect x="2.9385%" y="213" width="0.0462%" height="15" fill="rgb(221,155,16)" fg:x="95500000" fg:w="1500000"/><text x="3.1885%" y="223.50"></text></g><g><title>&lt;core::marker::PhantomData&lt;&lt;kiban_readbench::model::Memory as serde_core::de::Deserialize&gt;::deserialize::__Field&gt; as serde_core::de::DeserializeSeed&gt;::deserialize::&lt;serde_json::de::MapKey&lt;serde_json::read::SliceRead&gt;&gt; (1,500,000 samples, 0.05%)</title><rect x="2.9385%" y="197" width="0.0462%" height="15" fill="rgb(215,215,53)" fg:x="95500000" fg:w="1500000"/><text x="3.1885%" y="207.50"></text></g><g><title>&lt;&lt;kiban_readbench::model::Memory as serde_core::de::Deserialize&gt;::deserialize::__Field as serde_core::de::Deserialize&gt;::deserialize::&lt;serde_json::de::MapKey&lt;serde_json::read::SliceRead&gt;&gt; (1,500,000 samples, 0.05%)</title><rect x="2.9385%" y="181" width="0.0462%" height="15" fill="rgb(223,4,10)" fg:x="95500000" fg:w="1500000"/><text x="3.1885%" y="191.50"></text></g><g><title>&lt;serde_json::de::MapKey&lt;serde_json::read::SliceRead&gt; as serde_core::de::Deserializer&gt;::deserialize_identifier::&lt;&lt;kiban_readbench::model::Memory as serde_core::de::Deserialize&gt;::deserialize::__FieldVisitor&gt; (1,500,000 samples, 0.05%)</title><rect x="2.9385%" y="165" width="0.0462%" height="15" fill="rgb(234,103,6)" fg:x="95500000" fg:w="1500000"/><text x="3.1885%" y="175.50"></text></g><g><title>&lt;serde_json::de::MapKey&lt;serde_json::read::SliceRead&gt; as serde_core::de::Deserializer&gt;::deserialize_any::&lt;&lt;kiban_readbench::model::Memory as serde_core::de::Deserialize&gt;::deserialize::__FieldVisitor&gt; (1,500,000 samples, 0.05%)</title><rect x="2.9385%" y="149" width="0.0462%" height="15" fill="rgb(227,97,0)" fg:x="95500000" fg:w="1500000"/><text x="3.1885%" y="159.50"></text></g><g><title>&lt;alloc::vec::Vec&lt;u8&gt;&gt;::clear (500,000 samples, 0.02%)</title><rect x="2.9692%" y="133" width="0.0154%" height="15" fill="rgb(234,150,53)" fg:x="96500000" fg:w="500000"/><text x="3.2192%" y="143.50"></text></g><g><title>&lt;kiban_readbench::model::Memory as serde_core::de::Deserialize&gt;::deserialize::&lt;&amp;mut serde_json::de::Deserializer&lt;serde_json::read::SliceRead&gt;&gt; (3,000,000 samples, 0.09%)</title><rect x="2.9077%" y="277" width="0.0923%" height="15" fill="rgb(228,201,54)" fg:x="94500000" fg:w="3000000"/><text x="3.1577%" y="287.50"></text></g><g><title>&lt;&amp;mut serde_json::de::Deserializer&lt;serde_json::read::SliceRead&gt; as serde_core::de::Deserializer&gt;::deserialize_struct::&lt;&lt;kiban_readbench::model::Memory as serde_core::de::Deserialize&gt;::deserialize::__Visitor&gt; (3,000,000 samples, 0.09%)</title><rect x="2.9077%" y="261" width="0.0923%" height="15" fill="rgb(222,22,37)" fg:x="94500000" fg:w="3000000"/><text x="3.1577%" y="271.50"></text></g><g><title>&lt;serde_json::de::Deserializer&lt;serde_json::read::SliceRead&gt;&gt;::peek_error (500,000 samples, 0.02%)</title><rect x="2.9846%" y="245" width="0.0154%" height="15" fill="rgb(237,53,32)" fg:x="97000000" fg:w="500000"/><text x="3.2346%" y="255.50"></text></g><g><title>&lt;serde_json::read::SliceRead as serde_json::read::Read&gt;::peek_position (500,000 samples, 0.02%)</title><rect x="2.9846%" y="229" width="0.0154%" height="15" fill="rgb(233,25,53)" fg:x="97000000" fg:w="500000"/><text x="3.2346%" y="239.50"></text></g><g><title>&lt;serde_json::read::SliceRead&gt;::position_of_index (500,000 samples, 0.02%)</title><rect x="2.9846%" y="213" width="0.0154%" height="15" fill="rgb(210,40,34)" fg:x="97000000" fg:w="500000"/><text x="3.2346%" y="223.50"></text></g><g><title>[unknown] (67,000,000 samples, 2.06%)</title><rect x="0.9538%" y="309" width="2.0615%" height="15" fill="rgb(241,220,44)" fg:x="31000000" fg:w="67000000"/><text x="1.2038%" y="319.50">[..</text></g><g><title>serde_json::de::from_trait::&lt;serde_json::read::SliceRead, kiban_readbench::model::Memory&gt; (3,500,000 samples, 0.11%)</title><rect x="2.9077%" y="293" width="0.1077%" height="15" fill="rgb(235,28,35)" fg:x="94500000" fg:w="3500000"/><text x="3.1577%" y="303.50"></text></g><g><title>&lt;serde_json::de::Deserializer&lt;serde_json::read::SliceRead&gt;&gt;::new (500,000 samples, 0.02%)</title><rect x="3.0000%" y="277" width="0.0154%" height="15" fill="rgb(210,56,17)" fg:x="97500000" fg:w="500000"/><text x="3.2500%" y="287.50"></text></g><g><title>__memcmp_avx2_movbe (2,832,000,000 samples, 87.14%)</title><rect x="3.0154%" y="309" width="87.1385%" height="15" fill="rgb(224,130,29)" fg:x="98000000" fg:w="2832000000"/><text x="3.2654%" y="319.50">__memcmp_avx2_movbe</text></g><g><title>__memmove_avx_unaligned_erms (229,000,000 samples, 7.05%)</title><rect x="90.1538%" y="309" width="7.0462%" height="15" fill="rgb(235,212,8)" fg:x="2930000000" fg:w="229000000"/><text x="90.4038%" y="319.50">__memmove..</text></g><g><title>_fini (500,000 samples, 0.02%)</title><rect x="97.2000%" y="309" width="0.0154%" height="15" fill="rgb(223,33,50)" fg:x="3159000000" fg:w="500000"/><text x="97.4500%" y="319.50"></text></g><g><title>&lt;core::fmt::Formatter&gt;::pad_integral::write_prefix (500,000 samples, 0.02%)</title><rect x="97.2000%" y="293" width="0.0154%" height="15" fill="rgb(219,149,13)" fg:x="3159000000" fg:w="500000"/><text x="97.4500%" y="303.50"></text></g><g><title>_mi_page_malloc (1,000,000 samples, 0.03%)</title><rect x="97.2154%" y="309" width="0.0308%" height="15" fill="rgb(250,156,29)" fg:x="3159500000" fg:w="1000000"/><text x="97.4654%" y="319.50"></text></g><g><title>_mi_page_malloc_zero (500,000 samples, 0.02%)</title><rect x="97.2308%" y="293" width="0.0154%" height="15" fill="rgb(216,193,19)" fg:x="3160000000" fg:w="500000"/><text x="97.4808%" y="303.50"></text></g><g><title>core::str::converts::from_utf8 (2,500,000 samples, 0.08%)</title><rect x="97.2462%" y="309" width="0.0769%" height="15" fill="rgb(216,135,14)" fg:x="3160500000" fg:w="2500000"/><text x="97.4962%" y="319.50"></text></g><g><title>core::str::validations::run_utf8_validation (2,000,000 samples, 0.06%)</title><rect x="97.2615%" y="293" width="0.0615%" height="15" fill="rgb(241,47,5)" fg:x="3161000000" fg:w="2000000"/><text x="97.5115%" y="303.50"></text></g><g><title>&lt;[kiban::sstable::reader::IndexEntry]&gt;::get_unchecked::&lt;usize&gt; (1,000,000 samples, 0.03%)</title><rect x="97.3385%" y="245" width="0.0308%" height="15" fill="rgb(233,42,35)" fg:x="3163500000" fg:w="1000000"/><text x="97.5885%" y="255.50"></text></g><g><title>&lt;usize as core::slice::index::SliceIndex&lt;[kiban::sstable::reader::IndexEntry]&gt;&gt;::get_unchecked (1,000,000 samples, 0.03%)</title><rect x="97.3385%" y="229" width="0.0308%" height="15" fill="rgb(231,13,6)" fg:x="3163500000" fg:w="1000000"/><text x="97.5885%" y="239.50"></text></g><g><title>&lt;&amp;[u8] as core::cmp::PartialOrd&gt;::lt (40,000,000 samples, 1.23%)</title><rect x="97.3692%" y="213" width="1.2308%" height="15" fill="rgb(207,181,40)" fg:x="3164500000" fg:w="40000000"/><text x="97.6192%" y="223.50"></text></g><g><title>&lt;[u8] as core::cmp::PartialOrd&gt;::lt (40,000,000 samples, 1.23%)</title><rect x="97.3692%" y="197" width="1.2308%" height="15" fill="rgb(254,173,49)" fg:x="3164500000" fg:w="40000000"/><text x="97.6192%" y="207.50"></text></g><g><title>&lt;[u8] as core::cmp::PartialOrd&gt;::__chaining_lt (40,000,000 samples, 1.23%)</title><rect x="97.3692%" y="181" width="1.2308%" height="15" fill="rgb(221,1,38)" fg:x="3164500000" fg:w="40000000"/><text x="97.6192%" y="191.50"></text></g><g><title>&lt;u8 as core::slice::cmp::SliceChain&gt;::chaining_lt (40,000,000 samples, 1.23%)</title><rect x="97.3692%" y="165" width="1.2308%" height="15" fill="rgb(206,124,46)" fg:x="3164500000" fg:w="40000000"/><text x="97.6192%" y="175.50"></text></g><g><title>&lt;u8 as core::slice::cmp::SliceOrd&gt;::compare (40,000,000 samples, 1.23%)</title><rect x="97.3692%" y="149" width="1.2308%" height="15" fill="rgb(249,21,11)" fg:x="3164500000" fg:w="40000000"/><text x="97.6192%" y="159.50"></text></g><g><title>__memcmp_avx2_movbe (37,000,000 samples, 1.14%)</title><rect x="97.4615%" y="133" width="1.1385%" height="15" fill="rgb(222,201,40)" fg:x="3167500000" fg:w="37000000"/><text x="97.7115%" y="143.50"></text></g><g><title>&lt;[kiban::sstable::reader::IndexEntry]&gt;::partition_point::&lt;&lt;kiban::sstable::reader::SstTable&gt;::get::{closure#0}&gt; (66,500,000 samples, 2.05%)</title><rect x="97.3231%" y="277" width="2.0462%" height="15" fill="rgb(235,61,29)" fg:x="3163000000" fg:w="66500000"/><text x="97.5731%" y="287.50">&lt;..</text></g><g><title>&lt;[kiban::sstable::reader::IndexEntry]&gt;::binary_search_by::&lt;&lt;[kiban::sstable::reader::IndexEntry]&gt;::partition_point&lt;&lt;kiban::sstable::reader::SstTable&gt;::get::{closure#0}&gt;::{closure#0}&gt; (66,500,000 samples, 2.05%)</title><rect x="97.3231%" y="261" width="2.0462%" height="15" fill="rgb(219,207,3)" fg:x="3163000000" fg:w="66500000"/><text x="97.5731%" y="271.50">&lt;..</text></g><g><title>&lt;[kiban::sstable::reader::IndexEntry]&gt;::partition_point::&lt;&lt;kiban::sstable::reader::SstTable&gt;::get::{closure#0}&gt;::{closure#0} (65,000,000 samples, 2.00%)</title><rect x="97.3692%" y="245" width="2.0000%" height="15" fill="rgb(222,56,46)" fg:x="3164500000" fg:w="65000000"/><text x="97.6192%" y="255.50">&lt;..</text></g><g><title>&lt;kiban::sstable::reader::SstTable&gt;::get::{closure#0} (65,000,000 samples, 2.00%)</title><rect x="97.3692%" y="229" width="2.0000%" height="15" fill="rgb(239,76,54)" fg:x="3164500000" fg:w="65000000"/><text x="97.6192%" y="239.50">&lt;..</text></g><g><title>&lt;alloc::vec::Vec&lt;u8&gt;&gt;::as_slice (25,000,000 samples, 0.77%)</title><rect x="98.6000%" y="213" width="0.7692%" height="15" fill="rgb(231,124,27)" fg:x="3204500000" fg:w="25000000"/><text x="98.8500%" y="223.50"></text></g><g><title>&lt;*const u8&gt;::copy_to_nonoverlapping (4,000,000 samples, 0.12%)</title><rect x="99.3692%" y="197" width="0.1231%" height="15" fill="rgb(249,195,6)" fg:x="3229500000" fg:w="4000000"/><text x="99.6192%" y="207.50"></text></g><g><title>core::ptr::copy_nonoverlapping::&lt;u8&gt; (4,000,000 samples, 0.12%)</title><rect x="99.3692%" y="181" width="0.1231%" height="15" fill="rgb(237,174,47)" fg:x="3229500000" fg:w="4000000"/><text x="99.6192%" y="191.50"></text></g><g><title>__memmove_avx_unaligned_erms (4,000,000 samples, 0.12%)</title><rect x="99.3692%" y="165" width="0.1231%" height="15" fill="rgb(206,201,31)" fg:x="3229500000" fg:w="4000000"/><text x="99.6192%" y="175.50"></text></g><g><title>&lt;core::option::Option&lt;kiban::sstable::block::Match&gt;&gt;::map::&lt;kiban::sstable::reader::Found, &lt;kiban::sstable::reader::SstTable&gt;::get::{closure#1}&gt; (4,500,000 samples, 0.14%)</title><rect x="99.3692%" y="277" width="0.1385%" height="15" fill="rgb(231,57,52)" fg:x="3229500000" fg:w="4500000"/><text x="99.6192%" y="287.50"></text></g><g><title>&lt;kiban::sstable::reader::SstTable&gt;::get::{closure#1} (4,500,000 samples, 0.14%)</title><rect x="99.3692%" y="261" width="0.1385%" height="15" fill="rgb(248,177,22)" fg:x="3229500000" fg:w="4500000"/><text x="99.6192%" y="271.50"></text></g><g><title>&lt;[u8]&gt;::to_vec (4,500,000 samples, 0.14%)</title><rect x="99.3692%" y="245" width="0.1385%" height="15" fill="rgb(215,211,37)" fg:x="3229500000" fg:w="4500000"/><text x="99.6192%" y="255.50"></text></g><g><title>&lt;[u8]&gt;::to_vec_in::&lt;alloc::alloc::Global&gt; (4,500,000 samples, 0.14%)</title><rect x="99.3692%" y="229" width="0.1385%" height="15" fill="rgb(241,128,51)" fg:x="3229500000" fg:w="4500000"/><text x="99.6192%" y="239.50"></text></g><g><title>&lt;u8 as &lt;[_]&gt;::to_vec_in::ConvertVec&gt;::to_vec::&lt;alloc::alloc::Global&gt; (4,500,000 samples, 0.14%)</title><rect x="99.3692%" y="213" width="0.1385%" height="15" fill="rgb(227,165,31)" fg:x="3229500000" fg:w="4500000"/><text x="99.6192%" y="223.50"></text></g><g><title>&lt;alloc::vec::Vec&lt;u8&gt;&gt;::with_capacity_in (500,000 samples, 0.02%)</title><rect x="99.4923%" y="197" width="0.0154%" height="15" fill="rgb(228,167,24)" fg:x="3233500000" fg:w="500000"/><text x="99.7423%" y="207.50"></text></g><g><title>&lt;alloc::raw_vec::RawVec&lt;u8&gt;&gt;::with_capacity_in (500,000 samples, 0.02%)</title><rect x="99.4923%" y="181" width="0.0154%" height="15" fill="rgb(228,143,12)" fg:x="3233500000" fg:w="500000"/><text x="99.7423%" y="191.50"></text></g><g><title>&lt;alloc::raw_vec::RawVecInner&gt;::with_capacity_in (500,000 samples, 0.02%)</title><rect x="99.4923%" y="165" width="0.0154%" height="15" fill="rgb(249,149,8)" fg:x="3233500000" fg:w="500000"/><text x="99.7423%" y="175.50"></text></g><g><title>&lt;alloc::raw_vec::RawVecInner&gt;::try_allocate_in (500,000 samples, 0.02%)</title><rect x="99.4923%" y="149" width="0.0154%" height="15" fill="rgb(243,35,44)" fg:x="3233500000" fg:w="500000"/><text x="99.7423%" y="159.50"></text></g><g><title>&lt;alloc::alloc::Global as core::alloc::Allocator&gt;::allocate (500,000 samples, 0.02%)</title><rect x="99.4923%" y="133" width="0.0154%" height="15" fill="rgb(246,89,9)" fg:x="3233500000" fg:w="500000"/><text x="99.7423%" y="143.50"></text></g><g><title>&lt;alloc::alloc::Global&gt;::alloc_impl (500,000 samples, 0.02%)</title><rect x="99.4923%" y="117" width="0.0154%" height="15" fill="rgb(233,213,13)" fg:x="3233500000" fg:w="500000"/><text x="99.7423%" y="127.50"></text></g><g><title>&lt;alloc::alloc::Global&gt;::alloc_impl_runtime (500,000 samples, 0.02%)</title><rect x="99.4923%" y="101" width="0.0154%" height="15" fill="rgb(233,141,41)" fg:x="3233500000" fg:w="500000"/><text x="99.7423%" y="111.50"></text></g><g><title>alloc::alloc::alloc (500,000 samples, 0.02%)</title><rect x="99.4923%" y="85" width="0.0154%" height="15" fill="rgb(239,167,4)" fg:x="3233500000" fg:w="500000"/><text x="99.7423%" y="95.50"></text></g><g><title>__rustc::__rust_alloc (500,000 samples, 0.02%)</title><rect x="99.4923%" y="69" width="0.0154%" height="15" fill="rgb(209,217,16)" fg:x="3233500000" fg:w="500000"/><text x="99.7423%" y="79.50"></text></g><g><title>&lt;mimalloc::MiMalloc as core::alloc::global::GlobalAlloc&gt;::alloc (500,000 samples, 0.02%)</title><rect x="99.4923%" y="53" width="0.0154%" height="15" fill="rgb(219,88,35)" fg:x="3233500000" fg:w="500000"/><text x="99.7423%" y="63.50"></text></g><g><title>mi_heap_malloc_zero_aligned_at_generic (500,000 samples, 0.02%)</title><rect x="99.4923%" y="37" width="0.0154%" height="15" fill="rgb(220,193,23)" fg:x="3233500000" fg:w="500000"/><text x="99.7423%" y="47.50"></text></g><g><title>&lt;core::ops::range::Range&lt;u32&gt; as core::iter::traits::iterator::Iterator&gt;::all::&lt;&lt;kiban::bloom::BloomFilter&gt;::may_contain::{closure#0}&gt; (11,000,000 samples, 0.34%)</title><rect x="99.5077%" y="261" width="0.3385%" height="15" fill="rgb(230,90,52)" fg:x="3234000000" fg:w="11000000"/><text x="99.7577%" y="271.50"></text></g><g><title>&lt;core::ops::range::Range&lt;u32&gt; as core::iter::traits::iterator::Iterator&gt;::try_fold::&lt;(), core::iter::traits::iterator::Iterator::all::check&lt;u32, &lt;kiban::bloom::BloomFilter&gt;::may_contain::{closure#0}&gt;::{closure#0}, core::ops::control_flow::ControlFlow&lt;()&gt;&gt; (11,000,000 samples, 0.34%)</title><rect x="99.5077%" y="245" width="0.3385%" height="15" fill="rgb(252,106,19)" fg:x="3234000000" fg:w="11000000"/><text x="99.7577%" y="255.50"></text></g><g><title>core::iter::traits::iterator::Iterator::all::check::&lt;u32, &lt;kiban::bloom::BloomFilter&gt;::may_contain::{closure#0}&gt;::{closure#0} (11,000,000 samples, 0.34%)</title><rect x="99.5077%" y="229" width="0.3385%" height="15" fill="rgb(206,74,20)" fg:x="3234000000" fg:w="11000000"/><text x="99.7577%" y="239.50"></text></g><g><title>&lt;kiban::bloom::BloomFilter&gt;::may_contain::{closure#0} (11,000,000 samples, 0.34%)</title><rect x="99.5077%" y="213" width="0.3385%" height="15" fill="rgb(230,138,44)" fg:x="3234000000" fg:w="11000000"/><text x="99.7577%" y="223.50"></text></g><g><title>&lt;kiban::bloom::BloomFilter&gt;::get_bit (10,000,000 samples, 0.31%)</title><rect x="99.5385%" y="197" width="0.3077%" height="15" fill="rgb(235,182,43)" fg:x="3235000000" fg:w="10000000"/><text x="99.7885%" y="207.50"></text></g><g><title>kiban::db::get_from_version_at::{closure#0} (82,500,000 samples, 2.54%)</title><rect x="97.3231%" y="309" width="2.5385%" height="15" fill="rgb(242,16,51)" fg:x="3163000000" fg:w="82500000"/><text x="97.5731%" y="319.50">ki..</text></g><g><title>&lt;kiban::sstable::reader::SstTable&gt;::get (82,500,000 samples, 2.54%)</title><rect x="97.3231%" y="293" width="2.5385%" height="15" fill="rgb(248,9,4)" fg:x="3163000000" fg:w="82500000"/><text x="97.5731%" y="303.50">&lt;k..</text></g><g><title>&lt;kiban::bloom::BloomFilter&gt;::may_contain (11,500,000 samples, 0.35%)</title><rect x="99.5077%" y="277" width="0.3538%" height="15" fill="rgb(210,31,22)" fg:x="3234000000" fg:w="11500000"/><text x="99.7577%" y="287.50"></text></g><g><title>kiban::bloom::fnv1a_64 (500,000 samples, 0.02%)</title><rect x="99.8462%" y="261" width="0.0154%" height="15" fill="rgb(239,54,39)" fg:x="3245000000" fg:w="500000"/><text x="100.0962%" y="271.50"></text></g><g><title>&lt;u64&gt;::wrapping_mul (500,000 samples, 0.02%)</title><rect x="99.8462%" y="245" width="0.0154%" height="15" fill="rgb(230,99,41)" fg:x="3245000000" fg:w="500000"/><text x="100.0962%" y="255.50"></text></g><g><title>&lt;&amp;[u8] as core::cmp::PartialOrd&gt;::lt (500,000 samples, 0.02%)</title><rect x="99.8615%" y="293" width="0.0154%" height="15" fill="rgb(253,106,12)" fg:x="3245500000" fg:w="500000"/><text x="100.1115%" y="303.50"></text></g><g><title>&lt;[u8] as core::cmp::PartialOrd&gt;::lt (500,000 samples, 0.02%)</title><rect x="99.8615%" y="277" width="0.0154%" height="15" fill="rgb(213,46,41)" fg:x="3245500000" fg:w="500000"/><text x="100.1115%" y="287.50"></text></g><g><title>&lt;[u8] as core::cmp::PartialOrd&gt;::__chaining_lt (500,000 samples, 0.02%)</title><rect x="99.8615%" y="261" width="0.0154%" height="15" fill="rgb(215,133,35)" fg:x="3245500000" fg:w="500000"/><text x="100.1115%" y="271.50"></text></g><g><title>&lt;u8 as core::slice::cmp::SliceChain&gt;::chaining_lt (500,000 samples, 0.02%)</title><rect x="99.8615%" y="245" width="0.0154%" height="15" fill="rgb(213,28,5)" fg:x="3245500000" fg:w="500000"/><text x="100.1115%" y="255.50"></text></g><g><title>kiban::sstable::block::seek_restart_index (1,000,000 samples, 0.03%)</title><rect x="99.8615%" y="309" width="0.0308%" height="15" fill="rgb(215,77,49)" fg:x="3245500000" fg:w="1000000"/><text x="100.1115%" y="319.50"></text></g><g><title>kiban::sstable::block::full_key_at_restart (500,000 samples, 0.02%)</title><rect x="99.8769%" y="293" width="0.0154%" height="15" fill="rgb(248,100,22)" fg:x="3246000000" fg:w="500000"/><text x="100.1269%" y="303.50"></text></g><g><title>&lt;core::result::Result&lt;kiban_readbench::model::Memory, alloc::boxed::Box&lt;dyn core::error::Error&gt;&gt; as core::ops::try_trait::Try&gt;::branch (1,000,000 samples, 0.03%)</title><rect x="99.8923%" y="293" width="0.0308%" height="15" fill="rgb(208,67,9)" fg:x="3246500000" fg:w="1000000"/><text x="100.1423%" y="303.50"></text></g><g><title>&lt;serde_json::de::Deserializer&lt;serde_json::read::SliceRead&gt;&gt;::next_char (500,000 samples, 0.02%)</title><rect x="99.9385%" y="277" width="0.0154%" height="15" fill="rgb(219,133,21)" fg:x="3248000000" fg:w="500000"/><text x="100.1885%" y="287.50"></text></g><g><title>&lt;serde_json::de::Deserializer&lt;serde_json::read::SliceRead&gt;&gt;::parse_integer (1,500,000 samples, 0.05%)</title><rect x="99.9231%" y="293" width="0.0462%" height="15" fill="rgb(246,46,29)" fg:x="3247500000" fg:w="1500000"/><text x="100.1731%" y="303.50"></text></g><g><title>&lt;serde_json::de::Deserializer&lt;serde_json::read::SliceRead&gt;&gt;::peek_or_null (500,000 samples, 0.02%)</title><rect x="99.9538%" y="277" width="0.0154%" height="15" fill="rgb(246,185,52)" fg:x="3248500000" fg:w="500000"/><text x="100.2038%" y="287.50"></text></g><g><title>&lt;serde_json::de::Deserializer&lt;serde_json::read::SliceRead&gt;&gt;::peek (500,000 samples, 0.02%)</title><rect x="99.9538%" y="261" width="0.0154%" height="15" fill="rgb(252,136,11)" fg:x="3248500000" fg:w="500000"/><text x="100.2038%" y="271.50"></text></g><g><title>&lt;serde_json::read::SliceRead as serde_json::read::Read&gt;::peek (500,000 samples, 0.02%)</title><rect x="99.9538%" y="245" width="0.0154%" height="15" fill="rgb(219,138,53)" fg:x="3248500000" fg:w="500000"/><text x="100.2038%" y="255.50"></text></g><g><title>kiban_readbench::profile (3,000,000 samples, 0.09%)</title><rect x="99.8923%" y="309" width="0.0923%" height="15" fill="rgb(211,51,23)" fg:x="3246500000" fg:w="3000000"/><text x="100.1423%" y="319.50"></text></g><g><title>_mi_page_retire (500,000 samples, 0.02%)</title><rect x="99.9692%" y="293" width="0.0154%" height="15" fill="rgb(247,221,28)" fg:x="3249000000" fg:w="500000"/><text x="100.2192%" y="303.50"></text></g><g><title>all (3,250,000,000 samples, 100%)</title><rect x="0.0000%" y="341" width="100.0000%" height="15" fill="rgb(251,222,45)" fg:x="0" fg:w="3250000000"/><text x="0.2500%" y="351.50"></text></g><g><title>kiban-readbench (3,250,000,000 samples, 100.00%)</title><rect x="0.0000%" y="325" width="100.0000%" height="15" fill="rgb(217,162,53)" fg:x="0" fg:w="3250000000"/><text x="0.2500%" y="335.50">kiban-readbench</text></g><g><title>mi_heap_malloc_aligned_at (500,000 samples, 0.02%)</title><rect x="99.9846%" y="309" width="0.0154%" height="15" fill="rgb(229,93,14)" fg:x="3249500000" fg:w="500000"/><text x="100.2346%" y="319.50"></text></g><g><title>mi_heap_malloc_zero_aligned_at (500,000 samples, 0.02%)</title><rect x="99.9846%" y="293" width="0.0154%" height="15" fill="rgb(209,67,49)" fg:x="3249500000" fg:w="500000"/><text x="100.2346%" y="303.50"></text></g></svg></svg>

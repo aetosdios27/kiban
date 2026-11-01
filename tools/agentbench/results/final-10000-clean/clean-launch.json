@@ -1,0 +1,24 @@
+{
+  "time": "2026-10-16T14:33:40.911485+00:00",
+  "gate_load": [
+    1.4345703125,
+    2.16845703125,
+    8.77978515625
+  ],
+  "fallback": false,
+  "wait_seconds": 0.00015314800111809745,
+  "argv": [
+    "python3",
+    "tools/agentbench/run.py",
+    "--install-root",
+    "target/agentbench-setup",
+    "--output",
+    "target/agentbench-results/final-10000-clean",
+    "--n",
+    "10000",
+    "--operations",
+    "10000",
+    "--load-window",
+    "1m"
+  ]
+}

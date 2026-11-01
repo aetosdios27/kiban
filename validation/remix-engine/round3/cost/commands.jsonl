@@ -1,0 +1,2 @@
+{"name": "bulk", "cmd": ["/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/target/remix-bin/after", "validation/remix-engine/round3/cost/bulk.config.json"], "start": {"total": 2352071, "idle": 1984521}, "end": {"total": 2352905, "idle": 1985255}, "busy_fraction": 0.11990407673860914}
+{"name": "normal", "cmd": ["/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/target/remix-bin/after", "validation/remix-engine/round3/cost/normal.config.json"], "start": {"total": 2352968, "idle": 1985310}, "end": {"total": 2353747, "idle": 1986025}, "busy_fraction": 0.08215661103979466}

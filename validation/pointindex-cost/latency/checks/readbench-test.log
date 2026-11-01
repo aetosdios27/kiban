@@ -1,0 +1,44 @@
+   Compiling serde_core v1.0.228
+   Compiling libc v0.2.172
+   Compiling typenum v1.18.0
+   Compiling crossbeam-utils v0.8.21
+   Compiling ryu v1.0.20
+   Compiling memchr v2.7.4
+   Compiling itoa v1.0.15
+   Compiling heed-traits v0.20.0
+   Compiling byteorder v1.5.0
+   Compiling once_cell v1.20.3
+   Compiling cfg-if v1.0.5
+   Compiling crc32fast v1.5.0
+   Compiling kiban v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-f9d8504f)
+   Compiling crossbeam-queue v0.3.12
+   Compiling synchronoise v1.0.1
+   Compiling page_size v0.6.0
+   Compiling libmimalloc-sys v0.1.44
+   Compiling lmdb-master3-sys v0.2.5
+   Compiling mimalloc v0.1.48
+   Compiling serde v1.0.228
+   Compiling bitflags v2.10.0
+   Compiling generic-array v0.14.7
+   Compiling serde_json v1.0.143
+   Compiling bincode v1.3.3
+   Compiling crypto-common v0.1.6
+   Compiling aead v0.5.2
+   Compiling heed-types v0.21.0
+   Compiling heed3 v0.22.0
+   Compiling kiban-readbench v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/tools/agentbench/readpath)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.53s
+     Running unittests src/main.rs (target/pointindex-latency/verified-target/debug/deps/kiban_readbench-8f8eb326fb723587)
+
+running 9 tests
+test model::tests::recent_order_and_payload_identity ... ok
+test inline_index::tests::inline_separators_preserve_arbitrary_binary_keys_and_long_keys ... ok
+test random::tests::keyed_values_are_stable_distinct_and_prefix_consistent ... ok
+test block_index::tests::packed_block_search_preserves_binary_keys_versions_and_tombstones ... ok
+test block_compare::tests::comparison_matches_restart_decoder_for_binary_keys_and_history ... ok
+test metrics::tests::bounds_and_merge ... ok
+test index_hints::tests::separator_hints_match_binary_search_for_present_and_absent_binary_keys ... ok
+test runner::tests::verifies_real_database_across_reopen_and_rejects_corruption ... ok
+test tests::read_suite_checks_payloads_after_reopen_and_rejects_wrong_revisions ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
