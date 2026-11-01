@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- A group-commit follower whose leader panics now gets `DbError::CommitAmbiguous`
+  instead of `DbError::Corrupt`. Its write may already be durable and visible, and the
+  database is not corrupt. The `CommitAmbiguous` message no longer names the manifest,
+  since it now covers both cases.
+
 ## 0.2.0 - 2026-10-31
 
 - **Behavior change:** `KibanOptions::point_index` now defaults to `true`. New SSTs carry

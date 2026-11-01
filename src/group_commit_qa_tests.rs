@@ -322,10 +322,10 @@ fn qa_panic_boundaries_complete_followers_and_recover_synced_records() {
             assert_eq!(
                 outcomes
                     .iter()
-                    .filter(|r| matches!(r, Ok(Err(DbError::Corrupt(_)))))
+                    .filter(|r| matches!(r, Ok(Err(DbError::CommitAmbiguous(_)))))
                     .count(),
                 1,
-                "follower completes with error"
+                "follower learns its outcome is unknown"
             );
         });
         assert_eq!(db.group.queued(), 0);
