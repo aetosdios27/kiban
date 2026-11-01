@@ -1,0 +1,13 @@
+{
+  "backend": "kiban",
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-cost/data/after/kiban-bulk",
+  "n": 1000000,
+  "operations": 100000,
+  "k": 10,
+  "seed": 20261016,
+  "output": "/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/validation/pointindex-cost/reads/bulk-512/r2-after-kiban.jsonl",
+  "action": "read",
+  "layout": "bulk",
+  "cache_mib": 512,
+  "point_index": true
+}

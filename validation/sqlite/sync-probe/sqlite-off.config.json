@@ -1,0 +1,17 @@
+{
+  "backend": "sqlite",
+  "n": 10000,
+  "operations": 1000,
+  "k": 10,
+  "seed": 20261016,
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-59b24bda/target/sqlite/data/sync-probe-trial",
+  "output": "/home/aetos/.t3/worktrees/kiban/t3-59b24bda/validation/sqlite/sync-probe/sqlite-off.jsonl",
+  "action": "write",
+  "layout": "bulk",
+  "cache_mib": null,
+  "point_index": false,
+  "durable": false,
+  "sqlite_layout": "rowid",
+  "sqlite_sync": "OFF",
+  "sqlite_mmap_bytes": 0
+}

@@ -1,0 +1,13 @@
+{
+  "backend": "lmdb",
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/target/pointindex-cost/data/before/lmdb-normal",
+  "n": 1000000,
+  "operations": 100000,
+  "k": 10,
+  "seed": 20261016,
+  "output": "/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/validation/pointindex-cost/prepare/before-lmdb-normal.jsonl",
+  "action": "prepare",
+  "layout": "normal",
+  "cache_mib": 512,
+  "point_index": true
+}

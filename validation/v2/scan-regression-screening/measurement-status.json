@@ -1,0 +1,18 @@
+[
+  {
+    "stage": "prepare",
+    "args": [
+      "python3",
+      "/home/aetos/.t3/worktrees/kiban/t3-a7586988/tools/agentbench/readpath/v2.py",
+      "prepare",
+      "--before",
+      "/home/aetos/.t3/worktrees/kiban/t3-a7586988/target/v2-bin/before",
+      "--after",
+      "/home/aetos/.t3/worktrees/kiban/t3-a7586988/target/v2-bin/after"
+    ],
+    "start": 1792264257.8196733,
+    "end": 1792264309.195763,
+    "code": 0,
+    "env_changes": {}
+  }
+]

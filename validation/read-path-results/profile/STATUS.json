@@ -1,0 +1,5 @@
+{
+  "status": "interrupted_on_correctness_bug",
+  "usable_measurement": false,
+  "reason": "BloomFilter::empty codec reproduction triggered user stop condition"
+}

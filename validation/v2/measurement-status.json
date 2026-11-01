@@ -1,0 +1,96 @@
+[
+  {
+    "stage": "prepare",
+    "args": [
+      "python3",
+      "/home/aetos/.t3/worktrees/kiban/t3-a7586988/tools/agentbench/readpath/v2.py",
+      "prepare",
+      "--before",
+      "/home/aetos/.t3/worktrees/kiban/t3-a7586988/target/v2-final-bin/before",
+      "--after",
+      "/home/aetos/.t3/worktrees/kiban/t3-a7586988/target/v2-final-bin/after"
+    ],
+    "start": 1792266473.4161782,
+    "end": 1792266536.0751824,
+    "code": 0,
+    "env_changes": {}
+  },
+  {
+    "stage": "read",
+    "args": [
+      "python3",
+      "/home/aetos/.t3/worktrees/kiban/t3-a7586988/tools/agentbench/readpath/v2.py",
+      "read",
+      "--before",
+      "/home/aetos/.t3/worktrees/kiban/t3-a7586988/target/v2-final-bin/before",
+      "--after",
+      "/home/aetos/.t3/worktrees/kiban/t3-a7586988/target/v2-final-bin/after"
+    ],
+    "start": 1792266536.075456,
+    "end": 1792267060.5330098,
+    "code": 0,
+    "env_changes": {}
+  },
+  {
+    "stage": "range",
+    "args": [
+      "python3",
+      "/home/aetos/.t3/worktrees/kiban/t3-a7586988/tools/agentbench/readpath/v2.py",
+      "range",
+      "--before",
+      "/home/aetos/.t3/worktrees/kiban/t3-a7586988/target/v2-final-bin/before",
+      "--after",
+      "/home/aetos/.t3/worktrees/kiban/t3-a7586988/target/v2-final-bin/after"
+    ],
+    "start": 1792267060.5333133,
+    "end": 1792267112.6161458,
+    "code": 0,
+    "env_changes": {}
+  },
+  {
+    "stage": "write",
+    "args": [
+      "python3",
+      "/home/aetos/.t3/worktrees/kiban/t3-a7586988/tools/agentbench/readpath/v2.py",
+      "write",
+      "--before",
+      "/home/aetos/.t3/worktrees/kiban/t3-a7586988/target/v2-final-bin/before",
+      "--after",
+      "/home/aetos/.t3/worktrees/kiban/t3-a7586988/target/v2-final-bin/after"
+    ],
+    "start": 1792267112.6164596,
+    "end": 1792267162.2203135,
+    "code": 0,
+    "env_changes": {}
+  },
+  {
+    "stage": "maintenance",
+    "args": [
+      "taskset",
+      "-c",
+      "8",
+      "/home/aetos/.t3/worktrees/kiban/t3-a7586988/target/release/deps/kiban-9b697395093ef19c",
+      "point_index_maintenance_measurement",
+      "--ignored",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "start": 1792267162.2207131,
+    "end": 1792267224.9301763,
+    "code": 0,
+    "env_changes": {
+      "TMPDIR": "/home/aetos/.t3/worktrees/kiban/t3-a7586988/target/v2-maintenance"
+    }
+  },
+  {
+    "stage": "analysis",
+    "args": [
+      "python3",
+      "/home/aetos/.t3/worktrees/kiban/t3-a7586988/tools/agentbench/readpath/v2_report.py"
+    ],
+    "start": 1792267224.930522,
+    "end": 1792267224.9719458,
+    "code": 0,
+    "env_changes": {}
+  }
+]

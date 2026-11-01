@@ -1,0 +1,95 @@
+measure/read-1000000-bulk-512-fast/r1-kiban-index0
+measure/read-1000000-bulk-512-fast/r1-kiban-index1
+measure/read-1000000-bulk-512-fast/r1-rocksdb-tuned
+measure/read-1000000-bulk-512-fast/r1-rocksdb-lz4
+measure/read-1000000-bulk-512-fast/r1-lmdb
+measure/read-1000000-bulk-512-fast/r2-kiban-index1
+measure/read-1000000-bulk-512-fast/r2-rocksdb-tuned
+measure/read-1000000-bulk-512-fast/r2-rocksdb-lz4
+measure/read-1000000-bulk-512-fast/r2-lmdb
+measure/read-1000000-bulk-512-fast/r2-kiban-index0
+measure/read-1000000-bulk-512-fast/r3-rocksdb-tuned
+measure/read-1000000-bulk-512-fast/r3-rocksdb-lz4
+measure/read-1000000-bulk-512-fast/r3-lmdb
+measure/read-1000000-bulk-512-fast/r3-kiban-index0
+measure/read-1000000-bulk-512-fast/r3-kiban-index1
+measure/read-1000000-bulk-512-fast/r4-rocksdb-lz4
+measure/read-1000000-bulk-512-fast/r4-lmdb
+measure/read-1000000-bulk-512-fast/r4-kiban-index0
+measure/read-1000000-bulk-512-fast/r4-kiban-index1
+measure/read-1000000-bulk-512-fast/r4-rocksdb-tuned
+measure/read-1000000-bulk-512-fast/r5-lmdb
+measure/read-1000000-bulk-512-fast/r5-kiban-index0
+measure/read-1000000-bulk-512-fast/r5-kiban-index1
+measure/read-1000000-bulk-512-fast/r5-rocksdb-tuned
+measure/read-1000000-bulk-512-fast/r5-rocksdb-lz4
+measure/read-1000000-bulk-None-fast/r1-kiban-index0
+measure/read-1000000-bulk-None-fast/r1-kiban-index1
+measure/read-1000000-bulk-None-fast/r1-rocksdb-tuned
+measure/read-1000000-bulk-None-fast/r1-rocksdb-lz4
+measure/read-1000000-bulk-None-fast/r1-lmdb
+measure/read-1000000-bulk-None-fast/r2-kiban-index1
+measure/read-1000000-bulk-None-fast/r2-rocksdb-tuned
+measure/read-1000000-bulk-None-fast/r2-rocksdb-lz4
+measure/read-1000000-bulk-None-fast/r2-lmdb
+measure/read-1000000-bulk-None-fast/r2-kiban-index0
+measure/read-1000000-bulk-None-fast/r3-rocksdb-tuned
+measure/read-1000000-bulk-None-fast/r3-rocksdb-lz4
+measure/read-1000000-bulk-None-fast/r3-lmdb
+measure/read-1000000-bulk-None-fast/r3-kiban-index0
+measure/read-1000000-bulk-None-fast/r3-kiban-index1
+measure/read-1000000-bulk-None-fast/r4-rocksdb-lz4
+measure/read-1000000-bulk-None-fast/r4-lmdb
+measure/read-1000000-bulk-None-fast/r4-kiban-index0
+measure/read-1000000-bulk-None-fast/r4-kiban-index1
+measure/read-1000000-bulk-None-fast/r4-rocksdb-tuned
+measure/read-1000000-bulk-None-fast/r5-lmdb
+measure/read-1000000-bulk-None-fast/r5-kiban-index0
+measure/read-1000000-bulk-None-fast/r5-kiban-index1
+measure/read-1000000-bulk-None-fast/r5-rocksdb-tuned
+measure/read-1000000-bulk-None-fast/r5-rocksdb-lz4
+measure/read-1000000-normal-512-fast/r1-kiban-index0
+measure/read-1000000-normal-512-fast/r1-kiban-index1
+measure/read-1000000-normal-512-fast/r1-rocksdb-tuned
+measure/read-1000000-normal-512-fast/r1-rocksdb-lz4
+measure/read-1000000-normal-512-fast/r1-lmdb
+measure/read-1000000-normal-512-fast/r2-kiban-index1
+measure/read-1000000-normal-512-fast/r2-rocksdb-tuned
+measure/read-1000000-normal-512-fast/r2-rocksdb-lz4
+measure/read-1000000-normal-512-fast/r2-lmdb
+measure/read-1000000-normal-512-fast/r2-kiban-index0
+measure/read-1000000-normal-512-fast/r3-rocksdb-tuned
+measure/read-1000000-normal-512-fast/r3-rocksdb-lz4
+Traceback (most recent call last):
+  File "/home/aetos/.t3/worktrees/kiban/t3-7d737093/tools/agentbench/readpath/rocksdb_bench.py", line 243, in <module>
+    main()
+    ~~~~^^
+  File "/home/aetos/.t3/worktrees/kiban/t3-7d737093/tools/agentbench/readpath/rocksdb_bench.py", line 239, in main
+    else: measure(args, args.action == 'screen')
+          ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/aetos/.t3/worktrees/kiban/t3-7d737093/tools/agentbench/readpath/rocksdb_bench.py", line 173, in measure
+    run(c, args.out / ('screen' if screening else 'measure') / scenario, f'r{trial+1}-{label}', args.resume)
+    ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/aetos/.t3/worktrees/kiban/t3-7d737093/tools/agentbench/readpath/rocksdb_bench.py", line 96, in run
+    subprocess.run(['/usr/bin/time', '-v', '-o', str(out / (name + '.time.txt')),
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                    'taskset', '-c', '10', str(BINARY), str(path)],
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                   stdout=log, stderr=log, check=True, env=env)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.14/subprocess.py", line 557, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.14/subprocess.py", line 1213, in communicate
+    self.wait()
+    ~~~~~~~~~^^
+  File "/usr/lib64/python3.14/subprocess.py", line 1279, in wait
+    return self._wait(timeout=timeout)
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.14/subprocess.py", line 2084, in _wait
+    (pid, sts) = self._try_wait(0)
+                 ~~~~~~~~~~~~~~^^^
+  File "/usr/lib64/python3.14/subprocess.py", line 2042, in _try_wait
+    (pid, sts) = os.waitpid(self.pid, wait_flags)
+                 ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt

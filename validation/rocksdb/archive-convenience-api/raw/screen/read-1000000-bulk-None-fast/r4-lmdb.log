@@ -1,0 +1,2 @@
+{"backend":"lmdb","cache_bytes":449030592,"durable":false,"point_index":false,"type":"requested_config"}
+{"backend":"lmdb","details":{"heed3":"0.22.0","lmdb_flags":"EnvFlags(NO_SYNC | NO_META_SYNC)","lmdb_flags_bits":327680,"map_size_bytes":10737418240},"type":"backend_config"}

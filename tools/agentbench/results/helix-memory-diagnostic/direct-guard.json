@@ -1,0 +1,31 @@
+{
+  "status": "stopped_diagnostic",
+  "comparison_eligible": false,
+  "reason": "rss_limit",
+  "returncode": 1,
+  "argv": [
+    "/usr/bin/python3",
+    "-u",
+    "/home/aetos/.t3/worktrees/kiban/t3-d4970700/tools/agentbench/engine_probe.py",
+    "--output",
+    "/home/aetos/.t3/worktrees/kiban/t3-d4970700/target/enginebench-probes/large-guarded/probe",
+    "--n",
+    "1000000",
+    "--operations",
+    "1000",
+    "--engines",
+    "helix",
+    "--modes",
+    "fast",
+    "--cpus",
+    "1-4",
+    "--driver-cpus",
+    "12-21"
+  ],
+  "available_bytes_at_start": 15671984128,
+  "rss_limit_bytes": 6442450944,
+  "max_observed_rss_bytes": 6443012096,
+  "samples": 263,
+  "wall_seconds": 26.875668640001095,
+  "note": "Excluded calibration, not a replacement for the three-trial large-N matrix."
+}

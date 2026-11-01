@@ -1,0 +1,2 @@
+# Preserve verbatim profiler and test output, including generated whitespace.
+validation/read-path-results/** -whitespace

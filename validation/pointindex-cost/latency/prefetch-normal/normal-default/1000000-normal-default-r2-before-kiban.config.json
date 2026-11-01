@@ -1,0 +1,13 @@
+{
+  "backend": "kiban",
+  "db": "target/pointindex-latency/screen-data/before/kiban-normal",
+  "n": 1000000,
+  "operations": 100000,
+  "k": 10,
+  "seed": 20261016,
+  "output": "/home/aetos/.t3/worktrees/kiban/t3-f9d8504f/validation/pointindex-cost/latency/prefetch-normal/normal-default/1000000-normal-default-r2-before-kiban.jsonl",
+  "action": "read",
+  "layout": "normal",
+  "cache_mib": null,
+  "point_index": true
+}

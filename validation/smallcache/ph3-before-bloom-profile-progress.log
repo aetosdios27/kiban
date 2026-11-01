@@ -1,0 +1,50 @@
+Traceback (most recent call last):
+  File "<stdin>", line 11, in <module>
+  File "/home/aetos/.t3/worktrees/kiban/t3-9b9cb0e0/tools/agentbench/readpath/profile.py", line 27, in collect
+    path.write_text(json.dumps(c, indent=2)+'\n')
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.14/pathlib/__init__.py", line 809, in write_text
+    with self.open(mode='w', encoding=encoding, errors=errors, newline=newline) as f:
+         ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.14/pathlib/__init__.py", line 771, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/home/aetos/.t3/worktrees/kiban/t3-9b9cb0e0/validation/smallcache/ph3-before-bloom-profile/kiban.config.json'
+Warning:
+Processed 7901 events and lost 29 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 7901 events and lost 29 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 7901 events and lost 29 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 8893 events and lost 37 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 8893 events and lost 37 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 8893 events and lost 37 chunks!
+
+Check IO/CPU overload!
+
+bloom
+index
+verify-block
+cache
+hash
+block-seek
+copy
+crc-value

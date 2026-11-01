@@ -1,0 +1,5 @@
+--- pinned-generated-config
++++ memory-diagnostic-config
+@@
+-bm25: Some(true),
++bm25: Some(false),

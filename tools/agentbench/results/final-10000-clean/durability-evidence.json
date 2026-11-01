@@ -1,0 +1,15 @@
+{
+  "kiban_wal_sha256": "f86d5f7978e39482368b087673dd5dc66cd854dc6c3a945d1068f31d3444a3c3",
+  "lmdb_dependency": "lmdb-master3-sys 0.2.5 (see helix-Cargo.lock)",
+  "lmdb_mdb_c_sha256": "7a60232f6c709af6b144ec24a89ce3ed4105567f8d16528d7659e4d21b0e3801",
+  "paths": [
+    "src/wal.rs:585",
+    "src/db.rs:1359",
+    "helix-queries.rs.gz (byte-exact gzip)",
+    "mdb.c:3067 (data synchronization)",
+    "mdb.c:4481 (commit sync)",
+    "mdb.c:4767 (synchronous metadata descriptor)"
+  ],
+  "note": "Configuration/source evidence, not syscall tracing or a power-loss test.",
+  "generated_queries_sha256": "cb6befa71796c8da75a3e6c41ab388a087cbb51538dd171e224ee2064b9681d2"
+}

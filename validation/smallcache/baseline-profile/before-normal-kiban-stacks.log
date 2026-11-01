@@ -1,0 +1,11 @@
+Events disabled
+Events enabled
+Events disabled
+{"digest":353027,"errors":0,"ns":4308405318,"operations":1000000,"type":"profile"}
+[ perf record: Woken up 5374 times to write data ]
+Warning:
+Processed 15951 events and lost 66 chunks!
+
+Check IO/CPU overload!
+
+[ perf record: Captured and wrote 84.116 MB validation/smallcache/baseline-profile/before-normal-kiban-stacks.data (10464 samples) ]

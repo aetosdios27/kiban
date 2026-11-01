@@ -1,0 +1,47 @@
+{
+  "default": [
+    "bulk-32",
+    "bulk-512",
+    "bulk-default",
+    "normal-32",
+    "normal-512",
+    "writes-durable",
+    "writes-fast"
+  ],
+  "weak-handles": [
+    "bulk-512"
+  ],
+  "slots": [
+    "bulk-512"
+  ],
+  "inline-slots": [
+    "bulk-32",
+    "bulk-512",
+    "normal-32",
+    "normal-512",
+    "writes-durable",
+    "writes-fast"
+  ],
+  "mapped": [
+    "bulk-32",
+    "bulk-512",
+    "normal-32",
+    "normal-512",
+    "writes-durable",
+    "writes-fast"
+  ],
+  "latest": [
+    "bulk-32",
+    "bulk-512",
+    "normal-32",
+    "normal-512",
+    "writes-durable",
+    "writes-fast"
+  ],
+  "final_source_hashes_match": true,
+  "crash_suites": {
+    "direct_seeds": 20000,
+    "shared_seeds": 20000,
+    "crashes": 160000
+  }
+}

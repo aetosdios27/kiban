@@ -1,9 +1,14 @@
 //! CRC-32/IEEE checksum.
 //!
 //! Implements the decision in `ARCHITECTURE.md` (D2):
-//! slicing-by-eight CRC-32/IEEE, no external dependencies, verified against
-//! published check values and an independent bitwise reference. The polynomial,
-//! streaming state and stored checksum bytes are unchanged.
+//! runtime-dispatched PCLMUL folding for long x86_64 inputs and a portable
+//! slicing-by-eight fallback, without external dependencies. Published check
+//! values and an independent bitwise reference verify the polynomial,
+//! streaming state and stored checksum bytes.
+
+#[cfg(target_arch = "x86_64")]
+#[path = "crc32_pclmul.rs"]
+mod pclmul;
 
 const POLY: u32 = 0xEDB8_8320;
 
@@ -44,6 +49,19 @@ static SLICES: [[u32; 256]; 8] = make_slices();
 pub const INITIAL: u32 = 0xFFFF_FFFF;
 
 pub fn update(state: u32, data: &[u8]) -> u32 {
+    #[cfg(target_arch = "x86_64")]
+    if data.len() >= 128
+        && std::is_x86_feature_detected!("pclmulqdq")
+        && std::is_x86_feature_detected!("sse4.1")
+    {
+        // SAFETY: Both required features and the minimum input length are
+        // checked here. x86_64 guarantees SSE2; unaligned input is supported.
+        return unsafe { pclmul::update(state, data) };
+    }
+    update_scalar(state, data)
+}
+
+fn update_scalar(state: u32, data: &[u8]) -> u32 {
     let mut c = state;
     let (chunks, remainder) = data.as_chunks::<8>();
     for bytes in chunks {
@@ -112,6 +130,25 @@ mod tests {
         for size in [1, 3, 7, 8, 9, 31, 255, 4096] {
             let state = data.chunks(size).fold(INITIAL, update);
             assert_eq!(state, bitwise(INITIAL, &data), "stream chunk={size}");
+        }
+    }
+
+    #[test]
+    fn dispatched_updates_match_scalar_across_fold_boundaries() {
+        let data: Vec<_> = (0..8256usize)
+            .map(|i| (i.wrapping_mul(7919) ^ (i >> 3)) as u8)
+            .collect();
+        for offset in 0..64 {
+            for len in (112..=272).chain([511, 512, 513, 4095, 4096, 4097, 8192]) {
+                for state in [INITIAL, 0, 0x1234_5678] {
+                    let bytes = &data[offset..offset + len];
+                    assert_eq!(
+                        update(state, bytes),
+                        update_scalar(state, bytes),
+                        "offset={offset} len={len} state={state}"
+                    );
+                }
+            }
         }
     }
 

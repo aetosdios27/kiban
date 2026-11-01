@@ -1,0 +1,2 @@
+{"cache_bytes":536870912,"count":10,"errors":0,"operations":1000,"p50_ns":3468,"p99_ns":6880,"type":"range","verified_records":10000}
+{"cache_bytes":536870912,"count":256,"errors":0,"operations":1000,"p50_ns":31629,"p99_ns":68947,"type":"range","verified_records":256000}

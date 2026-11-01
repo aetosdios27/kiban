@@ -1,0 +1,2 @@
+scan preparation ready=true ns=195226836 stats=Some(RangeIndexStats { key_groups: 1000000, prefixes: 64, direct_ten_prefixes: 64, resident_bytes: 9532768, build_ns: 195223624 })
+scan preparation ready=true ns=211878365 stats=Some(RangeIndexStats { key_groups: 1000000, prefixes: 64, direct_ten_prefixes: 64, resident_bytes: 9532768, build_ns: 211875491 })

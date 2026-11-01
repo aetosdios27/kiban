@@ -1,0 +1,44 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 2K of event 'cpu_core/cycles/u'
+# Event count (approx.): 13926646117
+#
+# Overhead  Command        Shared Object     Symbol
+# ........  .............  ................  ........................................................................................................................................................................
+#
+    34.24%  ph2-readbench  ph2-readbench     [.] kiban::db::get_from_version_at::{closure#0}
+            |
+             --0.58%--<kiban::sstable::point::PointIndex>::get (inlined)
+                       <kiban::sstable::reader::SstTable>::get (inlined)
+                       kiban::db::get_from_version_at::{closure#0}
+
+    13.15%  ph2-readbench  libc.so.6         [.] __memmove_avx_unaligned_erms
+            |
+            ---__memmove_avx_unaligned_erms
+
+    12.75%  ph2-readbench  ph2-readbench     [.] <kiban::db::Kiban>::get::<alloc::string::String>
+    10.95%  ph2-readbench  ph2-readbench     [.] <kiban::sstable::point::PointIndex>::slot
+     8.31%  ph2-readbench  libc.so.6         [.] __memcmp_avx2_movbe
+            |
+            ---__memcmp_avx2_movbe
+
+     2.94%  ph2-readbench  ph2-readbench     [.] <serde_json::read::SliceRead>::skip_to_escape
+     2.62%  ph2-readbench  ph2-readbench     [.] core::str::converts::from_utf8
+     1.96%  ph2-readbench  ph2-readbench     [.] <serde_json::read::SliceRead as serde_json::read::Read>::parse_str
+     1.75%  ph2-readbench  ph2-readbench     [.] serde_json::de::from_trait::<serde_json::read::SliceRead, kiban_readbench::model::Memory>
+     1.31%  ph2-readbench  ph2-readbench     [.] <serde_json::de::Deserializer<serde_json::read::SliceRead>>::parse_integer
+     1.05%  ph2-readbench  ph2-readbench     [.] _mi_page_malloc
+     1.00%  ph2-readbench  ph2-readbench     [.] mi_heap_malloc_aligned_at
+     0.97%  ph2-readbench  ph2-readbench     [.] <kiban_readbench::embedded::Embedded as kiban_readbench::api::Backend>::get
+     0.79%  ph2-readbench  ph2-readbench     [.] <serde_json::de::MapAccess<_> as serde_core::de::MapAccess>::next_key_seed::has_next_key::<serde_json::read::SliceRead>
+     0.66%  ph2-readbench  ph2-readbench     [.] kiban_readbench::profile
+     0.61%  ph2-readbench  ph2-readbench     [.] <u64>::_fmt_inner
+     0.52%  ph2-readbench  ph2-readbench     [.] alloc::fmt::format::format_inner
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

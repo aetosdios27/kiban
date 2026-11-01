@@ -1,0 +1,18 @@
+{
+  "version": "2.3.5",
+  "commit": "17e7ecf764aecd553e1f54ca25320d654153a9aa",
+  "server_sha256": "d8ff5b9fb92e83bb7e5e3ace6174bb75981a591c1ac9991114834b90d80a61ad",
+  "population": 1001000,
+  "source_database": "/home/aetos/.t3/worktrees/kiban/t3-d4970700/target/enginebench-probes/large-guarded/probe/data/fast-helix",
+  "argv": [
+    "taskset",
+    "-c",
+    "1-4",
+    "/home/aetos/.t3/worktrees/kiban/t3-d4970700/target/agentbench-setup/project/.helix/dev/helix-repo-copy/target/release/helix-container"
+  ],
+  "environment": {
+    "HELIX_DATA_DIR": "/home/aetos/.t3/worktrees/kiban/t3-d4970700/target/enginebench-probes/http-memory-proof/data",
+    "HELIX_PORT": "16971",
+    "RUST_LOG": "error"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "backend": "helix",
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-d4970700/target/agentbench-results/final-10000/data/r2-helix",
+  "endpoint": "http://127.0.0.1:16969",
+  "n": 10000,
+  "operations": 10000,
+  "k": 10,
+  "seed": 20261016,
+  "output": "/home/aetos/.t3/worktrees/kiban/t3-d4970700/target/agentbench-results/final-10000/r2-helix.jsonl",
+  "verify_only": false
+}

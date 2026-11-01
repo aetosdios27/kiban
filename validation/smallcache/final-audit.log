@@ -1,0 +1,4 @@
+Validated 72 commands and 12 scenario/workload groups.
+Validated 72 commands and 12 scenario/workload groups.
+Validated 60 commands and 6 scenario/workload groups.
+PASS: 204 rebased children, all 11 gates, both 20k suites, effective nice 10, exact final engine source set, all binary hashes, archived source/binary provenance, 16 repaired syscall receipts, report links, 30 data rows, frozen source reconstruction, and build/test completion before timing.

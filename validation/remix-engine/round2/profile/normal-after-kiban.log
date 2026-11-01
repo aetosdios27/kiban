@@ -1,0 +1,5 @@
+Events disabled
+scan preparation ready=true ns=221243513 stats=Some(RangeIndexStats { key_groups: 1000000, prefixes: 64, direct_ten_prefixes: 64, resident_bytes: 9532768, build_ns: 221235589 })
+Events enabled
+Events disabled
+{"digest":804,"errors":0,"ns":2230286839,"operations":1000000,"type":"profile"}

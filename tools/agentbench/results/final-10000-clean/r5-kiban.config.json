@@ -1,0 +1,11 @@
+{
+  "backend": "kiban",
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-d4970700/target/agentbench-results/final-10000-clean/data/r5-kiban",
+  "endpoint": "",
+  "n": 10000,
+  "operations": 10000,
+  "k": 10,
+  "seed": 20261016,
+  "output": "/home/aetos/.t3/worktrees/kiban/t3-d4970700/target/agentbench-results/final-10000-clean/r5-kiban.jsonl",
+  "verify_only": false
+}

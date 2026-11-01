@@ -1,0 +1,18 @@
+{
+  "tools/agentbench/readpath/.gitignore": "306fd52e74fca6746e12acc750f232de15e71da917756a1270d74c91f5eb7368",
+  "tools/agentbench/readpath/Cargo.lock": "5881e973145342054957bcb72143c4e6bb05199165e673966154e33f502db466",
+  "tools/agentbench/readpath/Cargo.toml": "36916a35b6ee57dec8e46f67978076f0112fb979fb5d4c1b7f035761e2b00043",
+  "tools/agentbench/readpath/README.md": "9f54ea090d3e3f636ded7faaf09809b6f690816ae100e0e2eec0a7200338b36e",
+  "tools/agentbench/readpath/analyze_profile.py": "9ee8d9970c2cb67208382ed2c9ee1fe28816a34c8191a0cac31fecad87e22f0c",
+  "tools/agentbench/readpath/fold.py": "dd3d3f0ee1499cf84d48fad4f1b2e542dafc4e651bd4b2d74b2ea6afa8e81c17",
+  "tools/agentbench/readpath/profile.py": "68e658d17acde61d5a09301d1c891b98797cdd0f2c8da5a4f0c49343014e165b",
+  "tools/agentbench/readpath/run.py": "90d1d3cc7700113733dbb0e98824c2f496fe08c07bbfac626d2955188d0b3b09",
+  "tools/agentbench/readpath/src/backend.rs": "f1d53b99d3fec6ae8d09aef99860152c022cf16ae23609fc29adff2a44e2f102",
+  "tools/agentbench/readpath/src/index_hints.rs": "0ff856b54ed41173a2723da194b4592d878f0dce51f5ed055f4d8b3e86ad8f8b",
+  "tools/agentbench/readpath/src/inline_index.rs": "fd1c1f78e4864c171bec4c34f3c16ac704fcf1592771bca6ccb1b3f679d38480",
+  "tools/agentbench/readpath/src/main.rs": "017bbcfeed185f311408eb0f182d2ba06549fa63270a13c4f680acbf05c59c3e",
+  "tools/agentbench/readpath/src/micro.rs": "19bb1bac9f6d3424717bea045f69e6f4d24da99040341c73bbec0f8851beaf80",
+  "tools/agentbench/readpath/summarize.py": "65b31f427eb4532dff33eccfc2ced3eaa828cc90178f342b9ec83e69fc913435",
+  "tools/agentbench/readpath/verify.py": "5ff61eed768b995f1eb3ee5dbdd533e8c1b90639e57f61ef5142fa10020195a3",
+  "tools/agentbench/readpath/writes.py": "2634a83669aa45bd218d154522cdc25d1a3aa787a75b09ae9d442c0b3e152ace"
+}

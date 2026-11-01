@@ -1,6 +1,6 @@
-# Kiban v0.1.0 release procedure
+# Kiban release procedure
 
-This release preserves the corrected engine and storage formats. All required
+Recorded here for v0.1.0 and followed for later releases. All required
 checks must pass on the final commit before tagging. Publication is a separate
 step: a local tag, remote tag, GitHub Release and crates.io version are distinct
 states. Do not treat a dry run as publication.
@@ -118,14 +118,14 @@ Generated validation artifacts are intentionally excluded, not deleted from the
 repository. CI runs the correctness/package gate on Linux. Full benchmark and
 1,000-cycle torture evidence are recorded locally with explicit configurations.
 
-No v0.1.0 tag may already exist. Check local and remote tags and crates.io name
+The release tag must not already exist. Check local and remote tags and crates.io name
 status, then create the annotated tag only against the validated final commit:
 
 ```sh
-git tag -a v0.1.0 -m "Kiban v0.1.0"
-git rev-parse v0.1.0^{}
-git push origin v0.1.0
-gh release create v0.1.0 --verify-tag --title "Kiban v0.1.0" --notes-file RELEASE_NOTES.md
+git tag -a vX.Y.Z -m "Kiban vX.Y.Z"
+git rev-parse vX.Y.Z^{}
+git push origin vX.Y.Z
+gh release create vX.Y.Z --verify-tag --title "Kiban vX.Y.Z" --notes-file RELEASE_NOTES.md
 cargo publish
 ```
 
@@ -136,7 +136,7 @@ temporary project. Announce registry installation only after that succeeds.
 
 ## Remaining limits
 
-See CORRECTNESS.md: MANIFEST has no checksum; snapshots retain captured state
+See CORRECTNESS.md: snapshots retain captured state
 conservatively; independent owners of one directory are not validated; SIGKILL
 is not machine power loss; device and concurrency models have limited coverage.
 API and format compatibility are not promised before 1.0. No production-readiness

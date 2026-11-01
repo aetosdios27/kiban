@@ -330,6 +330,29 @@ impl FileLease<'_> {
         self.file.read_range_at(path_for_sim, offset, len)
     }
 
+    /// Read directly into the final shared allocation, without a Vec-to-Arc copy.
+    pub(crate) fn read_shared_range_at(
+        &self,
+        path_for_sim: &Path,
+        offset: u64,
+        len: u64,
+    ) -> io::Result<Arc<[u8]>> {
+        let len = usize::try_from(len).map_err(|_| {
+            io::Error::new(io::ErrorKind::InvalidData, "read exceeds address space")
+        })?;
+        let mut buf = Arc::<[u8]>::new_uninit_slice(len);
+        let unique = Arc::get_mut(&mut buf).expect("new allocation is unique");
+        unique.fill(std::mem::MaybeUninit::new(0));
+        // SAFETY: every byte was initialized above, including on short reads.
+        let mut buf = unsafe { buf.assume_init() };
+        self.file.read_exact_at(
+            path_for_sim,
+            Arc::get_mut(&mut buf).expect("allocation is still unique"),
+            offset,
+        )?;
+        Ok(buf)
+    }
+
     pub(crate) fn len(&self) -> io::Result<u64> {
         self.file.len()
     }
@@ -351,6 +374,20 @@ mod tests {
         let path = dir.join(name);
         fs::write(&path, contents).unwrap();
         path
+    }
+
+    #[test]
+    fn shared_positioned_reads_preserve_bytes_and_reject_short_reads() {
+        let td = TempDir::new("fc-shared-read");
+        let path = make_file(td.path(), "1.sst", b"0123456789");
+        let cache = TableFileCache::new(1);
+        let lease = cache.acquire(1, &path).unwrap();
+        assert_eq!(&*lease.read_shared_range_at(&path, 3, 4).unwrap(), b"3456");
+        assert_eq!(&*lease.read_shared_range_at(&path, 10, 0).unwrap(), b"");
+        assert_eq!(
+            lease.read_shared_range_at(&path, 8, 3).unwrap_err().kind(),
+            io::ErrorKind::UnexpectedEof
+        );
     }
 
     /// Test 2 (hard capacity): tracked resident descriptors never

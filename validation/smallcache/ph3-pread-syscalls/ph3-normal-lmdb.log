@@ -1,0 +1,5 @@
+Events disabled
+Events enabled
+Events disabled
+SYSCALL_PROBE calls=0 bytes=0 ns=0
+{"digest":353027,"errors":0,"ns":1281143130,"operations":1000000,"type":"profile"}

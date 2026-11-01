@@ -1,0 +1,15 @@
+{
+  "comparison_eligible": false,
+  "version": "2.3.5",
+  "commit": "17e7ecf764aecd553e1f54ca25320d654153a9aa",
+  "engine_sources_checked_against_installation_manifest": true,
+  "engine_modified": false,
+  "Recent_generated_core_identical_to_engine_adapter": true,
+  "Recent_core_sha256": "6b77601c19a4476699b311f0ccd3d64e30f591e4c0f7d0c77942f2b9b87442fd",
+  "config_change": "bm25 Some(true) -> Some(false) only",
+  "generated_queries_sha256": "8417f895166df817647db30d2e2b2d462dde7f9fe5bb1e0017dae987b9c3aa23",
+  "generated_code_note": "CLI emits different schema JSON/member/function ordering on successive compilations; archived HTTP Recent storage/traversal core compared byte-for-byte to frozen adapter",
+  "stock_startup": "Failed before serving requests: BM25 rebuild reaches MDB_MAP_FULL at 10 GiB; excluded, no W3 requests",
+  "direct_probe": "Stopped at 6 GiB during final verification; invalid as comparison; all five stage markers exist",
+  "http_probe": "1000 verified requests completed; every response dropped; no engine patch; excluded from engine latency tables"
+}

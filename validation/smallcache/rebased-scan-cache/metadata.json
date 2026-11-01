@@ -1,0 +1,11 @@
+{
+  "cpu": 6,
+  "nice": 10,
+  "operations": 100000,
+  "interface": "SharedKiban gets and SharedSnapshot.range; same Version/SST/block-cache path. Cache/page counts only, not a latency comparison.",
+  "oracle": "Full 1M-record comparison before and after; exact payload comparison on every latest-ten call.",
+  "binaries": {
+    "before": "328418a312fe139cffea94606cbcd09db5b06c610a33c54be44d4e8ba528f757",
+    "rebased": "0c275fe6542f7a866db471f102c0e9aaf07e5cdc08ac95eaa636d72f27b729f4"
+  }
+}

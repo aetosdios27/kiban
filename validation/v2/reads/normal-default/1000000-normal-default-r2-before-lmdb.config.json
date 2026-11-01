@@ -1,0 +1,12 @@
+{
+  "backend": "lmdb",
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-a7586988/target/v2-final-data/before/lmdb-1000000-normal",
+  "n": 1000000,
+  "operations": 100000,
+  "k": 10,
+  "seed": 20261016,
+  "output": "/home/aetos/.t3/worktrees/kiban/t3-a7586988/validation/v2/reads/normal-default/1000000-normal-default-r2-before-lmdb.jsonl",
+  "action": "read",
+  "layout": "normal",
+  "cache_mib": null
+}

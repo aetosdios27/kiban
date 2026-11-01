@@ -1,0 +1,13 @@
+{
+  "backend": "helix",
+  "mode": "fast",
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-d4970700/target/enginebench-probes/large-guarded/probe/data/fast-helix",
+  "n": 1000000,
+  "operations": 1000,
+  "k": 10,
+  "seed": 20261016,
+  "output": "/home/aetos/.t3/worktrees/kiban/t3-d4970700/target/enginebench-probes/large-guarded/probe/fast-helix.jsonl",
+  "verify_only": false,
+  "warmup": 100,
+  "write_operations": 1000
+}

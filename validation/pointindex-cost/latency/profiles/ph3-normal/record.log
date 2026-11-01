@@ -1,0 +1,6 @@
+Events disabled
+Events enabled
+Events disabled
+{"digest":172447,"errors":0,"ns":3313184178,"operations":3000000,"type":"profile"}
+[ perf record: Woken up 113 times to write data ]
+[ perf record: Captured and wrote 6.822 MB target/pointindex-latency/profile-ph3-normal/record.data (1648 samples) ]

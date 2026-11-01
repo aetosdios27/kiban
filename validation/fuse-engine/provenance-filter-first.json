@@ -1,0 +1,22 @@
+{
+  "base_of_this_round": "121e229c is the implementation of the lookup-order change; the paired binary before side is the frozen round-1 binary",
+  "binaries": {
+    "before": {
+      "path": "/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/target/fuse-engine/bin/after",
+      "sha256": "fd9e5aba02b625e4fb6e813d2954f7d7f49e0edd3b0c42c1ac04cc6d82253f74",
+      "source": "identical frozen round-1 build: HEAD 180aca0e plus report-only Python changes; Rust sources unchanged, so the binary equals the round-1 'after' in provenance.json"
+    },
+    "after": {
+      "path": "/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/target/fuse-engine/bin/after2",
+      "sha256": "1cc5a719f6183680a3d83deb6a3e04db2b6f5f7f675659b6b71202d8cf4a69cf",
+      "source": "commit 121e229c: same engine plus the filter-before-point-index shortcut in SstTable::get and one new test"
+    }
+  },
+  "fixtures": "frozen round-1 after-format fixtures in target/fuse-engine/data reused unchanged for both sides; the change is read-only (writer and on-disk formats untouched) and readbench verifies the full one-million-record population in every run",
+  "receipts": "validation/fuse-engine/results2 (reads only; round two exercises no writes or maintenance)",
+  "driver": "tools/agentbench/readpath/fuse_miss_order.py (reuses fuse_engine.execute so every harness assertion and affinity check applies)",
+  "report_tool": "tools/agentbench/readpath/filter_first_report.py -> validation/fuse-engine/FILTER-FIRST-TABLES.md and results2/paired-summary.csv",
+  "timing": {"cpu": 8, "sibling_cpu": 9, "product_siblings": false},
+  "toolchain": "rustc 1.98.1 (48a229cea 2026-09-01)",
+  "gates": "validation/fuse-engine/gates-fpi: 11 checks code 0 including both 20,000-seed suites, run with BINDGEN_EXTRA_CLANG_ARGS=-resource-dir=/usr/lib64/llvm15/lib/clang/15.0.7"
+}

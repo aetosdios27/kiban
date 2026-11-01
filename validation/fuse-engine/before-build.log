@@ -1,0 +1,3 @@
+   Compiling kiban v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/target/fuse-baseline)
+   Compiling kiban-readbench v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/target/fuse-baseline/tools/agentbench/readpath)
+    Finished `release` profile [optimized + debuginfo] target(s) in 49.77s

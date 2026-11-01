@@ -1,0 +1,13 @@
+{
+  "binaries": {
+    "before": {
+      "path": "/home/aetos/.t3/worktrees/kiban/t3-53ad0f47/target/read-path-tools/kiban-readbench-crc",
+      "sha256": "8995c54130f2f1566be65f78da8fcad49eacc19b2cea64b9fda72d0cbec25920"
+    },
+    "after": {
+      "path": "/home/aetos/.t3/worktrees/kiban/t3-53ad0f47/target/read-path-tools/kiban-readbench-seek",
+      "sha256": "acb68d175436054330e217502d7f34d52d179f6a90631e4466b9f53c44fc1287"
+    }
+  },
+  "trials": 5
+}

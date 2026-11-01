@@ -1,0 +1,11 @@
+{
+  "cpu": 3,
+  "binary": "/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/target/release/deps/kiban-9b697395093ef19c",
+  "sha256": "a4cf31e8119f6b4119e1925a723b101220230ce7fd3c7eb7eadda3891a93f77f",
+  "env": {
+    "KIBAN_POINT_BENCH_N": "1000000",
+    "KIBAN_SCAN_BENCH": "1"
+  },
+  "raw_point_index_field": "legacy loop selector; scan_index when KIBAN_SCAN_BENCH=1",
+  "parser_note": "include first JSON row prefixed by Rust test harness name"
+}

@@ -1,0 +1,5 @@
+Events disabled
+{"backend":"kiban","cache_bytes":33554432,"durable":false,"point_index":true,"type":"requested_config"}
+Events enabled
+Events disabled
+{"digest":804,"errors":0,"ns":4515624672,"operations":1000000,"type":"profile"}

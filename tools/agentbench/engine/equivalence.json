@@ -1,0 +1,32 @@
+{
+  "generated_helix_sha256": "cb6befa71796c8da75a3e6c41ab388a087cbb51538dd171e224ee2064b9681d2",
+  "method": "Verbatim arena, transaction, traversal, and commit statements; typed arguments/results replace Request and JSON wrappers.",
+  "handlers": {
+    "InitAgent": {
+      "storage_and_traversal": "let arena = Bump::new();\nlet mut txn = db.graph_env.write_txn().map_err(|e| GraphError::New(format!(\"Failed to start write transaction: {:?}\", e)))?;\n    let a = G::new_mut(&db, &arena, &mut txn)\n.add_n(\"Agent\", Some(ImmutablePropertiesMap::new(1, vec![(\"agent_num\", Value::from(&data.agent))].into_iter(), &arena)), Some(&[\"agent_num\"])).collect_to_obj()?;\n",
+      "commit": "txn.commit().map_err(|e| GraphError::New(format!(\"Failed to commit transaction: {:?}\", e)))?;\n",
+      "core_sha256": "990c705ad7e0e227c7fb6b74a74716d2e7965bf02516a0d0ae8460920fd4b92a"
+    },
+    "Remember": {
+      "storage_and_traversal": "let arena = Bump::new();\nlet mut txn = db.graph_env.write_txn().map_err(|e| GraphError::New(format!(\"Failed to start write transaction: {:?}\", e)))?;\n    let memory = G::new_mut(&db, &arena, &mut txn)\n.add_n(\"Memory\", Some(ImmutablePropertiesMap::new(5, vec![(\"memory_id\", Value::from(&data.memory_id)), (\"text\", Value::from(&data.text)), (\"agent\", Value::from(&data.agent)), (\"revision\", Value::from(&data.revision)), (\"created_at\", Value::from(&data.created_at))].into_iter(), &arena)), Some(&[\"memory_id\"])).collect_to_obj()?;\n    let a = G::new(&db, &txn, &arena)\n.n_from_index(\"Agent\", \"agent_num\", &data.agent).collect_to_obj()?;\n    let edge = G::new_mut(&db, &arena, &mut txn)\n.add_edge(\"Remembers\", None, a.id(), memory.id(), false, false).collect_to_obj()?;\n",
+      "commit": "txn.commit().map_err(|e| GraphError::New(format!(\"Failed to commit transaction: {:?}\", e)))?;\n",
+      "core_sha256": "2997e041a038239496355d27d1b48521ad60831b15bfe61a7d6d804d5fbefe5c"
+    },
+    "Recall": {
+      "storage_and_traversal": "let arena = Bump::new();\nlet txn = db.graph_env.read_txn().map_err(|e| GraphError::New(format!(\"Failed to start read transaction: {:?}\", e)))?;\n    let memory = G::new(&db, &txn, &arena)\n.n_from_index(\"Memory\", \"memory_id\", &data.memory_id).collect_to_obj()?;\n",
+      "commit": "txn.commit().map_err(|e| GraphError::New(format!(\"Failed to commit transaction: {:?}\", e)))?;\n",
+      "core_sha256": "6ab458bfbe7ca1da8c5df0dd986e41b51fa408da84679ee10be47dad8b724a03"
+    },
+    "Recent": {
+      "storage_and_traversal": "let arena = Bump::new();\nlet txn = db.graph_env.read_txn().map_err(|e| GraphError::New(format!(\"Failed to start read transaction: {:?}\", e)))?;\n    let memories = G::new(&db, &txn, &arena)\n.n_from_index(\"Agent\", \"agent_num\", &data.agent)\n\n.out_node(\"Remembers\")\n\n.order_by_desc(|val| val.get_property(\"created_at\").cloned().unwrap_or(Value::Empty))\n\n.range(0, data.k.clone()).collect::<Result<Vec<_>, _>>()?;\n",
+      "commit": "txn.commit().map_err(|e| GraphError::New(format!(\"Failed to commit transaction: {:?}\", e)))?;\n",
+      "core_sha256": "6b77601c19a4476699b311f0ccd3d64e30f591e4c0f7d0c77942f2b9b87442fd"
+    },
+    "Update": {
+      "storage_and_traversal": "let arena = Bump::new();\nlet mut txn = db.graph_env.write_txn().map_err(|e| GraphError::New(format!(\"Failed to start write transaction: {:?}\", e)))?;\n    let memory = {let update_tr = G::new(&db, &txn, &arena)\n.n_from_index(\"Memory\", \"memory_id\", &data.memory_id)\n    .collect::<Result<Vec<_>, _>>()?;G::new_mut_from_iter(&db, &mut txn, update_tr.iter().cloned(), &arena)\n    .update(&[(\"revision\", Value::from(&data.revision)), (\"text\", Value::from(&data.text))])\n    .collect_to_obj()?};\n",
+      "commit": "txn.commit().map_err(|e| GraphError::New(format!(\"Failed to commit transaction: {:?}\", e)))?;\n",
+      "core_sha256": "67ccae4285a3a06696acfe0e1c6366fd497e6aadd2120b7dbdf293663119379f"
+    }
+  },
+  "transport_free_rust_sha256": "95409a4eaaee399294ce9c6c3b96bac184e070d9a04b6c698a2bcdf7320f4c8b"
+}

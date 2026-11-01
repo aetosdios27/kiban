@@ -1,20 +1,19 @@
 # Kiban
 
 Kiban is an embedded LSM-tree key-value storage engine written in Rust. It stores
-ordered byte keys and byte values and targets Linux. **v0.1.0 is an early public
+ordered byte keys and byte values and targets Linux. **v0.2.0 is an early public
 release**, with no pre-1.0 API or storage-format compatibility promise.
 
-See [architecture](ARCHITECTURE.md) for the current invariants and [unreleased
-changes](CHANGELOG.md) for audit repairs on `main` that are newer than v0.1.0.
+See [architecture](ARCHITECTURE.md) for the current invariants and [the changelog](CHANGELOG.md) for what changed in each release.
 
 ## Installation
 
 These are the release installation commands. Use the Git dependency after the
-`v0.1.0` tag is pushed:
+`v0.2.0` tag is pushed:
 
 ```toml
 [dependencies]
-kiban = { git = "https://github.com/aetosdios27/kiban", tag = "v0.1.0" }
+kiban = { git = "https://github.com/aetosdios27/kiban", tag = "v0.2.0" }
 ```
 
 Crates.io installation becomes available only after publication succeeds. Check
@@ -60,6 +59,15 @@ engine with background flush/compaction; its snapshot exposes `get` and `scan`.
 One engine owner per directory is enforced with an OS lock; a second independent
 open returns `DbError::Locked`. Shared clones belong to one owner.
 
+For agent-memory style workloads (many small records, keys that begin with a fixed-length
+agent prefix, reads by id or "the latest N for one agent"), start from
+`KibanOptions::agent_memory(prefix_len)`. It turns on the per-SST perfect-hash point index and
+the prefix scan extension, which is the configuration measured in the head-to-head reports
+(`validation/{sqlite,rocksdb,remix-engine}`). It costs about 9% more SST bytes and slower
+flush/compaction builds. `mmap_max_level` and `binary_fuse_filter` stay separate choices:
+the first helps caches far smaller than the data but worsens cold-read tails, the second
+speeds misses but slows hits while a point index is resident.
+
 ## Supported operations
 
 - WAL-backed puts, deletes and atomic WAL write batches with explicit sync.
@@ -82,6 +90,24 @@ Oversized input does not poison the engine. The write-buffer option is a flush
 trigger, not a hard RSS budget; direct `Kiban` requires explicit flushing.
 
 Compression, range deletes, reverse iterators and transactions are not implemented.
+
+`KibanOptions::block_cache_bytes` defaults to min(physical RAM / 64, 512 MiB),
+with a 32 MiB floor. On Linux, a lower cgroup v2 `memory.max` (including
+ancestor limits) replaces physical RAM in that calculation. If neither memory source
+can be read, the fallback is 32 MiB. This is a per-database budget; opening
+several databases multiplies it. Set `block_cache_bytes` explicitly to override
+it, including zero to disable block admission.
+
+`KibanOptions::point_index` is on by default; set it to `false` to write plain
+sorted-block tables. It writes compact
+`KIBANPH3` sections with per-version value checksums in format-4 SSTs. Readers
+also accept PH2, flag-zero PH3, and format-3 tables. When the dataset exceeds the
+cache budget, resident locators can fetch and verify exact values through pread
+or the existing `mmap_max_level` option. Locator and full-data residency share
+the block-cache budget. Denied admission uses verified sorted blocks. Binaries
+older than the point-index release reject format-4 tables; set the option to
+`false` and rewrite (compaction or backup) before downgrading. See the [encoding](validation/pointindex-cost/DESIGN.md) and
+[small-cache validation](validation/smallcache/REPORT.md).
 
 ## Checkpoints, backups and inspection
 
@@ -138,9 +164,10 @@ The [first scale report](validation/REPORT.md) is historical evidence from befor
 the correctness repairs; its numbers are not v0.1.0 performance results.
 
 The [foreground report](validation/FOREGROUND_REPORT.md) records the latest
-published optimization/endurance campaign, including an unresolved concurrency
-throughput decline. [Audit repair evidence](validation/AUDIT_REPAIRS.md) tracks
-subsequent fixes and their validation; the
+published optimization/endurance campaign, including a 35% concurrency throughput
+decline in one run. [Audit repair evidence](validation/AUDIT_REPAIRS.md) tracks
+subsequent fixes and their validation, including a rerun where that decline did not
+reproduce; its cause was never established. The
 [read-path and range-cache report](validation/RANGE_CACHE.md) covers the read-path
 rework, the optional range tier and their benchmarks. Historical measurements describe their
 recorded source revision; they are not automatic performance claims for `main`.

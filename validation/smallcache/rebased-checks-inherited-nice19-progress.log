@@ -1,0 +1,11 @@
+start test
+end test: 0 (12.2s)
+start release
+end release: 0 (67.7s)
+start clippy
+end clippy: 0 (9.7s)
+start fmt
+end fmt: 0 (4.0s)
+start fixed
+end fixed: 0 (6.7s)
+start long-20000-each

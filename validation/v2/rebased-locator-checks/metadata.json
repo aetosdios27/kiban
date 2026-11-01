@@ -1,0 +1,9 @@
+{
+  "head": "2396b67d00996e46f9089ccaf824d7c77d915f16",
+  "cpu": "2,3,4,5,6,7,10,11",
+  "nice": 10,
+  "quick": true,
+  "seeds_per_suite": 20000,
+  "seed_start": 0,
+  "started": 1792266230.7136154
+}

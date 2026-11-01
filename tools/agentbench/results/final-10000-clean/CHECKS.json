@@ -1,0 +1,186 @@
+[
+  {
+    "argv": [
+      "cargo",
+      "fmt",
+      "--check"
+    ],
+    "returncode": 0,
+    "seconds": 0.24318761600443395,
+    "log": "target/agentbench-results/final-10000-clean/validation/01.log",
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "argv": [
+      "cargo",
+      "fmt",
+      "--manifest-path",
+      "tools/agentbench/Cargo.toml",
+      "--check"
+    ],
+    "returncode": 0,
+    "seconds": 0.05141256299975794,
+    "log": "target/agentbench-results/final-10000-clean/validation/02.log",
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "argv": [
+      "cargo",
+      "test",
+      "--release",
+      "--locked",
+      "--manifest-path",
+      "tools/agentbench/Cargo.toml"
+    ],
+    "returncode": 0,
+    "seconds": 0.8354120520016295,
+    "log": "target/agentbench-results/final-10000-clean/validation/03.log",
+    "log_sha256": "8a488c48089bf78bab11e1bcbd3ba0bbb75a57ef37ba411129f391b770d8c96b"
+  },
+  {
+    "argv": [
+      "python3",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tools/agentbench",
+      "-p",
+      "test_*.py"
+    ],
+    "returncode": 0,
+    "seconds": 1.6123514209975838,
+    "log": "target/agentbench-results/final-10000-clean/validation/04.log",
+    "log_sha256": "664797ced2dd957df19e406dc3ea9b4473e192e4c966966eb960d250b84ff070"
+  },
+  {
+    "argv": [
+      "cargo",
+      "test",
+      "--locked"
+    ],
+    "returncode": 0,
+    "seconds": 6.250565028996789,
+    "log": "target/agentbench-results/final-10000-clean/validation/05.log",
+    "log_sha256": "99b2d01f601d14784edfbbaf6c5acff8a8cf96339db08202713d62b129469093"
+  },
+  {
+    "argv": [
+      "cargo",
+      "clippy",
+      "--locked",
+      "--all-targets",
+      "--workspace",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "returncode": 0,
+    "seconds": 1.770254187998944,
+    "log": "target/agentbench-results/final-10000-clean/validation/06.log",
+    "log_sha256": "f05506598a05d3c125c3999f447633f3a937466908f5afaa36dd97892bd03555"
+  },
+  {
+    "argv": [
+      "cargo",
+      "clippy",
+      "--locked",
+      "--all-targets",
+      "--features",
+      "loom",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "returncode": 0,
+    "seconds": 3.5742032209964236,
+    "log": "target/agentbench-results/final-10000-clean/validation/07.log",
+    "log_sha256": "35b68b218da300555129ca78c2b6ba9acb4d4ba7c988510034d16e9f4e033db2"
+  },
+  {
+    "argv": [
+      "cargo",
+      "clippy",
+      "--locked",
+      "--all-targets",
+      "--features",
+      "diagnostics",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "returncode": 0,
+    "seconds": 1.6683481469954131,
+    "log": "target/agentbench-results/final-10000-clean/validation/08.log",
+    "log_sha256": "4a21ac97fc53888602e9aa0c8a87ee9fa86b7835c4991801d2056d91c0f8a88d"
+  },
+  {
+    "argv": [
+      "cargo",
+      "clippy",
+      "--release",
+      "--locked",
+      "--manifest-path",
+      "tools/agentbench/Cargo.toml",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "returncode": 0,
+    "seconds": 0.25695713100139983,
+    "log": "target/agentbench-results/final-10000-clean/validation/09.log",
+    "log_sha256": "d20bcdbb645d1877b4a8684070e2f10e43e779898688ef1c0892dbd72fc88c98"
+  },
+  {
+    "argv": [
+      "cargo",
+      "deny",
+      "--locked",
+      "check"
+    ],
+    "returncode": 0,
+    "seconds": 1.2019022589956876,
+    "log": "target/agentbench-results/final-10000-clean/validation/10.log",
+    "log_sha256": "f1a0fca39d4280363937aabd77783990ea6480bd9ca257816de3b68fc8efa845"
+  },
+  {
+    "argv": [
+      "python3",
+      "tools/site_facts.py",
+      "validate"
+    ],
+    "returncode": 0,
+    "seconds": 0.09354900299513247,
+    "log": "target/agentbench-results/final-10000-clean/validation/11.log",
+    "log_sha256": "75a5c512b65637b062d5deca942ce01564d75e6dbe7da5bf9350285877379ebc"
+  },
+  {
+    "argv": [
+      "python3",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tools/tests",
+      "-p",
+      "test_*.py"
+    ],
+    "returncode": 0,
+    "seconds": 2.5881950440016226,
+    "log": "target/agentbench-results/final-10000-clean/validation/12.log",
+    "log_sha256": "92eab75ba4a612b5772dfb67d99a67d6d6501920deb344d97780b193e9bcc612"
+  },
+  {
+    "argv": [
+      "cargo",
+      "package",
+      "--list",
+      "--allow-dirty"
+    ],
+    "returncode": 0,
+    "seconds": 0.051003317996219266,
+    "log": "target/agentbench-results/final-10000-clean/validation/13.log",
+    "log_sha256": "a2c4bf71eee7e919557d19273cad8b7bf11ad04869589d3db06c623e3b821c1d"
+  }
+]

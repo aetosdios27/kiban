@@ -1,0 +1,28 @@
+{
+  "baseline_commit": "06a457dbfe24aabe1e33a3763e1ac0e1a8d73e05",
+  "baseline_binary_sha256": "d3d94ced651aef43c28fc7799bc7fabf4b7a232c64897ca5b8c7519542db6a3c",
+  "rejected_patch_sha256": "81f020e37a0d6c3628480421ddea06cc1415236df79d61f615d551eb3e8348eb",
+  "restored_engine_matches_baseline": true,
+  "restored_source_hashes": {
+    "src/cache.rs": "da2c09ff2e242b3fab43aa53952cb10f71f46bb59e7c2b74bf7d873e2dc64bf8",
+    "src/db.rs": "2559f43f8564da046008b208861351d425ee01a97d115286e868b9e528ae4889",
+    "src/sstable/point.rs": "77764784aecc128d8a6207eb55ef13c6274485f46b7fc40425f05953437ef834",
+    "src/sstable/reader.rs": "61d245e3c09a68e86ad03428ed43f0ae565b77f1487c0cdeec436d88209d4a57"
+  },
+  "stop_reason": "Candidate debug test changed a missing referenced SST error from Corrupt to Io; all performance work stopped.",
+  "gate_status": {
+    "candidate_cargo_check_all_targets": "PASS",
+    "candidate_debug_tests": "FAIL: 344 passed, 1 failed, 6 ignored",
+    "final_fmt_check": "NOT RUN",
+    "final_clippy": "NOT RUN",
+    "final_debug_tests": "NOT RUN",
+    "final_release_tests": "NOT RUN",
+    "final_fixed_release_corpora": "NOT RUN",
+    "final_loom": "NOT RUN",
+    "final_verify_full_20000_each": "NOT RUN",
+    "paired_warm_matrix": "NOT RUN",
+    "paired_cold_matrix": "NOT RUN",
+    "write_nonregression": "NOT RUN"
+  },
+  "candidate_release_build": "Terminated after correctness failure; no candidate binary frozen or measured"
+}

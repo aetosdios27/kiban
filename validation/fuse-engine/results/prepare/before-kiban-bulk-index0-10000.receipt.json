@@ -1,0 +1,30 @@
+{
+  "name": "before-kiban-bulk-index0-10000",
+  "command": [
+    "taskset",
+    "-c",
+    "12-21",
+    "nice",
+    "-n",
+    "10",
+    "/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/target/fuse-engine/bin/before",
+    "/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/validation/fuse-engine/results/prepare/before-kiban-bulk-index0-10000.config.json"
+  ],
+  "code": 0,
+  "sha256": "707d41a57bc421b88dec629b57ae530b875672f5401c2a7767d6fe9595afddb1",
+  "seconds": 0.7456667423248291,
+  "start": {
+    "total": 2381912,
+    "idle": 2125384
+  },
+  "end": {
+    "total": 2381928,
+    "idle": 2125398
+  },
+  "cpu9_busy_percent": 12.5,
+  "load": [
+    29.2275390625,
+    31.5654296875,
+    25.24365234375
+  ]
+}

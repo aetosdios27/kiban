@@ -1,0 +1,577 @@
+{
+  "status": "complete",
+  "errors": 0,
+  "runs": [
+    {
+      "name": "r1-lmdb",
+      "backend": "lmdb",
+      "cache_mib": null,
+      "trial": 1,
+      "n": 1000000,
+      "operations": 100000,
+      "disk": {
+        "apparent_bytes": 838132352,
+        "allocated_bytes": 838123520,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792169776.6796155,
+        "end_epoch": 1792169777.5975401,
+        "samples": 7,
+        "largest_sample_gap_seconds": 0.20050525665283203,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 1.556640625,
+            "min": 1.556640625,
+            "max": 1.556640625
+          },
+          {
+            "median": 1.47900390625,
+            "min": 1.47900390625,
+            "max": 1.47900390625
+          },
+          {
+            "median": 1.720703125,
+            "min": 1.720703125,
+            "max": 1.720703125
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "r1-kiban-32",
+      "backend": "kiban",
+      "cache_mib": 32,
+      "trial": 1,
+      "n": 1000000,
+      "operations": 100000,
+      "disk": {
+        "apparent_bytes": 329848013,
+        "allocated_bytes": 329854976,
+        "files": 4
+      },
+      "load_summary": {
+        "start_epoch": 1792169787.0856616,
+        "end_epoch": 1792169788.9178984,
+        "samples": 11,
+        "largest_sample_gap_seconds": 0.20049190521240234,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 1.63134765625,
+            "min": 1.63134765625,
+            "max": 1.63134765625
+          },
+          {
+            "median": 1.49609375,
+            "min": 1.49609375,
+            "max": 1.49609375
+          },
+          {
+            "median": 1.72412109375,
+            "min": 1.72412109375,
+            "max": 1.72412109375
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "r1-kiban-256",
+      "backend": "kiban",
+      "cache_mib": 256,
+      "trial": 1,
+      "n": 1000000,
+      "operations": 100000,
+      "disk": {
+        "apparent_bytes": 329848013,
+        "allocated_bytes": 329854976,
+        "files": 4
+      },
+      "load_summary": {
+        "start_epoch": 1792169800.9623895,
+        "end_epoch": 1792169802.3137615,
+        "samples": 9,
+        "largest_sample_gap_seconds": 0.20040678977966309,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.10009765625,
+            "min": 2.10009765625,
+            "max": 2.10009765625
+          },
+          {
+            "median": 1.603515625,
+            "min": 1.603515625,
+            "max": 1.603515625
+          },
+          {
+            "median": 1.755859375,
+            "min": 1.755859375,
+            "max": 1.755859375
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "r1-kiban-512",
+      "backend": "kiban",
+      "cache_mib": 512,
+      "trial": 1,
+      "n": 1000000,
+      "operations": 100000,
+      "disk": {
+        "apparent_bytes": 329848013,
+        "allocated_bytes": 329854976,
+        "files": 4
+      },
+      "load_summary": {
+        "start_epoch": 1792169814.562497,
+        "end_epoch": 1792169815.782836,
+        "samples": 8,
+        "largest_sample_gap_seconds": 0.2004101276397705,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.2685546875,
+            "min": 2.2685546875,
+            "max": 2.2685546875
+          },
+          {
+            "median": 1.67041015625,
+            "min": 1.67041015625,
+            "max": 1.67041015625
+          },
+          {
+            "median": 1.77587890625,
+            "min": 1.77587890625,
+            "max": 1.77587890625
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "r1-kiban-1024",
+      "backend": "kiban",
+      "cache_mib": 1024,
+      "trial": 1,
+      "n": 1000000,
+      "operations": 100000,
+      "disk": {
+        "apparent_bytes": 329848013,
+        "allocated_bytes": 329854976,
+        "files": 4
+      },
+      "load_summary": {
+        "start_epoch": 1792169827.287866,
+        "end_epoch": 1792169828.469338,
+        "samples": 8,
+        "largest_sample_gap_seconds": 0.20035648345947266,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 3.47021484375,
+            "min": 3.47021484375,
+            "max": 3.47021484375
+          },
+          {
+            "median": 1.94580078125,
+            "min": 1.94580078125,
+            "max": 1.94580078125
+          },
+          {
+            "median": 1.86474609375,
+            "min": 1.86474609375,
+            "max": 1.86474609375
+          }
+        ]
+      },
+      "preliminary": true
+    },
+    {
+      "name": "r2-lmdb",
+      "backend": "lmdb",
+      "cache_mib": null,
+      "trial": 2,
+      "n": 1000000,
+      "operations": 100000,
+      "disk": {
+        "apparent_bytes": 838132352,
+        "allocated_bytes": 838123520,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792169838.048459,
+        "end_epoch": 1792169839.0426884,
+        "samples": 7,
+        "largest_sample_gap_seconds": 0.20039868354797363,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 3.32373046875,
+            "min": 3.32373046875,
+            "max": 3.32373046875
+          },
+          {
+            "median": 1.96435546875,
+            "min": 1.96435546875,
+            "max": 1.96435546875
+          },
+          {
+            "median": 1.8720703125,
+            "min": 1.8720703125,
+            "max": 1.8720703125
+          }
+        ]
+      },
+      "preliminary": true
+    },
+    {
+      "name": "r2-kiban-32",
+      "backend": "kiban",
+      "cache_mib": 32,
+      "trial": 2,
+      "n": 1000000,
+      "operations": 100000,
+      "disk": {
+        "apparent_bytes": 329848013,
+        "allocated_bytes": 329854976,
+        "files": 4
+      },
+      "load_summary": {
+        "start_epoch": 1792169847.8007898,
+        "end_epoch": 1792169849.6593297,
+        "samples": 11,
+        "largest_sample_gap_seconds": 0.20041322708129883,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 3.2802734375,
+            "min": 3.2802734375,
+            "max": 3.33837890625
+          },
+          {
+            "median": 1.99951171875,
+            "min": 1.99951171875,
+            "max": 2.033203125
+          },
+          {
+            "median": 1.884765625,
+            "min": 1.884765625,
+            "max": 1.896484375
+          }
+        ]
+      },
+      "preliminary": true
+    },
+    {
+      "name": "r2-kiban-256",
+      "backend": "kiban",
+      "cache_mib": 256,
+      "trial": 2,
+      "n": 1000000,
+      "operations": 100000,
+      "disk": {
+        "apparent_bytes": 329848013,
+        "allocated_bytes": 329854976,
+        "files": 4
+      },
+      "load_summary": {
+        "start_epoch": 1792169862.3558843,
+        "end_epoch": 1792169863.7849994,
+        "samples": 9,
+        "largest_sample_gap_seconds": 0.2004988193511963,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 3.05859375,
+            "min": 3.05859375,
+            "max": 3.05859375
+          },
+          {
+            "median": 2.01513671875,
+            "min": 2.01513671875,
+            "max": 2.01513671875
+          },
+          {
+            "median": 1.892578125,
+            "min": 1.892578125,
+            "max": 1.892578125
+          }
+        ]
+      },
+      "preliminary": true
+    },
+    {
+      "name": "r2-kiban-512",
+      "backend": "kiban",
+      "cache_mib": 512,
+      "trial": 2,
+      "n": 1000000,
+      "operations": 100000,
+      "disk": {
+        "apparent_bytes": 329848013,
+        "allocated_bytes": 329854976,
+        "files": 4
+      },
+      "load_summary": {
+        "start_epoch": 1792169875.1860516,
+        "end_epoch": 1792169876.4195843,
+        "samples": 8,
+        "largest_sample_gap_seconds": 0.2004530429840088,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.904296875,
+            "min": 2.904296875,
+            "max": 2.904296875
+          },
+          {
+            "median": 2.03076171875,
+            "min": 2.03076171875,
+            "max": 2.03076171875
+          },
+          {
+            "median": 1.90087890625,
+            "min": 1.90087890625,
+            "max": 1.90087890625
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "r2-kiban-1024",
+      "backend": "kiban",
+      "cache_mib": 1024,
+      "trial": 2,
+      "n": 1000000,
+      "operations": 100000,
+      "disk": {
+        "apparent_bytes": 329848013,
+        "allocated_bytes": 329854976,
+        "files": 4
+      },
+      "load_summary": {
+        "start_epoch": 1792169888.3097959,
+        "end_epoch": 1792169889.4865806,
+        "samples": 8,
+        "largest_sample_gap_seconds": 0.20036602020263672,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.8515625,
+            "min": 2.783203125,
+            "max": 2.8515625
+          },
+          {
+            "median": 2.04638671875,
+            "min": 2.04541015625,
+            "max": 2.04638671875
+          },
+          {
+            "median": 1.90771484375,
+            "min": 1.90771484375,
+            "max": 1.90869140625
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "r3-lmdb",
+      "backend": "lmdb",
+      "cache_mib": null,
+      "trial": 3,
+      "n": 1000000,
+      "operations": 100000,
+      "disk": {
+        "apparent_bytes": 838132352,
+        "allocated_bytes": 838123520,
+        "files": 2
+      },
+      "load_summary": {
+        "start_epoch": 1792169899.0382297,
+        "end_epoch": 1792169900.0139406,
+        "samples": 6,
+        "largest_sample_gap_seconds": 0.20037245750427246,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 3.04443359375,
+            "min": 2.9609375,
+            "max": 3.04443359375
+          },
+          {
+            "median": 2.12646484375,
+            "min": 2.0947265625,
+            "max": 2.12646484375
+          },
+          {
+            "median": 1.93701171875,
+            "min": 1.92578125,
+            "max": 1.93701171875
+          }
+        ]
+      },
+      "preliminary": true
+    },
+    {
+      "name": "r3-kiban-32",
+      "backend": "kiban",
+      "cache_mib": 32,
+      "trial": 3,
+      "n": 1000000,
+      "operations": 100000,
+      "disk": {
+        "apparent_bytes": 329848013,
+        "allocated_bytes": 329854976,
+        "files": 4
+      },
+      "load_summary": {
+        "start_epoch": 1792169908.4090815,
+        "end_epoch": 1792169910.2207038,
+        "samples": 11,
+        "largest_sample_gap_seconds": 0.20047950744628906,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 3.0439453125,
+            "min": 2.96044921875,
+            "max": 3.0439453125
+          },
+          {
+            "median": 2.1552734375,
+            "min": 2.1240234375,
+            "max": 2.1552734375
+          },
+          {
+            "median": 1.94873046875,
+            "min": 1.9375,
+            "max": 1.94873046875
+          }
+        ]
+      },
+      "preliminary": true
+    },
+    {
+      "name": "r3-kiban-256",
+      "backend": "kiban",
+      "cache_mib": 256,
+      "trial": 3,
+      "n": 1000000,
+      "operations": 100000,
+      "disk": {
+        "apparent_bytes": 329848013,
+        "allocated_bytes": 329854976,
+        "files": 4
+      },
+      "load_summary": {
+        "start_epoch": 1792169922.0183504,
+        "end_epoch": 1792169923.489669,
+        "samples": 9,
+        "largest_sample_gap_seconds": 0.20049071311950684,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 2.72900390625,
+            "min": 2.72900390625,
+            "max": 2.72900390625
+          },
+          {
+            "median": 2.11669921875,
+            "min": 2.11669921875,
+            "max": 2.11669921875
+          },
+          {
+            "median": 1.93798828125,
+            "min": 1.93798828125,
+            "max": 1.93798828125
+          }
+        ]
+      },
+      "preliminary": false
+    },
+    {
+      "name": "r3-kiban-512",
+      "backend": "kiban",
+      "cache_mib": 512,
+      "trial": 3,
+      "n": 1000000,
+      "operations": 100000,
+      "disk": {
+        "apparent_bytes": 329848013,
+        "allocated_bytes": 329854976,
+        "files": 4
+      },
+      "load_summary": {
+        "start_epoch": 1792169935.6308706,
+        "end_epoch": 1792169936.8477736,
+        "samples": 9,
+        "largest_sample_gap_seconds": 0.20036792755126953,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 3.1220703125,
+            "min": 3.1220703125,
+            "max": 3.1220703125
+          },
+          {
+            "median": 2.2275390625,
+            "min": 2.2275390625,
+            "max": 2.2275390625
+          },
+          {
+            "median": 1.97705078125,
+            "min": 1.97705078125,
+            "max": 1.97705078125
+          }
+        ]
+      },
+      "preliminary": true
+    },
+    {
+      "name": "r3-kiban-1024",
+      "backend": "kiban",
+      "cache_mib": 1024,
+      "trial": 3,
+      "n": 1000000,
+      "operations": 100000,
+      "disk": {
+        "apparent_bytes": 329848013,
+        "allocated_bytes": 329854976,
+        "files": 4
+      },
+      "load_summary": {
+        "start_epoch": 1792169948.217214,
+        "end_epoch": 1792169949.45505,
+        "samples": 8,
+        "largest_sample_gap_seconds": 0.2003495693206787,
+        "coverage": "sampled throughout",
+        "load": [
+          {
+            "median": 3.0166015625,
+            "min": 2.93505859375,
+            "max": 3.0166015625
+          },
+          {
+            "median": 2.236328125,
+            "min": 2.23193359375,
+            "max": 2.236328125
+          },
+          {
+            "median": 1.98291015625,
+            "min": 1.98291015625,
+            "max": 1.9833984375
+          }
+        ]
+      },
+      "preliminary": true
+    }
+  ],
+  "preliminary": true
+}

@@ -1,0 +1,15 @@
+{
+  "cpu": 6,
+  "sibling_unused": 7,
+  "build_cpus": "12-21",
+  "time": 1792269882.088714,
+  "head": "06a457dbfe24aabe1e33a3763e1ac0e1a8d73e05",
+  "load": [
+    4.642578125,
+    3.07568359375,
+    3.15673828125
+  ],
+  "binaries": {
+    "before": "d3d94ced651aef43c28fc7799bc7fabf4b7a232c64897ca5b8c7519542db6a3c"
+  }
+}

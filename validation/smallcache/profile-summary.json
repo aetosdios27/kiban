@@ -1,0 +1,78 @@
+[
+  {
+    "name": "before-bulk-kiban",
+    "events_per_operation": {
+      "cpu_core/cycles/u": 9915.939602,
+      "cpu_core/instructions/u": 13880.849108,
+      "cpu_core/L1-dcache-load-misses/u": 48.420275,
+      "cpu_core/LLC-load-misses/u": 8.04617,
+      "cpu_core/branch-misses/u": 5.945974,
+      "cpu_core/dTLB-load-misses/u": 0.167908
+    },
+    "loop_ns_per_operation": 3845.095694,
+    "receipt": {
+      "digest": 353027,
+      "errors": 0,
+      "ns": 3845095694,
+      "operations": 1000000,
+      "type": "profile"
+    }
+  },
+  {
+    "name": "before-bulk-lmdb",
+    "events_per_operation": {
+      "cpu_core/cycles/u": 5154.435728,
+      "cpu_core/instructions/u": 7893.379598,
+      "cpu_core/L1-dcache-load-misses/u": 46.816719,
+      "cpu_core/LLC-load-misses/u": 13.255489,
+      "cpu_core/branch-misses/u": 10.014883,
+      "cpu_core/dTLB-load-misses/u": 1.977045
+    },
+    "loop_ns_per_operation": 1419.69151,
+    "receipt": {
+      "digest": 353027,
+      "errors": 0,
+      "ns": 1419691510,
+      "operations": 1000000,
+      "type": "profile"
+    }
+  },
+  {
+    "name": "before-normal-kiban",
+    "events_per_operation": {
+      "cpu_core/cycles/u": 10432.385319,
+      "cpu_core/instructions/u": 15447.213866,
+      "cpu_core/L1-dcache-load-misses/u": 100.33529,
+      "cpu_core/LLC-load-misses/u": 8.1587,
+      "cpu_core/branch-misses/u": 11.403808,
+      "cpu_core/dTLB-load-misses/u": 0.486384
+    },
+    "loop_ns_per_operation": 3862.024888,
+    "receipt": {
+      "digest": 353027,
+      "errors": 0,
+      "ns": 3862024888,
+      "operations": 1000000,
+      "type": "profile"
+    }
+  },
+  {
+    "name": "before-normal-lmdb",
+    "events_per_operation": {
+      "cpu_core/cycles/u": 5613.916013,
+      "cpu_core/instructions/u": 7893.379757,
+      "cpu_core/L1-dcache-load-misses/u": 49.000975,
+      "cpu_core/LLC-load-misses/u": 14.939683,
+      "cpu_core/branch-misses/u": 10.138726,
+      "cpu_core/dTLB-load-misses/u": 1.954973
+    },
+    "loop_ns_per_operation": 1571.9451,
+    "receipt": {
+      "digest": 353027,
+      "errors": 0,
+      "ns": 1571945100,
+      "operations": 1000000,
+      "type": "profile"
+    }
+  }
+]

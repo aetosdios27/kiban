@@ -1,0 +1,11 @@
+Events disabled
+Events enabled
+Events disabled
+{"digest":353027,"errors":0,"ns":2356246405,"operations":1000000,"type":"profile"}
+[ perf record: Woken up 4751 times to write data ]
+Warning:
+Processed 14210 events and lost 64 chunks!
+
+Check IO/CPU overload!
+
+[ perf record: Captured and wrote 74.361 MB /home/aetos/.t3/worktrees/kiban/t3-9b9cb0e0/validation/smallcache/ph3-mapped-profile/before-normal-kiban-stacks.data (9248 samples) ]
