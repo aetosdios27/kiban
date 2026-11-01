@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/home/aetos/.t3/worktrees/kiban/t3-7d737093/tools/agentbench/readpath/rocksdb_sample.py", line 36, in <module>
+    subprocess.run(['taskset','-c','10',str(perf),'record','-e','cpu_core/cycles/u','-F','999','--call-graph','dwarf,8192','--control',f'fifo:{ctl},{ack}','-D','-1','-o',str(trace),'--',str(bench.BINARY),str(path)],check=True,env=env,stdout=log,stderr=log,timeout=120)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.14/subprocess.py", line 578, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['taskset', '-c', '10', '/home/aetos/.t3/worktrees/kiban/t3-7d737093/target/rocksdb/perf', 'record', '-e', 'cpu_core/cycles/u', '-F', '999', '--call-graph', 'dwarf,8192', '--control', 'fifo:/tmp/rocksdb-sample-y2269107/ctl,/tmp/rocksdb-sample-y2269107/ack', '-D', '-1', '-o', '/home/aetos/.t3/worktrees/kiban/t3-7d737093/target/rocksdb/samples/bulk/rocksdb-stage1.data', '--', '/home/aetos/.t3/worktrees/kiban/t3-7d737093/tools/agentbench/readpath/target/release/kiban-readbench', 'validation/rocksdb/sampling-bulk/rocksdb-stage1.config.json']' returned non-zero exit status 255.

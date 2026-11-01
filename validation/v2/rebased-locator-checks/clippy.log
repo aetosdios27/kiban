@@ -1,0 +1,21 @@
+    Checking kiban v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-a7586988)
+    Checking kiban-ffi v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-a7586988/crates/kiban-ffi)
+error: this expression creates a reference which is immediately dereferenced by the compiler
+   --> src/sstable/point.rs:562:28
+    |
+562 |         let arena = u64_at(&original, 24) as usize;
+    |                            ^^^^^^^^^ help: change this to: `original`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#needless_borrow
+    = note: `-D clippy::needless-borrow` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::needless_borrow)]`
+
+error: this expression creates a reference which is immediately dereferenced by the compiler
+   --> src/sstable/point.rs:563:37
+    |
+563 |         let slots = HEADER + u32_at(&original, 20) as usize * 4;
+    |                                     ^^^^^^^^^ help: change this to: `original`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#needless_borrow
+
+error: could not compile `kiban` (lib test) due to 2 previous errors

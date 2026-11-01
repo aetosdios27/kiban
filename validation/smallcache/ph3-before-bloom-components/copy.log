@@ -1,0 +1,4 @@
+Events disabled
+Events enabled
+Events disabled
+{"errors":0,"name":"copy","ns":25942386,"ns_per_op":25.942386,"operations":1000000,"type":"micro"}

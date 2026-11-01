@@ -1,0 +1,30 @@
+    Checking kiban v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-a7586988)
+error: using `chunks_exact` with a constant chunk size
+  --> src/sstable/point.rs:31:26
+   |
+31 |     let mut chunks = key.chunks_exact(8);
+   |                          ^^^^^^^^^^^^^^^
+   |
+help: consider using `as_chunks::<8>()` instead
+  --> src/sstable/point.rs:31:26
+   |
+31 |     let mut chunks = key.chunks_exact(8);
+   |                          ^^^^^^^^^^^^^^^
+   = note: you can access the chunks using `chunks.0.iter()`, and the remainder using `chunks.1`
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#chunks_exact_to_as_chunks
+   = note: `-D clippy::chunks-exact-to-as-chunks` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::chunks_exact_to_as_chunks)]`
+
+error: could not compile `kiban` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: manual implementation of `.is_multiple_of()`
+  --> src/point_index_tests.rs:40:20
+   |
+40 |                 if h % 7 == 0 {
+   |                    ^^^^^^^^^^ help: replace with: `h.is_multiple_of(7)`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#manual_is_multiple_of
+   = note: `-D clippy::manual-is-multiple-of` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::manual_is_multiple_of)]`
+
+error: could not compile `kiban` (lib test) due to 2 previous errors

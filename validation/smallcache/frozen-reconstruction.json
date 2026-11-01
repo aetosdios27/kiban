@@ -1,0 +1,8 @@
+{
+  "base": "37feee99f925d895aa0f00c32d902e0690089bde",
+  "frozen": "0283fc7af8cfba828ff05343c8b77bc27b228962",
+  "patch": "validation/smallcache/experiments/frozen-source-from-37feee99.patch",
+  "patch_sha256": "ab4c3015e532c141278ce1055539155a71acc640b022d92ec05772853e3d9dc6",
+  "engine_files_verified": 40,
+  "method": "Apply patch to a private git index at public main; compare every reconstructed engine source SHA256 against frozen provenance"
+}

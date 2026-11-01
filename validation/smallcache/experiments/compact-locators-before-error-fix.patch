@@ -1,0 +1,742 @@
+diff --git a/src/cache.rs b/src/cache.rs
+index 49712e79..4a9489a1 100644
+--- a/src/cache.rs
++++ b/src/cache.rs
+@@ -100,6 +100,7 @@ pub struct BlockCache {
+     range: RangeCache,
+     /// Largest read-ahead window a sequential iterator may request.
+     readahead_bytes: u64,
++    compact_points: AtomicBool,
+ }
+ 
+ /// Raw counters for a [`BlockCache`] (phase 11.7, extended 11.17-F) —
+@@ -165,6 +166,7 @@ impl BlockCache {
+             // both; let small early windows merge up to one full window.
+             range: RangeCache::new(range_bytes, readahead_bytes as usize),
+             readahead_bytes,
++            compact_points: AtomicBool::new(false),
+         }
+     }
+ 
+@@ -180,6 +182,16 @@ impl BlockCache {
+         self.capacity
+     }
+ 
++    pub(crate) fn prefer_compact_points(&self) -> bool {
++        self.compact_points.load(Ordering::Relaxed)
++    }
++
++    /// Admission policy only: existing residents/snapshots keep their leases.
++    pub(crate) fn set_point_working_set(&self, bytes: u64) {
++        self.compact_points
++            .store(bytes > self.capacity as u64, Ordering::Relaxed);
++    }
++
+     pub fn resident_bytes(&self) -> usize {
+         let inner = self.inner.read().expect("block cache lock poisoned");
+         inner.bytes + inner.point_bytes
+diff --git a/src/db.rs b/src/db.rs
+index bd72ffa6..87255bc6 100644
+--- a/src/db.rs
++++ b/src/db.rs
+@@ -1014,6 +1014,13 @@ impl Kiban {
+             wal_number = consolidated_number;
+         }
+ 
++        let mut point_working_set = 0u64;
++        for tref in &manifest.tables {
++            let path = dir.join(file_name(tref.number, SST_EXTENSION));
++            let lease = file_cache.acquire(tref.number, &path)?;
++            point_working_set = point_working_set.saturating_add(lease.len()?);
++        }
++        cache.set_point_working_set(point_working_set);
+         let mut tables = Vec::with_capacity(manifest.tables.len());
+         for tref in &manifest.tables {
+             let path = dir.join(file_name(tref.number, SST_EXTENSION));
+diff --git a/src/sstable/point.rs b/src/sstable/point.rs
+index 2a7a04ef..aa9c16ee 100644
+--- a/src/sstable/point.rs
++++ b/src/sstable/point.rs
+@@ -209,23 +209,15 @@ impl PointBuilder {
+     }
+ }
+ 
+-pub(super) struct PointIndex {
++pub(super) struct PointSection {
+     bytes: crate::cache::ArcBlock,
+-    data: crate::cache::ArcBlock,
+-    blocks: Vec<(usize, usize, crate::cache::BlockMeta)>,
+     seed: u64,
+     count: usize,
+     buckets: usize,
+     arena: usize,
+-    _reservation: ResidentReservation,
+ }
+-impl PointIndex {
+-    pub(super) fn decode(
+-        bytes: crate::cache::ArcBlock,
+-        data: crate::cache::ArcBlock,
+-        reservation: ResidentReservation,
+-        blocks: impl IntoIterator<Item = (u64, u64)>,
+-    ) -> Result<Self, SstError> {
++impl PointSection {
++    fn decode(bytes: crate::cache::ArcBlock, data_len: usize) -> Result<Self, SstError> {
+         super::reader::verify_trailer(&bytes, "point index")?;
+         if bytes.len() < HEADER + 5 || &bytes[..8] != MAGIC {
+             return Err(bad("unsupported header"));
+@@ -247,18 +239,14 @@ impl PointIndex {
+         {
+             return Err(bad("invalid section dimensions"));
+         }
+-        let mut result = Self {
++        let result = Self {
+             bytes,
+-            data,
+-            blocks: Vec::new(),
+             seed,
+             count,
+             buckets,
+             arena,
+-            _reservation: reservation,
+         };
+-        result.validate()?;
+-        result.validate_backing_records(blocks)?;
++        result.validate(data_len)?;
+         Ok(result)
+     }
+     fn slot(&self, h: u64) -> usize {
+@@ -270,7 +258,7 @@ impl PointIndex {
+         };
+         HEADER + self.buckets * 4 + at * SLOT
+     }
+-    fn validate(&self) -> Result<(), SstError> {
++    fn validate(&self, data_len: usize) -> Result<(), SstError> {
+         let raw = &self.bytes[..self.bytes.len() - 5];
+         for b in 0..self.buckets {
+             let pilot = u32_at(raw, HEADER + b * 4);
+@@ -317,7 +305,7 @@ impl PointIndex {
+                 if vl > crate::limits::MAX_VALUE_BYTES
+                     || offset
+                         .checked_add(vl as u64)
+-                        .is_none_or(|end| end > self.data.len() as u64)
++                        .is_none_or(|end| end > data_len as u64)
+                     || (kind == Kind::Tombstone && vl != 0)
+                     || last_seq.is_some_and(|last| last <= seq)
+                 {
+@@ -331,10 +319,14 @@ impl PointIndex {
+         }
+         Ok(())
+     }
+-    fn validate_backing_records(
+-        &mut self,
++    fn visit_backing<'a>(
++        &self,
++        data_len: usize,
+         blocks: impl IntoIterator<Item = (u64, u64)>,
+-    ) -> Result<(), SstError> {
++        mut read: impl FnMut(u64, u64) -> Result<std::borrow::Cow<'a, [u8]>, SstError>,
++        mut visit: impl FnMut(Kind, u64, &[u8], usize, &[u8]) -> Result<(), SstError>,
++    ) -> Result<Vec<(usize, usize, crate::cache::BlockMeta)>, SstError> {
++        let mut verified = Vec::new();
+         let mut pos = self.arena;
+         let end = self.bytes.len() - 5;
+         let mut remaining = 0u32;
+@@ -344,17 +336,13 @@ impl PointIndex {
+         for (offset, len) in blocks {
+             let offset = usize::try_from(offset).map_err(|_| bad("data offset overflow"))?;
+             let len = usize::try_from(len).map_err(|_| bad("data length overflow"))?;
+-            if offset != data_end
+-                || offset
+-                    .checked_add(len)
+-                    .is_none_or(|end| end > self.data.len())
+-            {
++            if offset != data_end || offset.checked_add(len).is_none_or(|end| end > data_len) {
+                 return Err(bad("invalid backing block bounds"));
+             }
+-            let raw = &self.data[offset..offset + len];
+-            let meta = super::block::VerifiedBlock::verify(raw)?;
++            let raw = read(offset as u64, len as u64)?;
++            let meta = super::block::VerifiedBlock::verify(&raw)?;
+             super::block::visit_records(
+-                raw,
++                &raw,
+                 &meta,
+                 &mut key,
+                 |kind, seq, key, value_offset, value_len| {
+@@ -376,20 +364,276 @@ impl PointIndex {
+                     {
+                         return Err(bad("point locator disagrees with sorted record"));
+                     }
++                    visit(
++                        kind,
++                        seq,
++                        key,
++                        offset + value_offset,
++                        &raw[value_offset..value_offset + value_len],
++                    )?;
+                     pos += 21;
+                     remaining -= 1;
+                     Ok(())
+                 },
+             )?;
+-            self.blocks.push((offset, len, meta));
++            verified.push((offset, len, meta));
+             data_end = offset + len;
+         }
+-        if data_end != self.data.len() || pos != end || remaining != 0 {
++        if data_end != data_len || pos != end || remaining != 0 {
+             return Err(bad("point and sorted record coverage differ"));
+         }
++        Ok(verified)
++    }
++}
++
++pub(super) struct PointIndex {
++    section: PointSection,
++    data: crate::cache::ArcBlock,
++    blocks: Vec<(usize, usize, crate::cache::BlockMeta)>,
++    _reservation: ResidentReservation,
++}
++
++/// Derived, resident metadata only. Values remain in the immutable SST. Both
++/// paths check a value CRC on every read; these CRCs are derived only after
++/// checking the original block CRC and exact agreement with the point section.
++pub(super) struct PointLocators {
++    seed: u64,
++    pilots: Box<[u32]>,
++    slots: Box<[u64]>,
++    records: Box<[u8]>,
++    _reservation: ResidentReservation,
++}
++
++const LOCATOR_RESTART: usize = 16;
++const LOCATOR_ADDRESS_MASK: u64 = (1 << 48) - 1;
++
++fn put_varint(out: &mut Vec<u8>, mut n: u64) {
++    while n >= 128 {
++        out.push(n as u8 | 128);
++        n >>= 7;
++    }
++    out.push(n as u8);
++}
++
++// Only used on the private encoding produced below from validated input.
++fn take_varint(raw: &[u8], pos: &mut usize) -> u64 {
++    let mut n = 0;
++    let mut shift = 0;
++    loop {
++        let byte = raw[*pos];
++        *pos += 1;
++        n |= u64::from(byte & 127) << shift;
++        if byte < 128 {
++            return n;
++        }
++        shift += 7;
++    }
++}
++
++#[derive(Default)]
++struct LocatorBuilder {
++    records: Vec<u8>,
++    key: Vec<u8>,
++    previous: Vec<u8>,
++    versions: Vec<u8>,
++    version_count: u64,
++    keys: usize,
++    restart: usize,
++}
++
++impl LocatorBuilder {
++    fn finish_key(&mut self, section: &PointSection, slots: &mut [u64]) -> Result<(), SstError> {
++        if self.version_count == 0 {
++            return Ok(());
++        }
++        let ordinal = self.keys % LOCATOR_RESTART;
++        let shared = if ordinal == 0 {
++            self.restart = self.records.len();
++            0
++        } else {
++            super::common_prefix_len(&self.previous, &self.key)
++        };
++        let address = (self.restart as u64)
++            .checked_mul(LOCATOR_RESTART as u64)
++            .and_then(|n| n.checked_add(ordinal as u64))
++            .filter(|n| *n <= LOCATOR_ADDRESS_MASK)
++            .ok_or_else(|| bad("compact locator address overflow"))?;
++        let h = hash(&self.key, section.seed);
++        let slot = (section.slot(h) - HEADER - section.buckets * 4) / SLOT;
++        slots[slot] = address | (u64::from(fingerprint(h)) << 48);
++        put_varint(&mut self.records, shared as u64);
++        put_varint(&mut self.records, (self.key.len() - shared) as u64);
++        self.records.extend_from_slice(&self.key[shared..]);
++        let mut count = Vec::new();
++        put_varint(&mut count, self.version_count);
++        put_varint(
++            &mut self.records,
++            (count.len() + self.versions.len()) as u64,
++        );
++        self.records.extend_from_slice(&count);
++        self.records.extend_from_slice(&self.versions);
++        self.previous.clone_from(&self.key);
++        self.versions.clear();
++        self.version_count = 0;
++        self.keys += 1;
+         Ok(())
+     }
++}
+ 
++pub(super) struct ValueLocator {
++    pub kind: Kind,
++    pub seq: u64,
++    pub offset: u64,
++    pub len: usize,
++    pub checksum: u32,
++}
++
++impl PointLocators {
++    pub(super) fn decode(
++        bytes: crate::cache::ArcBlock,
++        data_len: usize,
++        cache: &std::sync::Arc<crate::cache::BlockCache>,
++        blocks: impl IntoIterator<Item = (u64, u64)>,
++        mut read: impl FnMut(u64, u64) -> Result<Vec<u8>, SstError>,
++    ) -> Result<Option<Self>, SstError> {
++        let section = PointSection::decode(bytes, data_len)?;
++        // The private encoding can be larger than its source for unusual keys.
++        let fixed = section.count * 8 + section.buckets * 4;
++        if fixed > cache.capacity() {
++            return Ok(None);
++        }
++        let mut slots = vec![0; section.count];
++        let mut builder = LocatorBuilder::default();
++        let mut denied = false;
++        section.visit_backing(
++            data_len,
++            blocks,
++            |offset, len| read(offset, len).map(std::borrow::Cow::Owned),
++            |kind, seq, key, offset, value| {
++                if denied {
++                    return Ok(());
++                }
++                if builder
++                    .records
++                    .len()
++                    .saturating_add(builder.versions.len())
++                    .saturating_add(fixed)
++                    > cache.capacity()
++                {
++                    denied = true;
++                    return Ok(());
++                }
++                if builder.version_count != 0 && builder.key != key {
++                    builder.finish_key(&section, &mut slots)?;
++                }
++                if builder.version_count == 0 {
++                    builder.key.clear();
++                    builder.key.extend_from_slice(key);
++                }
++                put_varint(&mut builder.versions, seq);
++                builder.versions.push(kind.to_u8());
++                put_varint(&mut builder.versions, value.len() as u64);
++                put_varint(&mut builder.versions, offset as u64);
++                builder
++                    .versions
++                    .extend_from_slice(&crate::crc32::crc32(value).to_le_bytes());
++                builder.version_count += 1;
++                Ok(())
++            },
++        )?;
++        if denied {
++            return Ok(None);
++        }
++        builder.finish_key(&section, &mut slots)?;
++        let resident = fixed
++            .checked_add(builder.records.len())
++            .ok_or_else(|| bad("locator size overflow"))?;
++        let Some(reservation) = cache.reserve_point(resident) else {
++            return Ok(None);
++        };
++        let pilots = (0..section.buckets)
++            .map(|b| u32_at(&section.bytes, HEADER + b * 4))
++            .collect();
++        Ok(Some(Self {
++            seed: section.seed,
++            pilots,
++            slots: slots.into_boxed_slice(),
++            records: builder.records.into_boxed_slice(),
++            _reservation: reservation,
++        }))
++    }
++
++    pub(super) fn get(&self, target: &[u8], limit: Option<u64>) -> Option<ValueLocator> {
++        let h = hash(target, self.seed);
++        let slot = self.slots[index(h, &self.pilots, self.slots.len())];
++        if (slot >> 48) as u16 != fingerprint(h) {
++            return None;
++        }
++        let address = slot & LOCATOR_ADDRESS_MASK;
++        let mut pos = (address / LOCATOR_RESTART as u64) as usize;
++        let mut key = Vec::new();
++        for ordinal in 0..=address as usize % LOCATOR_RESTART {
++            let shared = take_varint(&self.records, &mut pos) as usize;
++            let suffix = take_varint(&self.records, &mut pos) as usize;
++            key.truncate(shared);
++            key.extend_from_slice(&self.records[pos..pos + suffix]);
++            pos += suffix;
++            let len = take_varint(&self.records, &mut pos) as usize;
++            if ordinal != address as usize % LOCATOR_RESTART {
++                pos += len;
++            }
++        }
++        // Fingerprints never substitute for a full byte-key comparison.
++        if key != target {
++            return None;
++        }
++        let count = take_varint(&self.records, &mut pos);
++        for _ in 0..count {
++            let seq = take_varint(&self.records, &mut pos);
++            let kind = Kind::from_u8(self.records[pos]).expect("validated kind");
++            pos += 1;
++            let len = take_varint(&self.records, &mut pos) as usize;
++            let offset = take_varint(&self.records, &mut pos);
++            let checksum = u32_at(&self.records, pos);
++            pos += 4;
++            if limit.is_none_or(|lim| seq <= lim) {
++                return Some(ValueLocator {
++                    kind,
++                    seq,
++                    offset,
++                    len,
++                    checksum,
++                });
++            }
++        }
++        None
++    }
++}
++impl PointIndex {
++    pub(super) fn decode(
++        bytes: crate::cache::ArcBlock,
++        data: crate::cache::ArcBlock,
++        reservation: ResidentReservation,
++        blocks: impl IntoIterator<Item = (u64, u64)>,
++    ) -> Result<Self, SstError> {
++        let section = PointSection::decode(bytes, data.len())?;
++        let verified = section.visit_backing(
++            data.len(),
++            blocks,
++            |offset, len| {
++                Ok(std::borrow::Cow::Borrowed(
++                    &data[offset as usize..(offset + len) as usize],
++                ))
++            },
++            |_, _, _, _, _| Ok(()),
++        )?;
++        Ok(Self {
++            section,
++            data,
++            blocks: verified,
++            _reservation: reservation,
++        })
++    }
+     pub(super) fn block(&self, idx: usize) -> super::block::VerifiedBlock {
+         let (offset, len, meta) = self.blocks[idx];
+         super::block::VerifiedBlock::from_shared(self.data.clone(), offset, len, meta)
+@@ -404,26 +648,26 @@ impl PointIndex {
+     }
+ 
+     pub(super) fn get(&self, key: &[u8], limit: Option<u64>) -> Option<Found> {
+-        let h = hash(key, self.seed);
+-        let s = self.slot(h);
+-        if u32_at(&self.bytes, s + 8) as u16 != fingerprint(h) {
++        let h = hash(key, self.section.seed);
++        let s = self.section.slot(h);
++        if u32_at(&self.section.bytes, s + 8) as u16 != fingerprint(h) {
+             return None;
+         }
+         // Decode validated addresses only. The complete key comparison is
+         // mandatory even when the fingerprint matches an absent key.
+-        let mut p = self.arena + u64_at(&self.bytes, s) as usize;
+-        let kl = u32_at(&self.bytes, p) as usize;
+-        let versions = u32_at(&self.bytes, p + 4);
++        let mut p = self.section.arena + u64_at(&self.section.bytes, s) as usize;
++        let kl = u32_at(&self.section.bytes, p) as usize;
++        let versions = u32_at(&self.section.bytes, p + 4);
+         p += 8;
+-        if &self.bytes[p..p + kl] != key {
++        if &self.section.bytes[p..p + kl] != key {
+             return None;
+         }
+         p += kl;
+         for _ in 0..versions {
+-            let seq = u64_at(&self.bytes, p);
+-            let kind = Kind::from_u8(self.bytes[p + 8]).expect("validated kind");
+-            let vl = u32_at(&self.bytes, p + 9) as usize;
+-            let offset = u64_at(&self.bytes, p + 13) as usize;
++            let seq = u64_at(&self.section.bytes, p);
++            let kind = Kind::from_u8(self.section.bytes[p + 8]).expect("validated kind");
++            let vl = u32_at(&self.section.bytes, p + 9) as usize;
++            let offset = u64_at(&self.section.bytes, p + 13) as usize;
+             p += 21;
+             if limit.is_none_or(|lim| seq <= lim) {
+                 return Some(Found {
+@@ -487,7 +731,7 @@ mod tests {
+         let cache = std::sync::Arc::new(crate::cache::BlockCache::new(resident));
+         let reservation = cache.reserve_point(resident).unwrap();
+         let point = PointIndex::decode(bytes.clone(), data.clone(), reservation, f.blocks).unwrap();
+-        assert!(std::sync::Arc::ptr_eq(&point.bytes, &bytes));
++        assert!(std::sync::Arc::ptr_eq(&point.section.bytes, &bytes));
+         assert!(std::sync::Arc::ptr_eq(&point.data, &data));
+         assert_eq!(cache.stats().point_index_bytes, resident);
+         assert!(cache.reserve_point(1).is_none());
+@@ -556,17 +800,17 @@ mod corruption_tests {
+         let mut builder = super::super::TableBuilder::with_point_index(true);
+         builder.add(Kind::Put, b"present", b"secret", 1).unwrap();
+         let point = decode_fixture(fixture(builder)).unwrap();
+-        let wanted = fingerprint(hash(b"present", point.seed));
++        let wanted = fingerprint(hash(b"present", point.section.seed));
+         let absent = (0u64..2_000_000)
+             .find_map(|i| {
+                 let key = i.to_be_bytes();
+-                (fingerprint(hash(&key, point.seed)) == wanted).then_some(key)
++                (fingerprint(hash(&key, point.section.seed)) == wanted).then_some(key)
+             })
+             .expect("a colliding fingerprint");
+         // Singleton MPHF routes every byte string to its one slot.
+         assert_eq!(
+-            point.slot(hash(&absent, point.seed)),
+-            point.slot(hash(b"present", point.seed))
++            point.section.slot(hash(&absent, point.section.seed)),
++            point.section.slot(hash(b"present", point.section.seed))
+         );
+         assert!(point.get(&absent, None).is_none());
+         assert_eq!(point.get(b"present", None).unwrap().value, b"secret");
+diff --git a/src/sstable/reader.rs b/src/sstable/reader.rs
+index 7f8290c3..83ece4a9 100644
+--- a/src/sstable/reader.rs
++++ b/src/sstable/reader.rs
+@@ -13,7 +13,7 @@ use std::sync::Arc;
+ 
+ use super::block::{BlockIter, VerifiedBlock};
+ use super::builder::{FOOTER_LEN, FORMAT_VERSION, MAGIC, POINT_FOOTER_EXTRA, POINT_FORMAT_VERSION};
+-use super::point::PointIndex;
++use super::point::{PointIndex, PointLocators};
+ use super::separator::Separator;
+ use super::{Kind, SstError};
+ use crate::bloom::BloomFilter;
+@@ -29,6 +29,108 @@ struct IndexEntry {
+     len: u64,
+ }
+ 
++#[cfg(test)]
++mod compact_point_tests {
++    use super::*;
++    use crate::sstable::TableBuilder;
++    use crate::testutil::TempDir;
++    use std::os::unix::fs::FileExt;
++
++    fn fixture(path: &Path, mapped: bool) -> SstTable {
++        let mut builder = TableBuilder::with_point_index(true);
++        builder.add(Kind::Put, b"", b"empty", 1).unwrap();
++        for id in 0..97 {
++            let key = [b"\0prefix/".as_slice(), &(id as u64).to_be_bytes(), b"\xff"].concat();
++            for seq in (1..=40).rev() {
++                let (kind, value) = if seq == 40 {
++                    (Kind::Tombstone, Vec::new())
++                } else {
++                    (Kind::Put, vec![(id + seq) as u8; 200])
++                };
++                builder.add(kind, &key, &value, seq as u64).unwrap();
++            }
++        }
++        let file = path.join("1.sst");
++        crate::atomic::commit_file(&file, &builder.finish().unwrap()).unwrap();
++        let cache = Arc::new(BlockCache::new(256 * 1024));
++        cache.set_point_working_set(u64::MAX);
++        let table =
++            SstTable::open(1, &file, cache, Arc::new(TableFileCache::new(2)), mapped).unwrap();
++        assert!(table.locators.is_some());
++        assert!(table.point.is_none());
++        table
++    }
++
++    #[test]
++    fn compact_locators_preserve_versions_full_keys_and_cache_budget() {
++        for mapped in [false, true] {
++            let dir = TempDir::new("compact-versions");
++            let table = fixture(dir.path(), mapped);
++            assert_eq!(table.get(b"", None).unwrap().unwrap().value, b"empty");
++            for id in 0..97 {
++                let key = [b"\0prefix/".as_slice(), &(id as u64).to_be_bytes(), b"\xff"].concat();
++                assert_eq!(
++                    table.get(&key, None).unwrap().unwrap().kind,
++                    Kind::Tombstone
++                );
++                for seq in [1, 17, 39] {
++                    let found = table.get(&key, Some(seq)).unwrap().unwrap();
++                    assert_eq!(found.seq, seq);
++                    assert_eq!(found.value, vec![(id + seq) as u8; 200]);
++                }
++                assert!(table.get(&key, Some(0)).unwrap().is_none());
++            }
++            for id in 0..100_000u64 {
++                assert!(table.get(&id.to_be_bytes(), None).unwrap().is_none());
++            }
++            assert!(table.block_cache.stats().point_index_bytes > 0);
++            assert!(table.block_cache.resident_bytes() <= table.block_cache.capacity());
++            let before = table.block_cache.stats();
++            table.get(b"", None).unwrap();
++            assert_eq!(before.misses, table.block_cache.stats().misses);
++            let cache = table.block_cache.clone();
++            drop(table);
++            assert_eq!(cache.stats().point_index_bytes, 0);
++        }
++    }
++
++    #[test]
++    fn compact_values_recheck_corruption_after_open_for_pread_and_mapping() {
++        for mapped in [false, true] {
++            let dir = TempDir::new("compact-value-corruption");
++            let table = fixture(dir.path(), mapped);
++            let locator = table.locators.as_ref().unwrap().get(b"", None).unwrap();
++            let file = std::fs::OpenOptions::new()
++                .write(true)
++                .open(dir.path().join("1.sst"))
++                .unwrap();
++            file.write_all_at(b"X", locator.offset).unwrap();
++            file.sync_all().unwrap();
++            for _ in 0..2 {
++                assert!(matches!(table.get(b"", None), Err(SstError::Corrupt(_))));
++            }
++        }
++    }
++
++    #[test]
++    fn compact_mapping_survives_unlink_with_concurrent_reads() {
++        let dir = TempDir::new("compact-unlink-concurrent");
++        let table = fixture(dir.path(), true);
++        assert!(table.mmap.is_some());
++        std::fs::remove_file(dir.path().join("1.sst")).unwrap();
++        std::thread::scope(|scope| {
++            for _ in 0..4 {
++                let table = &table;
++                scope.spawn(move || {
++                    for _ in 0..1000 {
++                        assert_eq!(table.get(b"", None).unwrap().unwrap().value, b"empty");
++                    }
++                });
++            }
++        });
++    }
++}
++
+ unsafe extern "C" {
+     fn mmap(
+         addr: *mut std::ffi::c_void,
+@@ -128,6 +230,7 @@ pub struct SstTable {
+     index: Vec<IndexEntry>,
+     filter: BloomFilter,
+     point: Option<Box<PointIndex>>,
++    locators: Option<Box<PointLocators>>,
+     first_key: Vec<u8>,
+     last_key: Vec<u8>,
+     block_cache: Arc<BlockCache>,
+@@ -266,12 +369,23 @@ impl SstTable {
+             &index_raw,
+             point_range.map_or(filter_offset, |(offset, _)| offset),
+         )?;
++        let mut locators = None;
+         let point = if let Some((offset, len)) = point_range {
+             let lease = file_cache.acquire(number, path).map_err(open_err)?;
+-            let resident = offset
+-                .checked_add(len)
+-                .and_then(|n| usize::try_from(n).ok())
+-                .and_then(|n| block_cache.reserve_point(n));
++            let header = lease
++                .read_range_at(path, offset, 32)
++                .map_err(|e| bad(e.to_string()))?;
++            let count = u32::from_le_bytes(header[16..20].try_into().unwrap()) as u64;
++            let buckets = u32::from_le_bytes(header[20..24].try_into().unwrap()) as u64;
++            let compact_possible = count * 8 + buckets * 4 <= block_cache.capacity() as u64;
++            let resident = (!block_cache.prefer_compact_points())
++                .then(|| {
++                    offset
++                        .checked_add(len)
++                        .and_then(|n| usize::try_from(n).ok())
++                        .and_then(|n| block_cache.reserve_point(n))
++                })
++                .flatten();
+             if let Some(reservation) = resident {
+                 let raw = lease
+                     .read_shared_range_at(path, offset, len)
+@@ -285,6 +399,23 @@ impl SstTable {
+                     reservation,
+                     index.iter().map(|entry| (entry.offset, entry.len)),
+                 )?))
++            } else if compact_possible {
++                let raw = lease
++                    .read_shared_range_at(path, offset, len)
++                    .map_err(|e| bad(e.to_string()))?;
++                locators = PointLocators::decode(
++                    raw,
++                    offset as usize,
++                    &block_cache,
++                    index.iter().map(|entry| (entry.offset, entry.len)),
++                    |offset, len| {
++                        lease
++                            .read_range_at(path, offset, len)
++                            .map_err(|e| bad(e.to_string()))
++                    },
++                )?
++                .map(Box::new);
++                None
+             } else {
+                 let header = lease
+                     .read_range_at(path, offset, 8)
+@@ -332,6 +463,7 @@ impl SstTable {
+             index,
+             filter,
+             point,
++            locators,
+             first_key: Vec::new(),
+             last_key: Vec::new(),
+             block_cache,
+@@ -550,6 +682,38 @@ impl SstTable {
+         if let Some(point) = &self.point {
+             return Ok(point.get(key, limit));
+         }
++        if let Some(locators) = &self.locators {
++            let Some(locator) = locators.get(key, limit) else {
++                return Ok(None);
++            };
++            let value = if locator.len == 0 {
++                Vec::new()
++            } else if let Some(mapping) = &self.mmap {
++                let start = locator.offset as usize;
++                let bytes = &mapping.as_slice()[start..start + locator.len];
++                if crc32::crc32(bytes) != locator.checksum {
++                    return Err(SstError::Corrupt("point value checksum mismatch".into()));
++                }
++                bytes.to_vec()
++            } else {
++                let lease = self
++                    .file_cache
++                    .acquire(self.number, &self.path)
++                    .map_err(|e| SstError::Corrupt(e.to_string()))?;
++                let bytes = lease
++                    .read_range_at(&self.path, locator.offset, locator.len as u64)
++                    .map_err(|e| SstError::Corrupt(e.to_string()))?;
++                if crc32::crc32(&bytes) != locator.checksum {
++                    return Err(SstError::Corrupt("point value checksum mismatch".into()));
++                }
++                bytes
++            };
++            return Ok(Some(Found {
++                kind: locator.kind,
++                seq: locator.seq,
++                value,
++            }));
++        }
+         let idx = self.index.partition_point(|e| e.separator.as_slice() < key);
+         if idx == self.index.len() {
+             return Ok(None);

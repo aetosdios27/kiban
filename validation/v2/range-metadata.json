@@ -1,0 +1,23 @@
+{
+  "binaries": {
+    "before": {
+      "path": "/home/aetos/.t3/worktrees/kiban/t3-a7586988/target/v2-final-bin/before",
+      "sha256": "acc09f77ff637c28757f3f8324b666fb6bfb06170f5f549aa8003b369e676bdf"
+    },
+    "after": {
+      "path": "/home/aetos/.t3/worktrees/kiban/t3-a7586988/target/v2-final-bin/after",
+      "sha256": "0cea2b4f1e4dce399498ebd12b43799a8c2bf4130d61623403820cca311a129b"
+    }
+  },
+  "cpu": 8,
+  "build_cpus": "2,3,4,5,6,7,10,11",
+  "trials": 5,
+  "operations": 100000,
+  "head": "1f626f88d7bb6aa2b27126a25bee20eb316d2e3d",
+  "load": [
+    4.15673828125,
+    5.31640625,
+    11.2890625
+  ],
+  "time": 1792267060.5994325
+}

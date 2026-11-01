@@ -1,0 +1,32 @@
+    Finished `release` profile [optimized] target(s) in 0.27s
+     Running unittests src/lib.rs (target/pointindex-latency/verified-target/release/deps/kiban-9b697395093ef19c)
+
+running 2 tests
+test db::simulation_tests::seeded_crash_fixed_corpus ... ok
+test db::simulation_tests::shared_seeded_crash_fixed_corpus ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 350 filtered out; finished in 1.20s
+
+     Running unittests src/bin/kiban.rs (target/pointindex-latency/verified-target/release/deps/kiban-0ffd74a072b92ad6)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/operations.rs (target/pointindex-latency/verified-target/release/deps/operations-ee8a3197f96c2d30)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+     Running tests/recovery_validation.rs (target/pointindex-latency/verified-target/release/deps/recovery_validation-2f55f1510c860133)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+     Running tests/site_examples.rs (target/pointindex-latency/verified-target/release/deps/site_examples-5bf3aa82cd244c4f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s

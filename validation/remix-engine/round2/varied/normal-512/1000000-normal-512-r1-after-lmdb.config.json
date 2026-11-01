@@ -1,0 +1,13 @@
+{
+  "backend": "lmdb",
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/target/remix-data/after/lmdb-1000000-normal",
+  "n": 1000000,
+  "operations": 100000,
+  "k": 10,
+  "seed": 20261016,
+  "output": "/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/validation/remix-engine/varied/normal-512/1000000-normal-512-r1-after-lmdb.jsonl",
+  "action": "varied",
+  "layout": "normal",
+  "cache_mib": 512,
+  "point_index": true
+}

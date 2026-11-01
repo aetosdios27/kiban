@@ -1,0 +1,4 @@
+{"config": "after-kiban-10000-bulk.config.json", "started": 1792264258.0702689, "ended": 1792264258.2247944, "load": [25.2265625, 25.64306640625, 25.0263671875], "affinity": "8"}
+{"config": "after-kiban-10000-normal.config.json", "started": 1792264258.2272198, "ended": 1792264258.368033, "load": [25.2265625, 25.64306640625, 25.0263671875], "affinity": "8"}
+{"config": "after-kiban-1000000-bulk.config.json", "started": 1792264258.3708813, "ended": 1792264271.5812676, "load": [27.58740234375, 26.16259765625, 25.20751953125], "affinity": "8"}
+{"config": "after-kiban-1000000-normal.config.json", "started": 1792264271.6087213, "ended": 1792264308.9726534, "load": [28.19384765625, 26.50048828125, 25.35791015625], "affinity": "8"}

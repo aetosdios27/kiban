@@ -1,0 +1,65 @@
+[
+  {
+    "name": "test",
+    "command": [
+      "cargo",
+      "test",
+      "--workspace",
+      "--",
+      "--test-threads=4"
+    ],
+    "code": 0,
+    "seconds": 12.207481861114502
+  },
+  {
+    "name": "release",
+    "command": [
+      "cargo",
+      "test",
+      "--release",
+      "--workspace",
+      "--",
+      "--test-threads=4"
+    ],
+    "code": 0,
+    "seconds": 67.73558282852173
+  },
+  {
+    "name": "clippy",
+    "command": [
+      "cargo",
+      "clippy",
+      "--all-targets",
+      "--workspace",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "code": 0,
+    "seconds": 9.65854811668396
+  },
+  {
+    "name": "fmt",
+    "command": [
+      "cargo",
+      "fmt",
+      "--all",
+      "--check"
+    ],
+    "code": 0,
+    "seconds": 3.9927186965942383
+  },
+  {
+    "name": "fixed",
+    "command": [
+      "cargo",
+      "test",
+      "--release",
+      "seeded_crash_fixed_corpus",
+      "--",
+      "--test-threads=1"
+    ],
+    "code": 0,
+    "seconds": 6.677907466888428
+  }
+]

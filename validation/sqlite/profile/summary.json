@@ -1,0 +1,102 @@
+[
+  {
+    "name": "kiban-index0-stage1",
+    "per_op": {
+      "cpu_core/cycles/u": 7366.196994,
+      "cpu_core/instructions/u": 8477.155857,
+      "cpu_core/LLC-load-misses/u": 10.642012,
+      "cpu_core/branch-misses/u": 3.681453,
+      "cpu_core/dTLB-load-misses/u": 0.271452
+    }
+  },
+  {
+    "name": "kiban-index0-stage2",
+    "per_op": {
+      "cpu_core/cycles/u": 12396.476981,
+      "cpu_core/instructions/u": 49119.571953,
+      "cpu_core/LLC-load-misses/u": 0.05542,
+      "cpu_core/branch-misses/u": 21.943861,
+      "cpu_core/dTLB-load-misses/u": 0.294755
+    }
+  },
+  {
+    "name": "kiban-index1-stage1",
+    "per_op": {
+      "cpu_core/cycles/u": 4198.25778,
+      "cpu_core/instructions/u": 5784.873401,
+      "cpu_core/LLC-load-misses/u": 9.305844,
+      "cpu_core/branch-misses/u": 1.709113,
+      "cpu_core/dTLB-load-misses/u": 0.020108
+    }
+  },
+  {
+    "name": "kiban-index1-stage2",
+    "per_op": {
+      "cpu_core/cycles/u": 12236.270215,
+      "cpu_core/instructions/u": 48449.130631,
+      "cpu_core/LLC-load-misses/u": 0.043437,
+      "cpu_core/branch-misses/u": 22.736742,
+      "cpu_core/dTLB-load-misses/u": 0.320613
+    }
+  },
+  {
+    "name": "lmdb-stage1",
+    "per_op": {
+      "cpu_core/cycles/u": 5599.298932,
+      "cpu_core/instructions/u": 8037.379364,
+      "cpu_core/LLC-load-misses/u": 12.98372,
+      "cpu_core/branch-misses/u": 10.989615,
+      "cpu_core/dTLB-load-misses/u": 1.993689
+    }
+  },
+  {
+    "name": "lmdb-stage2",
+    "per_op": {
+      "cpu_core/cycles/u": 10255.011751,
+      "cpu_core/instructions/u": 42342.607807,
+      "cpu_core/LLC-load-misses/u": 0.151145,
+      "cpu_core/branch-misses/u": 24.041177,
+      "cpu_core/dTLB-load-misses/u": 0.12197
+    }
+  },
+  {
+    "name": "sqlite-mmap-stage1",
+    "per_op": {
+      "cpu_core/cycles/u": 5798.670331,
+      "cpu_core/instructions/u": 9869.975217,
+      "cpu_core/LLC-load-misses/u": 7.500383,
+      "cpu_core/branch-misses/u": 16.346451,
+      "cpu_core/dTLB-load-misses/u": 1.108463
+    }
+  },
+  {
+    "name": "sqlite-mmap-stage2",
+    "per_op": {
+      "cpu_core/cycles/u": 36299.860655,
+      "cpu_core/instructions/u": 106122.876035,
+      "cpu_core/LLC-load-misses/u": 0.251518,
+      "cpu_core/branch-misses/u": 69.399333,
+      "cpu_core/dTLB-load-misses/u": 0.521273
+    }
+  },
+  {
+    "name": "sqlite-stage1",
+    "per_op": {
+      "cpu_core/cycles/u": 7089.477984,
+      "cpu_core/instructions/u": 9968.003928,
+      "cpu_core/LLC-load-misses/u": 10.862263,
+      "cpu_core/branch-misses/u": 16.44815,
+      "cpu_core/dTLB-load-misses/u": 2.90352
+    }
+  },
+  {
+    "name": "sqlite-stage2",
+    "per_op": {
+      "cpu_core/cycles/u": 38103.062954,
+      "cpu_core/instructions/u": 107362.743717,
+      "cpu_core/LLC-load-misses/u": 0.173956,
+      "cpu_core/branch-misses/u": 76.289383,
+      "cpu_core/dTLB-load-misses/u": 0.609805
+    }
+  }
+]

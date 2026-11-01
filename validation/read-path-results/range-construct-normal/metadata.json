@@ -1,0 +1,17 @@
+{
+  "cases": {
+    "before": {
+      "component": "iter-construct",
+      "binary": "/home/aetos/.t3/worktrees/kiban/t3-53ad0f47/target/read-path-tools/kiban-readbench-inline",
+      "sha256": "08225021a14d675e9f75119134f462e01d4bd9961562f9841f77098621889ca8"
+    },
+    "after": {
+      "component": "iter-construct",
+      "binary": "/home/aetos/.t3/worktrees/kiban/t3-53ad0f47/target/read-path-tools/kiban-readbench-range-alloc-final",
+      "sha256": "9afa6c894677e7f940e4984b199fb09a601caa6ae829c37d66268d2c563c4867"
+    }
+  },
+  "layout": "normal",
+  "trials": 5,
+  "affinity": "3"
+}

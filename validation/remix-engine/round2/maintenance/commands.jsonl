@@ -1,0 +1,1 @@
+{"name": "million", "cmd": ["/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/target/release/deps/kiban-9b697395093ef19c", "--ignored", "--exact", "db::point_index_tests::point_index_maintenance_measurement", "--nocapture", "--test-threads=1"], "start": {"total": 2117651, "idle": 1787959}, "end": {"total": 2121720, "idle": 1791887}, "busy_fraction": 0.034652248709756694}

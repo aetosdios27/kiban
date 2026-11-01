@@ -1,0 +1,8 @@
+{"config": "bulk-index0-cache32.config.json", "started": 1792270784.2207432, "ended": 1792270784.2316568, "load": [7.9345703125, 7.2587890625, 5.421875], "affinity": "6"}
+{"config": "bulk-index0-cacheNone.config.json", "started": 1792270784.2321746, "ended": 1792270784.240931, "load": [7.9345703125, 7.2587890625, 5.421875], "affinity": "6"}
+{"config": "bulk-index1-cache32.config.json", "started": 1792270784.241455, "ended": 1792270784.996304, "load": [7.9345703125, 7.2587890625, 5.421875], "affinity": "6"}
+{"config": "bulk-index1-cacheNone.config.json", "started": 1792270784.9969707, "ended": 1792270785.6556118, "load": [7.9345703125, 7.2587890625, 5.421875], "affinity": "6"}
+{"config": "normal-index0-cache32.config.json", "started": 1792270785.6561606, "ended": 1792270785.6954377, "load": [7.9345703125, 7.2587890625, 5.421875], "affinity": "6"}
+{"config": "normal-index0-cacheNone.config.json", "started": 1792270785.6959383, "ended": 1792270785.705057, "load": [7.9345703125, 7.2587890625, 5.421875], "affinity": "6"}
+{"config": "normal-index1-cache32.config.json", "started": 1792270785.7055645, "ended": 1792270786.257099, "load": [7.9345703125, 7.2587890625, 5.421875], "affinity": "6"}
+{"config": "normal-index1-cacheNone.config.json", "started": 1792270786.2576776, "ended": 1792270786.54169, "load": [7.9345703125, 7.2587890625, 5.421875], "affinity": "6"}

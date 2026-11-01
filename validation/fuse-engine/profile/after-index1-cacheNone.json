@@ -1,0 +1,20 @@
+{
+  "name": "after-index1-cacheNone",
+  "seconds": 1.1827541220009152,
+  "cpu_seconds": 1.18,
+  "delta": {
+    "cpu_ticks": 118,
+    "rchar": 4,
+    "wchar": 8,
+    "syscr": 1,
+    "syscw": 2,
+    "read_bytes": 0,
+    "write_bytes": 0,
+    "cancelled_write_bytes": 0
+  },
+  "wchan_samples": {
+    "anon_pipe_read": 1,
+    "0": 221
+  },
+  "source_limitation": "No source-level sampler installed; only CPU/I/O phase accounting is established."
+}

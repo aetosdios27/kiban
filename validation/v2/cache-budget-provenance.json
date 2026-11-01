@@ -1,0 +1,15 @@
+{
+  "memtotal": "MemTotal:       32258716 kB",
+  "limits": {
+    "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/app-t3code.slice/app-t3code-agents.slice/app-t3code-agents-952060bec3a7.slice/t3code-codex-24a4a87b.scope/memory.max": "max",
+    "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/app-t3code.slice/app-t3code-agents.slice/app-t3code-agents-952060bec3a7.slice/memory.max": "max",
+    "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/app-t3code.slice/app-t3code-agents.slice/memory.max": "28737957888",
+    "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/app-t3code.slice/memory.max": "max",
+    "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/memory.max": "max",
+    "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/memory.max": "max",
+    "/sys/fs/cgroup/user.slice/user-1000.slice/memory.max": "max",
+    "/sys/fs/cgroup/user.slice/memory.max": "max"
+  },
+  "default_bytes": 449030592,
+  "source": "all standalone range probe records, both builds"
+}

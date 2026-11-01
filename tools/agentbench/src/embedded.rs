@@ -24,9 +24,17 @@ impl Embedded {
 
     #[allow(dead_code)] // Optional cache diagnosis binary; original harness keeps defaults.
     pub fn with_options(path: &Path, options: kiban::db::KibanOptions) -> Result<Self> {
+        Self::with_options_and_durability(path, options, false)
+    }
+
+    pub fn with_options_and_durability(
+        path: &Path,
+        options: kiban::db::KibanOptions,
+        durable: bool,
+    ) -> Result<Self> {
         Ok(Self {
             db: Kiban::open_with_options(path, options)?,
-            durable: false,
+            durable,
         })
     }
 }
@@ -55,6 +63,10 @@ impl Backend for Embedded {
     fn get(&mut self, id: u64) -> Result<Memory> {
         let value = self.db.get(key(id))?.ok_or("missing memory")?;
         Ok(serde_json::from_slice(&value)?)
+    }
+
+    fn contains_key(&mut self, key: &[u8]) -> Result<bool> {
+        Ok(self.db.get(key)?.is_some())
     }
 
     fn recent(&mut self, agent: u32, k: usize) -> Result<Vec<Memory>> {

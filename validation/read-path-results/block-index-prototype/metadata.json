@@ -1,0 +1,5 @@
+{
+  "binary_sha256": "62a6fbc8df89d38019eb035cba8773f26e2f73473247bdff1339aa86e5d03846",
+  "trials": 5,
+  "scope": "Ordinary restart seek versus bounded packed in-memory block index"
+}

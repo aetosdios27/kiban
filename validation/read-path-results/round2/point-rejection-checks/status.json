@@ -1,0 +1,127 @@
+[
+  {
+    "name": "fmt",
+    "command": [
+      "cargo",
+      "fmt",
+      "--all",
+      "--check"
+    ],
+    "code": 0,
+    "seconds": 0.3292355537414551
+  },
+  {
+    "name": "clippy",
+    "command": [
+      "cargo",
+      "clippy",
+      "--all-targets",
+      "--workspace",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "code": 0,
+    "seconds": 1.7318799495697021
+  },
+  {
+    "name": "readbench-fmt",
+    "command": [
+      "cargo",
+      "fmt",
+      "--manifest-path",
+      "tools/agentbench/readpath/Cargo.toml",
+      "--check"
+    ],
+    "code": 0,
+    "seconds": 0.07727694511413574
+  },
+  {
+    "name": "readbench-clippy",
+    "command": [
+      "cargo",
+      "clippy",
+      "--manifest-path",
+      "tools/agentbench/readpath/Cargo.toml",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "code": 0,
+    "seconds": 0.8928167819976807
+  },
+  {
+    "name": "test",
+    "command": [
+      "cargo",
+      "test",
+      "--workspace",
+      "--",
+      "--test-threads=4"
+    ],
+    "code": 0,
+    "seconds": 17.524222135543823
+  },
+  {
+    "name": "release",
+    "command": [
+      "cargo",
+      "test",
+      "--release",
+      "--workspace",
+      "--",
+      "--test-threads=4"
+    ],
+    "code": 0,
+    "seconds": 36.05381441116333
+  },
+  {
+    "name": "readbench-test",
+    "command": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "tools/agentbench/readpath/Cargo.toml"
+    ],
+    "code": 0,
+    "seconds": 2.8511221408843994
+  },
+  {
+    "name": "fixed",
+    "command": [
+      "cargo",
+      "test",
+      "--release",
+      "seeded_crash_fixed_corpus",
+      "--",
+      "--test-threads=1"
+    ],
+    "code": 0,
+    "seconds": 0.446270227432251
+  },
+  {
+    "name": "loom",
+    "command": [
+      "cargo",
+      "test",
+      "--features",
+      "loom",
+      "--",
+      "--test-threads=1",
+      "loom_"
+    ],
+    "code": 0,
+    "seconds": 31.268513441085815
+  },
+  {
+    "name": "site-facts",
+    "command": [
+      "python3",
+      "tools/site_facts.py",
+      "validate"
+    ],
+    "code": 0,
+    "seconds": 0.18411469459533691
+  }
+]

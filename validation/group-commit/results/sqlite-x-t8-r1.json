@@ -1,0 +1,1 @@
+{"engine":"sqlite","fdatasync":0,"fsync":4032,"max_us":835281.409,"mean_us":10998.991,"mode":"x","msync":0,"ops_per_thread":500,"p50_us":1516.194,"p99_us":310126.154,"probe":true,"sync_file_range":0,"threads":8,"throughput":645.4583211847521,"verified":true,"wall_s":6.197146847,"write_bytes":60894552,"write_calls":25524,"writes":4000}

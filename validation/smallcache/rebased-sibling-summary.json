@@ -1,0 +1,29 @@
+{
+  "rebased-mapped-read": {
+    "children": 72,
+    "scope": "Whole child process including open and verification",
+    "busy_fraction": {
+      "min": 0.045171339563862926,
+      "median": 0.12294809651795177,
+      "max": 0.4881516587677725
+    }
+  },
+  "rebased-pread-read": {
+    "children": 72,
+    "scope": "Whole child process including open and verification",
+    "busy_fraction": {
+      "min": 0.04307116104868914,
+      "median": 0.10830466061933061,
+      "max": 0.8786536758193091
+    }
+  },
+  "rebased-controls-mapped-read": {
+    "children": 60,
+    "scope": "Whole child process including open and verification",
+    "busy_fraction": {
+      "min": 0.05411764705882353,
+      "median": 0.11865947479262476,
+      "max": 0.23173277661795408
+    }
+  }
+}

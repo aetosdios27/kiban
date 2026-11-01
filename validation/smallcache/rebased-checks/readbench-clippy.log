@@ -1,0 +1,20 @@
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.14
+   Compiling pkg-config v0.3.34
+   Compiling vcpkg v0.2.15
+    Checking foldhash v0.2.0
+    Checking fallible-streaming-iterator v0.1.9
+    Checking smallvec v1.14.0
+    Checking fallible-iterator v0.3.0
+    Checking kiban v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-9b9cb0e0)
+    Checking hashbrown v0.17.1
+   Compiling cc v1.8.0
+    Checking hashlink v0.12.2
+   Compiling libsqlite3-sys v0.38.2
+   Compiling libmimalloc-sys v0.1.44
+   Compiling lmdb-master3-sys v0.2.5
+    Checking heed3 v0.22.0
+    Checking mimalloc v0.1.48
+    Checking rusqlite v0.40.2
+    Checking kiban-readbench v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-9b9cb0e0/tools/agentbench/readpath)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 11.54s

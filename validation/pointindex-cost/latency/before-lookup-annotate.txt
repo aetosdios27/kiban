@@ -1,0 +1,620 @@
+ Percent |	Source code & Disassembly of before for cpu_core/cycles/u (530 samples, percent: local period)
+--------------------------------------------------------------------------------------------------------------
+         : 0     0xc3760 <kiban::db::get_from_version_at::{closure#0}>:
+    0.20 :   c3760:        pushq   %rbp
+    0.00 :   c3761:        pushq   %r15
+    0.00 :   c3763:        pushq   %r14
+    0.00 :   c3765:        pushq   %r13
+    0.00 :   c3767:        pushq   %r12
+    0.00 :   c3769:        pushq   %rbx
+    0.00 :   c376a:        subq    $0xc8, %rsp
+    0.00 :   c3771:        movq    %rdx, %r14
+    0.00 :   c3774:        movq    %rsi, %rbx
+    0.00 :   c3777:        movq    %rdi, %r15
+    0.00 :   c377a:        movabsq $-0x340d631b7bdddcdb, %rcx
+    0.00 :   c3784:        movq    (%rsi), %rax
+    0.00 :   c3787:        movq    %rax, (%rsp)
+    0.00 :   c378b:        movq    0x8(%rsi), %r12
+    0.00 :   c378f:        movq    0x10(%rsi), %rax
+    0.00 :   c3793:        testq   %r12, %r12
+    0.00 :   c3796:        je      0xc3857 <kiban::db::get_from_version_at::{closure#0}+0xf7>
+    0.21 :   c379c:        movabsq $0x100000001b3, %rdx
+    0.00 :   c37a6:        movl    %r12d, %esi
+    0.00 :   c37a9:        andl    $0x7, %esi
+    0.00 :   c37ac:        cmpq    $0x8, %r12
+    0.00 :   c37b0:        jae     0xc37bb <kiban::db::get_from_version_at::{closure#0}+0x5b>
+    0.00 :   c37b2:        movq    (%rsp), %rdi
+    0.00 :   c37b6:        jmp     0xc383a <kiban::db::get_from_version_at::{closure#0}+0xda>
+    0.00 :   c37bb:        movq    %r12, %r8
+    0.00 :   c37be:        andq    $-0x8, %r8
+    0.00 :   c37c2:        movq    (%rsp), %rdi
+    0.00 :   c37c6:        nopw    %cs:(%rax,%rax)
+    0.00 :   c37d0:        movzbl  (%rdi), %r9d
+    0.00 :   c37d4:        xorq    %rcx, %r9
+    0.19 :   c37d7:        imulq   %rdx, %r9
+    0.40 :   c37db:        movzbl  0x1(%rdi), %ecx
+    0.00 :   c37df:        xorq    %r9, %rcx
+    0.00 :   c37e2:        imulq   %rdx, %rcx
+    0.93 :   c37e6:        movzbl  0x2(%rdi), %r9d
+    0.00 :   c37eb:        xorq    %rcx, %r9
+    0.00 :   c37ee:        imulq   %rdx, %r9
+    0.20 :   c37f2:        movzbl  0x3(%rdi), %ecx
+    0.00 :   c37f6:        xorq    %r9, %rcx
+    0.00 :   c37f9:        imulq   %rdx, %rcx
+    1.51 :   c37fd:        movzbl  0x4(%rdi), %r9d
+    0.00 :   c3802:        xorq    %rcx, %r9
+    0.00 :   c3805:        imulq   %rdx, %r9
+    0.19 :   c3809:        movzbl  0x5(%rdi), %ecx
+    0.00 :   c380d:        xorq    %r9, %rcx
+    0.00 :   c3810:        imulq   %rdx, %rcx
+    0.57 :   c3814:        movzbl  0x6(%rdi), %r9d
+    0.00 :   c3819:        xorq    %rcx, %r9
+    0.00 :   c381c:        imulq   %rdx, %r9
+    0.94 :   c3820:        movzbl  0x7(%rdi), %ecx
+    0.00 :   c3824:        addq    $0x8, %rdi
+    0.00 :   c3828:        xorq    %r9, %rcx
+    0.00 :   c382b:        imulq   %rdx, %rcx
+    0.39 :   c382f:        addq    $-0x8, %r8
+    0.00 :   c3833:        jne     0xc37d0 <kiban::db::get_from_version_at::{closure#0}+0x70>
+    0.00 :   c3835:        testq   %rsi, %rsi
+    0.00 :   c3838:        je      0xc3857 <kiban::db::get_from_version_at::{closure#0}+0xf7>
+    0.00 :   c383a:        xorl    %r8d, %r8d
+    0.00 :   c383d:        movq    %rcx, %r9
+    0.19 :   c3840:        movzbl  (%rdi,%r8), %ecx
+    0.00 :   c3845:        xorq    %r9, %rcx
+    0.00 :   c3848:        imulq   %rdx, %rcx
+    1.70 :   c384c:        incq    %r8
+    0.00 :   c384f:        movq    %rcx, %r9
+    0.00 :   c3852:        cmpq    %r8, %rsi
+    0.00 :   c3855:        jne     0xc3840 <kiban::db::get_from_version_at::{closure#0}+0xe0>
+    0.00 :   c3857:        movq    (%rax), %rax
+    0.00 :   c385a:        movq    %rax, 0x58(%rsp)
+    0.00 :   c385f:        movq    %rcx, %r8
+    0.00 :   c3862:        rolq    $0x15, %r8
+    0.00 :   c3866:        orq     $0x1, %r8
+    0.00 :   c386a:        movl    0x68(%r14), %r9d
+    0.00 :   c386e:        movq    0x60(%r14), %r10
+    0.00 :   c3872:        movq    0x50(%r14), %r11
+    0.00 :   c3876:        movq    0x58(%r14), %rsi
+    0.00 :   c387a:        incq    %r9
+    0.00 :   c387d:        nopl    (%rax)
+    0.00 :   c3880:        decq    %r9
+    0.00 :   c3883:        je      0xc38f0 <kiban::db::get_from_version_at::{closure#0}+0x190>
+    0.00 :   c3885:        testq   %r10, %r10
+    0.00 :   c3888:        je      0xc4187 <kiban::db::get_from_version_at::{closure#0}+0xa27>
+    0.00 :   c388e:        movq    %rcx, %rax
+    0.00 :   c3891:        orq     %r10, %rax
+    0.00 :   c3894:        shrq    $0x20, %rax
+    0.19 :   c3898:        je      0xc38b0 <kiban::db::get_from_version_at::{closure#0}+0x150>
+    0.00 :   c389a:        movq    %rcx, %rax
+    0.00 :   c389d:        xorl    %edx, %edx
+    0.00 :   c389f:        divq    %r10
+    1.13 :   c38a2:        jmp     0xc38b7 <kiban::db::get_from_version_at::{closure#0}+0x157>
+    0.00 :   c38a4:        nopw    %cs:(%rax,%rax)
+    0.00 :   c38b0:        movl    %ecx, %eax
+    0.00 :   c38b2:        xorl    %edx, %edx
+    0.00 :   c38b4:        divl    %r10d
+    0.00 :   c38b7:        movq    %rdx, %rdi
+    0.00 :   c38ba:        shrq    $0x3, %rdi
+    0.00 :   c38be:        cmpq    %rsi, %rdi
+    0.00 :   c38c1:        jae     0xc417b <kiban::db::get_from_version_at::{closure#0}+0xa1b>
+    0.00 :   c38c7:        addq    %r8, %rcx
+    0.19 :   c38ca:        movzbl  (%r11,%rdi), %eax
+    9.65 :   c38cf:        andl    $0x7, %edx
+    0.37 :   c38d2:        btl     %edx, %eax
+    0.00 :   c38d5:        jb      0xc3880 <kiban::db::get_from_version_at::{closure#0}+0x120>
+    0.00 :   c38d7:        movq    $-0x1, (%r15)
+    0.00 :   c38de:        addq    $0xc8, %rsp
+    0.00 :   c38e5:        popq    %rbx
+    0.00 :   c38e6:        popq    %r12
+    0.00 :   c38e8:        popq    %r13
+    0.00 :   c38ea:        popq    %r14
+    0.00 :   c38ec:        popq    %r15
+    0.00 :   c38ee:        popq    %rbp
+    0.00 :   c38ef:        retq
+    0.00 :   c38f0:        movq    0xc0(%r14), %r13
+    0.00 :   c38f7:        testq   %r13, %r13
+    0.00 :   c38fa:        movq    %r12, 0x10(%rsp)
+    0.00 :   c38ff:        je      0xc3975 <kiban::db::get_from_version_at::{closure#0}+0x215>
+    0.00 :   c3901:        movabsq $-0x40a7b892e31b1a47, %rdx
+    0.00 :   c390b:        movabsq $-0x6b2fb644ecceee15, %rbp
+    0.00 :   c3915:        movq    0x48(%r13), %rax
+    0.00 :   c3919:        xorq    %r12, %rax
+    0.00 :   c391c:        movq    %rax, %rcx
+    0.00 :   c391f:        shrq    $0x1e, %rcx
+    0.00 :   c3923:        xorq    %rax, %rcx
+    0.00 :   c3926:        imulq   %rdx, %rcx
+    0.00 :   c392a:        movq    %rcx, %rax
+    0.00 :   c392d:        shrq    $0x1b, %rax
+    0.00 :   c3931:        xorq    %rcx, %rax
+    0.00 :   c3934:        imulq   %rbp, %rax
+    0.00 :   c3938:        movq    %rax, %r14
+    0.00 :   c393b:        shrq    $0x1f, %r14
+    0.00 :   c393f:        xorq    %rax, %r14
+    0.00 :   c3942:        movabsq $0x7ffffffffffffff8, %rcx
+    0.00 :   c394c:        andq    %r12, %rcx
+    0.00 :   c394f:        movq    (%rsp), %rax
+    0.00 :   c3953:        leaq    (%rax,%rcx), %rsi
+    0.00 :   c3957:        testq   %rcx, %rcx
+    0.00 :   c395a:        je      0xc3a68 <kiban::db::get_from_version_at::{closure#0}+0x308>
+    0.00 :   c3960:        addq    $-0x8, %rcx
+    0.00 :   c3964:        movl    %ecx, %eax
+    0.00 :   c3966:        notl    %eax
+    0.00 :   c3968:        testb   $0x18, %al
+    0.00 :   c396a:        jne     0xc39de <kiban::db::get_from_version_at::{closure#0}+0x27e>
+    0.00 :   c396c:        movq    (%rsp), %rax
+    0.00 :   c3970:        jmp     0xc3a14 <kiban::db::get_from_version_at::{closure#0}+0x2b4>
+    0.00 :   c3975:        movq    0x40(%r14), %r12
+    0.00 :   c3979:        testq   %r12, %r12
+    0.00 :   c397c:        je      0xc38d7 <kiban::db::get_from_version_at::{closure#0}+0x177>
+    0.00 :   c3982:        movq    %rbx, 0x18(%rsp)
+    0.00 :   c3987:        movq    %r15, 0x8(%rsp)
+    0.00 :   c398c:        movq    %r14, 0xc0(%rsp)
+    0.00 :   c3994:        movq    0x38(%r14), %rbx
+    0.00 :   c3998:        cmpq    $0x1, %r12
+    0.00 :   c399c:        movq    %r12, 0xb8(%rsp)
+    0.00 :   c39a4:        jne     0xc3bed <kiban::db::get_from_version_at::{closure#0}+0x48d>
+    0.00 :   c39aa:        xorl    %r14d, %r14d
+    0.00 :   c39ad:        movq    %r14, %rcx
+    0.00 :   c39b0:        shlq    $0x6, %rcx
+    0.00 :   c39b4:        leaq    (%rbx,%rcx), %rax
+    0.00 :   c39b8:        cmpb    $0x1, (%rbx,%rcx)
+    0.00 :   c39bc:        jne     0xc3c6f <kiban::db::get_from_version_at::{closure#0}+0x50f>
+    0.00 :   c39c2:        movq    0x10(%rax), %rdi
+    0.00 :   c39c6:        movq    0x18(%rax), %rdx
+    0.00 :   c39ca:        movq    0x8(%rsp), %r15
+    0.00 :   c39cf:        movq    0x18(%rsp), %r12
+    0.00 :   c39d4:        movq    0x10(%rsp), %rcx
+    0.00 :   c39d9:        jmp     0xc3c93 <kiban::db::get_from_version_at::{closure#0}+0x533>
+    0.00 :   c39de:        movl    %ecx, %edx
+    0.00 :   c39e0:        shrl    $0x3, %edx
+    0.00 :   c39e3:        incl    %edx
+    0.00 :   c39e5:        andl    $0x3, %edx
+    0.00 :   c39e8:        movabsq $-0x61c8864680b583eb, %rdi
+    0.00 :   c39f2:        movq    (%rsp), %rax
+    0.00 :   c39f6:        nopw    %cs:(%rax,%rax)
+    0.00 :   c3a00:        xorq    (%rax), %r14
+    0.00 :   c3a03:        addq    $0x8, %rax
+    0.00 :   c3a07:        rolq    $0x1b, %r14
+    0.00 :   c3a0b:        imulq   %rdi, %r14
+    0.00 :   c3a0f:        decq    %rdx
+    0.00 :   c3a12:        jne     0xc3a00 <kiban::db::get_from_version_at::{closure#0}+0x2a0>
+    0.00 :   c3a14:        cmpq    $0x18, %rcx
+    0.00 :   c3a18:        jb      0xc3a68 <kiban::db::get_from_version_at::{closure#0}+0x308>
+    0.00 :   c3a1a:        movabsq $-0x61c8864680b583eb, %rcx
+    0.00 :   c3a24:        nopw    %cs:(%rax,%rax)
+    0.00 :   c3a30:        xorq    (%rax), %r14
+    0.00 :   c3a33:        rolq    $0x1b, %r14
+    0.00 :   c3a37:        imulq   %rcx, %r14
+    0.19 :   c3a3b:        xorq    0x8(%rax), %r14
+    0.00 :   c3a3f:        rolq    $0x1b, %r14
+    0.00 :   c3a43:        imulq   %rcx, %r14
+    0.00 :   c3a47:        xorq    0x10(%rax), %r14
+    0.00 :   c3a4b:        rolq    $0x1b, %r14
+    0.00 :   c3a4f:        imulq   %rcx, %r14
+    0.00 :   c3a53:        xorq    0x18(%rax), %r14
+    0.00 :   c3a57:        addq    $0x20, %rax
+    0.00 :   c3a5b:        rolq    $0x1b, %r14
+    0.00 :   c3a5f:        imulq   %rcx, %r14
+    0.00 :   c3a63:        cmpq    %rsi, %rax
+    0.00 :   c3a66:        jne     0xc3a30 <kiban::db::get_from_version_at::{closure#0}+0x2d0>
+    0.00 :   c3a68:        movl    %r12d, %edx
+    0.00 :   c3a6b:        andl    $0x7, %edx
+    0.00 :   c3a6e:        movq    $0x0, 0x20(%rsp)
+    0.00 :   c3a77:        leaq    0x20(%rsp), %rdi
+    0.00 :   c3a7c:        callq   *0x6d836(%rip)  # 0x1312b8 <_DYNAMIC+0x210>
+    0.00 :   c3a82:        xorq    0x20(%rsp), %r14
+    1.31 :   c3a87:        movq    %r14, %rax
+    0.00 :   c3a8a:        shrq    $0x1e, %rax
+    0.00 :   c3a8e:        xorq    %r14, %rax
+    0.00 :   c3a91:        movabsq $-0x40a7b892e31b1a47, %rcx
+    0.00 :   c3a9b:        imulq   %rcx, %rax
+    0.00 :   c3a9f:        movq    %rax, %rcx
+    0.00 :   c3aa2:        shrq    $0x1b, %rcx
+    0.00 :   c3aa6:        xorq    %rax, %rcx
+    0.00 :   c3aa9:        movq    %rbp, %r12
+    0.00 :   c3aac:        imulq   %rbp, %rcx
+    0.56 :   c3ab0:        movq    %rcx, %rbp
+    0.00 :   c3ab3:        shrq    $0x1f, %rbp
+    0.00 :   c3ab7:        xorq    %rcx, %rbp
+    0.19 :   c3aba:        movq    %r13, %rdi
+    0.00 :   c3abd:        movq    %rbp, %rsi
+    0.00 :   c3ac0:        callq   0x97140 <<kiban::sstable::point::PointIndex>::slot>
+    0.00 :   c3ac5:        movq    %r13, %r9
+    0.00 :   c3ac8:        movq    0x20(%r13), %r13
+    0.00 :   c3acc:        leaq    0x8(%rax), %rdx
+    0.00 :   c3ad0:        leaq    0xc(%rax), %rsi
+    0.00 :   c3ad4:        cmpq    $-0x5, %rdx
+    0.00 :   c3ad8:        ja      0xc4109 <kiban::db::get_from_version_at::{closure#0}+0x9a9>
+    0.21 :   c3ade:        cmpq    %r13, %rsi
+    0.00 :   c3ae1:        ja      0xc4109 <kiban::db::get_from_version_at::{closure#0}+0x9a9>
+    0.00 :   c3ae7:        movq    0x18(%r9), %r14
+    0.00 :   c3aeb:        leaq    0x10(%r14), %r10
+    0.00 :   c3aef:        movabsq $-0x2917014799a6026d, %rcx
+    0.00 :   c3af9:        xorq    %rcx, %rbp
+    0.00 :   c3afc:        movq    %rbp, %rcx
+    0.00 :   c3aff:        shrq    $0x1e, %rcx
+    0.00 :   c3b03:        xorq    %rbp, %rcx
+    0.00 :   c3b06:        movabsq $-0x40a7b892e31b1a47, %rsi
+    0.00 :   c3b10:        imulq   %rsi, %rcx
+    0.00 :   c3b14:        movq    %rcx, %rsi
+    0.00 :   c3b17:        shrq    $0x1b, %rsi
+    0.00 :   c3b1b:        xorq    %rcx, %rsi
+    0.00 :   c3b1e:        imulq   %r12, %rsi
+    0.00 :   c3b22:        shrq    $0x30, %rsi
+    0.00 :   c3b26:        movq    $-0x1, %r8
+    0.00 :   c3b2d:        cmpw    %si, (%r10,%rdx)
+   38.73 :   c3b32:        movq    %rbx, 0x18(%rsp)
+    0.00 :   c3b37:        jne     0xc3ef5 <kiban::db::get_from_version_at::{closure#0}+0x795>
+    0.00 :   c3b3d:        cmpq    $-0x9, %rax
+    0.00 :   c3b41:        ja      0xc411b <kiban::db::get_from_version_at::{closure#0}+0x9bb>
+    0.00 :   c3b47:        cmpq    %r13, %rdx
+    0.00 :   c3b4a:        ja      0xc411b <kiban::db::get_from_version_at::{closure#0}+0x9bb>
+    0.00 :   c3b50:        movq    0x60(%r9), %rcx
+    0.00 :   c3b54:        movq    (%r10,%rax), %rax
+    0.39 :   c3b58:        leaq    (%rax,%rcx), %rbp
+    0.00 :   c3b5c:        leaq    (%rax,%rcx), %rsi
+    0.00 :   c3b60:        addq    $0x4, %rsi
+    0.00 :   c3b64:        cmpq    $-0x5, %rbp
+    0.00 :   c3b68:        ja      0xc4130 <kiban::db::get_from_version_at::{closure#0}+0x9d0>
+    0.00 :   c3b6e:        cmpq    %r13, %rsi
+    0.00 :   c3b71:        ja      0xc4130 <kiban::db::get_from_version_at::{closure#0}+0x9d0>
+    0.00 :   c3b77:        leaq    0x8(%rbp), %rdi
+    0.00 :   c3b7b:        cmpq    $-0x5, %rsi
+    0.00 :   c3b7f:        ja      0xc4142 <kiban::db::get_from_version_at::{closure#0}+0x9e2>
+    0.00 :   c3b85:        cmpq    %r13, %rdi
+    0.00 :   c3b88:        ja      0xc4142 <kiban::db::get_from_version_at::{closure#0}+0x9e2>
+    0.00 :   c3b8e:        movq    %r15, 0x8(%rsp)
+    0.00 :   c3b93:        movl    (%r10,%rbp), %r15d
+   38.22 :   c3b97:        movq    %rdi, %rax
+    0.00 :   c3b9a:        addq    %r15, %rax
+    0.00 :   c3b9d:        jb      0xc4151 <kiban::db::get_from_version_at::{closure#0}+0x9f1>
+    0.00 :   c3ba3:        cmpq    %r13, %rax
+    0.00 :   c3ba6:        ja      0xc4151 <kiban::db::get_from_version_at::{closure#0}+0x9f1>
+    0.00 :   c3bac:        movq    0x10(%rsp), %rdx
+    0.00 :   c3bb1:        cmpq    %r15, %rdx
+    0.00 :   c3bb4:        jne     0xc3be3 <kiban::db::get_from_version_at::{closure#0}+0x483>
+    0.00 :   c3bb6:        movq    %r9, %r12
+    0.00 :   c3bb9:        movl    (%r10,%rsi), %ebx
+    0.00 :   c3bbd:        addq    %r10, %rdi
+    0.00 :   c3bc0:        movq    (%rsp), %rsi
+    0.00 :   c3bc4:        callq   *0x6d776(%rip)  # 0x131340 <_DYNAMIC+0x298>
+    0.00 :   c3bca:        testl   %eax, %eax
+    0.00 :   c3bcc:        je      0xc3dcf <kiban::db::get_from_version_at::{closure#0}+0x66f>
+    0.00 :   c3bd2:        movq    0x8(%rsp), %r15
+    0.00 :   c3bd7:        movq    $-0x1, %r8
+    0.00 :   c3bde:        jmp     0xc3ef5 <kiban::db::get_from_version_at::{closure#0}+0x795>
+    0.00 :   c3be3:        movq    0x8(%rsp), %r15
+    0.00 :   c3be8:        jmp     0xc3ef5 <kiban::db::get_from_version_at::{closure#0}+0x795>
+    0.00 :   c3bed:        xorl    %r14d, %r14d
+    0.00 :   c3bf0:        jmp     0xc3c3d <kiban::db::get_from_version_at::{closure#0}+0x4dd>
+    0.00 :   c3bf2:        nopw    %cs:(%rax,%rax)
+    0.00 :   c3c00:        movq    0x10(%rax), %rdi
+    0.00 :   c3c04:        movq    0x18(%rax), %rdx
+    0.00 :   c3c08:        movq    %rdx, %rbp
+    0.00 :   c3c0b:        movq    0x10(%rsp), %rax
+    0.00 :   c3c10:        subq    %rax, %rbp
+    0.00 :   c3c13:        cmovaeq %rax, %rdx
+    0.00 :   c3c17:        movq    (%rsp), %rsi
+    0.00 :   c3c1b:        callq   *0x6d67f(%rip)  # 0x1312a0 <_DYNAMIC+0x1f8>
+    0.00 :   c3c21:        cltq
+    0.00 :   c3c23:        testl   %eax, %eax
+    0.00 :   c3c25:        cmovneq %rax, %rbp
+    0.00 :   c3c29:        testq   %rbp, %rbp
+    0.00 :   c3c2c:        cmovsq  %r15, %r14
+    0.00 :   c3c30:        subq    %r13, %r12
+    0.00 :   c3c33:        cmpq    $0x1, %r12
+    0.00 :   c3c37:        jbe     0xc39ad <kiban::db::get_from_version_at::{closure#0}+0x24d>
+    0.00 :   c3c3d:        movq    %r12, %r13
+    0.00 :   c3c40:        shrq    %r13
+    0.00 :   c3c43:        leaq    (%r14,%r13), %r15
+    0.00 :   c3c47:        movq    %r15, %rcx
+    0.00 :   c3c4a:        shlq    $0x6, %rcx
+    0.00 :   c3c4e:        leaq    (%rbx,%rcx), %rax
+    0.00 :   c3c52:        cmpb    $0x1, (%rbx,%rcx)
+    0.00 :   c3c56:        je      0xc3c00 <kiban::db::get_from_version_at::{closure#0}+0x4a0>
+    0.00 :   c3c58:        movzbl  0x1(%rax), %edx
+    0.00 :   c3c5c:        cmpq    $0x2f, %rdx
+    0.00 :   c3c60:        jae     0xc40cb <kiban::db::get_from_version_at::{closure#0}+0x96b>
+    0.00 :   c3c66:        addq    $0x2, %rax
+    0.00 :   c3c6a:        movq    %rax, %rdi
+    0.00 :   c3c6d:        jmp     0xc3c08 <kiban::db::get_from_version_at::{closure#0}+0x4a8>
+    0.00 :   c3c6f:        movzbl  0x1(%rax), %edx
+    0.00 :   c3c73:        cmpq    $0x2f, %rdx
+    0.00 :   c3c77:        movq    0x8(%rsp), %r15
+    0.00 :   c3c7c:        movq    0x18(%rsp), %r12
+    0.00 :   c3c81:        movq    0x10(%rsp), %rcx
+    0.00 :   c3c86:        jae     0xc40cb <kiban::db::get_from_version_at::{closure#0}+0x96b>
+    0.00 :   c3c8c:        addq    $0x2, %rax
+    0.00 :   c3c90:        movq    %rax, %rdi
+    0.00 :   c3c93:        movq    %rdx, %r13
+    0.00 :   c3c96:        subq    %rcx, %r13
+    0.00 :   c3c99:        cmovaeq %rcx, %rdx
+    0.00 :   c3c9d:        movq    (%rsp), %rsi
+    0.00 :   c3ca1:        callq   *0x6d5f9(%rip)  # 0x1312a0 <_DYNAMIC+0x1f8>
+    0.00 :   c3ca7:        cltq
+    0.00 :   c3ca9:        testl   %eax, %eax
+    0.00 :   c3cab:        cmovneq %rax, %r13
+    0.00 :   c3caf:        shrq    $0x3f, %r13
+    0.00 :   c3cb3:        addq    %r14, %r13
+    0.00 :   c3cb6:        movq    0xb8(%rsp), %rax
+    0.00 :   c3cbe:        cmpq    %rax, %r13
+    0.00 :   c3cc1:        movq    0xc0(%rsp), %rsi
+    0.00 :   c3cc9:        je      0xc38d7 <kiban::db::get_from_version_at::{closure#0}+0x177>
+    0.00 :   c3ccf:        jae     0xc41b4 <kiban::db::get_from_version_at::{closure#0}+0xa54>
+    0.00 :   c3cd5:        shlq    $0x6, %r13
+    0.00 :   c3cd9:        addq    %r13, %rbx
+    0.00 :   c3cdc:        leaq    0x20(%rsp), %rdi
+    0.00 :   c3ce1:        movq    %rbx, %rdx
+    0.00 :   c3ce4:        callq   0x92c80 <<kiban::sstable::reader::SstTable>::read_block>
+    0.00 :   c3ce9:        movq    0x20(%rsp), %r14
+    0.00 :   c3cee:        movq    0x28(%rsp), %rbx
+    0.00 :   c3cf3:        movq    0x30(%rsp), %r8
+    0.00 :   c3cf8:        movq    0x38(%rsp), %rbp
+    0.00 :   c3cfd:        movq    0x40(%rsp), %r13
+    0.00 :   c3d02:        testq   %r14, %r14
+    0.00 :   c3d05:        je      0xc3f11 <kiban::db::get_from_version_at::{closure#0}+0x7b1>
+    0.00 :   c3d0b:        movups  0x48(%rsp), %xmm0
+    0.00 :   c3d10:        movups  %xmm0, 0xa8(%rsp)
+    0.00 :   c3d18:        movq    %rbx, 0x88(%rsp)
+    0.00 :   c3d20:        movq    %r8, 0x90(%rsp)
+    0.00 :   c3d28:        movq    %rbp, 0x98(%rsp)
+    0.00 :   c3d30:        movq    %r13, 0xa0(%rsp)
+    0.00 :   c3d38:        movq    %r14, 0x80(%rsp)
+    0.00 :   c3d40:        leaq    0x20(%rsp), %rdi
+    0.00 :   c3d45:        leaq    0x80(%rsp), %rsi
+    0.00 :   c3d4d:        movl    $0x1, %r8d
+    0.00 :   c3d53:        movq    (%rsp), %rdx
+    0.00 :   c3d57:        movq    0x10(%rsp), %rcx
+    0.00 :   c3d5c:        movq    0x58(%rsp), %r9
+    0.00 :   c3d61:        callq   0xb2380 <<kiban::sstable::block::VerifiedBlock>::get>
+    0.00 :   c3d66:        movq    0x28(%rsp), %rbx
+    0.00 :   c3d6b:        movq    0x30(%rsp), %r8
+    0.00 :   c3d70:        movq    0x38(%rsp), %rbp
+    0.00 :   c3d75:        movzbl  0x40(%rsp), %eax
+    0.00 :   c3d7a:        movzbl  0x47(%rsp), %ecx
+    0.00 :   c3d7f:        shll    $0x10, %ecx
+    0.00 :   c3d82:        movzwl  0x45(%rsp), %edx
+    0.00 :   c3d87:        orl     %ecx, %edx
+    0.00 :   c3d89:        shlq    $0x20, %rdx
+    0.00 :   c3d8d:        movl    0x41(%rsp), %r13d
+    0.00 :   c3d92:        orq     %rdx, %r13
+    0.00 :   c3d95:        cmpl    $0x1, 0x20(%rsp)
+    0.00 :   c3d9a:        jne     0xc402b <kiban::db::get_from_version_at::{closure#0}+0x8cb>
+    0.00 :   c3da0:        movzbl  %al, %eax
+    0.00 :   c3da3:        shlq    $0x8, %r13
+    0.00 :   c3da7:        orq     %rax, %r13
+    0.00 :   c3daa:        lock
+    0.00 :   c3dab:        decq    (%r14)
+    0.00 :   c3dae:        jne     0xc3f11 <kiban::db::get_from_version_at::{closure#0}+0x7b1>
+    0.00 :   c3db4:        movq    0x88(%rsp), %rsi
+    0.00 :   c3dbc:        movq    %r14, %rdi
+    0.00 :   c3dbf:        movq    %r8, %r14
+    0.00 :   c3dc2:        callq   0x83170 <<alloc::sync::Arc<[u8]>>::drop_slow>
+    0.00 :   c3dc7:        movq    %r14, %r8
+    0.00 :   c3dca:        jmp     0xc3f11 <kiban::db::get_from_version_at::{closure#0}+0x7b1>
+    0.00 :   c3dcf:        leaq    (%r15,%rbp), %rsi
+    0.00 :   c3dd3:        addq    $-0xd, %rsi
+    0.00 :   c3dd7:        incl    %ebx
+    0.00 :   c3dd9:        movq    0x8(%rsp), %r15
+    0.00 :   c3dde:        movq    0x58(%rsp), %rcx
+    0.00 :   c3de3:        movq    $-0x1, %r8
+    0.00 :   c3dea:        movq    %r12, %r9
+    0.00 :   c3ded:        leaq    0x10(%r14), %rdx
+    0.00 :   c3df1:        nopw    %cs:(%rax,%rax)
+    0.00 :   c3e00:        decl    %ebx
+    0.00 :   c3e02:        je      0xc3ef5 <kiban::db::get_from_version_at::{closure#0}+0x795>
+    0.00 :   c3e08:        leaq    0x15(%rsi), %rdi
+    0.00 :   c3e0c:        leaq    0x1d(%rsi), %rax
+    0.00 :   c3e10:        cmpq    $-0x9, %rdi
+    0.00 :   c3e14:        ja      0xc40e1 <kiban::db::get_from_version_at::{closure#0}+0x981>
+    0.00 :   c3e1a:        cmpq    %r13, %rax
+    0.00 :   c3e1d:        ja      0xc40e1 <kiban::db::get_from_version_at::{closure#0}+0x981>
+    0.00 :   c3e23:        jae     0xc41a2 <kiban::db::get_from_version_at::{closure#0}+0xa42>
+    0.00 :   c3e29:        movq    0x25(%r14,%rsi), %rbp
+    0.19 :   c3e2e:        movzbl  0x2d(%r14,%rsi), %eax
+    0.00 :   c3e34:        cmpl    $0x1, %eax
+    0.00 :   c3e37:        je      0xc3e50 <kiban::db::get_from_version_at::{closure#0}+0x6f0>
+    0.00 :   c3e39:        cmpl    $0x2, %eax
+    0.00 :   c3e3c:        jne     0xc4163 <kiban::db::get_from_version_at::{closure#0}+0xa03>
+    0.00 :   c3e42:        movb    $0x1, %r12b
+    0.00 :   c3e45:        jmp     0xc3e53 <kiban::db::get_from_version_at::{closure#0}+0x6f3>
+    0.00 :   c3e47:        nopw    (%rax,%rax)
+    0.00 :   c3e50:        xorl    %r12d, %r12d
+    0.00 :   c3e53:        leaq    0x22(%rsi), %rax
+    0.00 :   c3e57:        cmpq    $-0xe, %rdi
+    0.00 :   c3e5b:        ja      0xc40ea <kiban::db::get_from_version_at::{closure#0}+0x98a>
+    0.00 :   c3e61:        cmpq    %r13, %rax
+    0.00 :   c3e64:        ja      0xc40ea <kiban::db::get_from_version_at::{closure#0}+0x98a>
+    0.00 :   c3e6a:        addq    $0x2a, %rsi
+    0.00 :   c3e6e:        cmpq    $-0x16, %rdi
+    0.00 :   c3e72:        ja      0xc40f7 <kiban::db::get_from_version_at::{closure#0}+0x997>
+    0.00 :   c3e78:        cmpq    %r13, %rsi
+    0.00 :   c3e7b:        ja      0xc40f7 <kiban::db::get_from_version_at::{closure#0}+0x997>
+    0.00 :   c3e81:        movq    %rdi, %rsi
+    0.00 :   c3e84:        cmpq    %rcx, %rbp
+    0.00 :   c3e87:        ja      0xc3e00 <kiban::db::get_from_version_at::{closure#0}+0x6a0>
+    0.00 :   c3e8d:        movl    0x9(%rdx,%rdi), %r13d
+    0.38 :   c3e92:        movq    0xd(%rdx,%rdi), %r15
+    0.14 :   c3e97:        movq    0x30(%r9), %rdx
+    0.00 :   c3e9b:        movq    %r15, %rsi
+    0.00 :   c3e9e:        addq    %r13, %rsi
+    0.00 :   c3ea1:        jb      0xc4193 <kiban::db::get_from_version_at::{closure#0}+0xa33>
+    0.00 :   c3ea7:        cmpq    %rdx, %rsi
+    0.00 :   c3eaa:        ja      0xc4193 <kiban::db::get_from_version_at::{closure#0}+0xa33>
+    0.00 :   c3eb0:        testq   %r13, %r13
+    0.00 :   c3eb3:        je      0xc40b9 <kiban::db::get_from_version_at::{closure#0}+0x959>
+    0.00 :   c3eb9:        movq    0x28(%r9), %r14
+    0.00 :   c3ebd:        movl    $0x1, %esi
+    0.00 :   c3ec2:        movq    %r13, %rdi
+    0.00 :   c3ec5:        callq   *0x6d3dd(%rip)  # 0x1312a8 <_DYNAMIC+0x200>
+    0.00 :   c3ecb:        testq   %rax, %rax
+    0.00 :   c3ece:        je      0xc41c6 <kiban::db::get_from_version_at::{closure#0}+0xa66>
+    0.00 :   c3ed4:        movq    %rax, %rbx
+    0.00 :   c3ed7:        leaq    (%r14,%r15), %rsi
+    0.00 :   c3edb:        addq    $0x10, %rsi
+    0.00 :   c3edf:        movq    %rax, %rdi
+    0.00 :   c3ee2:        movq    %r13, %rdx
+    0.00 :   c3ee5:        callq   *0x6d3cd(%rip)  # 0x1312b8 <_DYNAMIC+0x210>
+    0.00 :   c3eeb:        movq    0x8(%rsp), %r15
+    0.00 :   c3ef0:        movq    %r13, %r8
+    0.00 :   c3ef3:        jmp     0xc3ef5 <kiban::db::get_from_version_at::{closure#0}+0x795>
+    0.00 :   c3ef5:        movzbl  %r12b, %r13d
+    0.00 :   c3ef9:        movq    %r8, %r14
+    0.00 :   c3efc:        movq    0x18(%rsp), %r12
+    0.00 :   c3f01:        cmpq    $-0x1, %r14
+    0.00 :   c3f05:        je      0xc38d7 <kiban::db::get_from_version_at::{closure#0}+0x177>
+    0.00 :   c3f0b:        cmpq    $-0x2, %r14
+    0.00 :   c3f0f:        jne     0xc3f86 <kiban::db::get_from_version_at::{closure#0}+0x826>
+    0.00 :   c3f11:        cmpq    $0x1, %rbx
+    0.00 :   c3f15:        jne     0xc3fd1 <kiban::db::get_from_version_at::{closure#0}+0x871>
+    0.00 :   c3f1b:        movq    %r8, 0x80(%rsp)
+    0.00 :   c3f23:        movq    %rbp, 0x88(%rsp)
+    0.00 :   c3f2b:        movq    %r13, 0x90(%rsp)
+    0.00 :   c3f33:        leaq    0x80(%rsp), %rax
+    0.00 :   c3f3b:        movq    %rax, 0x60(%rsp)
+    0.00 :   c3f40:        leaq    -0x52aa7(%rip), %rax  # 0x714a0 <<alloc::string::String as core::fmt::Display>::fmt>
+    0.00 :   c3f47:        movq    %rax, 0x68(%rsp)
+    0.00 :   c3f4c:        leaq    0x28(%rsp), %rdi
+    0.00 :   c3f51:        leaq    -0xb4702(%rip), %rsi  # 0xf856
+    0.00 :   c3f58:        leaq    0x60(%rsp), %rdx
+    0.00 :   c3f5d:        callq   0x72b30 <alloc::fmt::format::format_inner>
+    0.00 :   c3f62:        movq    $0x7, 0x20(%rsp)
+    0.00 :   c3f6b:        cmpq    $0x0, 0x80(%rsp)
+    0.00 :   c3f74:        je      0xc3fe9 <kiban::db::get_from_version_at::{closure#0}+0x889>
+    0.00 :   c3f76:        movq    0x88(%rsp), %rdi
+    0.00 :   c3f7e:        callq   *0x6d32c(%rip)  # 0x1312b0 <_DYNAMIC+0x208>
+    0.00 :   c3f84:        jmp     0xc3fe9 <kiban::db::get_from_version_at::{closure#0}+0x889>
+    0.00 :   c3f86:        movq    %r12, %rax
+    0.00 :   c3f89:        movq    %r15, %r12
+    0.00 :   c3f8c:        movq    0x18(%rax), %r15
+    0.00 :   c3f90:        movq    (%r15), %rax
+    0.36 :   c3f93:        cmpq    $-0x1, %rax
+    0.00 :   c3f97:        je      0xc3fb6 <kiban::db::get_from_version_at::{closure#0}+0x856>
+    0.00 :   c3f99:        cmpq    0x18(%r15), %rbp
+    0.00 :   c3f9d:        jbe     0xc4011 <kiban::db::get_from_version_at::{closure#0}+0x8b1>
+    0.00 :   c3f9f:        testq   %rax, %rax
+    0.00 :   c3fa2:        je      0xc3fb6 <kiban::db::get_from_version_at::{closure#0}+0x856>
+    0.00 :   c3fa4:        movq    0x8(%r15), %rdi
+    0.00 :   c3fa8:        movq    %r8, (%rsp)
+    0.00 :   c3fac:        callq   *0x6d2fe(%rip)  # 0x1312b0 <_DYNAMIC+0x208>
+    0.00 :   c3fb2:        movq    (%rsp), %r8
+    0.00 :   c3fb6:        movq    %r14, (%r15)
+    0.00 :   c3fb9:        movq    %rbx, 0x8(%r15)
+    0.00 :   c3fbd:        movq    %r8, 0x10(%r15)
+    0.00 :   c3fc1:        movq    %rbp, 0x18(%r15)
+    0.00 :   c3fc5:        movq    %r13, 0x20(%r15)
+    0.00 :   c3fc9:        movq    %r12, %r15
+    0.00 :   c3fcc:        jmp     0xc38d7 <kiban::db::get_from_version_at::{closure#0}+0x177>
+    0.00 :   c3fd1:        movq    %r8, 0x28(%rsp)
+    0.00 :   c3fd6:        movq    %rbp, 0x30(%rsp)
+    0.00 :   c3fdb:        movq    %r13, 0x38(%rsp)
+    0.00 :   c3fe0:        movq    $0x7, 0x20(%rsp)
+    0.00 :   c3fe9:        movq    0x20(%rsp), %rax
+    0.00 :   c3fee:        movq    0x28(%rsp), %rcx
+    0.00 :   c3ff3:        movq    0x30(%rsp), %rdx
+    0.00 :   c3ff8:        movq    %rdx, 0x10(%r15)
+    0.00 :   c3ffc:        movq    0x38(%rsp), %rdx
+    0.00 :   c4001:        movq    %rdx, 0x18(%r15)
+    0.00 :   c4005:        movq    %rax, (%r15)
+    0.00 :   c4008:        movq    %rcx, 0x8(%r15)
+    0.00 :   c400c:        jmp     0xc38de <kiban::db::get_from_version_at::{closure#0}+0x17e>
+    0.00 :   c4011:        testq   %r14, %r14
+    0.00 :   c4014:        movq    %r12, %r15
+    0.00 :   c4017:        je      0xc38d7 <kiban::db::get_from_version_at::{closure#0}+0x177>
+    0.00 :   c401d:        movq    %rbx, %rdi
+    0.00 :   c4020:        callq   *0x6d28a(%rip)  # 0x1312b0 <_DYNAMIC+0x208>
+    0.00 :   c4026:        jmp     0xc38d7 <kiban::db::get_from_version_at::{closure#0}+0x177>
+    0.00 :   c402b:        movq    %r14, (%rsp)
+    0.00 :   c402f:        cmpb    $0x2, %al
+    0.00 :   c4031:        jne     0xc403c <kiban::db::get_from_version_at::{closure#0}+0x8dc>
+    0.00 :   c4033:        movq    $-0x1, %r14
+    0.00 :   c403a:        jmp     0xc4091 <kiban::db::get_from_version_at::{closure#0}+0x931>
+    0.00 :   c403c:        movq    %rbx, 0x60(%rsp)
+    0.00 :   c4041:        movq    %r8, 0x68(%rsp)
+    0.00 :   c4046:        movq    %rbp, 0x70(%rsp)
+    0.00 :   c404b:        movl    %r13d, 0x79(%rsp)
+    0.00 :   c4050:        movq    %r13, %rcx
+    0.00 :   c4053:        shrq    $0x30, %rcx
+    0.00 :   c4057:        movb    %cl, 0x7f(%rsp)
+    0.00 :   c405b:        shrq    $0x20, %r13
+    0.00 :   c405f:        movw    %r13w, 0x7d(%rsp)
+    0.00 :   c4065:        movb    %al, 0x78(%rsp)
+    0.00 :   c4069:        leaq    0x20(%rsp), %rdi
+    0.00 :   c406e:        leaq    0x60(%rsp), %rsi
+    0.00 :   c4073:        callq   0xb2990 <<kiban::sstable::reader::SstTable>::get::{closure#1}>
+    0.00 :   c4078:        movq    0x20(%rsp), %r14
+    0.00 :   c407d:        movq    0x28(%rsp), %rbx
+    0.00 :   c4082:        movq    0x30(%rsp), %r8
+    0.00 :   c4087:        movq    0x38(%rsp), %rbp
+    0.00 :   c408c:        movq    0x40(%rsp), %r13
+    0.00 :   c4091:        movq    (%rsp), %rdi
+    0.00 :   c4095:        lock
+    0.00 :   c4096:        decq    (%rdi)
+    0.00 :   c4099:        jne     0xc3f01 <kiban::db::get_from_version_at::{closure#0}+0x7a1>
+    0.00 :   c409f:        movq    0x88(%rsp), %rsi
+    0.00 :   c40a7:        movq    %r8, (%rsp)
+    0.00 :   c40ab:        callq   0x83170 <<alloc::sync::Arc<[u8]>>::drop_slow>
+    0.00 :   c40b0:        movq    (%rsp), %r8
+    0.00 :   c40b4:        jmp     0xc3f01 <kiban::db::get_from_version_at::{closure#0}+0x7a1>
+    0.00 :   c40b9:        movl    $0x1, %ebx
+    0.00 :   c40be:        xorl    %r8d, %r8d
+    0.00 :   c40c1:        movq    0x8(%rsp), %r15
+    0.00 :   c40c6:        jmp     0xc3ef5 <kiban::db::get_from_version_at::{closure#0}+0x795>
+    0.00 :   c40cb:        leaq    0x684ee(%rip), %rcx  # 0x12c5c0 <__dso_handle+0x2100>
+    0.00 :   c40d2:        movq    %rdx, %rsi
+    0.00 :   c40d5:        movl    $0x2e, %edx
+    0.00 :   c40da:        xorl    %edi, %edi
+    0.00 :   c40dc:        callq   0x75050 <core::slice::index::slice_index_fail>
+    0.00 :   c40e1:        leaq    0x68e18(%rip), %rcx  # 0x12cf00 <__dso_handle+0x2a40>
+    0.00 :   c40e8:        jmp     0xc4158 <kiban::db::get_from_version_at::{closure#0}+0x9f8>
+    0.00 :   c40ea:        addq    $0x9, %rdi
+    0.00 :   c40ee:        leaq    0x68df3(%rip), %rcx  # 0x12cee8 <__dso_handle+0x2a28>
+    0.00 :   c40f5:        jmp     0xc4158 <kiban::db::get_from_version_at::{closure#0}+0x9f8>
+    0.00 :   c40f7:        leaq    0x68e02(%rip), %rcx  # 0x12cf00 <__dso_handle+0x2a40>
+    0.00 :   c40fe:        movq    %rax, %rdi
+    0.00 :   c4101:        movq    %r13, %rdx
+    0.00 :   c4104:        callq   0x75050 <core::slice::index::slice_index_fail>
+    0.00 :   c4109:        leaq    0x68dd8(%rip), %rcx  # 0x12cee8 <__dso_handle+0x2a28>
+    0.00 :   c4110:        movq    %rdx, %rdi
+    0.00 :   c4113:        movq    %r13, %rdx
+    0.00 :   c4116:        callq   0x75050 <core::slice::index::slice_index_fail>
+    0.00 :   c411b:        leaq    0x68dde(%rip), %rcx  # 0x12cf00 <__dso_handle+0x2a40>
+    0.00 :   c4122:        movq    %rax, %rdi
+    0.00 :   c4125:        movq    %rdx, %rsi
+    0.00 :   c4128:        movq    %r13, %rdx
+    0.00 :   c412b:        callq   0x75050 <core::slice::index::slice_index_fail>
+    0.00 :   c4130:        leaq    0x68db1(%rip), %rcx  # 0x12cee8 <__dso_handle+0x2a28>
+    0.00 :   c4137:        movq    %rbp, %rdi
+    0.00 :   c413a:        movq    %r13, %rdx
+    0.00 :   c413d:        callq   0x75050 <core::slice::index::slice_index_fail>
+    0.00 :   c4142:        leaq    0x68d9f(%rip), %rcx  # 0x12cee8 <__dso_handle+0x2a28>
+    0.00 :   c4149:        movq    %rdi, %rax
+    0.00 :   c414c:        movq    %rsi, %rdi
+    0.00 :   c414f:        jmp     0xc4158 <kiban::db::get_from_version_at::{closure#0}+0x9f8>
+    0.00 :   c4151:        leaq    0x688c8(%rip), %rcx  # 0x12ca20 <__dso_handle+0x2560>
+    0.00 :   c4158:        movq    %rax, %rsi
+    0.00 :   c415b:        movq    %r13, %rdx
+    0.00 :   c415e:        callq   0x75050 <core::slice::index::slice_index_fail>
+    0.00 :   c4163:        leaq    -0xab6aa(%rip), %rdi  # 0x18ac0
+    0.00 :   c416a:        leaq    0x68897(%rip), %rdx  # 0x12ca08 <__dso_handle+0x2548>
+    0.00 :   c4171:        movl    $0xe, %esi
+    0.00 :   c4176:        callq   0x765e0 <core::option::expect_failed>
+    0.00 :   c417b:        leaq    0x67ec6(%rip), %rdx  # 0x12c048 <__dso_handle+0x1b88>
+    0.00 :   c4182:        callq   0x7406b <core::panicking::panic_bounds_check>
+    0.00 :   c4187:        leaq    0x67ea2(%rip), %rdi  # 0x12c030 <__dso_handle+0x1b70>
+    0.00 :   c418e:        callq   0x76820 <core::panicking::panic_const::panic_const_rem_by_zero>
+    0.00 :   c4193:        leaq    0x68856(%rip), %rcx  # 0x12c9f0 <__dso_handle+0x2530>
+    0.00 :   c419a:        movq    %r15, %rdi
+    0.00 :   c419d:        callq   0x75050 <core::slice::index::slice_index_fail>
+    0.00 :   c41a2:        leaq    0x6882f(%rip), %rdx  # 0x12c9d8 <__dso_handle+0x2518>
+    0.00 :   c41a9:        movq    %rax, %rdi
+    0.00 :   c41ac:        movq    %r13, %rsi
+    0.00 :   c41af:        callq   0x7406b <core::panicking::panic_bounds_check>
+    0.00 :   c41b4:        leaq    0x6859d(%rip), %rdx  # 0x12c758 <__dso_handle+0x2298>
+    0.00 :   c41bb:        movq    %r13, %rdi
+    0.00 :   c41be:        movq    %rax, %rsi
+    0.00 :   c41c1:        callq   0x7406b <core::panicking::panic_bounds_check>
+    0.00 :   c41c6:        movl    $0x1, %edi
+    0.00 :   c41cb:        movq    %r13, %rsi
+    0.00 :   c41ce:        callq   0x72571 <alloc::raw_vec::handle_error>

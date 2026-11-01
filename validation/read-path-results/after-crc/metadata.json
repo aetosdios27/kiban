@@ -1,0 +1,12 @@
+{
+  "binary": "/home/aetos/.t3/worktrees/kiban/t3-53ad0f47/tools/agentbench/readpath/target/release/kiban-readbench",
+  "sha256": "8995c54130f2f1566be65f78da8fcad49eacc19b2cea64b9fda72d0cbec25920",
+  "git_head": "46550c47421c53ed2cd47658c717e59ff9cd992d",
+  "affinity": "3",
+  "load": [
+    21.90478515625,
+    21.96142578125,
+    20.1923828125
+  ],
+  "trials": 5
+}

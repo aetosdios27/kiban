@@ -1,0 +1,17 @@
+{
+  "frozen": "0283fc7af8cfba828ff05343c8b77bc27b228962",
+  "rebased_base": "37feee99f925d895aa0f00c32d902e0690089bde",
+  "changed": {
+    "src/point_index_tests.rs": {
+      "frozen": "d3e52bd1769559965a22e3136922366b7ef5e2ef3e74b227f3928e1d825ae84d",
+      "rebased": "ee2db75032038574bba9cc4c48269cbd9b5398a31c6c7c438962fea242e50840"
+    },
+    "src/sstable/reader.rs": {
+      "frozen": "87d41446e2cccd7a2d14485ea7e9d0bd0517209d0488bbc39138f8aaff6de7e0",
+      "rebased": "07fbb74a764f6fd1fa027f87c75782d43ed02d9c6a7737a308e6bcdc5f85f1ea"
+    }
+  },
+  "reader_difference": "Main explanatory comment only; removing that exact comment yields identical source",
+  "test_difference": "Main ignored maintenance measurement gains KIBAN_POINT_BENCH_TRIAL selector",
+  "production_logic_identical": true
+}

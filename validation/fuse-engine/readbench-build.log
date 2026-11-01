@@ -1,0 +1,9 @@
+    Blocking waiting for file lock on build directory
+   Compiling bindgen v0.72.1
+   Compiling libsqlite3-sys v0.38.2
+   Compiling kiban v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-c0aaa680)
+   Compiling rusqlite v0.40.2
+   Compiling librocksdb-sys v0.19.0+11.8.1
+   Compiling rocksdb v0.25.0
+   Compiling kiban-readbench v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/tools/agentbench/readpath)
+    Finished `release` profile [optimized + debuginfo] target(s) in 1m 14s

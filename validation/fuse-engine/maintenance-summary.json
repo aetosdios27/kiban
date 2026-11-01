@@ -1,0 +1,86 @@
+[
+  {
+    "indexed": false,
+    "field": "flush_ns",
+    "before": "736.230 [676.084, 818.979]",
+    "after": "903.142 [887.950, 1060.669]",
+    "paired_ratio": "1.248 [1.103, 1.381]"
+  },
+  {
+    "indexed": false,
+    "field": "compaction_build_ns",
+    "before": "496.132 [453.637, 557.423]",
+    "after": "644.946 [618.271, 699.047]",
+    "paired_ratio": "1.300 [1.174, 1.375]"
+  },
+  {
+    "indexed": false,
+    "field": "compaction_commit_ns",
+    "before": "21.079 [19.779, 27.942]",
+    "after": "23.686 [18.849, 27.912]",
+    "paired_ratio": "0.953 [0.872, 1.295]"
+  },
+  {
+    "indexed": false,
+    "field": "input_bytes",
+    "before": "322946108.000 [322946108.000, 322946108.000]",
+    "after": "322777528.000 [322777528.000, 322777528.000]",
+    "paired_ratio": "0.999 [0.999, 0.999]"
+  },
+  {
+    "indexed": false,
+    "field": "output_bytes",
+    "before": "322951967.000 [322951967.000, 322951967.000]",
+    "after": "322914294.000 [322914294.000, 322914294.000]",
+    "paired_ratio": "1.000 [1.000, 1.000]"
+  },
+  {
+    "indexed": false,
+    "field": "point_resident_bytes",
+    "before": "0.000 [0.000, 0.000]",
+    "after": "0.000 [0.000, 0.000]",
+    "paired_ratio": "1.000 [1.000, 1.000]"
+  },
+  {
+    "indexed": true,
+    "field": "flush_ns",
+    "before": "1641.336 [1557.604, 1804.230]",
+    "after": "1790.189 [1773.328, 1855.237]",
+    "paired_ratio": "1.082 [1.021, 1.144]"
+  },
+  {
+    "indexed": true,
+    "field": "compaction_build_ns",
+    "before": "734.902 [710.762, 793.769]",
+    "after": "898.428 [862.319, 975.672]",
+    "paired_ratio": "1.185 [1.132, 1.373]"
+  },
+  {
+    "indexed": true,
+    "field": "compaction_commit_ns",
+    "before": "50.182 [35.586, 57.433]",
+    "after": "50.858 [39.264, 52.853]",
+    "paired_ratio": "1.013 [0.708, 1.485]"
+  },
+  {
+    "indexed": true,
+    "field": "input_bytes",
+    "before": "349720724.000 [349720724.000, 349720724.000]",
+    "after": "349552144.000 [349552144.000, 349552144.000]",
+    "paired_ratio": "1.000 [1.000, 1.000]"
+  },
+  {
+    "indexed": true,
+    "field": "output_bytes",
+    "before": "347833741.000 [347833741.000, 347833741.000]",
+    "after": "347806315.000 [347806315.000, 347806315.000]",
+    "paired_ratio": "1.000 [1.000, 1.000]"
+  },
+  {
+    "indexed": true,
+    "field": "point_resident_bytes",
+    "before": "189225548.000 [189225548.000, 189225548.000]",
+    "after": "189225548.000 [189225548.000, 189225548.000]",
+    "paired_ratio": "1.000 [1.000, 1.000]"
+  }
+]

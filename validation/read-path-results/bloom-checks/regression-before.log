@@ -1,0 +1,24 @@
+   Compiling kiban v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-53ad0f47)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.51s
+     Running unittests src/lib.rs (target/debug/deps/kiban-60f9814aeb7cdf24)
+
+running 1 test
+test bloom::tests::empty_filter_roundtrips_through_encode_and_decode ... FAILED
+
+failures:
+
+---- bloom::tests::empty_filter_roundtrips_through_encode_and_decode stdout ----
+
+thread 'bloom::tests::empty_filter_roundtrips_through_encode_and_decode' (12029) panicked at src/bloom.rs:161:9:
+assertion `left == right` failed
+  left: None
+ right: Some(BloomFilter { bits: [0, 0, 0, 0, 0, 0, 0, 0], num_bits: 64, num_probes: 7 })
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    bloom::tests::empty_filter_roundtrips_through_encode_and_decode
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 325 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`

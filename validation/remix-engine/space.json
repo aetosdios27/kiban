@@ -1,0 +1,34 @@
+[
+  {
+    "label": "before",
+    "layout": "bulk",
+    "files": 1,
+    "sst_bytes": 360945109,
+    "point_bytes": 31101232,
+    "scan_bytes": 0
+  },
+  {
+    "label": "before",
+    "layout": "normal",
+    "files": 94,
+    "sst_bytes": 361480243,
+    "point_bytes": 31622158,
+    "scan_bytes": 0
+  },
+  {
+    "label": "after",
+    "layout": "bulk",
+    "files": 1,
+    "sst_bytes": 364945141,
+    "point_bytes": 35101264,
+    "scan_bytes": 4000032
+  },
+  {
+    "label": "after",
+    "layout": "normal",
+    "files": 91,
+    "sst_bytes": 365497184,
+    "point_bytes": 35639436,
+    "scan_bytes": 4002912
+  }
+]

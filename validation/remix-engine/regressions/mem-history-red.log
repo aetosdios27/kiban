@@ -1,0 +1,21 @@
+   Compiling kiban v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.58s
+     Running unittests src/lib.rs (target/debug/deps/kiban-60f9814aeb7cdf24)
+
+running 1 test
+
+thread 'db::point_index_tests::remix_memtable_histories_emit_one_visible_value_per_key' (550531) panicked at src/point_index_tests.rs:795:5:
+assertion `left == right` failed
+  left: [[110, 101, 119], [111, 108, 100], [100, 101, 108, 101, 116, 101, 100], [108, 97, 115, 116]]
+ right: [[110, 101, 119], [108, 97, 115, 116]]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test db::point_index_tests::remix_memtable_histories_emit_one_visible_value_per_key ... FAILED
+
+failures:
+
+failures:
+    db::point_index_tests::remix_memtable_histories_emit_one_visible_value_per_key
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 358 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`

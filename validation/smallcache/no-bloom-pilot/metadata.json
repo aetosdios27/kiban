@@ -1,0 +1,13 @@
+{
+  "cpu": 6,
+  "before": "f4c01580 PH3 with Bloom precheck",
+  "after": "PH3 exact-key membership without Bloom",
+  "same_fixtures": true,
+  "point_index": true,
+  "cache_mib": 32,
+  "mmap_max_level": 4294967295,
+  "binaries": {
+    "before": "2d5a3bc0aa1a9b31aa8fdcb43a66c3175c880dc26b6c387a171c4a4c995553a6",
+    "ph3-nobloom": "01bcee3530e76439c9979189cb1f65a235946b92ac101ab578e4fe0b2103579d"
+  }
+}

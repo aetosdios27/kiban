@@ -1,0 +1,96 @@
+bulk-pread-kiban
+Warning:
+Processed 5896 events and lost 23 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 5896 events and lost 23 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 5896 events and lost 23 chunks!
+
+Check IO/CPU overload!
+
+bulk-mapped-kiban
+Warning:
+Processed 6324 events and lost 34 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 6324 events and lost 34 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 6324 events and lost 34 chunks!
+
+Check IO/CPU overload!
+
+bulk-control-lmdb
+Warning:
+Processed 8078 events and lost 35 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 8078 events and lost 35 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 8078 events and lost 35 chunks!
+
+Check IO/CPU overload!
+
+normal-pread-kiban
+Warning:
+Processed 7884 events and lost 32 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 7884 events and lost 32 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 7884 events and lost 32 chunks!
+
+Check IO/CPU overload!
+
+normal-mapped-kiban
+Warning:
+Processed 8363 events and lost 40 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 8363 events and lost 40 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 8363 events and lost 40 chunks!
+
+Check IO/CPU overload!
+
+normal-control-lmdb
+Warning:
+Processed 7806 events and lost 39 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 7806 events and lost 39 chunks!
+
+Check IO/CPU overload!
+
+Warning:
+Processed 7806 events and lost 39 chunks!
+
+Check IO/CPU overload!
+

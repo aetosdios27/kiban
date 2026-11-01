@@ -1,0 +1,1 @@
+{"batch_mean_ns":2570.139448,"counter_operations":1000000,"digest":296732188,"e2e":{"mean_ns":2847.01597,"p50_ns":2658,"p99_ns":4773},"errors":0,"missing":false,"operations":100000,"raw":{"mean_ns":2322.03122,"p50_ns":2182,"p99_ns":3999},"throughput_ops_s":389083.9467010897,"type":"read","variant":"kiban","verified_all_hits":1000000,"verified_timed_results":1000000}

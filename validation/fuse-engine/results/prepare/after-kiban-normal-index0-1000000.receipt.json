@@ -1,0 +1,30 @@
+{
+  "name": "after-kiban-normal-index0-1000000",
+  "command": [
+    "taskset",
+    "-c",
+    "12-21",
+    "nice",
+    "-n",
+    "10",
+    "/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/target/fuse-engine/bin/after",
+    "/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/validation/fuse-engine/results/prepare/after-kiban-normal-index0-1000000.config.json"
+  ],
+  "code": 0,
+  "sha256": "fd9e5aba02b625e4fb6e813d2954f7d7f49e0edd3b0c42c1ac04cc6d82253f74",
+  "seconds": 35.151899576187134,
+  "start": {
+    "total": 2365055,
+    "idle": 2111576
+  },
+  "end": {
+    "total": 2368566,
+    "idle": 2114396
+  },
+  "cpu9_busy_percent": 19.681002563372264,
+  "load": [
+    32.86279296875,
+    32.33935546875,
+    24.46337890625
+  ]
+}

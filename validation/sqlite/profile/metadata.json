@@ -1,0 +1,19 @@
+{
+  "binary_sha256": "a9d6e53d6f19db45ddd840f8d654dcccc73df0fb03310ec0e90987a244944a26",
+  "perf_sha256": "7e57c3322aa62b6d6b6a90cc147aee5a0a6234a03e26ee39a8b843f80f8c7833",
+  "perf_version": "perf version 7.2.10-200.fc44.x86_64",
+  "cpu": 10,
+  "events": [
+    "cycles:u",
+    "instructions:u",
+    "LLC-load-misses:u",
+    "branch-misses:u",
+    "dTLB-load-misses:u"
+  ],
+  "event_pmu": "cpu_core",
+  "operations_per_loop": 1000000,
+  "layout": "bulk",
+  "cache_mib": 512,
+  "perf_control": "FIFO enable/disable only around profile loop; exclude preload and full verification",
+  "boundary": "Full backend call plus digest and returned Memory destruction; minimal ID/count checks in loop"
+}

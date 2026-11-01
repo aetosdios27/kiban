@@ -50,14 +50,14 @@ dependencies = [
 
 [[package]]
 name = "kiban"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "loom",
 ]
 
 [[package]]
 name = "kiban-ffi"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "kiban",
 ]

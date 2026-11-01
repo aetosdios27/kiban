@@ -1,0 +1,9 @@
+   Compiling kiban v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-9b9cb0e0)
+error[E0063]: missing field `checksum` in initializer of `compact::Encoding`
+   --> src/sstable/point/compact.rs:678:21
+    |
+678 |             let e = Encoding {
+    |                     ^^^^^^^^ missing `checksum`
+
+For more information about this error, try `rustc --explain E0063`.
+error: could not compile `kiban` (lib test) due to 1 previous error

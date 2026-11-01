@@ -1,0 +1,6 @@
+Events disabled
+Events enabled
+Events disabled
+{"digest":804,"errors":0,"ns":6716580947,"operations":1000000,"type":"profile"}
+[ perf record: Woken up 601 times to write data ]
+[ perf record: Captured and wrote 149.640 MB validation/read-path-results/profile-complete-stacks/normal-512-w3-kiban-stacks.data (18625 samples) ]

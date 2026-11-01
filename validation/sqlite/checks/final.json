@@ -1,0 +1,64 @@
+{
+  "commands": [
+    {
+      "command": [
+        "taskset",
+        "-c",
+        "12-21",
+        "nice",
+        "-n",
+        "10",
+        "cargo",
+        "fmt",
+        "--check",
+        "--manifest-path",
+        "tools/agentbench/readpath/Cargo.toml"
+      ],
+      "started": 1792273252.296143,
+      "ended": 1792273252.3919806,
+      "exit_status": 0
+    },
+    {
+      "command": [
+        "taskset",
+        "-c",
+        "12-21",
+        "nice",
+        "-n",
+        "10",
+        "python3",
+        "-m",
+        "py_compile",
+        "tools/agentbench/readpath/sqlite_bench.py",
+        "tools/agentbench/readpath/sqlite_report.py",
+        "tools/agentbench/readpath/sqlite_profile.py",
+        "tools/agentbench/readpath/sqlite_sync_probe.py",
+        "tools/agentbench/readpath/sqlite_mmap_screen.py",
+        "tools/agentbench/readpath/sqlite_fdatasync.py"
+      ],
+      "started": 1792273252.3919928,
+      "ended": 1792273252.4613616,
+      "exit_status": 0
+    },
+    {
+      "command": [
+        "taskset",
+        "-c",
+        "12-21",
+        "nice",
+        "-n",
+        "10",
+        "python3",
+        "tools/agentbench/readpath/sqlite_report.py"
+      ],
+      "started": 1792273252.4613693,
+      "ended": 1792273252.688434,
+      "exit_status": 0
+    }
+  ],
+  "engine_sources_unchanged": true,
+  "primary_binary_unchanged": true,
+  "engine_file_count": 37,
+  "engine_head": "06a457dbfe24aabe1e33a3763e1ac0e1a8d73e05",
+  "finished_utc": "2026-10-17T21:40:52.726019+00:00"
+}

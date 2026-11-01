@@ -13,6 +13,10 @@ pub trait Backend {
         Err("bulk loading is unsupported by this backend".into())
     }
     fn get(&mut self, id: u64) -> Result<Memory>;
+    /// Raw membership lookup used to verify absent-key read workloads.
+    fn contains_key(&mut self, _key: &[u8]) -> Result<bool> {
+        Err("raw membership lookup unsupported by this backend".into())
+    }
     fn recent(&mut self, agent: u32, k: usize) -> Result<Vec<Memory>>;
     fn finish(&mut self) -> Result<()>;
 }

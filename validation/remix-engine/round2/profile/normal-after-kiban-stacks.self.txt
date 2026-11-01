@@ -1,0 +1,60 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 8K of event 'cpu_core/cycles/u'
+# Event count (approx.): 8734000000
+#
+# Overhead  Command  Shared Object     Symbol                                                                                                                                                                       
+# ........  .......  ................  .............................................................................................................................................................................
+#
+    24.18%  after    after             [.] <serde_json::read::SliceRead>::skip_to_escape
+    14.24%  after    after             [.] core::str::converts::from_utf8
+    11.24%  after    after             [.] serde_json::de::from_trait::<serde_json::read::SliceRead, kiban_readbench::model::Memory>
+    10.17%  after    after             [.] <serde_json::read::SliceRead as serde_json::read::Read>::parse_str
+     8.40%  after    after             [.] <serde_json::de::MapAccess<_> as serde_core::de::MapAccess>::next_key_seed::has_next_key::<serde_json::read::SliceRead>
+     5.59%  after    after             [.] <serde_json::de::Deserializer<serde_json::read::SliceRead>>::parse_integer
+     5.22%  after    after             [.] <kiban::remix::Cursor>::direct_values::<kiban_readbench::model::Memory, alloc::boxed::Box<dyn core::error::Error>, <kiban_readbench::varied::Reader>::range::{closure#0}>
+     3.40%  after    after             [.] mi_heap_malloc_aligned_at
+     2.35%  after    after             [.] <core::marker::PhantomData<alloc::string::String> as serde_core::de::DeserializeSeed>::deserialize::<&mut serde_json::de::Deserializer<serde_json::read::SliceRead>>
+     1.84%  after    after             [.] mi_free
+     1.82%  after    after             [.] _mi_page_malloc
+     1.57%  after    libc.so.6         [.] __memmove_avx_unaligned_erms
+            |
+            ---__memmove_avx_unaligned_erms
+
+     1.28%  after    after             [.] <core::marker::PhantomData<u64> as serde_core::de::DeserializeSeed>::deserialize::<&mut serde_json::de::Deserializer<serde_json::read::SliceRead>>
+     1.21%  after    after             [.] <u32 as serde_core::de::Deserialize>::deserialize::<&mut serde_json::de::Deserializer<serde_json::read::SliceRead>>
+     1.05%  after    after             [.] <kiban::remix::Remix>::cursor
+     0.82%  after    libc.so.6         [.] __memcmp_avx2_movbe
+            |
+            ---__memcmp_avx2_movbe
+
+     0.77%  after    after             [.] <kiban_readbench::embedded::Embedded as kiban_readbench::api::Backend>::recent
+     0.55%  after    after             [.] mi_malloc_aligned
+     0.46%  after    after             [.] kiban_readbench::profile
+     0.42%  after    after             [.] <serde_json::de::Deserializer<serde_json::read::SliceRead>>::end_map
+     0.41%  after    after             [.] <core::fmt::Formatter>::pad_integral
+     0.39%  after    after             [.] mi_heap_malloc_zero_aligned_at_generic
+     0.37%  after    after             [.] alloc::fmt::format::format_inner
+     0.34%  after    after             [.] <alloc::string::String as core::fmt::Write>::write_str.16
+     0.29%  after    after             [.] <u32 as core::fmt::Display>::fmt
+     0.29%  after    after             [.] core::fmt::write
+     0.29%  after    after             [.] mi_heap_collect_ex
+     0.23%  after    after             [.] <alloc::string::String as core::fmt::Write>::write_char.17
+     0.21%  after    after             [.] mi_find_page
+     0.17%  after    after             [.] _mi_page_free_collect
+     0.13%  after    after             [.] _mi_malloc_generic
+     0.10%  after    after             [.] _mi_bin
+     0.07%  after    [unknown]         [k] 0xffffffff982015f0
+     0.06%  after    after             [.] <core::fmt::Formatter>::pad_integral::write_prefix
+     0.03%  after    after             [.] <kiban::db::Version>::request_scan
+     0.01%  after    after             [.] _mi_arena_segment_clear_abandoned_next
+     0.01%  after    libc.so.6         [.] __GI___pthread_mutex_unlock_usercnt
+     0.01%  after    libc.so.6         [.] pthread_mutex_trylock@@GLIBC_2.34
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

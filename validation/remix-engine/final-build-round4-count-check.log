@@ -1,0 +1,7 @@
+   Compiling kiban-readbench v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/tools/agentbench/readpath)
+    Finished `release` profile [optimized + debuginfo] target(s) in 28.61s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.05s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.06s
+   Compiling kiban v0.1.0 (/home/aetos/.t3/worktrees/kiban/t3-c08f0b5b/target/remix-before-src)
+    Finished `release` profile [optimized] target(s) in 20.45s
+    Finished `release` profile [optimized] target(s) in 0.02s

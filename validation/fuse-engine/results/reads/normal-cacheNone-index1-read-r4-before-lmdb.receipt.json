@@ -1,0 +1,91 @@
+{
+  "name": "normal-cacheNone-index1-read-r4-before-lmdb",
+  "command": [
+    "taskset",
+    "-c",
+    "8",
+    "/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/target/fuse-engine/bin/before",
+    "/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/validation/fuse-engine/results/reads/normal-cacheNone-index1-read-r4-before-lmdb.config.json"
+  ],
+  "code": 0,
+  "sha256": "707d41a57bc421b88dec629b57ae530b875672f5401c2a7767d6fe9595afddb1",
+  "seconds": 5.273989200592041,
+  "start": {
+    "total": 2587974,
+    "idle": 2307931
+  },
+  "end": {
+    "total": 2588460,
+    "idle": 2308396
+  },
+  "cpu9_busy_percent": 4.320987654320985,
+  "load": [
+    23.54443359375,
+    23.96484375,
+    24.55419921875
+  ],
+  "stages": [
+    {
+      "call_ops_s": 498260.1974642034,
+      "call_seconds": 0.200698351,
+      "errors": 0,
+      "latency": {
+        "count": 100000,
+        "max_ns": 209422,
+        "p50_ns": 1952,
+        "p999_ns": 11264,
+        "p99_ns": 3392
+      },
+      "reads": {
+        "count": 100000,
+        "max_ns": 209422,
+        "p50_ns": 1952,
+        "p999_ns": 11264,
+        "p99_ns": 3392
+      },
+      "type": "stage",
+      "verified_ops_s": 364988.58396006864,
+      "wall_seconds": 0.273981172,
+      "workload": "recall-by-id",
+      "write_readback_seconds": 0.0,
+      "writes": {
+        "count": 0,
+        "max_ns": 0,
+        "p50_ns": null,
+        "p999_ns": null,
+        "p99_ns": null
+      }
+    },
+    {
+      "call_ops_s": 266907.72562463395,
+      "call_seconds": 0.374661317,
+      "errors": 0,
+      "latency": {
+        "count": 100000,
+        "max_ns": 95871,
+        "p50_ns": 3520,
+        "p999_ns": 14592,
+        "p99_ns": 7808
+      },
+      "reads": {
+        "count": 100000,
+        "max_ns": 95871,
+        "p50_ns": 3520,
+        "p999_ns": 14592,
+        "p99_ns": 7808
+      },
+      "type": "stage",
+      "verified_ops_s": 103721.08983229967,
+      "wall_seconds": 0.964124077,
+      "workload": "recent-for-agent",
+      "write_readback_seconds": 0.0,
+      "writes": {
+        "count": 0,
+        "max_ns": 0,
+        "p50_ns": null,
+        "p999_ns": null,
+        "p99_ns": null
+      }
+    }
+  ]
+}

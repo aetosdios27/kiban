@@ -28,6 +28,7 @@ pub mod atomic;
 pub mod background;
 pub mod bloom;
 pub mod cache;
+mod cache_budget;
 mod counter;
 pub mod crc32;
 pub mod db;
@@ -37,6 +38,7 @@ pub(crate) mod engine_lock;
 pub mod file_cache;
 pub mod frame;
 pub mod governor;
+mod group_commit;
 pub mod limits;
 pub mod manifest;
 pub mod memtable;
@@ -49,3 +51,6 @@ pub mod sys;
 #[cfg(test)]
 pub mod testutil;
 pub mod wal;
+
+mod remix;
+mod xxh3;

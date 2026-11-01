@@ -1,0 +1,91 @@
+{
+  "name": "bulk-cache32-index1-miss-r4-after-lmdb",
+  "command": [
+    "taskset",
+    "-c",
+    "8",
+    "/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/target/fuse-engine/bin/after",
+    "/home/aetos/.t3/worktrees/kiban/t3-c0aaa680/validation/fuse-engine/results/reads/bulk-cache32-index1-miss-r4-after-lmdb.config.json"
+  ],
+  "code": 0,
+  "sha256": "fd9e5aba02b625e4fb6e813d2954f7d7f49e0edd3b0c42c1ac04cc6d82253f74",
+  "seconds": 3.7528271675109863,
+  "start": {
+    "total": 2452069,
+    "idle": 2188469
+  },
+  "end": {
+    "total": 2452393,
+    "idle": 2188774
+  },
+  "cpu9_busy_percent": 5.864197530864201,
+  "load": [
+    24.0,
+    25.880859375,
+    25.60546875
+  ],
+  "stages": [
+    {
+      "call_ops_s": 2455313.478833737,
+      "call_seconds": 0.040727997,
+      "errors": 0,
+      "latency": {
+        "count": 100000,
+        "max_ns": 17430,
+        "p50_ns": 392,
+        "p999_ns": 2304,
+        "p99_ns": 816
+      },
+      "reads": {
+        "count": 100000,
+        "max_ns": 17430,
+        "p50_ns": 392,
+        "p999_ns": 2304,
+        "p99_ns": 816
+      },
+      "type": "stage",
+      "verified_ops_s": 2269016.7084490964,
+      "wall_seconds": 0.044071954,
+      "workload": "absent-uniform",
+      "write_readback_seconds": 0.0,
+      "writes": {
+        "count": 0,
+        "max_ns": 0,
+        "p50_ns": null,
+        "p999_ns": null,
+        "p99_ns": null
+      }
+    },
+    {
+      "call_ops_s": 3113228.493910961,
+      "call_seconds": 0.032120996,
+      "errors": 0,
+      "latency": {
+        "count": 100000,
+        "max_ns": 18001,
+        "p50_ns": 304,
+        "p999_ns": 896,
+        "p99_ns": 624
+      },
+      "reads": {
+        "count": 100000,
+        "max_ns": 18001,
+        "p50_ns": 304,
+        "p999_ns": 896,
+        "p99_ns": 624
+      },
+      "type": "stage",
+      "verified_ops_s": 2827382.39552405,
+      "wall_seconds": 0.035368403,
+      "workload": "absent-agent-prefix",
+      "write_readback_seconds": 0.0,
+      "writes": {
+        "count": 0,
+        "max_ns": 0,
+        "p50_ns": null,
+        "p999_ns": null,
+        "p99_ns": null
+      }
+    }
+  ]
+}

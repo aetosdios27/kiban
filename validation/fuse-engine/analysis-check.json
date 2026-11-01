@@ -1,0 +1,84 @@
+{
+  "processes": 360,
+  "trials": 5,
+  "maintenance_processes": 10,
+  "errors": 0,
+  "gates": 11,
+  "sibling_median": 9.603471788826479,
+  "sibling_min": 2.0408163265306145,
+  "sibling_max": 41.52173913043479,
+  "fixtures": {
+    "after-kiban-bulk-index0-10000": {
+      "files": 1,
+      "bytes": 3280059,
+      "filter_bytes": 12341,
+      "fallbacks": 0
+    },
+    "after-kiban-bulk-index0-1000000": {
+      "files": 1,
+      "bytes": 329671139,
+      "filter_bytes": 1077301,
+      "fallbacks": 0
+    },
+    "after-kiban-bulk-index1-10000": {
+      "files": 1,
+      "bytes": 3783047,
+      "filter_bytes": 12341,
+      "fallbacks": 0
+    },
+    "after-kiban-bulk-index1-1000000": {
+      "files": 1,
+      "bytes": 360772395,
+      "filter_bytes": 1077301,
+      "fallbacks": 0
+    },
+    "after-kiban-normal-index0-1000000": {
+      "files": 84,
+      "bytes": 329814133,
+      "filter_bytes": 1212900,
+      "fallbacks": 0
+    },
+    "after-kiban-normal-index1-1000000": {
+      "files": 94,
+      "bytes": 361424607,
+      "filter_bytes": 1221398,
+      "fallbacks": 0
+    },
+    "before-kiban-bulk-index0-10000": {
+      "files": 1,
+      "bytes": 3280233,
+      "filter_bytes": 12515,
+      "fallbacks": 0
+    },
+    "before-kiban-bulk-index0-1000000": {
+      "files": 1,
+      "bytes": 329843853,
+      "filter_bytes": 1250015,
+      "fallbacks": 0
+    },
+    "before-kiban-bulk-index1-10000": {
+      "files": 1,
+      "bytes": 3783221,
+      "filter_bytes": 12515,
+      "fallbacks": 0
+    },
+    "before-kiban-bulk-index1-1000000": {
+      "files": 1,
+      "bytes": 360945109,
+      "filter_bytes": 1250015,
+      "fallbacks": 0
+    },
+    "before-kiban-normal-index0-1000000": {
+      "files": 84,
+      "bytes": 329852455,
+      "filter_bytes": 1251222,
+      "fallbacks": 0
+    },
+    "before-kiban-normal-index1-1000000": {
+      "files": 94,
+      "bytes": 361480243,
+      "filter_bytes": 1251378,
+      "fallbacks": 0
+    }
+  }
+}

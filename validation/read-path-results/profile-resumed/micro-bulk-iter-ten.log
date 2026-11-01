@@ -1,0 +1,4 @@
+Events disabled
+Events enabled
+Events disabled
+{"errors":0,"layout":"bulk","name":"iter-ten","ns":1894044142,"ns_per_op":1894.044142,"operations":1000000,"type":"micro"}

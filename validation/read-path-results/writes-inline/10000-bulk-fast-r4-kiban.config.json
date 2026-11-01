@@ -1,0 +1,13 @@
+{
+  "backend": "kiban",
+  "db": "/home/aetos/.t3/worktrees/kiban/t3-53ad0f47/target/read-path-data/kiban-10000-bulk-write-trial",
+  "n": 10000,
+  "operations": 1000,
+  "k": 10,
+  "seed": 20261016,
+  "output": "/home/aetos/.t3/worktrees/kiban/t3-53ad0f47/validation/read-path-results/writes-inline/10000-bulk-fast-r4-kiban.jsonl",
+  "action": "write",
+  "layout": "bulk",
+  "cache_mib": 32,
+  "durable": false
+}

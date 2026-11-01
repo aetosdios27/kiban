@@ -1,0 +1,59 @@
+{
+  "date": "2026-10-17T21:59:41+00:00\n",
+  "uname": "Linux fedora 7.2.10-200.fc44.x86_64 #1 SMP PREEMPT_DYNAMIC Sun Oct 11 18:11:51 UTC 2026 x86_64 GNU/Linux\n",
+  "lscpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           46 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  22\nOn-line CPU(s) list:                     0-21\nVendor ID:                               GenuineIntel\nModel name:                              Intel(R) Core(TM) Ultra 9 185H\nCPU family:                              6\nModel:                                   170\nThread(s) per core:                      2\nCore(s) per socket:                      16\nSocket(s):                               1\nStepping:                                4\nCPU(s) scaling MHz:                      62%\nCPU max MHz:                             5100.0000\nCPU min MHz:                             400.0000\nBogoMIPS:                                6144.00\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb ssbd ibrs ibpb stibp ibrs_enhanced tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt clwb intel_pt sha_ni xsaveopt xsavec xgetbv1 xsaves split_lock_detect user_shstk avx_vnni dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp hwp_pkg_req hfi vnmi umip pku ospke waitpkg gfni vaes vpclmulqdq rdpid bus_lock_detect movdiri movdir64b fsrm md_clear serialize pconfig arch_lbr ibt flush_l1d arch_capabilities\nVirtualization:                          VT-x\nL1d cache:                               544 KiB (14 instances)\nL1i cache:                               896 KiB (14 instances)\nL2 cache:                                18 MiB (9 instances)\nL3 cache:                                24 MiB (1 instance)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0-21\nVulnerability Gather data sampling:      Not affected\nVulnerability Ghostwrite:                Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Old microcode:             Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Not affected\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Enhanced / Automatic IBRS; IBPB conditional; PBRSB-eIBRS Not affected; BHI BHI_DIS_S\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Not affected\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Mitigation; IBPB before exit to userspace\n",
+  "topology": "CPU CORE SOCKET    MAXMHZ\n  0    0      0 4800.0000\n  1    1      0 5100.0000\n  2    1      0 5100.0000\n  3    2      0 5100.0000\n  4    2      0 5100.0000\n  5    0      0 4800.0000\n  6    3      0 4800.0000\n  7    3      0 4800.0000\n  8    4      0 4800.0000\n  9    4      0 4800.0000\n 10    5      0 4800.0000\n 11    5      0 4800.0000\n 12    6      0 3800.0000\n 13    7      0 3800.0000\n 14    8      0 3800.0000\n 15    9      0 3800.0000\n 16   10      0 3800.0000\n 17   11      0 3800.0000\n 18   12      0 3800.0000\n 19   13      0 3800.0000\n 20   14      0 2500.0000\n 21   15      0 2500.0000\n",
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.1\nLLVM version: 22.1.8\n",
+  "cargo": "cargo 1.98.1 (797e8a9bc 2026-08-05)\n",
+  "cc": "cc (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)\nCopyright (C) 2026 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+  "cxx": "c++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)\nCopyright (C) 2026 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+  "filesystem": "SOURCE                                                       FSTYPE OPTIONS\n/dev/mapper/luks-e8d0b5ef-62d8-4e14-a174-bb280aceca58[/home] btrfs  rw,relatime,seclabel,compress=zstd:1,ssd,discard=async,space_cache=v2,subvolid=257,subvol=/home\n",
+  "disk": "NAME                                          MODEL                           SIZE TYPE\nzram0                                                                           8G disk\nnvme0n1                                       WD PC SN740 SDDPMQD-1T00-1101 953.9G disk\n\u251c\u2500nvme0n1p1                                                                   260M part\n\u251c\u2500nvme0n1p2                                                                    16M part\n\u251c\u2500nvme0n1p3                                                                 651.6G part\n\u251c\u2500nvme0n1p4                                                                     2G part\n\u251c\u2500nvme0n1p5                                                                     2G part\n\u2514\u2500nvme0n1p6                                                                   298G part\n  \u2514\u2500luks-e8d0b5ef-62d8-4e14-a174-bb280aceca58                                 298G crypt\n",
+  "load": " 03:29:41 up  8:26,  1 user,  load average: 10.18, 5.55, 4.92\n",
+  "affinity": [
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21
+  ],
+  "cpu10_siblings": "10-11\n",
+  "meminfo": "MemTotal:       32258716 kB\nMemFree:          491604 kB\nMemAvailable:   14748316 kB\nBuffers:             664 kB\nCached:         16379196 kB\nSwapCached:         2848 kB\nActive:         11722348 kB\nInactive:       15772424 kB\nActive(anon):    9278812 kB\nInactive(anon):  3786940 kB\nActive(file):    2443536 kB\nInactive(file): 11985484 kB\nUnevictable:      726832 kB\nMlocked:             524 kB\nSwapTotal:       8388604 kB\nSwapFree:        2024596 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:            106852 kB\nWriteback:             0 kB\nAnonPages:      11840100 kB\nMapped:           955736 kB\nShmem:           1950240 kB\nKReclaimable:     315624 kB\nSlab:             787104 kB\nSReclaimable:     315624 kB\nSUnreclaim:       471480 kB\nKernelStack:       37632 kB\nPageTables:       181600 kB\nSecPageTables:      2276 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    24517960 kB\nCommitted_AS:   37627276 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:      119840 kB\nVmallocChunk:          0 kB\nPercpu:            25344 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:  1024000 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nCmaTotal:              0 kB\nCmaFree:               0 kB\nUnaccepted:            0 kB\nBalloon:               0 kB\nGPUActive:             0 kB\nGPUReclaim:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      417536 kB\nDirectMap2M:    16816128 kB\nDirectMap1G:    17825792 kB\n",
+  "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-t3code.slice/app-t3code-agents.slice/app-t3code-agents-952060bec3a7.slice/t3code-codex-24a4a87b.scope\n",
+  "build_environment": {
+    "LIBCLANG_PATH": "/usr/lib64/llvm15/lib",
+    "BINDGEN_EXTRA_CLANG_ARGS": "-resource-dir=/usr/lib64/llvm15/lib/clang/15.0.7",
+    "affinity": "12-21",
+    "nice": 10,
+    "cargo_profile": "release: opt-level=2, codegen-units=1, lto=true, panic=abort, debug=1"
+  },
+  "ldd": "\tlinux-vdso.so.1 (0x00007f99783f1000)\n\tlibstdc++.so.6 => /lib64/libstdc++.so.6 (0x00007f9977600000)\n\tlibgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x00007f99779d3000)\n\tlibm.so.6 => /lib64/libm.so.6 (0x00007f99778bc000)\n\tlibc.so.6 => /lib64/libc.so.6 (0x00007f9977407000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007f99783f3000)\n",
+  "frequency_policy": {
+    "/sys/devices/system/cpu/cpu10/cpufreq/scaling_governor": "powersave",
+    "/sys/devices/system/cpu/cpu10/cpufreq/scaling_driver": "intel_pstate",
+    "/sys/devices/system/cpu/intel_pstate/no_turbo": "0",
+    "/sys/devices/system/cpu/cpu10/cpufreq/scaling_min_freq": "400000",
+    "/sys/devices/system/cpu/cpu10/cpufreq/scaling_max_freq": "4800000"
+  },
+  "final_campaign_restart_utc": "2026-10-17T22:34:23.702926+00:00",
+  "compiler_flag_environment": {
+    "RUSTFLAGS": null,
+    "CXXFLAGS": null,
+    "CFLAGS": null,
+    "ROCKSDB_CXX_STD": null,
+    "CC": null,
+    "CXX": null,
+    "CARGO_BUILD_TARGET": null,
+    "CARGO_BUILD_RUSTFLAGS": null
+  },
+  "libc": [
+    "glibc",
+    "2.43"
+  ],
+  "python_version": "3.14.8 (main, Oct  1 2026, 00:00:00) [GCC 16.2.1 20260819 (Red Hat 16.2.1-2)]"
+}

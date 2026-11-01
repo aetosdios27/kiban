@@ -1,0 +1,8 @@
+{
+  "reason": "2s quiet sample cannot start on active desktop; require zero busy ticks over 250ms instead, keep full-process counters",
+  "file": "tools/agentbench/readpath/remix_final.py",
+  "before": "ad1a9f94669051371f09499ef6022b333eea43f4c1077f8c4d7ec788040b5231",
+  "after": "4ac2487eff81fb32b53045cfc4ec82684d4e90563595859a770e66323a08ef0b",
+  "binaries_unchanged": true,
+  "timed_runs_started": 0
+}

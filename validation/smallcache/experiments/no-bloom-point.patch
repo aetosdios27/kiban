@@ -1,0 +1,22 @@
+--- a/src/sstable/reader.rs
++++ b/src/sstable/reader.rs
+@@ -578,9 +578,6 @@
+     /// Point lookup. Returns the newest version of `key` whose sequence
+     /// number does not exceed `limit`, or `None` when provably absent.
+     pub fn get(&self, key: &[u8], limit: Option<u64>) -> Result<Option<Found>, SstError> {
+-        if !self.filter.may_contain(key) {
+-            return Ok(None);
+-        }
+         if let Some(point) = &self.point {
+             return Ok(point.get(key, limit));
+         }
+@@ -608,6 +605,9 @@
+                 seq: v.seq,
+                 value,
+             }));
++        }
++        if !self.filter.may_contain(key) {
++            return Ok(None);
+         }
+         let idx = self.index.partition_point(|e| e.separator.as_slice() < key);
+         if idx == self.index.len() {

@@ -1,0 +1,2 @@
+{"arena_bytes":338732640,"build_ns":471798847,"keys":1000000,"layout":{"0":1},"mphf_bits_per_key":2.989928,"mphf_build_ns":179856115,"original_sst_bytes":329843853,"slot_bytes_per_key":12,"threads":1,"type":"build"}
+{"batch_mean_ns":111.611766,"counter_operations":1000000,"digest":0,"e2e":{"mean_ns":352.05576,"p50_ns":318,"p99_ns":601},"errors":0,"missing":true,"operations":100000,"raw":{"mean_ns":228.9387,"p50_ns":218,"p99_ns":397},"throughput_ops_s":8959628.86206818,"type":"read","variant":"mphf","verified_all_hits":1000000,"verified_timed_results":1000000}

@@ -1,0 +1,11 @@
+{
+  "default_cache_bytes": 449030592,
+  "commands": 425,
+  "timed_calls": 56725000,
+  "errors": 0,
+  "primary_commands": 155,
+  "primary_timed_calls": 20275000,
+  "all_affinities": "10",
+  "normal_rocksdb_pending_compaction_bytes": 0
+}
+Sibling busy median/range {'median': 3.6065573770491803, 'min': 0.0, 'max': 30.483271375464685}

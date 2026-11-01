@@ -1,0 +1,173 @@
+[
+  {
+    "name": "test",
+    "command": [
+      "cargo",
+      "test",
+      "--workspace",
+      "--",
+      "--test-threads=4"
+    ],
+    "code": 0,
+    "seconds": 11.39276385307312
+  },
+  {
+    "name": "release",
+    "command": [
+      "cargo",
+      "test",
+      "--release",
+      "--workspace",
+      "--",
+      "--test-threads=4"
+    ],
+    "code": 0,
+    "seconds": 21.76504135131836
+  },
+  {
+    "name": "clippy",
+    "command": [
+      "cargo",
+      "clippy",
+      "--all-targets",
+      "--workspace",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "code": 0,
+    "seconds": 1.7391912937164307
+  },
+  {
+    "name": "fmt",
+    "command": [
+      "cargo",
+      "fmt",
+      "--all",
+      "--check"
+    ],
+    "code": 0,
+    "seconds": 0.39526867866516113
+  },
+  {
+    "name": "fixed",
+    "command": [
+      "cargo",
+      "test",
+      "--release",
+      "seeded_crash_fixed_corpus",
+      "--",
+      "--test-threads=1"
+    ],
+    "code": 0,
+    "seconds": 0.5133321285247803
+  },
+  {
+    "name": "long-20000-each",
+    "command": [
+      "cargo",
+      "test",
+      "--release",
+      "--lib",
+      "seeded_crash_long",
+      "--",
+      "--ignored",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "code": 0,
+    "seconds": 139.68384981155396
+  },
+  {
+    "name": "loom",
+    "command": [
+      "cargo",
+      "test",
+      "--features",
+      "loom",
+      "--",
+      "--test-threads=1",
+      "loom_"
+    ],
+    "code": 0,
+    "seconds": 29.845192432403564
+  },
+  {
+    "name": "site-facts",
+    "command": [
+      "python3",
+      "tools/site_facts.py",
+      "validate"
+    ],
+    "code": 0,
+    "seconds": 0.17372488975524902
+  },
+  {
+    "name": "readbench-clippy",
+    "command": [
+      "cargo",
+      "clippy",
+      "--manifest-path",
+      "tools/agentbench/readpath/Cargo.toml",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "code": 0,
+    "seconds": 1.0497918128967285
+  },
+  {
+    "name": "readbench-remix-clippy",
+    "command": [
+      "cargo",
+      "clippy",
+      "--manifest-path",
+      "tools/agentbench/readpath/Cargo.toml",
+      "--features",
+      "remix",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "code": 0,
+    "seconds": 0.39690732955932617
+  },
+  {
+    "name": "readbench-remix-test",
+    "command": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "tools/agentbench/readpath/Cargo.toml",
+      "--features",
+      "remix"
+    ],
+    "code": 0,
+    "seconds": 3.635899543762207
+  },
+  {
+    "name": "readbench-test",
+    "command": [
+      "cargo",
+      "test",
+      "--manifest-path",
+      "tools/agentbench/readpath/Cargo.toml"
+    ],
+    "code": 0,
+    "seconds": 1.3482706546783447
+  },
+  {
+    "name": "readbench-fmt",
+    "command": [
+      "cargo",
+      "fmt",
+      "--manifest-path",
+      "tools/agentbench/readpath/Cargo.toml",
+      "--check"
+    ],
+    "code": 0,
+    "seconds": 0.0894327163696289
+  }
+]

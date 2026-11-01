@@ -1,0 +1,9 @@
+usage: Count libc sync calls in complete write suites, outside the latency matrix.
+Build the diagnostic shared library first on CPUs 12-21, with no timed run active.
+
+       [-h] [--raw RAW] [--out OUT]
+
+options:
+  -h, --help  show this help message and exit
+  --raw RAW
+  --out OUT

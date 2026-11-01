@@ -1,0 +1,11 @@
+{"backend":"lmdb","cache_bytes":449030592,"durable":true,"point_index":false,"type":"requested_config"}
+{"backend":"lmdb","details":{"heed3":"0.22.0","lmdb_flags":"EnvFlags(0x0)","lmdb_flags_bits":0,"map_size_bytes":10737418240},"type":"backend_config"}
+lmdb: remember 1000 verified calls
+lmdb: recall-by-id 1000 verified calls
+lmdb: recent-for-agent 1000 verified calls
+lmdb: update 1000 verified calls
+lmdb: mixed-90-10 1000 verified calls
+{"backend":"lmdb","cache_bytes":449030592,"durable":true,"point_index":false,"type":"requested_config"}
+{"backend":"lmdb","details":{"heed3":"0.22.0","lmdb_flags":"EnvFlags(0x0)","lmdb_flags_bits":0,"map_size_bytes":10737418240},"type":"backend_config"}
+sync_probe fsync=0 fdatasync=2101 failures=0
+sync_probe fsync=0 fdatasync=0 failures=0
