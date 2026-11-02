@@ -156,6 +156,21 @@
       "date": "2026-10-16",
       "title": "Headerless WAL after header truncation",
       "pr": 5
+    },
+    {
+      "date": "2026-10-19",
+      "title": "Group commit reported an error for durable writes after a failed memtable freeze",
+      "pr": 23
+    },
+    {
+      "date": "2026-10-19",
+      "title": "A panic during hand-off could leave group commit followers waiting",
+      "pr": 23
+    },
+    {
+      "date": "2026-11-01",
+      "title": "Group commit leader panic reported as corruption",
+      "pr": 30
     }
   ],
   "capabilities": [
@@ -233,7 +248,22 @@
       "status": "done"
     }
   ],
-  "local_sweeps": [],
+  "local_sweeps": [
+    {
+      "date": "2026-10-18",
+      "commit": "76a6a190ccb2a1f48a58b6cf02a81076f5015957",
+      "suite": "direct and shared crash simulation",
+      "seeds": 10000000,
+      "result": "200 of 200 chunks, 0 failures"
+    },
+    {
+      "date": "2026-11-02",
+      "commit": "fd1b95c5c1586f766ec6fab4fdab29d8734e1e50",
+      "suite": "direct, shared and group commit crash simulation",
+      "seeds": 10000000,
+      "result": "200 of 200 chunks, 0 failures"
+    }
+  ],
   "correctness_stats": [
     {
       "value": {
