@@ -97,7 +97,7 @@ pub(super) fn run(o: &Options) -> Result<()> {
     let keys: Vec<_> = ids.iter().map(|&id| model::key(id).into_bytes()).collect();
     let positions: Vec<_> = keys
         .iter()
-        .map(|k| index.partition_point(|e| e.separator.as_slice() < k))
+        .map(|k| index.partition_point(|e| e.separator.as_slice() < k.as_slice()))
         .collect();
     let values: Vec<_> = keys
         .iter()
@@ -166,7 +166,9 @@ pub(super) fn run(o: &Options) -> Result<()> {
                 assert!(black_box(filter.may_contain(black_box(key))));
             }
             "index" => {
-                black_box(index.partition_point(|e| e.separator.as_slice() < black_box(key)));
+                black_box(
+                    index.partition_point(|e| e.separator.as_slice() < black_box(key.as_slice())),
+                );
             }
             "index-hints" => {
                 black_box(
@@ -178,7 +180,7 @@ pub(super) fn run(o: &Options) -> Result<()> {
             }
             "index-inline" => {
                 let entries = inline.as_ref().unwrap();
-                let at = entries.partition_point(|e| e.as_ref() < black_box(key));
+                let at = entries.partition_point(|e| e.as_ref() < black_box(key.as_slice()));
                 black_box((entries[at].offset, entries[at].len));
             }
             "hash" => {

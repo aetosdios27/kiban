@@ -1,0 +1,21 @@
+{
+  "backend": "fjall",
+  "n": 10000,
+  "operations": 100000,
+  "k": 10,
+  "seed": 20261016,
+  "db": "/home/aetos/.t3-app/worktrees/kiban/t3-8104aad7-d6f0c33caac29045/target/fjall-data/10000-fjall-16384bloom10mem64-none-bulk",
+  "output": "/home/aetos/.t3-app/worktrees/kiban/t3-8104aad7-d6f0c33caac29045/validation/fjall/raw/prepare/10000-fjall-16384bloom10mem64-none-bulk.jsonl",
+  "action": "prepare",
+  "layout": "bulk",
+  "cache_mib": null,
+  "point_index": false,
+  "durable": false,
+  "rocks": {},
+  "fjall": {
+    "block_size": 16384,
+    "bloom_bits": 10,
+    "memtable_mib": 64,
+    "lz4": false
+  }
+}

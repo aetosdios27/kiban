@@ -1,0 +1,15 @@
+{
+  "backend": "kiban",
+  "n": 10000,
+  "operations": 100000,
+  "k": 10,
+  "seed": 20261016,
+  "db": "",
+  "output": "",
+  "action": "metadata",
+  "layout": "bulk",
+  "cache_mib": null,
+  "point_index": false,
+  "durable": false,
+  "rocks": {}
+}

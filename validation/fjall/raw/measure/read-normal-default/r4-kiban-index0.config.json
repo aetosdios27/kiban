@@ -1,0 +1,16 @@
+{
+  "backend": "kiban",
+  "n": 1000000,
+  "operations": 100000,
+  "k": 10,
+  "seed": 20261016,
+  "db": "/home/aetos/.t3-app/worktrees/kiban/t3-8104aad7-d6f0c33caac29045/target/fjall-data/1000000-kiban-index0-normal",
+  "output": "/home/aetos/.t3-app/worktrees/kiban/t3-8104aad7-d6f0c33caac29045/validation/fjall/raw/measure/read-normal-default/r4-kiban-index0.jsonl",
+  "action": "read",
+  "layout": "normal",
+  "cache_mib": null,
+  "point_index": false,
+  "durable": false,
+  "rocks": {},
+  "agent_memory": true
+}

@@ -1,0 +1,13 @@
+date	decision	reason	evidence
+2026-11-22	Pin Fjall 3.1.13 and lsm-tree 3.1.10	Latest stable Fjall at freeze and its locked dependency	PROTOCOL.md
+2026-11-22	Use native sorted ingestion and normal ID-order loading	Fjall exposes two meaningful fixture paths	PROTOCOL.md
+2026-11-22	Use forward prefix iteration	The shared complemented ID key sorts newest first	PROTOCOL.md
+2026-11-22	Screen four leveled configurations	Separate block size, Bloom bits and memtable size around one baseline. No supported size-tiered or prefix filtering API	PROTOCOL.md
+2026-11-22	Enable the Kiban agent-memory profile	Use the current documented profile and show the cost and benefit of its indexes	PROTOCOL.md
+2026-11-22	Use manual buffered Fjall journal writes and explicit SyncData for durable	Match the per-acknowledgment boundary and audit fdatasync	PROTOCOL.md
+2026-11-22	Reuse the existing static RocksDB archive	RocksDB is linked for harness compatibility and never enters the campaign. Avoid a duplicate long native build on the shared host	host.json
+2026-11-22	Pace normal Fjall fixture loading at the configured memtable limit minus 1 KiB	Avoid the one-worker bounded queue stall seen before screening. Preserve individual puts and natural compaction	checks/preparation-stall/backtraces.log
+2026-11-22	Select block4 for reads	Minimum frozen read score of 4.091 microseconds	raw/selection.json
+2026-11-22	Select block4 for writes	Minimum frozen write score of 26.156 microseconds	raw/selection.json
+2026-11-22	Accept all 150 primary receipts after coordinator SIGTERM	The last command exited zero and every result hash, oracle and round verified. No trials repeated	AUDIT.json
+2026-11-22	Use the existing libc sync probe	strace unavailable. Source and durable-minus-fast fdatasync count confirm the journal path	checks/sync.json

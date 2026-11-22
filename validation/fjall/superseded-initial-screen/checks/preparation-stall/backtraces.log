@@ -1,0 +1,56 @@
+[New LWP 52134 (id 2)]
+
+This GDB supports auto-downloading debuginfo from the following URLs:
+  <ima:enforcing>
+  <https://debuginfod.fedoraproject.org/>
+  <ima:ignore>
+Enable debuginfod for this session? (y or [n]) [answered N; input not from terminal]
+Debuginfod has been disabled.
+To make this setting permanent, add 'set debuginfod enabled off' to .gdbinit.
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib64/libthread_db.so.1".
+[Switching to thread 1 (Thread 0x7f381aabe040 (LWP 52133))]
+0x00007f381a5e43bd in syscall () from /lib64/libc.so.6
+warning: Missing auto-load script at offset 0 in section .debug_gdb_scripts
+of file /home/aetos/.t3-app/worktrees/kiban/t3-8104aad7-d6f0c33caac29045/target/fjall-h2h/release/kiban-readbench.
+Use `info auto-load python-scripts [REGEXP]' to list them.
+
+Thread 2 (Thread 0x7f381a4ef6c0 (LWP 52134) "fjall:worker"):
+#0  0x00007f381a5e43bd in syscall () from /lib64/libc.so.6
+#1  0x000055c06a528277 in std::sys::pal::unix::futex::futex_wait () at library/std/src/sys/pal/unix/futex.rs:73
+#2  std::sys::sync::thread_parking::futex::Parker::park () at library/std/src/sys/sync/thread_parking/futex.rs:55
+#3  std::thread::thread::Thread::park () at library/std/src/thread/thread.rs:121
+#4  std::thread::functions::park () at library/std/src/thread/functions.rs:533
+#5  0x000055c06a3e722d in flume::signal::SyncSignal::wait () at /home/aetos/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/flume-0.12.0/src/signal.rs:40
+#6  flume::Hook::wait_send<fjall::worker_pool::WorkerMessage> () at /home/aetos/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/flume-0.12.0/src/lib.rs:380
+#7  flume::{impl#26}::send_sync::{closure#1}<fjall::worker_pool::WorkerMessage> () at /home/aetos/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/flume-0.12.0/src/lib.rs:597
+#8  flume::Shared::send<fjall::worker_pool::WorkerMessage, flume::signal::SyncSignal, core::result::Result<(), flume::TrySendTimeoutError<fjall::worker_pool::WorkerMessage>>, flume::{impl#26}::send_sync::{closure_env#0}<fjall::worker_pool::WorkerMessage>, flume::{impl#26}::send_sync::{closure_env#1}<fjall::worker_pool::WorkerMessage>> () at /home/aetos/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/flume-0.12.0/src/lib.rs:553
+#9  0x000055c06a3e7f71 in flume::Shared::send_sync<fjall::worker_pool::WorkerMessage> () at /home/aetos/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/flume-0.12.0/src/lib.rs:564
+#10 flume::Sender::send<fjall::worker_pool::WorkerMessage> () at /home/aetos/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/flume-0.12.0/src/lib.rs:749
+#11 fjall::keyspace::Keyspace::inner_rotate_memtable () at src/keyspace/mod.rs:755
+#12 0x000055c06a3dfd0b in fjall::worker_pool::worker_tick () at src/worker_pool.rs:183
+#13 fjall::worker_pool::{impl#1}::start::{closure#0}::{closure#0} () at src/worker_pool.rs:98
+#14 std::sys::backtrace::__rust_begin_short_backtrace<fjall::worker_pool::{impl#1}::start::{closure#0}::{closure_env#0}, core::result::Result<(), fjall::error::Error>> () at /home/aetos/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/sys/backtrace.rs:166
+#15 0x000055c06a3f8793 in std::thread::lifecycle::spawn_unchecked::{closure#1}::{closure#0}<fjall::worker_pool::{impl#1}::start::{closure#0}::{closure_env#0}, core::result::Result<(), fjall::error::Error>> () at /home/aetos/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/thread/lifecycle.rs:70
+#16 core::panic::unwind_safe::{impl#23}::call_once<core::result::Result<(), fjall::error::Error>, std::thread::lifecycle::spawn_unchecked::{closure#1}::{closure_env#0}<fjall::worker_pool::{impl#1}::start::{closure#0}::{closure_env#0}, core::result::Result<(), fjall::error::Error>>> () at /home/aetos/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/panic/unwind_safe.rs:275
+#17 std::panicking::catch_unwind::do_call<core::panic::unwind_safe::AssertUnwindSafe<std::thread::lifecycle::spawn_unchecked::{closure#1}::{closure_env#0}<fjall::worker_pool::{impl#1}::start::{closure#0}::{closure_env#0}, core::result::Result<(), fjall::error::Error>>>, core::result::Result<(), fjall::error::Error>> () at /home/aetos/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/panicking.rs:576
+
+Thread 1 (Thread 0x7f381aabe040 (LWP 52133) "kiban-readbench"):
+#0  0x00007f381a5e43bd in syscall () from /lib64/libc.so.6
+#1  0x000055c06a528277 in std::sys::pal::unix::futex::futex_wait () at library/std/src/sys/pal/unix/futex.rs:73
+#2  std::sys::sync::thread_parking::futex::Parker::park () at library/std/src/sys/sync/thread_parking/futex.rs:55
+#3  std::thread::thread::Thread::park () at library/std/src/thread/thread.rs:121
+#4  std::thread::functions::park () at library/std/src/thread/functions.rs:533
+#5  0x000055c06a3e722d in flume::signal::SyncSignal::wait () at /home/aetos/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/flume-0.12.0/src/signal.rs:40
+#6  flume::Hook::wait_send<fjall::worker_pool::WorkerMessage> () at /home/aetos/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/flume-0.12.0/src/lib.rs:380
+#7  flume::{impl#26}::send_sync::{closure#1}<fjall::worker_pool::WorkerMessage> () at /home/aetos/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/flume-0.12.0/src/lib.rs:597
+#8  flume::Shared::send<fjall::worker_pool::WorkerMessage, flume::signal::SyncSignal, core::result::Result<(), flume::TrySendTimeoutError<fjall::worker_pool::WorkerMessage>>, flume::{impl#26}::send_sync::{closure_env#0}<fjall::worker_pool::WorkerMessage>, flume::{impl#26}::send_sync::{closure_env#1}<fjall::worker_pool::WorkerMessage>> () at /home/aetos/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/flume-0.12.0/src/lib.rs:553
+#9  0x000055c06a3e7f71 in flume::Shared::send_sync<fjall::worker_pool::WorkerMessage> () at /home/aetos/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/flume-0.12.0/src/lib.rs:564
+#10 flume::Sender::send<fjall::worker_pool::WorkerMessage> () at /home/aetos/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/flume-0.12.0/src/lib.rs:749
+#11 fjall::keyspace::Keyspace::inner_rotate_memtable () at src/keyspace/mod.rs:755
+#12 0x000055c06a3b52bd in fjall::keyspace::Keyspace::rotate_memtable () at /home/aetos/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fjall-3.1.13/src/keyspace/mod.rs:729
+#13 kiban_readbench::fjall::{impl#2}::finish () at src/fjall.rs:152
+#14 0x000055c06a393116 in kiban_readbench::prepare () at src/main.rs:211
+#15 0x000055c06a382ba4 in kiban_readbench::run () at src/main.rs:442
+#16 kiban_readbench::main () at src/main.rs:457
+[Inferior 1 (process 52133) detached]

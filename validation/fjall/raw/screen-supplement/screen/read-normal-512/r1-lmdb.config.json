@@ -1,0 +1,15 @@
+{
+  "backend": "lmdb",
+  "n": 1000000,
+  "operations": 100000,
+  "k": 10,
+  "seed": 20261016,
+  "db": "/home/aetos/.t3-app/worktrees/kiban/t3-8104aad7-d6f0c33caac29045/target/fjall-data/1000000-lmdb",
+  "output": "/home/aetos/.t3-app/worktrees/kiban/t3-8104aad7-d6f0c33caac29045/validation/fjall/raw/screen-supplement/screen/read-normal-512/r1-lmdb.jsonl",
+  "action": "read",
+  "layout": "normal",
+  "cache_mib": 512,
+  "point_index": false,
+  "durable": false,
+  "rocks": {}
+}

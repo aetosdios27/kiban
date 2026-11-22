@@ -1,0 +1,16 @@
+{
+  "backend": "kiban",
+  "n": 10000,
+  "operations": 1000,
+  "k": 10,
+  "seed": 20261016,
+  "db": "/home/aetos/.t3-app/worktrees/kiban/t3-8104aad7-d6f0c33caac29045/target/fjall-data/write-trial",
+  "output": "/home/aetos/.t3-app/worktrees/kiban/t3-8104aad7-d6f0c33caac29045/validation/fjall/raw/measure/write-durable/r2-kiban-index1.jsonl",
+  "action": "write",
+  "layout": "bulk",
+  "cache_mib": null,
+  "point_index": true,
+  "durable": true,
+  "rocks": {},
+  "agent_memory": true
+}

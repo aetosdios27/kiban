@@ -112,3 +112,17 @@ and test on CPUs 12–21 at nice 10, with no timed campaign active. Start with
 fresh private data and output directories. `--resume` validates completed
 receipts and frozen binary/source hashes. The write suite now fully verifies
 again after closing and reopening each database.
+
+## Fjall comparison
+
+`backend: "fjall"` uses the `memories` keyspace. The `fjall` options set
+`block_size`, `bloom_bits`, `memtable_mib` and `lz4`. Durable puts explicitly
+persist the journal with `SyncData`. Fast puts leave the journal buffered. Bulk
+uses Fjall's sorted ingestion API. Normal loading uses individual puts and a
+final memtable flush.
+
+The [Fjall protocol](../../../validation/fjall/PROTOCOL.md) defines CPU
+affinity, screening, verification and the five-trial comparison with Kiban and
+LMDB. Build the release binary with `--features remix` so the Kiban
+agent-memory profile uses the prefix-values API. `fjall_bench.py` runs the
+campaign and `fjall_report.py` audits and summarizes its receipts.

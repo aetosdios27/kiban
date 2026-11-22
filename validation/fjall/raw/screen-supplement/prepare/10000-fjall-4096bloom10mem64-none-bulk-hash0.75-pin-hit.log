@@ -1,0 +1,6 @@
+{"backend":"fjall","binary_fuse_filter":false,"cache_bytes":448987008,"durable":false,"point_index":false,"type":"requested_config"}
+{"backend":"fjall","cache_bytes":448987008,"durable":false,"manual_journal_persist":true,"requested_tuning":{"block_size":4096,"bloom_bits":10,"expect_point_read_hits":true,"hash_ratio":0.75,"lz4":false,"memtable_mib":64,"pin_blocks":true,"restart_interval":null},"state":{"active_compactions":0,"journals":1,"l0_tables":0,"outstanding_flushes":0,"sealed_memtables":0,"tables":0,"write_buffer_bytes":0},"type":"backend_config","workers":1}
+{"state":{"active_compactions":0,"journals":1,"l0_tables":1,"outstanding_flushes":0,"sealed_memtables":0,"tables":1,"write_buffer_bytes":0},"type":"fjall_settled"}
+{"backend":"fjall","binary_fuse_filter":false,"cache_bytes":448987008,"durable":false,"point_index":false,"type":"requested_config"}
+{"backend":"fjall","cache_bytes":448987008,"durable":false,"manual_journal_persist":true,"requested_tuning":{"block_size":4096,"bloom_bits":10,"expect_point_read_hits":true,"hash_ratio":0.75,"lz4":false,"memtable_mib":64,"pin_blocks":true,"restart_interval":null},"state":{"active_compactions":0,"journals":1,"l0_tables":0,"outstanding_flushes":0,"sealed_memtables":0,"tables":1,"write_buffer_bytes":0},"type":"backend_config","workers":1}
+{"layout":null,"type":"prepared","verified_records":10000}

@@ -305,6 +305,7 @@ mod tests {
                     cache_mib: Some(32),
                     mmap_max_level: None,
                     readers: 1,
+                    agent_memory: false,
                     point_index: false,
                     binary_fuse_filter: false,
                     stage: 0,
@@ -313,6 +314,7 @@ mod tests {
                     sqlite_layout: layout,
                     sqlite_sync: sync,
                     sqlite_mmap_bytes: 1024 * 1024 * 1024,
+                    fjall: crate::fjall::Tuning::default(),
                     rocks: crate::rocks::Tuning::default(),
                     redb: Default::default(),
                     #[cfg(feature = "remix")]

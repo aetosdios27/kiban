@@ -1,0 +1,20 @@
+date	decision	reason	evidence
+2026-11-22	Pin Fjall 3.1.13 and lsm-tree 3.1.10	Latest stable Fjall at freeze and its locked dependency	PROTOCOL.md
+2026-11-22	Use native sorted ingestion and normal ID-order loading	Fjall exposes two meaningful fixture paths	PROTOCOL.md
+2026-11-22	Use forward prefix iteration	The shared complemented ID key sorts newest first	PROTOCOL.md
+2026-11-22	Screen four leveled configurations	Separate block size, Bloom bits and memtable size around one baseline. No supported size-tiered or prefix filtering API	PROTOCOL.md
+2026-11-22	Enable the Kiban agent-memory profile	Use the current documented profile and show the cost and benefit of its indexes	PROTOCOL.md
+2026-11-22	Use manual buffered Fjall journal writes and explicit SyncData for durable	Match the per-acknowledgment boundary and audit fdatasync	PROTOCOL.md
+2026-11-22	Reuse the existing static RocksDB archive	RocksDB is linked for harness compatibility and never enters the campaign. Avoid a duplicate long native build on the shared host	host.json
+2026-11-22	Pace normal Fjall fixture loading at the configured memtable limit minus 1 KiB	Avoid the one-worker bounded queue stall seen before screening. Preserve individual puts and natural compaction	checks/preparation-stall/backtraces.log
+2026-11-22	Select block4 for reads	Minimum frozen read score of 4.091 microseconds	raw/selection.json
+2026-11-22	Select block4 for writes	Minimum frozen write score of 26.156 microseconds	raw/selection.json
+2026-11-22	Accept all 150 primary receipts after coordinator SIGTERM	The last command exited zero and every result hash, oracle and round verified. No trials repeated	AUDIT.json
+2026-11-22	Use the existing libc sync probe	strace unavailable. Source and durable-minus-fast fdatasync count confirm the journal path	checks/sync.json
+2026-11-22	Screen hash ratio 0.75	Fjall forwards the policy to lsm-tree ingest, flush and compaction; lsm-tree embeds a hash index in each data block with roughly 0.75 buckets per entry. Exact point lookups can fall back to binary search.	lsm-tree 3.1.10: table/block/hash_index/builder.rs, table/data_block/mod.rs
+2026-11-22	Screen filter and index pinning at all levels	Defaults pin filters at L0 and indexes at L0/L1. Table recovery pins full unpartitioned blocks by policy. Partitioned blocks use a pinned top-level index, and the fresh ingest path skips full pinning until reopen.	fjall 3.1.13: keyspace/options.rs; lsm-tree 3.1.10: table/mod.rs, tree/mod.rs, tree/ingest.rs
+2026-11-22	Screen expect_point_read_hits=true	Sorted ingest omits Bloom filters and compaction omits them at the last level. Ordinary flush keeps the Bloom policy. All measured recalls hit, but overlapping tables may still require negative probes.	lsm-tree 3.1.10: tree/ingest.rs, tree/mod.rs, compaction/flavour.rs
+2026-11-22	Screen data restart interval 8	More frequent full keys shorten in-block reconstruction and increase encoding overhead. Fjall defaults to 10 in L0 and 16 thereafter. Its index restart setter is commented out; partitioning stays at the frozen defaults.	fjall 3.1.13: keyspace/options.rs; lsm-tree 3.1.10: table/block/encoder.rs, table/block/decoder.rs
+2026-11-22	Select g-hash-pin-hit-restart for supplemental reads	Minimum rotated score 3.125854 microseconds. Concurrent block4 scored 3.521667 microseconds.	raw/screen-supplement/selection.json
+2026-11-22	Select g-hash-pin-hit-restart for supplemental writes	Minimum rotated score 15.867499 microseconds. Concurrent block4 scored 16.136837 microseconds.	raw/screen-supplement/selection.json
+2026-11-22	Trace durable writes with strace -f -C	Fedora strace 6.19 was extracted into the worktree from a signature-checked RPM. The summary includes the same counts as -c and raw calls identify journal paths and returned bytes. Exclude the fsync on open and finalization calls from per-mutation totals.	checks/durable-syscalls/summary.json
