@@ -1,0 +1,2 @@
+{"backend":"redb","cache_bytes":448987008,"durability":"Immediate","tuning":{"compact":"maximum","quick_repair":false},"type":"backend_config","version":"5.0.0"}
+{"type":"reopen_verified","verified_records":10032}
