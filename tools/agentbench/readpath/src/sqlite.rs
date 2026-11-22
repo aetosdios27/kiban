@@ -314,6 +314,7 @@ mod tests {
                     sqlite_sync: sync,
                     sqlite_mmap_bytes: 1024 * 1024 * 1024,
                     rocks: crate::rocks::Tuning::default(),
+                    redb: Default::default(),
                     #[cfg(feature = "remix")]
                     scan_prefix_len: 18,
                 };
