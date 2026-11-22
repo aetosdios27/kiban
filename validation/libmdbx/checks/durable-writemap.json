@@ -1,0 +1,96 @@
+{
+  "acknowledgments": [
+    10000,
+    9999,
+    10001,
+    9998,
+    10002,
+    9997,
+    10003,
+    9996,
+    10004,
+    9995,
+    10005,
+    9994,
+    10006,
+    9993,
+    10007,
+    9992,
+    10008,
+    9991,
+    10009,
+    9990,
+    10010,
+    9989,
+    10011,
+    9988,
+    10012,
+    9987,
+    10013,
+    9986,
+    10014,
+    9985,
+    10015,
+    9984
+  ],
+  "trace_sha256": "254d31c5a54a86ea6b622ba9548b72be3bd50b46a4323e05a16134a7b5adb074",
+  "log_sha256": "ae86d2a0934e1e65f32a8379571ba86e250082470045d9c3c0f7c81da759a894",
+  "command": [
+    "taskset",
+    "-c",
+    "10",
+    "/home/aetos/.t3-app/worktrees/kiban/t3-c158b6a5-62c4619a2d410fa9/target/libmdbx-data/usr/bin/strace",
+    "-f",
+    "-y",
+    "-s",
+    "64",
+    "-e",
+    "trace=clone,clone3,openat,close,write,read,pwrite64,pwritev,pwritev2,fsync,fdatasync,msync",
+    "-o",
+    "/home/aetos/.t3-app/worktrees/kiban/t3-c158b6a5-62c4619a2d410fa9/validation/libmdbx/checks/durable-writemap.strace",
+    "/home/aetos/.t3-app/worktrees/kiban/t3-c158b6a5-62c4619a2d410fa9/target/libmdbx-h2h/release/kiban-readbench",
+    "/home/aetos/.t3-app/worktrees/kiban/t3-c158b6a5-62c4619a2d410fa9/validation/libmdbx/checks/durable-writemap-writer.config.json"
+  ],
+  "killed_pid": 145069,
+  "signal": "SIGKILL",
+  "ready_tids": [
+    145069
+  ],
+  "last_ack_tids": [
+    145069
+  ],
+  "cpu_tick_delta": {
+    "cpu10": [
+      0,
+      4,
+      9,
+      2,
+      4,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "cpu11": [
+      0,
+      0,
+      0,
+      19,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "affinity": "10",
+  "started": 1795370214.4185948,
+  "ended": 1795370214.608286,
+  "load": [
+    3.73388671875,
+    4.17822265625,
+    4.2265625
+  ]
+}

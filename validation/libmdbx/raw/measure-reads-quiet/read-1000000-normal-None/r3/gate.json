@@ -1,0 +1,9 @@
+{
+  "attempt": 1,
+  "major_faults": {
+    "r3-libmdbx-tuned": 0,
+    "r3-lmdb": 0,
+    "r3-kiban-index0": 0,
+    "r3-kiban-index1": 0
+  }
+}

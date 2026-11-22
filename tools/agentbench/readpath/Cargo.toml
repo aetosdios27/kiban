@@ -16,6 +16,7 @@ group = []
 kiban = { path = "../../.." }
 heed3 = "=0.22.0"
 fjall = { version = "=3.1.13", default-features = false, features = ["lz4"] }
+mdbx-sys = "=14.4.0"
 redb = "=5.0.0"
 mimalloc = "=0.1.48"
 serde = { version = "1", features = ["derive"] }

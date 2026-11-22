@@ -63,7 +63,8 @@ def fixture(c):
 
 
 def run(c, out, name, resume=False, probe=None, *, binary=BINARY, data=DATA,
-        cpu=10, sibling=11, fixture_path=fixture, copy_from=None, invalid=None, tracer=()):
+        cpu=10, sibling=11, fixture_path=fixture, copy_from=None, invalid=None, tracer=(),
+        sample=None):
     out.mkdir(parents=True, exist_ok=True)
     path = out / (name + '.config.json')
     c = dict(c, output=str((out / (name + '.jsonl')).resolve()))
@@ -100,9 +101,11 @@ def run(c, out, name, resume=False, probe=None, *, binary=BINARY, data=DATA,
     if probe:
         env['LD_PRELOAD'] = str(probe)
     with (out / (name + '.log')).open('w') as log:
-        result = subprocess.run(['/usr/bin/time', '-v', '-o', str(out / (name + '.time.txt')),
-                                 'taskset', '-c', str(cpu), *tracer, str(binary), str(path)],
-                                stdout=log, stderr=log, env=env)
+        command = ['/usr/bin/time', '-v', '-o', str(out / (name + '.time.txt')),
+                   'taskset', '-c', str(cpu), *tracer, str(binary), str(path)]
+        sample_before = sample() if sample else None
+        result = subprocess.run(command, stdout=log, stderr=log, env=env)
+        sample_after = sample() if sample else None
     if result.returncode:
         if invalid:
             invalid.write_text(f'{path}: exit {result.returncode}\n')
@@ -125,6 +128,8 @@ def run(c, out, name, resume=False, probe=None, *, binary=BINARY, data=DATA,
             options = sorted(Path(c['db']).glob('OPTIONS-*'))[-1]
             shutil.copyfile(options, out / (name + '.OPTIONS.txt'))
             shutil.copyfile(Path(c['db']) / 'LOG', out / (name + '.ROCKSDB-LOG.txt'))
+    if sample:
+        record.update(command=command, memory_before=sample_before, memory_after=sample_after)
     record['config_sha256'] = digest(path)
     record['log_sha256'] = digest(out / (name + '.log'))
     record['time_sha256'] = digest(out / (name + '.time.txt'))

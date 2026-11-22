@@ -317,6 +317,7 @@ mod tests {
                     fjall: crate::fjall::Tuning::default(),
                     rocks: crate::rocks::Tuning::default(),
                     redb: Default::default(),
+                    libmdbx: crate::libmdbx::Tuning::default(),
                     #[cfg(feature = "remix")]
                     scan_prefix_len: 18,
                 };
