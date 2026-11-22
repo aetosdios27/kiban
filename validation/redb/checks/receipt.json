@@ -1,0 +1,33 @@
+{
+  "first_preparation_started": 1795367536.7088346,
+  "all_completed_before_first_preparation": true,
+  "affinity": "12-21",
+  "nice": 10,
+  "cargo_jobs": 2,
+  "logs": {
+    "clippy-remix.log": {
+      "sha256": "a8e50c6368f58a3a869868f59bbe05407c86126910e0eaf54f166840a094bb9b",
+      "mtime_ns": 1795367481167285369
+    },
+    "clippy.log": {
+      "sha256": "d810b959e5602f50f7434761b9882e9a38f30bd8f7c9f1db03b153b07f207021",
+      "mtime_ns": 1795367479936273978
+    },
+    "final-build.log": {
+      "sha256": "2a5b579cb7fd474fa15ebaa828105dfaaacb91620c9c1077d57dcc26ffd00942",
+      "mtime_ns": 1795367517293619676
+    },
+    "fmt.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mtime_ns": 1795367391687458859
+    },
+    "test-remix.log": {
+      "sha256": "85454454a131a9c446e0ae2bc334a09a34b8b623e30b836daa30f1f85cd7f315",
+      "mtime_ns": 1795367464636132393
+    },
+    "test.log": {
+      "sha256": "7c0a8cef60065f165a6ee6d9ab2fdb6d5da3374afe0ae5d8c3afea0f89ecf2ed",
+      "mtime_ns": 1795367427276786676
+    }
+  }
+}
