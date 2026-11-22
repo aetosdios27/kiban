@@ -149,7 +149,7 @@ fn open(o: &Options) -> Result<Box<dyn Backend>> {
         }
         "sqlite" => Box::new(sqlite::Sqlite::open(o)?),
         "rocksdb" => Box::new(rocks::Rocks::open(o)?),
-        "redb" => Box::new(redb::Redb::open(o, false)?),
+        "redb" => redb::open(o, false)?,
         _ => return Err("only kiban/lmdb/sqlite/rocksdb/redb supported".into()),
     })
 }
@@ -199,7 +199,7 @@ fn prepare(o: &Options) -> Result<()> {
         db.close()?;
     } else {
         let mut b = if c.backend == "redb" {
-            Box::new(redb::Redb::open(o, true)?) as Box<dyn Backend>
+            redb::open(o, true)?
         } else {
             open(o)?
         };
@@ -438,7 +438,7 @@ fn run() -> Result<()> {
         "prepare" => prepare(&o),
         "compact-redb" if c.backend == "redb" => {
             runner::verify_initial(open(&o)?.as_mut(), c)?;
-            redb::Redb::compact_fixture(&o)?;
+            redb::compact_fixture(&o)?;
             runner::verify_initial(open(&o)?.as_mut(), c)?;
             println!("{}", json!({"type":"prepared", "verified_records":c.n}));
             Ok(())
@@ -477,18 +477,24 @@ mod tests {
                 .as_nanos()
         ));
         std::fs::create_dir(&root)?;
-        for backend in ["kiban", "lmdb", "rocksdb", "redb"] {
+        for (label, backend) in [
+            ("kiban", "kiban"),
+            ("lmdb", "lmdb"),
+            ("rocksdb", "rocksdb"),
+            ("redb", "redb"),
+            ("redb-plain", "redb"),
+        ] {
             for shape in ["bulk", "normal"] {
                 let mut o = Options {
                     suite: Config {
                         backend: backend.into(),
-                        db: root.join(format!("{backend}-{shape}")),
+                        db: root.join(format!("{label}-{shape}")),
                         n: 640,
                         operations: 100,
                         k: 10,
                         seed: 20261016,
                         endpoint: String::new(),
-                        output: root.join(format!("{backend}-{shape}.jsonl")),
+                        output: root.join(format!("{label}-{shape}.jsonl")),
                         verify_only: false,
                     },
                     action: "read".into(),
@@ -509,6 +515,7 @@ mod tests {
                     rocks: rocks::Tuning::default(),
                     redb: redb::Tuning::default(),
                 };
+                o.redb.plain_keys = label == "redb-plain";
                 prepare(&o)?;
                 reads(&o)?;
                 let rows: Vec<Value> = std::fs::read_to_string(&o.suite.output)?
@@ -522,7 +529,7 @@ mod tests {
                 }
                 if matches!(backend, "kiban" | "lmdb" | "redb") {
                     o.action = "miss".into();
-                    o.suite.output = root.join(format!("{backend}-{shape}-miss.jsonl"));
+                    o.suite.output = root.join(format!("{label}-{shape}-miss.jsonl"));
                     reads(&o)?;
                     let rows: Vec<Value> = std::fs::read_to_string(&o.suite.output)?
                         .lines()
