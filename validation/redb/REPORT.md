@@ -60,6 +60,12 @@ The normal load used about 40 KiB more logical and 20 KiB more allocated space t
 
 Each Kiban bulk fixture had one L0 SST. Its normal layout had 1 L1, 6 L2, and 77 L3 files without the point and scan indexes, and 1 L1, 6 L2, and 82 L3 files with them. Those normal groups measure the profile and its resulting layout together.
 
+## redb key-order A/B
+
+The descending comparator and reverse latest-ten range remain the study configuration. The opt-in candidate used redb's native byte-slice comparator and a forward range over the same key and value bytes. Across five paired rounds on CPU 8, every p50 and p99 trial range overlapped or touched. The largest median improvement among the 1M read cases was bulk recall at default cache, from 1.952 to 1.792 µs p50 and 2.880 to 2.496 µs p99. Normal recall at default cache moved in the other direction at p50, from 2.496 to 2.624 µs. The plain-key layout allocated 365.8 MiB versus 361.8 MiB after Maximum compaction and 753.9 MiB versus 658.9 MiB for the organic normal fixture.
+
+The prespecified rule required a disjoint trial range and a median difference above one histogram bucket. The plain-key candidate did not meet the improvement criterion, so the original primary and durability checks stand. All 60 A/B commands passed the oracle, covering 8.1 million timed calls and 42,000 mutations. CPU 9 was busy for a median 2.0% of command time, with a 0–35.3% range. Host load ranged from 4.25 to 8.23. The A/B measures traversal direction, comparator, and the resulting B-tree layout together. [Key-order method](keyorder-ab/README.md) · [Per-operation latencies and ranges](keyorder-ab/RESULTS.md) · [Throughput and audit receipts](keyorder-ab/summary.json)
+
 ## 1M warm reads
 
 Each cell gives p50 µs / p99 µs / call kops/s. Values are five-trial medians.
