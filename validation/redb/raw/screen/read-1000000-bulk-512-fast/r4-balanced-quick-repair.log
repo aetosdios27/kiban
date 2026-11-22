@@ -1,0 +1,2 @@
+{"backend":"redb","binary_fuse_filter":false,"cache_bytes":536870912,"durable":false,"point_index":false,"type":"requested_config"}
+{"backend":"redb","cache_bytes":536870912,"durability":"None","tuning":{"compact":"balanced","quick_repair":true},"type":"backend_config","version":"5.0.0"}

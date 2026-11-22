@@ -1,0 +1,9 @@
+{"backend":"redb","binary_fuse_filter":false,"cache_bytes":448987008,"durable":true,"point_index":false,"type":"requested_config"}
+{"backend":"redb","cache_bytes":448987008,"durability":"Immediate","tuning":{"compact":"balanced","quick_repair":false},"type":"backend_config","version":"5.0.0"}
+redb: remember 1000 verified calls
+redb: recall-by-id 1000 verified calls
+redb: recent-for-agent 1000 verified calls
+redb: update 1000 verified calls
+redb: mixed-90-10 1000 verified calls
+{"backend":"redb","binary_fuse_filter":false,"cache_bytes":448987008,"durable":true,"point_index":false,"type":"requested_config"}
+{"backend":"redb","cache_bytes":448987008,"durability":"Immediate","tuning":{"compact":"balanced","quick_repair":false},"type":"backend_config","version":"5.0.0"}

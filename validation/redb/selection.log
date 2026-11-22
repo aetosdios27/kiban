@@ -1,0 +1,19 @@
+{
+  "read": "maximum",
+  "write": "maximum",
+  "scores_seconds": {
+    "read": {
+      "as-is": 2.979535041624581e-06,
+      "balanced": 3.0439917466158322e-06,
+      "maximum": 2.7508049003374795e-06,
+      "balanced-quick-repair": 3.0133840039512666e-06
+    },
+    "write": {
+      "as-is": 5.7791874735602714e-05,
+      "balanced": 5.738499273087983e-05,
+      "maximum": 5.460137193808038e-05,
+      "balanced-quick-repair": 7.614819382819891e-05
+    }
+  },
+  "rule": "Minimize the geometric mean of the per-stage medians of mean call time. Use both read stages across four read scenarios, and remember/update/mixed across both write modes. Choose one configuration per family. Ties use label order."
+}
