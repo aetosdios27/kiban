@@ -136,8 +136,16 @@ def audit_phase(raw, phase, selection, default_caches, preparation):
                      action=action, durable=durable, operations=100000 if action == 'read' else 1000)
             stages, layout, resources = audit_command(folder, receipt, c, default_caches)
             if action == 'read':
-                assert layout == preparation[fixture(c).name]['layout'], 'fixture layout changed'
-                assert resources['logical_bytes'] == preparation[fixture(c).name]['logical_bytes']
+                prepared = preparation[fixture(c).name]
+                assert layout == prepared['layout'], 'fixture layout changed'
+                if c['backend'] == 'redb':
+                    # Even a read-only workload closes a read-write handle.
+                    # redb persists the allocator and can trim free tail pages.
+                    sizes = prepared.setdefault('read_logical_bytes', [])
+                    if resources['logical_bytes'] not in sizes:
+                        sizes.append(resources['logical_bytes'])
+                else:
+                    assert resources['logical_bytes'] == prepared['logical_bytes']
             totals['commands'] += 1
             totals['busy'].append(busy_sibling(receipt))
             totals['load_1m'].append(receipt['load'][0])
