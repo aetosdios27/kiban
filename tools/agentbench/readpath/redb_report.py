@@ -249,7 +249,8 @@ def tables(path, result, primary):
             for label, row in next(iter(workloads.values())).items():
                 print('| ' + ' | '.join((label, *(span(row[k], scale) for k, scale in
                                                 zip(RESOURCES, (1024, 1024**2, 1024**2))))) + ' |', file=f)
-            print(file=f)
+            if scenario != next(reversed(result)):
+                print(file=f)
 
 
 def main():
@@ -283,7 +284,7 @@ def main():
                            ('fixture-layouts.json', preparation)):
         (out / filename).write_text(json.dumps(data, indent=2) + '\n')
     with (out / 'TRIALS.csv').open('w', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=trials[0])
+        writer = csv.DictWriter(f, fieldnames=trials[0], lineterminator='\n')
         writer.writeheader()
         writer.writerows(trials)
     tables(out / 'SCREEN.md', summary['screen'], primary=False)
