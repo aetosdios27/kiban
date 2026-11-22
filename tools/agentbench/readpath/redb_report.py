@@ -194,7 +194,8 @@ def audit_checks(out):
                     counts[parts[-1]] = int(parts[3])
             syncs[label] = counts
         delta = sum(syncs[f'{engine}-durable'].values()) - sum(syncs[f'{engine}-fast'].values())
-        assert delta >= 2099, (engine, delta)
+        # redb's fast-mode final checkpoint adds two syncs after the timed stages.
+        assert delta == (2098 if engine == 'redb' else 2100), (engine, delta)
     receipt = json.loads((checks / 'crash-receipt.json').read_text())
     assert receipt['signal'] == 'SIGKILL' and receipt['wait_code'] == -9
     assert receipt['affinity'] == str(CPU) and receipt['acknowledgments'] == 32
@@ -203,7 +204,18 @@ def audit_checks(out):
     reopened, = (r for r in read_jsonl(checks / 'crash-verify.log')
                  if r['type'] == 'reopen_verified')
     assert reopened['verified_records'] == receipt['verified_records'] == 10032
-    return dict(sync_syscalls=syncs, crash=receipt)
+    result = dict(sync_syscalls=syncs, crash=receipt)
+    windows_path = checks / 'redb-commit-windows.json'
+    if windows_path.is_file():
+        windows = json.loads(windows_path.read_text())
+        assert all(record['completed'] and record['affinity'] == str(CPU)
+                   for record in windows.values())
+        observed = {mode: row['fdatasync_calls'] for mode, row in windows.items()}
+        expected = dict(zip((*WRITE_STAGES, 'after_mixed'), (1000, 0, 0, 1000, 100, -2)))
+        assert {stage: observed['durable'][stage] - observed['fast'][stage]
+                for stage in expected} == expected
+        result['redb_commit_windows'] = windows
+    return result
 
 
 def span(s, scale=1, digits=3):

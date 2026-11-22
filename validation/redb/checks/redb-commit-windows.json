@@ -1,0 +1,88 @@
+{
+  "fast": {
+    "fdatasync_calls": {
+      "remember": 2,
+      "recall-by-id": 0,
+      "recent-for-agent": 0,
+      "update": 0,
+      "mixed-90-10": 0,
+      "after_mixed": 11
+    },
+    "affinity": "8",
+    "load": [
+      3.7451171875,
+      3.88232421875,
+      3.46826171875
+    ],
+    "cpu_tick_delta": {
+      "cpu8": [
+        0,
+        8,
+        6,
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "cpu9": [
+        0,
+        0,
+        1,
+        15,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "completed": true
+  },
+  "durable": {
+    "fdatasync_calls": {
+      "remember": 1002,
+      "recall-by-id": 0,
+      "recent-for-agent": 0,
+      "update": 1000,
+      "mixed-90-10": 100,
+      "after_mixed": 9
+    },
+    "affinity": "8",
+    "load": [
+      4.326171875,
+      4.0009765625,
+      3.5087890625
+    ],
+    "cpu_tick_delta": {
+      "cpu8": [
+        4,
+        19,
+        71,
+        3,
+        107,
+        1,
+        0,
+        0,
+        0,
+        0
+      ],
+      "cpu9": [
+        5,
+        0,
+        14,
+        191,
+        0,
+        1,
+        3,
+        0,
+        0,
+        0
+      ]
+    },
+    "completed": true
+  }
+}
