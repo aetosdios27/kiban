@@ -1,0 +1,32 @@
+{
+  "kiban-index1-fast": {
+    "fsync": 9,
+    "fdatasync": 2,
+    "failures": 0
+  },
+  "fjall-tuned-fast": {
+    "fsync": 12,
+    "fdatasync": 1,
+    "failures": 0
+  },
+  "lmdb-fast": {
+    "fsync": 0,
+    "fdatasync": 1,
+    "failures": 0
+  },
+  "kiban-index1-durable": {
+    "fsync": 9,
+    "fdatasync": 2102,
+    "failures": 0
+  },
+  "fjall-tuned-durable": {
+    "fsync": 12,
+    "fdatasync": 2101,
+    "failures": 0
+  },
+  "lmdb-durable": {
+    "fsync": 0,
+    "fdatasync": 2101,
+    "failures": 0
+  }
+}

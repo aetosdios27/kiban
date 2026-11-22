@@ -10,6 +10,7 @@ mod cold;
 #[path = "embedded.rs"]
 #[allow(dead_code)]
 mod embedded;
+mod fjall;
 mod index_hints;
 mod inline_index;
 #[path = "../../../../examples/scale/metrics.rs"]
@@ -76,6 +77,8 @@ struct Options {
     readers: usize,
     #[serde(default)]
     point_index: bool,
+    #[serde(default)]
+    agent_memory: bool,
     #[cfg(feature = "remix")]
     #[serde(default = "scan_prefix_len")]
     scan_prefix_len: usize,
@@ -96,6 +99,8 @@ struct Options {
     rocks: rocks::Tuning,
     #[serde(default)]
     redb: redb::Tuning,
+    #[serde(default)]
+    fjall: fjall::Tuning,
 }
 
 impl Options {
@@ -104,6 +109,23 @@ impl Options {
             || KibanOptions::default().block_cache_bytes,
             |mib| mib * 1024 * 1024,
         )
+    }
+
+    fn kiban_options(&self, block_cache_bytes: usize) -> KibanOptions {
+        let mut options = if self.agent_memory && self.point_index {
+            KibanOptions::agent_memory("agent/0000/memory/".len())
+        } else {
+            KibanOptions::default()
+        };
+        options.point_index = self.point_index;
+        #[cfg(feature = "remix")]
+        if self.point_index && !self.agent_memory {
+            options.scan_prefix_len = self.scan_prefix_len;
+        }
+        options.binary_fuse_filter = self.binary_fuse_filter;
+        options.block_cache_bytes = block_cache_bytes;
+        options.mmap_max_level = self.mmap_max_level;
+        options
     }
 }
 
@@ -125,15 +147,7 @@ fn open(o: &Options) -> Result<Box<dyn Backend>> {
     Ok(match o.suite.backend.as_str() {
         "kiban" => Box::new(backend::Embedded::with_options_and_durability(
             &o.suite.db,
-            KibanOptions {
-                point_index: o.point_index,
-                #[cfg(feature = "remix")]
-                scan_prefix_len: if o.point_index { o.scan_prefix_len } else { 0 },
-                binary_fuse_filter: o.binary_fuse_filter,
-                block_cache_bytes: o.cache_bytes(),
-                mmap_max_level: o.mmap_max_level,
-                ..KibanOptions::default()
-            },
+            o.kiban_options(o.cache_bytes()),
             o.durable,
         )?) as Box<dyn Backend>,
         "lmdb" => {
@@ -150,7 +164,8 @@ fn open(o: &Options) -> Result<Box<dyn Backend>> {
         "sqlite" => Box::new(sqlite::Sqlite::open(o)?),
         "rocksdb" => Box::new(rocks::Rocks::open(o)?),
         "redb" => redb::open(o, false)?,
-        _ => return Err("only kiban/lmdb/sqlite/rocksdb/redb supported".into()),
+        "fjall" => Box::new(fjall::Fjall::open(o)?),
+        _ => return Err("only kiban/lmdb/sqlite/rocksdb/redb/fjall supported".into()),
     })
 }
 
@@ -177,11 +192,8 @@ fn prepare(o: &Options) -> Result<()> {
         let mut db = Kiban::open_with_options(
             &c.db,
             KibanOptions {
-                point_index: o.point_index,
-                #[cfg(feature = "remix")]
-                scan_prefix_len: if o.point_index { o.scan_prefix_len } else { 0 },
-                binary_fuse_filter: o.binary_fuse_filter,
-                ..KibanOptions::default()
+                mmap_max_level: None,
+                ..o.kiban_options(KibanOptions::default().block_cache_bytes)
             },
         )?;
         let mut bytes = 0;
@@ -443,7 +455,8 @@ fn run() -> Result<()> {
             println!("{}", json!({"type":"prepared", "verified_records":c.n}));
             Ok(())
         }
-        "crash-write" | "crash-verify" => redb::crash_check(&o),
+        "crash-write" | "crash-verify" if c.backend == "redb" => redb::crash_check(&o),
+        "crash-write" if c.backend == "fjall" => fjall::crash_write(&o),
         "read" | "profile" | "miss" => reads(&o),
         "write" => writes(&o),
         "varied" => varied::run(&o),
@@ -483,6 +496,7 @@ mod tests {
             ("rocksdb", "rocksdb"),
             ("redb", "redb"),
             ("redb-plain", "redb"),
+            ("fjall", "fjall"),
         ] {
             for shape in ["bulk", "normal"] {
                 let mut o = Options {
@@ -499,6 +513,7 @@ mod tests {
                     },
                     action: "read".into(),
                     layout: shape.into(),
+                    agent_memory: false,
                     point_index: true,
                     #[cfg(feature = "remix")]
                     scan_prefix_len: 18,
@@ -512,6 +527,7 @@ mod tests {
                     sqlite_layout: sqlite::Layout::default(),
                     sqlite_sync: sqlite::Sync::default(),
                     sqlite_mmap_bytes: 0,
+                    fjall: crate::fjall::Tuning::default(),
                     rocks: rocks::Tuning::default(),
                     redb: redb::Tuning::default(),
                 };

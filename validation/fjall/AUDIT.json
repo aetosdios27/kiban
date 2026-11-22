@@ -1,0 +1,2987 @@
+{
+  "primary_commands": 150,
+  "primary_calls": 20250000,
+  "primary_mutations": 105000,
+  "primary_host": {
+    "sibling_busy_pct": {
+      "median": 0.5134864344662113,
+      "minimum": 0.0,
+      "maximum": 22.22222222222222
+    },
+    "load1": {
+      "median": 2.181396484375,
+      "minimum": 1.73095703125,
+      "maximum": 2.4970703125
+    }
+  },
+  "screen_commands": 270,
+  "screen_calls": 36450000,
+  "screen_mutations": 189000,
+  "screen_host": {
+    "sibling_busy_pct": {
+      "median": 1.0049241282283188,
+      "minimum": 0.0,
+      "maximum": 21.278140885984023
+    },
+    "load1": {
+      "median": 2.128662109375,
+      "minimum": 1.19677734375,
+      "maximum": 6.16259765625
+    }
+  },
+  "prepare_commands": 35,
+  "source_hashes_verified": true,
+  "binary_hash_verified": true,
+  "sync": {
+    "kiban-index1-fast": {
+      "fsync": 9,
+      "fdatasync": 2,
+      "failures": 0
+    },
+    "fjall-tuned-fast": {
+      "fsync": 12,
+      "fdatasync": 1,
+      "failures": 0
+    },
+    "lmdb-fast": {
+      "fsync": 0,
+      "fdatasync": 1,
+      "failures": 0
+    },
+    "kiban-index1-durable": {
+      "fsync": 9,
+      "fdatasync": 2102,
+      "failures": 0
+    },
+    "fjall-tuned-durable": {
+      "fsync": 12,
+      "fdatasync": 2101,
+      "failures": 0
+    },
+    "lmdb-durable": {
+      "fsync": 0,
+      "fdatasync": 2101,
+      "failures": 0
+    }
+  },
+  "crash": {
+    "acknowledged": 25,
+    "returncode": -9,
+    "verified_records": 10025,
+    "cpu": 6,
+    "load": [
+      2.40087890625,
+      2.22607421875,
+      2.8134765625
+    ],
+    "seconds": 0.09488654136657715,
+    "cpu_tick_delta": {
+      "cpu6": [
+        0,
+        3,
+        1,
+        1,
+        4,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "cpu7": [
+        0,
+        0,
+        0,
+        10,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  },
+  "paired_ratios": [
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.925925925925926,
+      "minimum": 0.8679245283018868,
+      "maximum": 0.9615384615384617
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.9729729729729729,
+      "minimum": 0.9249999999999999,
+      "maximum": 1.0
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 1.0823460705333379,
+      "minimum": 1.0423454171904076,
+      "maximum": 1.1475120702705677
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.0618747201862941,
+      "minimum": 1.0397408948875924,
+      "maximum": 1.1275526980243535
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 1.225,
+      "minimum": 1.1794871794871795,
+      "maximum": 1.2820512820512822
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 1.3333333333333333,
+      "minimum": 1.2758620689655171,
+      "maximum": 1.4339622641509433
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 0.8106408693425284,
+      "minimum": 0.7755583116673396,
+      "maximum": 0.8417539374922854
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 0.8616877733426387,
+      "minimum": 0.8139915483666202,
+      "maximum": 0.8753587983358762
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.5555555555555556,
+      "minimum": 0.5394736842105263,
+      "maximum": 0.5833333333333334
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.6229508196721312,
+      "minimum": 0.5161290322580645,
+      "maximum": 0.8999999999999999
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 1.7939729114288316,
+      "minimum": 1.656689069736357,
+      "maximum": 1.8327886213918345
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.351570121523857,
+      "minimum": 1.260436302817578,
+      "maximum": 1.3849231924106766
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 1.2,
+      "minimum": 1.1428571428571428,
+      "maximum": 1.264705882352941
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 1.2075471698113207,
+      "minimum": 1.0158730158730158,
+      "maximum": 1.473684210526316
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 0.8312192522005752,
+      "minimum": 0.771655398589202,
+      "maximum": 0.8771267468986772
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 0.9360397869532026,
+      "minimum": 0.8773675990585059,
+      "maximum": 0.9840913719107066
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.45098039215686275,
+      "minimum": 0.4230769230769231,
+      "maximum": 0.49056603773584906
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.4024390243902439,
+      "minimum": 0.3815789473684211,
+      "maximum": 0.48648648648648646
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 2.220177507807423,
+      "minimum": 2.121917123777554,
+      "maximum": 2.4349770792958365
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.8295544046473906,
+      "minimum": 1.7932408946430942,
+      "maximum": 1.9624340540242962
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 0.6025641025641025,
+      "minimum": 0.5499999999999999,
+      "maximum": 0.6666666666666666
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 0.5943396226415094,
+      "minimum": 0.5,
+      "maximum": 0.6666666666666666
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 1.6519256391975743,
+      "minimum": 1.5565257571111346,
+      "maximum": 1.848327529469805
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 1.4323201385869344,
+      "minimum": 1.3921559474886969,
+      "maximum": 1.60201556852772
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.375,
+      "minimum": 0.375,
+      "maximum": 0.38888888888888895
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.44827586206896547,
+      "minimum": 0.3709677419354839,
+      "maximum": 0.5299999999999999
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 2.562181695402683,
+      "minimum": 2.4788276914084717,
+      "maximum": 2.6395547548197302
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.5486183360884933,
+      "minimum": 1.4973087242716694,
+      "maximum": 1.585140549119116
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 0.8142857142857143,
+      "minimum": 0.7714285714285714,
+      "maximum": 0.8636363636363636
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 0.7878787878787878,
+      "minimum": 0.7162162162162162,
+      "maximum": 1.0526315789473684
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 1.219513077890214,
+      "minimum": 1.119423223067066,
+      "maximum": 1.28498687822847
+    },
+    {
+      "scenario": "read-bulk-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 1.0978006973219034,
+      "minimum": 1.0033450418215837,
+      "maximum": 1.1484301848742555
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.9038461538461539,
+      "minimum": 0.8518518518518519,
+      "maximum": 0.9038461538461539
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.923076923076923,
+      "minimum": 0.7954545454545455,
+      "maximum": 0.9736842105263158
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 1.1069634448992844,
+      "minimum": 1.1022867180524574,
+      "maximum": 1.183305844606234
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.077064626642819,
+      "minimum": 1.0681015212149207,
+      "maximum": 1.1553985910944977
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 1.15,
+      "minimum": 1.121951219512195,
+      "maximum": 1.175
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 1.1935483870967742,
+      "minimum": 0.9024390243902438,
+      "maximum": 1.2203389830508475
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 0.8722224785228576,
+      "minimum": 0.8378282299917783,
+      "maximum": 0.8939828796154197
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 0.9044317725945562,
+      "minimum": 0.8739613331097095,
+      "maximum": 0.9202691077323206
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.5526315789473685,
+      "minimum": 0.5263157894736842,
+      "maximum": 0.5833333333333334
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.6666666666666666,
+      "minimum": 0.543859649122807,
+      "maximum": 0.82
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 1.728279772018558,
+      "minimum": 1.66098553020038,
+      "maximum": 1.8734272670862988
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.317097949202113,
+      "minimum": 1.254819570303768,
+      "maximum": 1.407572737080303
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 1.2,
+      "minimum": 1.1428571428571428,
+      "maximum": 1.2121212121212122
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 1.0540540540540542,
+      "minimum": 0.9393939393939393,
+      "maximum": 1.576923076923077
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 0.8332117209495818,
+      "minimum": 0.8000290208785823,
+      "maximum": 0.8834179302950774
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 0.9393465050745402,
+      "minimum": 0.9070404935721501,
+      "maximum": 0.9928330948268086
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.4326923076923077,
+      "minimum": 0.4038461538461539,
+      "maximum": 0.46153846153846156
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.4285714285714285,
+      "minimum": 0.3465909090909091,
+      "maximum": 0.4342105263157895
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 2.395100295126149,
+      "minimum": 2.159476210902202,
+      "maximum": 2.489829061571183
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.8941257517798749,
+      "minimum": 1.794519643700393,
+      "maximum": 2.0059125009996497
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 0.5609756097560975,
+      "minimum": 0.525,
+      "maximum": 0.6
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 0.5322580645161291,
+      "minimum": 0.4024390243902439,
+      "maximum": 0.5806451612903225
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 1.837211293150052,
+      "minimum": 1.6601230831958163,
+      "maximum": 1.943988914152271
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 1.5844012039124222,
+      "minimum": 1.469627369135539,
+      "maximum": 1.6192669212812245
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.375,
+      "minimum": 0.368421052631579,
+      "maximum": 0.39583333333333337
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.47368421052631576,
+      "minimum": 0.4444444444444445,
+      "maximum": 0.58
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 2.5833658209818453,
+      "minimum": 2.4689203333677887,
+      "maximum": 2.6466701411851457
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.5495875728874573,
+      "minimum": 1.4521216547962705,
+      "maximum": 1.5850681378390732
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 0.8142857142857143,
+      "minimum": 0.7999999999999999,
+      "maximum": 0.8636363636363636
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 0.8181818181818181,
+      "minimum": 0.6891891891891891,
+      "maximum": 1.1153846153846154
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 1.2276196303781193,
+      "minimum": 1.1480120335642228,
+      "maximum": 1.3110479320644022
+    },
+    {
+      "scenario": "read-bulk-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 1.093003427223417,
+      "minimum": 1.0000267203294368,
+      "maximum": 1.169942075300776
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.9272727272727272,
+      "minimum": 0.9038461538461539,
+      "maximum": 1.0
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.891304347826087,
+      "minimum": 0.8599999999999999,
+      "maximum": 0.9736842105263158
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 1.0958051739218735,
+      "minimum": 1.023174809954123,
+      "maximum": 1.11119375225891
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.07807711383377,
+      "minimum": 1.009229321025001,
+      "maximum": 1.0976832255219688
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 1.2999999999999998,
+      "minimum": 1.236842105263158,
+      "maximum": 1.3333333333333333
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 1.4333333333333333,
+      "minimum": 1.28125,
+      "maximum": 1.4509803921568627
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 0.7648871037020726,
+      "minimum": 0.748243312102508,
+      "maximum": 0.795345322030695
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 0.813396337661243,
+      "minimum": 0.7977396439725686,
+      "maximum": 0.8393703718547925
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.5227272727272727,
+      "minimum": 0.5106382978723404,
+      "maximum": 0.5333333333333333
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.6031746031746031,
+      "minimum": 0.5512820512820512,
+      "maximum": 0.71875
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 1.8839873089557546,
+      "minimum": 1.8260636757449933,
+      "maximum": 1.9153055087308868
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.4276700054351654,
+      "minimum": 1.3742312225352902,
+      "maximum": 1.4507936775918218
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 1.3939393939393938,
+      "minimum": 1.3714285714285712,
+      "maximum": 1.4117647058823528
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 1.357142857142857,
+      "minimum": 1.2592592592592593,
+      "maximum": 1.7037037037037037
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 0.7165662000016918,
+      "minimum": 0.6796034825781403,
+      "maximum": 0.7348582615353894
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 0.8784083785610212,
+      "minimum": 0.834814820132668,
+      "maximum": 0.8857606587158308
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.5636363636363636,
+      "minimum": 0.5446428571428571,
+      "maximum": 0.5865384615384616
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.4891304347826087,
+      "minimum": 0.47727272727272735,
+      "maximum": 0.58
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 1.8224811843714885,
+      "minimum": 1.6342969514775063,
+      "maximum": 1.8697667329238945
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.586059177917763,
+      "minimum": 1.4747248240681734,
+      "maximum": 1.6591534222079962
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 0.7763157894736842,
+      "minimum": 0.7560975609756098,
+      "maximum": 0.8
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 0.7843137254901962,
+      "minimum": 0.65625,
+      "maximum": 0.9666666666666668
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 1.2708205429907156,
+      "minimum": 1.2217390905673355,
+      "maximum": 1.3211286238580406
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 1.2114489542261668,
+      "minimum": 1.1885661127412468,
+      "maximum": 1.2371227999089296
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.30434782608695654,
+      "minimum": 0.2925531914893617,
+      "maximum": 0.3166666666666667
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.3770491803278688,
+      "minimum": 0.358974358974359,
+      "maximum": 0.4921875
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 3.2302222130027447,
+      "minimum": 3.1058098869774935,
+      "maximum": 3.3258677758840873
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.7892958998586328,
+      "minimum": 1.6995225020557483,
+      "maximum": 1.8309151828573669
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 0.803030303030303,
+      "minimum": 0.7857142857142857,
+      "maximum": 0.8382352941176471
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 0.8518518518518519,
+      "minimum": 0.8235294117647058,
+      "maximum": 1.1666666666666667
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 1.2221008990445,
+      "minimum": 1.1558847829084593,
+      "maximum": 1.2688223612462752
+    },
+    {
+      "scenario": "read-normal-512",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 1.0942345691181585,
+      "minimum": 1.0324220179247579,
+      "maximum": 1.1191271709399138
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.9272727272727272,
+      "minimum": 0.8703703703703703,
+      "maximum": 0.9454545454545454
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.9333333333333335,
+      "minimum": 0.8163265306122449,
+      "maximum": 1.3571428571428572
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 1.0715457446543128,
+      "minimum": 1.0172061858995034,
+      "maximum": 1.1395387628966531
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.0528622488001202,
+      "minimum": 1.0012092239115549,
+      "maximum": 1.1195230903120004
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 1.3076923076923077,
+      "minimum": 1.175,
+      "maximum": 1.3333333333333333
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 1.4642857142857144,
+      "minimum": 1.3333333333333333,
+      "maximum": 2.150943396226415
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 0.7526284886210836,
+      "minimum": 0.7167685056348542,
+      "maximum": 0.8423874963262893
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 0.8014422309527545,
+      "minimum": 0.7581241259179783,
+      "maximum": 0.8765821966295166
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.5222222222222223,
+      "minimum": 0.5111111111111111,
+      "maximum": 0.5340909090909092
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.5873015873015872,
+      "minimum": 0.5303030303030303,
+      "maximum": 0.6166666666666667
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 1.9023284042289585,
+      "minimum": 1.8369009761505242,
+      "maximum": 1.950834445765139
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.4334172922824466,
+      "minimum": 1.3930456880600932,
+      "maximum": 1.470815937606439
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 1.3939393939393938,
+      "minimum": 1.352941176470588,
+      "maximum": 1.424242424242424
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 1.3962264150943395,
+      "minimum": 1.161290322580645,
+      "maximum": 1.4285714285714286
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 0.7085580616530194,
+      "minimum": 0.6811921486520802,
+      "maximum": 0.7298979513472211
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 0.8622121952252207,
+      "minimum": 0.8436139777672752,
+      "maximum": 0.898101558839214
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.5370370370370371,
+      "minimum": 0.5350877192982456,
+      "maximum": 0.5545454545454546
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.46428571428571425,
+      "minimum": 0.40816326530612246,
+      "maximum": 0.5111111111111111
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 1.8453537644126403,
+      "minimum": 1.8251685133736177,
+      "maximum": 1.9554102484301656
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.6236927234097647,
+      "minimum": 1.601983059845849,
+      "maximum": 1.7279492753448649
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 0.7564102564102564,
+      "minimum": 0.7374999999999999,
+      "maximum": 0.782051282051282
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 0.7272727272727273,
+      "minimum": 0.6842105263157895,
+      "maximum": 0.8679245283018868
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 1.3213236783114288,
+      "minimum": 1.261627603867222,
+      "maximum": 1.3565899801147114
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 1.2513059215722653,
+      "minimum": 1.190995469464161,
+      "maximum": 1.2593047574663132
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.3,
+      "minimum": 0.29444444444444445,
+      "maximum": 0.3125
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.35714285714285715,
+      "minimum": 0.2954545454545454,
+      "maximum": 0.39344262295081966
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 3.2830243830081427,
+      "minimum": 3.1580176020720856,
+      "maximum": 3.389584579196302
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.8165016499335584,
+      "minimum": 1.7449381583110701,
+      "maximum": 1.8528409498525387
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 0.803030303030303,
+      "minimum": 0.7941176470588235,
+      "maximum": 0.8333333333333333
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 0.8113207547169811,
+      "minimum": 0.6774193548387097,
+      "maximum": 0.9056603773584906
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 1.2283322024492822,
+      "minimum": 1.1933531908228427,
+      "maximum": 1.2539050968366783
+    },
+    {
+      "scenario": "read-normal-default",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 1.1096658640596513,
+      "minimum": 1.068426325157262,
+      "maximum": 1.1202038421803275
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "remember",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.857142857142857,
+      "minimum": 0.857142857142857,
+      "maximum": 0.857142857142857
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "remember",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.975,
+      "minimum": 0.8260869565217391,
+      "maximum": 1.0526315789473684
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "remember",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 1.132380737044809,
+      "minimum": 1.06599633773782,
+      "maximum": 1.1727451470145571
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "remember",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.1505957869544112,
+      "minimum": 1.1087861210536343,
+      "maximum": 1.1740288393349618
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "remember",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 0.09782608695652173,
+      "minimum": 0.09782608695652173,
+      "maximum": 0.09999999999999999
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "remember",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 0.5263157894736842,
+      "minimum": 0.45238095238095233,
+      "maximum": 0.5897435897435898
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "remember",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 7.691940498604127,
+      "minimum": 7.272888556943059,
+      "maximum": 8.000882535656872
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "remember",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 4.0425669352185984,
+      "minimum": 3.953134731613493,
+      "maximum": 4.1532055026777055
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.6666666666666667,
+      "minimum": 0.6363636363636364,
+      "maximum": 0.7619047619047619
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.66,
+      "minimum": 0.41911764705882354,
+      "maximum": 0.9791666666666666
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 1.5090737570847124,
+      "minimum": 1.2289339126231043,
+      "maximum": 1.6175829256558762
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.2663759238782517,
+      "minimum": 1.1177462486514762,
+      "maximum": 1.3416991307338362
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 1.2058823529411764,
+      "minimum": 1.2,
+      "maximum": 1.4117647058823528
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 1.152542372881356,
+      "minimum": 0.891891891891892,
+      "maximum": 2.088888888888889
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 0.8720275367871425,
+      "minimum": 0.6811518032563357,
+      "maximum": 0.9323701928563277
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 0.9503697026936765,
+      "minimum": 0.8341083395992023,
+      "maximum": 1.013030320665774
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.6176470588235294,
+      "minimum": 0.6,
+      "maximum": 0.65625
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.6363636363636364,
+      "minimum": 0.6052631578947368,
+      "maximum": 0.9473684210526315
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 1.523370116503933,
+      "minimum": 1.4858887574804431,
+      "maximum": 1.6680288117056983
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.231889184501111,
+      "minimum": 1.1989524837062402,
+      "maximum": 1.2837850822701717
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 1.2352941176470589,
+      "minimum": 1.2352941176470589,
+      "maximum": 1.257142857142857
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 1.3846153846153846,
+      "minimum": 1.0,
+      "maximum": 1.7999999999999998
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 0.8028853932783502,
+      "minimum": 0.7388012592462676,
+      "maximum": 0.8204317882523224
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 0.9271522290385095,
+      "minimum": 0.8885939279148217,
+      "maximum": 0.9419784839521559
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "update",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.891304347826087,
+      "minimum": 0.891304347826087,
+      "maximum": 0.9318181818181819
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "update",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 1.0,
+      "minimum": 0.930232558139535,
+      "maximum": 1.1944444444444444
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "update",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 0.9165129523469971,
+      "minimum": 0.7784398599867584,
+      "maximum": 0.9766437082423395
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "update",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 0.9988491586511963,
+      "minimum": 0.929924713050727,
+      "maximum": 1.0700019656111648
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "update",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 0.1138888888888889,
+      "minimum": 0.1138888888888889,
+      "maximum": 0.11647727272727273
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "update",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 0.5833333333333334,
+      "minimum": 0.46739130434782605,
+      "maximum": 0.638888888888889
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "update",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 5.485676890310836,
+      "minimum": 5.202558468541424,
+      "maximum": 5.983094572147994
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "update",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 3.2934366098238463,
+      "minimum": 3.1740411317296795,
+      "maximum": 3.577340752228337
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "mixed-90-10",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.7258064516129032,
+      "minimum": 0.6818181818181818,
+      "maximum": 0.7575757575757576
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "mixed-90-10",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.8793103448275861,
+      "minimum": 0.6621621621621622,
+      "maximum": 1.1555555555555554
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "mixed-90-10",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 1.3091046522968888,
+      "minimum": 1.2025419016786212,
+      "maximum": 1.4508747844336478
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "mixed-90-10",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.1286189457626556,
+      "minimum": 1.079100688891482,
+      "maximum": 1.222767749079042
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "mixed-90-10",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 1.3333333333333335,
+      "minimum": 1.2162162162162162,
+      "maximum": 1.3513513513513515
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "mixed-90-10",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 0.2552083333333333,
+      "minimum": 0.17410714285714285,
+      "maximum": 0.27604166666666663
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "mixed-90-10",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 1.442137978355474,
+      "minimum": 1.296626391063761,
+      "maximum": 1.6114741784565874
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "mixed-90-10",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 1.2000615515909954,
+      "minimum": 1.154202279843227,
+      "maximum": 1.3500460733254092
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "remember",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.857142857142857,
+      "minimum": 0.857142857142857,
+      "maximum": 0.857142857142857
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "remember",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.8837209302325582,
+      "minimum": 0.8260869565217391,
+      "maximum": 1.0263157894736843
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "remember",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 1.1657375272253545,
+      "minimum": 1.0962083986062927,
+      "maximum": 1.1707382502324915
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "remember",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.157534376184372,
+      "minimum": 1.1290985509253222,
+      "maximum": 1.169897521356038
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "remember",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 0.09782608695652173,
+      "minimum": 0.09782608695652173,
+      "maximum": 0.09999999999999999
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "remember",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 0.48717948717948717,
+      "minimum": 0.45238095238095233,
+      "maximum": 0.5277777777777778
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "remember",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 7.79552676576363,
+      "minimum": 7.536855042974304,
+      "maximum": 7.95594148627908
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "remember",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 4.114279615333691,
+      "minimum": 4.00572137340871,
+      "maximum": 4.171014081332808
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.3888888888888889,
+      "minimum": 0.36363636363636365,
+      "maximum": 0.3951612903225807
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.3557692307692308,
+      "minimum": 0.2426470588235294,
+      "maximum": 0.6
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 2.4982508121229428,
+      "minimum": 2.294905998727367,
+      "maximum": 2.68591110212
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.540796484162542,
+      "minimum": 1.4320095883492017,
+      "maximum": 1.6446665964050269
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 0.7058823529411764,
+      "minimum": 0.6857142857142856,
+      "maximum": 0.7205882352941176
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 0.6271186440677966,
+      "minimum": 0.55,
+      "maximum": 1.0666666666666667
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 1.4334365167192784,
+      "minimum": 1.3321591776870023,
+      "maximum": 1.4672955301767852
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 1.1756165458893306,
+      "minimum": 1.1245374394197696,
+      "maximum": 1.191015405436378
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.4852941176470588,
+      "minimum": 0.4714285714285714,
+      "maximum": 0.53125
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.5789473684210527,
+      "minimum": 0.2727272727272727,
+      "maximum": 0.7916666666666667
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 2.032433441870718,
+      "minimum": 1.7924916066393055,
+      "maximum": 2.198175152455046
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.37301916488445,
+      "minimum": 1.2584425740609937,
+      "maximum": 1.4541445956094938
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 0.9705882352941176,
+      "minimum": 0.9428571428571428,
+      "maximum": 1.0
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 1.1578947368421053,
+      "minimum": 0.6101694915254238,
+      "maximum": 1.425
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 1.0172382079677391,
+      "minimum": 0.9653708434542256,
+      "maximum": 1.073422863667643
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 1.0217364257386679,
+      "minimum": 0.9824241062543316,
+      "maximum": 1.0626351679172679
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "update",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.891304347826087,
+      "minimum": 0.8695652173913044,
+      "maximum": 0.9318181818181819
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "update",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 1.116279069767442,
+      "minimum": 1.0434782608695652,
+      "maximum": 1.3055555555555556
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "update",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 1.0717162988417284,
+      "minimum": 0.9846552178598718,
+      "maximum": 1.1149501601514487
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "update",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.1159434477268062,
+      "minimum": 1.0305595507493237,
+      "maximum": 1.127359188334678
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "update",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 0.11363636363636365,
+      "minimum": 0.11111111111111112,
+      "maximum": 0.1138888888888889
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "update",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 0.6666666666666667,
+      "minimum": 0.5108695652173914,
+      "maximum": 0.7272727272727273
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "update",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 6.440326620711533,
+      "minimum": 5.9585800390636585,
+      "maximum": 6.756245372652007
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "update",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 3.6236942434404193,
+      "minimum": 3.4682196817481987,
+      "maximum": 3.782374038736719
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "mixed-90-10",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.40909090909090906,
+      "minimum": 0.3857142857142857,
+      "maximum": 0.4435483870967742
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "mixed-90-10",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.6458333333333334,
+      "minimum": 0.4256756756756757,
+      "maximum": 0.7555555555555556
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "mixed-90-10",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 2.1081123614795683,
+      "minimum": 1.8234361248987927,
+      "maximum": 2.2876080168245165
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "mixed-90-10",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.4433752278077077,
+      "minimum": 1.301151321951887,
+      "maximum": 1.5212729611476992
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "mixed-90-10",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 0.75,
+      "minimum": 0.7105263157894737,
+      "maximum": 0.7837837837837839
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "mixed-90-10",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 0.1640625,
+      "minimum": 0.13839285714285715,
+      "maximum": 0.21354166666666666
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "mixed-90-10",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 2.172998389844352,
+      "minimum": 1.966098144823459,
+      "maximum": 2.5722791730560064
+    },
+    {
+      "scenario": "write-fast",
+      "workload": "mixed-90-10",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 1.501058019456852,
+      "minimum": 1.4538727540928105,
+      "maximum": 1.6563058573148075
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "remember",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 1.0161290322580645,
+      "minimum": 1.0,
+      "maximum": 1.1290322580645162
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "remember",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 1.0930232558139537,
+      "minimum": 0.65,
+      "maximum": 1.1944444444444444
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "remember",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 0.9355385406657473,
+      "minimum": 0.8132023180026468,
+      "maximum": 0.9683727716656897
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "remember",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 0.9360061361083727,
+      "minimum": 0.8136926361805301,
+      "maximum": 0.9688710124312876
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "remember",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 0.472972972972973,
+      "minimum": 0.45588235294117646,
+      "maximum": 0.5147058823529412
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "remember",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 0.6142857142857142,
+      "minimum": 0.5,
+      "maximum": 2.2941176470588234
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "remember",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 1.9594773107407073,
+      "minimum": 1.2606223905339167,
+      "maximum": 2.197386952471367
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "remember",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 1.9577127479072738,
+      "minimum": 1.2611434489236568,
+      "maximum": 2.1941526562830345
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.7625,
+      "minimum": 0.6888888888888889,
+      "maximum": 0.95
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.868421052631579,
+      "minimum": 0.6181818181818183,
+      "maximum": 1.5263157894736843
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 1.2750228400444628,
+      "minimum": 0.922494413969322,
+      "maximum": 1.4629305448123313
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.1399150284838238,
+      "minimum": 0.9214821791079076,
+      "maximum": 1.3532477483138303
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 1.2448979591836733,
+      "minimum": 1.24,
+      "maximum": 1.5510204081632653
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 1.6097560975609757,
+      "minimum": 1.5000000000000002,
+      "maximum": 2.9
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 0.7584460758675856,
+      "minimum": 0.5568040720149842,
+      "maximum": 0.7781798637416893
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recall-by-id",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 0.8692285369795881,
+      "minimum": 0.6935829467389761,
+      "maximum": 0.8770829060529299
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.6323529411764705,
+      "minimum": 0.6176470588235294,
+      "maximum": 0.6323529411764705
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.7799999999999999,
+      "minimum": 0.75,
+      "maximum": 0.8478260869565217
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 1.5308683092843887,
+      "minimum": 1.4870465291850439,
+      "maximum": 1.5771614371601248
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.2191403489844623,
+      "minimum": 1.1890570627906263,
+      "maximum": 1.2448530041354582
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 1.2285714285714284,
+      "minimum": 1.2,
+      "maximum": 1.264705882352941
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 1.4716981132075473,
+      "minimum": 1.3214285714285714,
+      "maximum": 1.6595744680851063
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 0.7811650037775124,
+      "minimum": 0.7509463899793449,
+      "maximum": 0.8020357415779598
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recent-for-agent",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 0.9233705938710446,
+      "minimum": 0.8947819613103078,
+      "maximum": 0.9250709792883846
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "update",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 1.0163934426229508,
+      "minimum": 0.9722222222222224,
+      "maximum": 1.1290322580645162
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "update",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 1.0,
+      "minimum": 0.2708333333333333,
+      "maximum": 1.3783783783783783
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "update",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 1.0010416974699585,
+      "minimum": 0.8811527415491174,
+      "maximum": 1.5829084388967847
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "update",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.0016636928801195,
+      "minimum": 0.8820022956835346,
+      "maximum": 1.5811327113354139
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "update",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 0.44285714285714284,
+      "minimum": 0.43750000000000006,
+      "maximum": 0.472972972972973
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "update",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 0.4875,
+      "minimum": 0.25999999999999995,
+      "maximum": 0.7083333333333334
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "update",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 2.208426634251859,
+      "minimum": 2.0896219123656996,
+      "maximum": 2.6107431454697156
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "update",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 2.2056284302778653,
+      "minimum": 2.086995508946055,
+      "maximum": 2.605916973498175
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "mixed-90-10",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.7999999999999999,
+      "minimum": 0.7374999999999999,
+      "maximum": 0.8999999999999999
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "mixed-90-10",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 1.0540540540540542,
+      "minimum": 0.8292682926829269,
+      "maximum": 1.4117647058823528
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "mixed-90-10",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 0.9294175749882733,
+      "minimum": 0.822837086766008,
+      "maximum": 1.127445731478476
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "mixed-90-10",
+      "label": "kiban-index0",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 0.9314949574213114,
+      "minimum": 0.8275772641908569,
+      "maximum": 1.1242544999984754
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "mixed-90-10",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 1.3404255319148937,
+      "minimum": 1.2391304347826089,
+      "maximum": 1.5526315789473684
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "mixed-90-10",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 0.4534883720930233,
+      "minimum": 0.3,
+      "maximum": 0.5227272727272727
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "mixed-90-10",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 2.143276198439955,
+      "minimum": 2.0896653175291147,
+      "maximum": 2.5716680078482566
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "mixed-90-10",
+      "label": "kiban-index0",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 2.1201167497638966,
+      "minimum": 2.068832434054481,
+      "maximum": 2.5434641319521454
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "remember",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 1.032258064516129,
+      "minimum": 0.9714285714285714,
+      "maximum": 1.1290322580645162
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "remember",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.9166666666666667,
+      "minimum": 0.5666666666666668,
+      "maximum": 6.6976744186046515
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "remember",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 0.9744026983192374,
+      "minimum": 0.5490079355509799,
+      "maximum": 1.285668097065281
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "remember",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 0.9748577224952839,
+      "minimum": 0.5503654538790625,
+      "maximum": 1.2849088976778922
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "remember",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 0.47058823529411764,
+      "minimum": 0.45945945945945954,
+      "maximum": 0.5147058823529412
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "remember",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 0.4714285714285714,
+      "minimum": 0.39473684210526316,
+      "maximum": 4.0
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "remember",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 2.1113189226327176,
+      "minimum": 1.2136302902896574,
+      "maximum": 2.1716226508241587
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "remember",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 2.1079635891737167,
+      "minimum": 1.2145290357756293,
+      "maximum": 2.1686990786177582
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.525,
+      "minimum": 0.46666666666666673,
+      "maximum": 0.5625
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.5657894736842105,
+      "minimum": 0.40909090909090906,
+      "maximum": 0.7763157894736842
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 1.849000834940667,
+      "minimum": 1.4956864320581118,
+      "maximum": 2.157934094278896
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.403429513941169,
+      "minimum": 1.2265818620593716,
+      "maximum": 1.6429399104995648
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 0.8571428571428572,
+      "minimum": 0.84,
+      "maximum": 0.9183673469387754
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 1.075,
+      "minimum": 0.8863636363636365,
+      "maximum": 1.3409090909090908
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 1.1013364446026768,
+      "minimum": 0.9128566385984794,
+      "maximum": 1.1475066693431317
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recall-by-id",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 1.0387837458176894,
+      "minimum": 0.9353152917561491,
+      "maximum": 1.091700316191467
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.4852941176470588,
+      "minimum": 0.4852941176470588,
+      "maximum": 0.5
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.5599999999999999,
+      "minimum": 0.5192307692307693,
+      "maximum": 0.6304347826086957
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 2.02652983419255,
+      "minimum": 1.987066033446349,
+      "maximum": 2.071660682267588
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 1.3672886890599103,
+      "minimum": 1.354451970693707,
+      "maximum": 1.397638102096084
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 0.9705882352941176,
+      "minimum": 0.9428571428571428,
+      "maximum": 0.9714285714285714
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 1.0943396226415094,
+      "minimum": 0.9464285714285714,
+      "maximum": 1.1521739130434783
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 1.0310986241241906,
+      "minimum": 1.007737691749915,
+      "maximum": 1.0617172937339456
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "recent-for-agent",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 1.0338638264758315,
+      "minimum": 1.0181238768224952,
+      "maximum": 1.038674783807289
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "update",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 1.0819672131147542,
+      "minimum": 0.9444444444444445,
+      "maximum": 1.1290322580645162
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "update",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 1.1794871794871795,
+      "minimum": 0.59375,
+      "maximum": 6.594594594594595
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "update",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 0.9491674495902552,
+      "minimum": 0.7578641164783219,
+      "maximum": 1.1651680637272235
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "update",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 0.9495091615758418,
+      "minimum": 0.7590174040277847,
+      "maximum": 1.165331426710759
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "update",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 0.43750000000000006,
+      "minimum": 0.4358974358974359,
+      "maximum": 0.472972972972973
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "update",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 0.575,
+      "minimum": 0.513888888888889,
+      "maximum": 3.3888888888888893
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "update",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 1.9217501536704003,
+      "minimum": 1.6895991258223813,
+      "maximum": 2.1674076825854165
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "update",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 1.92062116155423,
+      "minimum": 1.6892834881417065,
+      "maximum": 2.1637938316038294
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "mixed-90-10",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p50_us",
+      "median": 0.5,
+      "minimum": 0.475,
+      "maximum": 0.5972222222222222
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "mixed-90-10",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "p99_us",
+      "median": 0.853658536585366,
+      "minimum": 0.8157894736842105,
+      "maximum": 1.3235294117647058
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "mixed-90-10",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "call_kops_s",
+      "median": 0.9658561352771181,
+      "minimum": 0.7929308249437269,
+      "maximum": 1.1187570105199558
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "mixed-90-10",
+      "label": "kiban-index1",
+      "peer": "fjall-tuned",
+      "metric": "verified_kops_s",
+      "median": 0.9676467547707331,
+      "minimum": 0.7980455892248364,
+      "maximum": 1.1166737568346303
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "mixed-90-10",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p50_us",
+      "median": 0.8974358974358975,
+      "minimum": 0.7659574468085106,
+      "maximum": 1.0
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "mixed-90-10",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "p99_us",
+      "median": 0.4186046511627907,
+      "minimum": 0.28125,
+      "maximum": 0.47727272727272735
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "mixed-90-10",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "call_kops_s",
+      "median": 2.323646397349142,
+      "minimum": 1.5652074717654123,
+      "maximum": 2.597117169606863
+    },
+    {
+      "scenario": "write-durable",
+      "workload": "mixed-90-10",
+      "label": "kiban-index1",
+      "peer": "lmdb",
+      "metric": "verified_kops_s",
+      "median": 2.2943648867252286,
+      "minimum": 1.557528310671215,
+      "maximum": 2.5657909062669635
+    }
+  ]
+}

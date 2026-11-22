@@ -1,0 +1,27 @@
+{
+  "read": "g-hash-pin-hit-restart",
+  "write": "g-hash-pin-hit-restart",
+  "rule": "Minimize the equal-workload geometric mean of five-trial medians of mean call time, separately for reads (both operations, layouts and cache budgets) and writes (remember, update and mixed in both modes). Ties break by candidate label.",
+  "scores_seconds": {
+    "read": {
+      "a-hash": 3.4834012959602187e-06,
+      "b-pin": 3.378271405212531e-06,
+      "block4": 3.521667385812913e-06,
+      "c-hit": 3.258668669902343e-06,
+      "d-restart": 3.580052804028078e-06,
+      "e-hash-pin": 3.560214369050093e-06,
+      "f-hash-pin-hit": 3.375966922428574e-06,
+      "g-hash-pin-hit-restart": 3.1258540809887266e-06
+    },
+    "write": {
+      "a-hash": 1.6932375229463383e-05,
+      "b-pin": 1.672326810467705e-05,
+      "block4": 1.613683729010855e-05,
+      "c-hit": 1.66416636825149e-05,
+      "d-restart": 1.703913979234248e-05,
+      "e-hash-pin": 1.5895629455407498e-05,
+      "f-hash-pin-hit": 1.696617187643218e-05,
+      "g-hash-pin-hit-restart": 1.586749870141053e-05
+    }
+  }
+}

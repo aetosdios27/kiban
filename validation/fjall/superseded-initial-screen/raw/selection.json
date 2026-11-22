@@ -1,0 +1,19 @@
+{
+  "read": "block4",
+  "write": "block4",
+  "rule": "Minimize the equal-workload geometric mean of five-trial medians of mean call time, separately for reads (both operations, layouts and cache budgets) and writes (remember, update and mixed in both modes). Ties break by candidate label.",
+  "scores_seconds": {
+    "read": {
+      "block16": 4.354705294577746e-06,
+      "block4": 4.0906529783815654e-06,
+      "bloom6": 4.426143302996179e-06,
+      "mem16": 4.324518322963078e-06
+    },
+    "write": {
+      "block16": 2.769233374452426e-05,
+      "block4": 2.6155874196990963e-05,
+      "bloom6": 2.7758181591365267e-05,
+      "mem16": 2.6311887879815144e-05
+    }
+  }
+}

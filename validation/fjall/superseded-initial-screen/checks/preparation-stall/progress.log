@@ -1,0 +1,9 @@
+prepare/1000000-fjall-16384bloom10mem64-none-bulk
+prepare/1000000-fjall-4096bloom10mem64-none-bulk
+prepare/1000000-fjall-4096bloom6mem64-none-bulk
+prepare/1000000-fjall-4096bloom10mem16-none-bulk
+prepare/1000000-lmdb
+prepare/1000000-kiban-index0-bulk
+prepare/1000000-kiban-index1-bulk
+prepare/1000000-fjall-16384bloom10mem64-none-normal
+prepare/1000000-fjall-4096bloom10mem64-none-normal

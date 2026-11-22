@@ -1,0 +1,109 @@
+{
+  "strace": "strace -- version 6.19",
+  "strace_sha256": "d3e53f65b6993f23fe5fcf47327bba3617ebbed7b267aef980e84c47a8ae2af5",
+  "binary_sha256": "0543e282fa70084df5db74a8da4d6858fcef2235a919a0858b63607be3652ce3",
+  "traces": {
+    "kiban-index1": {
+      "argv": [
+        "/home/aetos/.t3-app/worktrees/kiban/t3-8104aad7-d6f0c33caac29045/target/fjall-h2h/strace/usr/bin/strace",
+        "-f",
+        "-C",
+        "-s",
+        "0",
+        "-y",
+        "-o",
+        "/home/aetos/.t3-app/worktrees/kiban/t3-8104aad7-d6f0c33caac29045/validation/fjall/checks/durable-syscalls/kiban-index1.trace.txt",
+        "-e",
+        "trace=write,writev,pwrite64,pwritev,pwritev2,fdatasync,fsync",
+        "/home/aetos/.t3-app/worktrees/kiban/t3-8104aad7-d6f0c33caac29045/target/fjall-h2h/release/kiban-readbench",
+        "/home/aetos/.t3-app/worktrees/kiban/t3-8104aad7-d6f0c33caac29045/validation/fjall/checks/durable-syscalls/kiban-index1.config.json"
+      ],
+      "sha256": "8727ca17b837d48b04793429953568cdb3fb69b48f8870233f46909a6bc634c8"
+    },
+    "fjall-tuned": {
+      "argv": [
+        "/home/aetos/.t3-app/worktrees/kiban/t3-8104aad7-d6f0c33caac29045/target/fjall-h2h/strace/usr/bin/strace",
+        "-f",
+        "-C",
+        "-s",
+        "0",
+        "-y",
+        "-o",
+        "/home/aetos/.t3-app/worktrees/kiban/t3-8104aad7-d6f0c33caac29045/validation/fjall/checks/durable-syscalls/fjall-tuned.trace.txt",
+        "-e",
+        "trace=write,writev,pwrite64,pwritev,pwritev2,fdatasync,fsync",
+        "/home/aetos/.t3-app/worktrees/kiban/t3-8104aad7-d6f0c33caac29045/target/fjall-h2h/release/kiban-readbench",
+        "/home/aetos/.t3-app/worktrees/kiban/t3-8104aad7-d6f0c33caac29045/validation/fjall/checks/durable-syscalls/fjall-tuned.config.json"
+      ],
+      "sha256": "22217cf516acfb951b3b52b86a4b9f6d02d770f232fe54b01bf33916e90fd632"
+    }
+  },
+  "counts": {
+    "kiban-index1": {
+      "other": {
+        "write": {
+          "calls": 187,
+          "bytes": 766110
+        },
+        "fsync": {
+          "calls": 9,
+          "bytes": 0
+        },
+        "fdatasync": {
+          "calls": 2,
+          "bytes": 0
+        }
+      },
+      "journal_mutations": {
+        "write": {
+          "calls": 2100,
+          "bytes": 8601582
+        },
+        "fdatasync": {
+          "calls": 2100,
+          "bytes": 0
+        }
+      },
+      "journal_fdatasync_by_stage": [
+        1000,
+        0,
+        0,
+        1000,
+        100
+      ]
+    },
+    "fjall-tuned": {
+      "other": {
+        "write": {
+          "calls": 495,
+          "bytes": 640198
+        },
+        "fsync": {
+          "calls": 12,
+          "bytes": 0
+        },
+        "fdatasync": {
+          "calls": 1,
+          "bytes": 0
+        }
+      },
+      "journal_mutations": {
+        "write": {
+          "calls": 2100,
+          "bytes": 798665
+        },
+        "fdatasync": {
+          "calls": 2100,
+          "bytes": 0
+        }
+      },
+      "journal_fdatasync_by_stage": [
+        1000,
+        0,
+        0,
+        1000,
+        100
+      ]
+    }
+  }
+}

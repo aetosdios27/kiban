@@ -1,0 +1,20 @@
+{
+  "screen_commands": 270,
+  "screen_calls": 36450000,
+  "screen_mutations": 189000,
+  "screen_host": {
+    "sibling_busy_pct": {
+      "median": 1.0049241282283188,
+      "minimum": 0.0,
+      "maximum": 21.278140885984023
+    },
+    "load1": {
+      "median": 2.128662109375,
+      "minimum": 1.19677734375,
+      "maximum": 6.16259765625
+    }
+  },
+  "prepare_commands": 35,
+  "source_hashes_verified": true,
+  "binary_hash_verified": true
+}
