@@ -32,9 +32,10 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def ticks():
+def ticks(cpus=(10, 11)):
+    names = {f"cpu{cpu}" for cpu in cpus}
     return {p[0]: list(map(int, p[1:])) for line in Path('/proc/stat').read_text().splitlines()
-            if (p := line.split()) and p[0] in ('cpu10', 'cpu11')}
+            if (p := line.split()) and p[0] in names}
 
 
 def disk(path):
@@ -61,47 +62,57 @@ def fixture(c):
     return DATA / f'{c["n"]}-{label}'
 
 
-def run(c, out, name, resume=False, probe=None):
+def run(c, out, name, resume=False, probe=None, *, binary=BINARY, data=DATA,
+        cpu=10, sibling=11, fixture_path=fixture, copy_from=None, invalid=None, tracer=()):
     out.mkdir(parents=True, exist_ok=True)
     path = out / (name + '.config.json')
     c = dict(c, output=str((out / (name + '.jsonl')).resolve()))
     receipts = out / 'commands.jsonl'
     completed = [json.loads(s) for s in receipts.read_text().splitlines()] if receipts.exists() else []
     old = next((r for r in completed if r['name'] == name), None)
+    preparing = c['action'] in ('prepare', 'compact-redb')
     if old:
         assert resume, 'use --resume or a fresh output directory'
         assert json.loads(path.read_text()) == c, 'resume configuration changed'
-        if c['action'] != 'prepare':
+        if not preparing:
             assert digest(Path(c['output'])) == old['result_sha256'], 'saved result changed'
         return
-    if c['action'] == 'prepare' and Path(c['db']).exists():
-        assert resume and Path(c['db']).parent == DATA, 'unexpected existing fixture'
+    if preparing and Path(c['db']).exists():
+        assert resume and Path(c['db']).parent == data, 'unexpected existing fixture'
         shutil.rmtree(Path(c['db']))
+    diagnostic = bool(probe or tracer)
     if c['action'] == 'write':
-        dest = DATA / ('probe-trial' if probe else 'write-trial')
+        dest = data / ('probe-trial' if diagnostic else 'write-trial')
         if dest.exists():
             assert resume, 'unexpected trial directory'
             shutil.rmtree(dest)
-        subprocess.run(['cp', '-a', '--reflink=auto', str(fixture(c)), str(dest)], check=True)
+        subprocess.run(['cp', '-a', '--reflink=auto', str(fixture_path(c)), str(dest)], check=True)
         assert c['db'] == str(dest)
+    if copy_from:
+        subprocess.run(['taskset', '-c', str(cpu), 'cp', '-a', '--reflink=auto',
+                        str(copy_from), c['db']], check=True)
     Path(c['output']).unlink(missing_ok=True)
     path.write_text(json.dumps(c, indent=2) + '\n')
-    before = ticks()
+    before = ticks((cpu, sibling))
     started = time.time()
     print(str(out.relative_to(out.parents[1])) + '/' + name, flush=True)
     env = dict(os.environ)
     if probe:
         env['LD_PRELOAD'] = str(probe)
     with (out / (name + '.log')).open('w') as log:
-        subprocess.run(['/usr/bin/time', '-v', '-o', str(out / (name + '.time.txt')),
-                        'taskset', '-c', '10', str(BINARY), str(path)],
-                       stdout=log, stderr=log, check=True, env=env)
-    after = ticks()
+        result = subprocess.run(['/usr/bin/time', '-v', '-o', str(out / (name + '.time.txt')),
+                                 'taskset', '-c', str(cpu), *tracer, str(binary), str(path)],
+                                stdout=log, stderr=log, env=env)
+    if result.returncode:
+        if invalid:
+            invalid.write_text(f'{path}: exit {result.returncode}\n')
+        result.check_returncode()
+    after = ticks((cpu, sibling))
     record = dict(name=name, config=path.name, started=started, ended=time.time(),
-                  affinity='10', load=os.getloadavg(),
+                  affinity=str(cpu), load=os.getloadavg(),
                   cpu_tick_delta={cpu: [b-a for a, b in zip(before[cpu], after[cpu])]
-                                  for cpu in before}, disk=disk(Path(c['db'])), diagnostic=bool(probe))
-    if c['action'] != 'prepare':
+                                  for cpu in before}, disk=disk(Path(c['db'])), diagnostic=diagnostic)
+    if not preparing:
         rows = [json.loads(s) for s in Path(c['output']).read_text().splitlines()]
         assert all(r.get('errors', 0) == 0 for r in rows)
         assert any(r['type'] == 'complete' for r in rows)
