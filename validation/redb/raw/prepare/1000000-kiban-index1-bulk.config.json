@@ -1,0 +1,16 @@
+{
+  "backend": "kiban",
+  "n": 1000000,
+  "operations": 100000,
+  "k": 10,
+  "seed": 20261016,
+  "db": "/home/aetos/.t3-app/worktrees/kiban/t3-6c506e23-1412d35e141d8da8/target/redb-data/1000000-kiban-index1-bulk",
+  "output": "/home/aetos/.t3-app/worktrees/kiban/t3-6c506e23-1412d35e141d8da8/validation/redb/raw/prepare/1000000-kiban-index1-bulk.jsonl",
+  "action": "prepare",
+  "layout": "bulk",
+  "cache_mib": null,
+  "point_index": true,
+  "durable": false,
+  "rocks": {},
+  "scan_prefix_len": 18
+}
