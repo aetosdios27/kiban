@@ -21,6 +21,9 @@ pub struct Tuning {
     pub mmap: bool,
     pub row_cache: bool,
     pub disable_wal: bool,
+    /// RocksDB's default: index/filter blocks live in table-reader memory,
+    /// outside the block-cache budget (as Kiban's block index and filter do).
+    pub index_outside_cache: bool,
 }
 impl Default for Tuning {
     fn default() -> Self {
@@ -32,6 +35,7 @@ impl Default for Tuning {
             mmap: false,
             row_cache: false,
             disable_wal: false,
+            index_outside_cache: false,
         }
     }
 }
@@ -39,8 +43,8 @@ fn options(o: &BenchOptions) -> Options {
     let t = &o.rocks;
     let mut block = BlockBasedOptions::default();
     block.set_block_cache(&Cache::new_lru_cache(o.cache_bytes()));
-    block.set_cache_index_and_filter_blocks(true);
-    block.set_pin_l0_filter_and_index_blocks_in_cache(true);
+    block.set_cache_index_and_filter_blocks(!t.index_outside_cache);
+    block.set_pin_l0_filter_and_index_blocks_in_cache(!t.index_outside_cache);
     block.set_data_block_index_type(DataBlockIndexType::BinaryAndHash);
     block.set_block_size(t.block_size);
     if t.ribbon {
