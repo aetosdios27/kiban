@@ -1,0 +1,15 @@
+{"backend":"redb","cache_bytes":448987008,"durability":"None","tuning":{"compact":"none","plain_keys":true,"quick_repair":false},"type":"backend_config","version":"5.0.0"}
+redb: normal preload 100000/1000000
+redb: normal preload 200000/1000000
+redb: normal preload 300000/1000000
+redb: normal preload 400000/1000000
+redb: normal preload 500000/1000000
+redb: normal preload 600000/1000000
+redb: normal preload 700000/1000000
+redb: normal preload 800000/1000000
+redb: normal preload 900000/1000000
+redb: normal preload 1000000/1000000
+{"allocated_pages":192932,"fragmented_bytes":785148765,"metadata_bytes":20961091,"page_size":4096,"phase":"loaded","stored_bytes":334732640,"type":"redb_storage"}
+{"backend":"redb","binary_fuse_filter":false,"cache_bytes":448987008,"durable":false,"point_index":false,"type":"requested_config"}
+{"backend":"redb","cache_bytes":448987008,"durability":"None","tuning":{"compact":"none","plain_keys":true,"quick_repair":false},"type":"backend_config","version":"5.0.0"}
+{"layout":null,"type":"prepared","verified_records":1000000}
