@@ -35,8 +35,11 @@ def audit_command(folder, receipt, c, default_caches):
     assert not receipt['diagnostic']
     config = recorded_file(folder, receipt, 'config', 'config.json')
     expected_db = fixture(c).with_name('write-trial') if c['action'] == 'write' else fixture(c)
-    c = dict(c, db=str(expected_db), output=str(folder / f'{receipt["name"]}.jsonl'))
-    assert json.loads(config.read_text()) == c, config
+    observed = json.loads(config.read_text())
+    assert Path(observed.pop('db')).name == expected_db.name
+    output = Path(observed.pop('output'))
+    assert output.name == f'{receipt["name"]}.jsonl' and output.parent.name == folder.name
+    assert observed == {k: v for k, v in c.items() if k not in ('db', 'output')}, config
     log = recorded_file(folder, receipt, 'log', 'log').read_text()
     time = recorded_file(folder, receipt, 'time', 'time.txt').read_text()
     rows = read_jsonl(recorded_file(folder, receipt, 'result', 'jsonl'))
@@ -164,7 +167,7 @@ def audit_phase(raw, phase, selection, default_caches, preparation):
                     }
             result[title].setdefault(workload, {})[label] = values
     totals['sibling_busy_percent'] = stats(totals.pop('busy'))
-    totals['host_load_1m'] = stats(totals['load_1m'])
+    totals['host_load_1m'] = stats(totals.pop('load_1m'))
     return result, trials, totals
 
 
@@ -240,6 +243,9 @@ def main():
     assert metadata['cpu'] == CPU and metadata['sibling'] == SIBLING
     assert metadata['seed'] == SEED and metadata['trials'] == TRIALS
     assert metadata['protocol_sha256'] == digest(STUDY / 'PROTOCOL.md')
+    binary = Path(metadata['binary'])
+    if binary.is_file():
+        assert digest(binary) == metadata['binary_sha256'], binary
     for rel, sha in metadata['sources'].items():
         assert digest(ROOT / rel) == sha, rel
     preparation = audit_preparation(raw)
