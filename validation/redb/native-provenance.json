@@ -1,0 +1,75 @@
+{
+  "cargo_packages": {
+    "redb": {
+      "version": "5.0.0",
+      "crate_sha256": "11175cc688ba1b9d3cec4fe582fd82cb97e2a82e28ccc8101b7b8030a8003280",
+      "source_commit": "0d53424a7e0a38b2665e4d41f40bb6372da953ad"
+    },
+    "heed3": {
+      "version": "0.22.0",
+      "crate_sha256": "8cb8e15e526c34dc6aa19ee62c125324e34af32bcfe4cb8b0de4be621735f007",
+      "source_commit": "f27db6a9ce9e72c2a292d454dad6da93ed36823f"
+    },
+    "lmdb-master3-sys": {
+      "version": "0.2.5",
+      "crate_sha256": "4e744ace4c7d8002c577b8985438f467b21950f263015420112e053685fcfd8f",
+      "source_commit": "62d1115bd7d72da5f02532a200952af7b4e16b3e",
+      "vendored_header_version_lines": [
+        "#define MDB_VERSION_MAJOR\t0",
+        "#define MDB_VERSION_MINOR\t9",
+        "#define MDB_VERSION_PATCH\t90",
+        "#define MDB_VERSION_DATE\t\"May 1, 2017\""
+      ],
+      "source_sha256": {
+        "lmdb.h": "76923addb24ce5e1c6484c4360d4eccf80f282ca300a50280179c5e5142dbeee",
+        "mdb.c": "7a60232f6c709af6b144ec24a89ce3ed4105567f8d16528d7659e4d21b0e3801"
+      }
+    },
+    "libc": {
+      "version": "0.2.191",
+      "crate_sha256": "65cd87c9a6d60536580b316ad985726104730a5151c99845f2490428ef91240a",
+      "source_commit": "ccc2ff4aaab962f7fde7b8edda7379c045b1ca12"
+    },
+    "mimalloc": {
+      "version": "0.1.48",
+      "crate_sha256": "e1ee66a4b64c74f4ef288bcbb9192ad9c3feaad75193129ac8509af543894fd8",
+      "source_commit": "a5a76fd2c5a3a7c7b24d4765d53c71e41b32df74"
+    },
+    "libmimalloc-sys": {
+      "version": "0.1.44",
+      "crate_sha256": "667f4fec20f29dfc6bc7357c582d91796c169ad7e2fce709468aefeb2c099870",
+      "source_commit": "a5a76fd2c5a3a7c7b24d4765d53c71e41b32df74"
+    },
+    "serde_json": {
+      "version": "1.0.143",
+      "crate_sha256": "d401abef1d108fbd9cbaebc3e46611f4b1021f714a0597a71f41ee463f5f4a5a",
+      "source_commit": "10102c49bfd95e5b8d42a6c0b9530b1732a6fea8"
+    },
+    "librocksdb-sys": {
+      "version": "0.19.0+11.8.1",
+      "crate_sha256": "4f45e86edad8e88efe97dbf384b4e48e1ff0f111eabf154c7b09d7a1e5fb573c",
+      "source_commit": "e4aac69f55021e619566b6ca5902665e0ea2af4e"
+    },
+    "lz4-sys": {
+      "version": "1.11.1+lz4-1.10.0",
+      "crate_sha256": "6bd8c0d6c6ed0cd30b3652886bb8711dc4bb01d637a68105a3d5158039b418e6",
+      "source_commit": "5f52707d2e9b3c7f6a1a3e95180c00e7a6204d21"
+    },
+    "rusqlite": {
+      "version": "0.40.2",
+      "crate_sha256": "23f2a97da3e3873c73cb2a2e71b35c40ff95e0b1eefa8d72d8499a6928c3b5b3",
+      "source_commit": "e88f112bef7899234a497baed5cc3c3d553deeb8"
+    },
+    "libsqlite3-sys": {
+      "version": "0.38.2",
+      "crate_sha256": "f1d20bef17f513b9b3004532233187769cd072d790971f4e4da0e346eb6401e8",
+      "source_commit": "e88f112bef7899234a497baed5cc3c3d553deeb8"
+    }
+  },
+  "redb_vendored_c_library": null,
+  "rocksdb_linked_archive": {
+    "path": "/home/aetos/dev/personal/kiban/tools/agentbench/readpath/target/release/build/librocksdb-sys-4e8f08d23b260015/out/librocksdb.a",
+    "sha256": "3e7d2e4852c635587ae428780c6643fbd5d8dfd549bded46dab71c2317334eaf",
+    "role": "Linked for existing RocksDB harness tests only"
+  }
+}

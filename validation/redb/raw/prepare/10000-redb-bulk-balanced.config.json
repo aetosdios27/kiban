@@ -1,0 +1,19 @@
+{
+  "backend": "redb",
+  "n": 10000,
+  "operations": 100000,
+  "k": 10,
+  "seed": 20261016,
+  "db": "/home/aetos/.t3-app/worktrees/kiban/t3-6c506e23-1412d35e141d8da8/target/redb-data/10000-redb-bulk-balanced",
+  "output": "/home/aetos/.t3-app/worktrees/kiban/t3-6c506e23-1412d35e141d8da8/validation/redb/raw/prepare/10000-redb-bulk-balanced.jsonl",
+  "action": "compact-redb",
+  "layout": "bulk",
+  "cache_mib": null,
+  "point_index": false,
+  "durable": false,
+  "rocks": {},
+  "redb": {
+    "compact": "balanced",
+    "quick_repair": false
+  }
+}

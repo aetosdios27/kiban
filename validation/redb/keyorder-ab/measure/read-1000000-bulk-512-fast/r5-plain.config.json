@@ -1,0 +1,20 @@
+{
+  "backend": "redb",
+  "n": 1000000,
+  "operations": 100000,
+  "k": 10,
+  "seed": 20261016,
+  "db": "/home/aetos/.t3-app/worktrees/kiban/t3-6c506e23-1412d35e141d8da8/target/redb-data/1000000-redb-plain-bulk-maximum",
+  "output": "/home/aetos/.t3-app/worktrees/kiban/t3-6c506e23-1412d35e141d8da8/validation/redb/keyorder-ab/measure/read-1000000-bulk-512-fast/r5-plain.jsonl",
+  "action": "read",
+  "layout": "bulk",
+  "cache_mib": 512,
+  "point_index": false,
+  "durable": false,
+  "rocks": {},
+  "redb": {
+    "compact": "maximum",
+    "quick_repair": false,
+    "plain_keys": true
+  }
+}

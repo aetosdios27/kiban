@@ -1,0 +1,6 @@
+raw/sync-probe/redb-fast
+raw/sync-probe/redb-durable
+raw/sync-probe/kiban-fast
+raw/sync-probe/kiban-durable
+raw/sync-probe/lmdb-fast
+raw/sync-probe/lmdb-durable
