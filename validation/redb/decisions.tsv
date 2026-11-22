@@ -1,0 +1,4 @@
+time_utc	decision	why	evidence	result
+2026-11-22T17:09:33Z	Pin redb 5.0.0	Use the current stable release and exact API	Cargo.lock and crates.io source archive	Immediate and None are the two documented durability levels
+2026-11-22T17:09:33Z	Keep the common key format	Return the latest ten via a bounded reverse range	src/redb.rs	Descending comparator preserves every key and value byte
+2026-11-22T17:09:33Z	Freeze four candidates and selection rule	Screen the two physical compaction modes and quick repair at matched budgets	PROTOCOL.md	Share the organic normal read layout across candidates
