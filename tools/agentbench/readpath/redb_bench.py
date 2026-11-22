@@ -18,6 +18,7 @@ BINARY = ROOT / 'target/redb-h2h/release/kiban-readbench'
 DATA = ROOT / 'target/redb-data'
 CPU, SIBLING = 8, 9
 TRIALS = 5
+KEY_ORDERS = ('descending', 'plain')
 CANDIDATES = {
     'as-is': dict(compact='none', quick_repair=False),
     'balanced': dict(compact='balanced', quick_repair=False),
@@ -50,14 +51,17 @@ def fixture(c):
         return DATA / f'{c["n"]}-kiban-index{int(c["point_index"])}-{layout}'
     if backend == 'redb':
         compact = c['redb']['compact'] if layout == 'bulk' else 'none'
-        return DATA / f'{c["n"]}-redb-{layout}-{compact}'
+        name = 'redb-plain' if c['redb'].get('plain_keys') else 'redb'
+        return DATA / f'{c["n"]}-{name}-{layout}-{compact}'
     return DATA / f'{c["n"]}-lmdb-bulk'
 
 
-def configuration(engine, n, layout='bulk', cache=None, label=None):
+def configuration(engine, n, layout='bulk', cache=None, label=None, *, key_order='descending'):
     c = base(engine, n, layout, cache)
     if engine == 'redb':
         c['redb'] = dict(CANDIDATES[label])
+        if key_order == 'plain':
+            c['redb']['plain_keys'] = True
         if layout == 'normal':
             c['redb']['compact'] = 'none'
     elif engine == 'kiban':
@@ -90,6 +94,49 @@ def prepare(args):
                     copy_from=plain)
 
 
+def keyorder_selection():
+    return json.loads((STUDY / 'raw' / 'selection.json').read_text())
+
+
+def prepare_keyorder(args):
+    selection = keyorder_selection()
+    out = args.out / 'prepare'
+    for key_order in KEY_ORDERS:
+        for action, n, shape in (('write', 10000, 'bulk'), ('read', 1000000, 'bulk'),
+                                 ('read', 1000000, 'normal')):
+            base_config = configuration('redb', n, shape, label='as-is', key_order=key_order)
+            path = fixture(base_config)
+            execute(args, dict(base_config, action='prepare', db=str(path)), out, path.name)
+            conf = configuration('redb', n, shape, label=selection[action], key_order=key_order)
+            compacted = fixture(conf)
+            if compacted != path:
+                execute(args, dict(conf, action='compact-redb', db=str(compacted)),
+                        out, compacted.name, copy_from=path)
+
+
+def keyorder_configs(scenario, selection):
+    action, n, shape, cache, _ = scenario
+    return [(order, configuration('redb', n, shape, cache, selection[action], key_order=order))
+            for order in KEY_ORDERS]
+
+
+def run_scenario(args, scenario, configs, phase):
+    action, _, _, _, durable = scenario
+    out = args.out / phase / scenario_name(scenario)
+    for trial in range(TRIALS):
+        for label, conf in rotate(configs, trial):
+            c = dict(conf, action=action, durable=durable,
+                     operations=100000 if action == 'read' else 1000)
+            c['db'] = str(DATA / 'write-trial' if action == 'write' else fixture(c))
+            execute(args, c, out, f'r{trial + 1}-{label}')
+
+
+def measure_keyorder(args):
+    selection = keyorder_selection()
+    for scenario in SCENARIOS:
+        run_scenario(args, scenario, keyorder_configs(scenario, selection), 'measure')
+
+
 def measure(args, screening):
     if not screening:
         selection = json.loads((args.out / 'selection.json').read_text())
@@ -103,13 +150,7 @@ def measure(args, screening):
                        for label in ('kiban-index0', 'kiban-index1')]
             configs.append(('redb', configuration('redb', n, shape, cache, selection[action])))
         configs.append(('lmdb', configuration('lmdb', n, shape, cache)))
-        out = args.out / ('screen' if screening else 'measure') / scenario_name(scenario)
-        for trial in range(TRIALS):
-            for label, conf in rotate(configs, trial):
-                c = dict(conf, action=action, durable=durable,
-                         operations=100000 if action == 'read' else 1000)
-                c['db'] = str(DATA / 'write-trial' if action == 'write' else fixture(c))
-                execute(args, c, out, f'r{trial + 1}-{label}')
+        run_scenario(args, scenario, configs, 'screen' if screening else 'measure')
 
 
 def choose(raw):
@@ -233,14 +274,17 @@ def provenance(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['prepare', 'screen', 'select', 'measure', 'probe'])
-    parser.add_argument('--out', type=Path, default=STUDY / 'raw')
+    parser.add_argument('action', choices=['prepare', 'screen', 'select', 'measure', 'probe',
+                                           'prepare-keyorder', 'measure-keyorder'])
+    parser.add_argument('--out', type=Path)
     parser.add_argument('--resume', action='store_true')
     parser.add_argument('--strace', type=Path,
                         default=Path(shutil.which('strace') or DATA / 'tools/usr/bin/strace'))
     args = parser.parse_args()
     assert set(os.sched_getaffinity(0)) <= set(range(12, 22)), 'pin coordinator to CPUs 12–21'
     assert os.getpriority(os.PRIO_PROCESS, 0) >= 10, 'run coordinator at nice +10'
+    if args.out is None:
+        args.out = STUDY / ('keyorder-ab' if args.action.endswith('-keyorder') else 'raw')
     args.out = args.out.resolve()
     args.out.mkdir(parents=True, exist_ok=True)
     DATA.mkdir(parents=True, exist_ok=True)
@@ -251,7 +295,9 @@ def main():
         if args.action in ('screen', 'measure'):
             measure(args, args.action == 'screen')
         else:
-            {'prepare': prepare, 'select': select, 'probe': probe}[args.action](args)
+            {'prepare': prepare, 'select': select, 'probe': probe,
+             'prepare-keyorder': prepare_keyorder,
+             'measure-keyorder': measure_keyorder}[args.action](args)
 
 
 if __name__ == '__main__':

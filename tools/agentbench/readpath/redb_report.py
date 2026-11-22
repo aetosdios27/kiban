@@ -2,14 +2,17 @@
 """Audit redb comparison receipts and render the full results tables."""
 import argparse
 from collections import defaultdict
+import hashlib
 import csv
 import json
 from pathlib import Path
 import statistics
+import subprocess
 
 from redb_bench import (
-    CANDIDATES, CPU, ROOT, SCENARIOS, SEED, SIBLING, STUDY, TRIALS,
-    choose, configuration, digest, fixture, read_jsonl, rotate, scenario_name,
+    CANDIDATES, CPU, KEY_ORDERS, ROOT, SCENARIOS, SEED, SIBLING, STUDY, TRIALS,
+    choose, configuration, digest, fixture, keyorder_configs, keyorder_selection, read_jsonl, rotate,
+    scenario_name,
 )
 
 READ_STAGES = ('recall-by-id', 'recent-for-agent')
@@ -88,7 +91,7 @@ def audit_command(folder, receipt, c, default_caches):
         allocated_bytes=receipt['disk']['allocated_bytes'])
 
 
-def audit_preparation(raw):
+def audit_preparation(raw, count=15):
     folder = raw / 'prepare'
     records = {}
     for receipt in read_jsonl(folder / 'commands.jsonl'):
@@ -103,7 +106,7 @@ def audit_preparation(raw):
         assert key == fixture(config).name and key not in records
         records[key] = dict(receipt['disk'], layout=prepared.get('layout'),
                             storage=[r for r in rows if r['type'] == 'redb_storage'])
-    assert len(records) == 15
+    assert len(records) == count
     return records
 
 
@@ -253,9 +256,81 @@ def tables(path, result, primary):
                 print(file=f)
 
 
+def keyorder_direction(descending, plain):
+    change = plain['median'] / descending['median'] - 1
+    if plain['max'] < descending['min'] and change < -0.03125:
+        return 'Plain faster'
+    if plain['min'] > descending['max'] and change > 0.03125:
+        return 'Plain slower'
+    return 'Within noise'
+
+
+def keyorder_report(out):
+    preparation = audit_preparation(out, count=10)
+    selection = keyorder_selection()
+    caches = set()
+    totals = dict(commands=0, timed_calls=0, timed_mutations=0)
+    sibling, load = [], []
+    results = {}
+    for scenario in SCENARIOS:
+        action, _, _, _, durable = scenario
+        configs = keyorder_configs(scenario, selection)
+        title = scenario_name(scenario)
+        folder = out / 'measure' / title
+        receipts = read_jsonl(folder / 'commands.jsonl')
+        expected = [(f'r{trial + 1}-{order}', order, c)
+                    for trial in range(TRIALS) for order, c in rotate(configs, trial)]
+        assert [r['name'] for r in receipts] == [name for name, _, _ in expected]
+        groups = defaultdict(list)
+        for (_, order, c), receipt in zip(expected, receipts):
+            assert fixture(c).name in preparation
+            ops = 100000 if action == 'read' else 1000
+            stages, _, _ = audit_command(folder, receipt,
+                                         dict(c, action=action, durable=durable, operations=ops),
+                                         caches)
+            totals['commands'] += 1
+            sibling.append(busy_sibling(receipt))
+            load.append(receipt['load'][0])
+            for row in stages:
+                totals['timed_calls'] += row['latency']['count']
+                totals['timed_mutations'] += row['writes']['count']
+                groups[row['workload'], order].append(
+                    dict(p50_ns=row['latency']['p50_ns'], p99_ns=row['latency']['p99_ns'],
+                         call_ops_s=row['call_ops_s'], verified_ops_s=row['verified_ops_s']))
+        results[title] = {
+            op: {order: {key: stats([row[key] for row in groups[op, order]]) for key in METRICS}
+                 for order in KEY_ORDERS}
+            for op in (READ_STAGES if action == 'read' else WRITE_STAGES)
+        }
+    default_cache, = caches
+    audit = dict(**totals, default_cache_bytes=default_cache, sibling_busy_percent=stats(sibling),
+                 host_load_1m=stats(load), preparation=preparation)
+    outcomes = set()
+    with (out / 'RESULTS.md').open('w') as f:
+        print('# Key order results\n\nFive-trial medians [min, max]. Latencies are in µs.\n',
+              file=f)
+        print('| Scenario | Operation | Percentile | Descending | Plain | Outcome |', file=f)
+        print('|---|---|---|---:|---:|---|', file=f)
+        for title, workloads in results.items():
+            for op, labels in workloads.items():
+                for key in ('p50_ns', 'p99_ns'):
+                    descending, plain = (labels[order][key] for order in KEY_ORDERS)
+                    outcome = keyorder_direction(descending, plain)
+                    outcomes.add(outcome)
+                    print(f'| {title} | {op} | {key.removesuffix("_ns")} | '
+                          f'{span(descending, 1000)} | {span(plain, 1000)} | {outcome} |', file=f)
+    adopt = 'Plain faster' in outcomes and 'Plain slower' not in outcomes
+    (out / 'summary.json').write_text(json.dumps(dict(adopt_plain=adopt, audit=audit,
+                                                      results=results), indent=2) + '\n')
+    print(totals, 'adopt plain' if adopt else 'retain descending')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('raw', nargs='?', type=Path, default=STUDY / 'raw')
+    parser.add_argument('--keyorder', action='store_true')
+    parser.add_argument('--source-revision',
+                        help='verify archived source and protocol hashes against this Git revision')
     args = parser.parse_args()
     raw = args.raw.resolve()
     out = raw.parent
@@ -263,12 +338,21 @@ def main():
     metadata = json.loads((raw / 'metadata.json').read_text())
     assert metadata['cpu'] == CPU and metadata['sibling'] == SIBLING
     assert metadata['seed'] == SEED and metadata['trials'] == TRIALS
-    assert metadata['protocol_sha256'] == digest(STUDY / 'PROTOCOL.md')
+    source_hashes = dict(metadata['sources'])
+    source_hashes['validation/redb/PROTOCOL.md'] = metadata['protocol_sha256']
+    for rel, sha in source_hashes.items():
+        if args.source_revision:
+            original = subprocess.check_output(['git', 'show', f'{args.source_revision}:{rel}'],
+                                               cwd=ROOT)
+            assert hashlib.sha256(original).hexdigest() == sha, rel
+        else:
+            assert digest(ROOT / rel) == sha, rel
     binary = Path(metadata['binary'])
-    if binary.is_file():
+    if binary.is_file() and not args.source_revision:
         assert digest(binary) == metadata['binary_sha256'], binary
-    for rel, sha in metadata['sources'].items():
-        assert digest(ROOT / rel) == sha, rel
+    if args.keyorder:
+        keyorder_report(raw)
+        return
     preparation = audit_preparation(raw)
     selection = choose(raw)
     assert selection == json.loads((raw / 'selection.json').read_text())
