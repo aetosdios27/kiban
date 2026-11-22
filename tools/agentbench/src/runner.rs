@@ -166,7 +166,12 @@ pub fn suite_plan(b: &mut dyn Backend, c: &Config, plan: Plan, out: &mut impl Wr
     )
 }
 
-fn verify(b: &mut dyn Backend, c: &Config, population: u64, revisions: &[u64]) -> Result<()> {
+pub(crate) fn verify(
+    b: &mut dyn Backend,
+    c: &Config,
+    population: u64,
+    revisions: &[u64],
+) -> Result<()> {
     for id in 0..population {
         check(&b.get(id)?, id, revisions[id as usize], c.seed)?;
     }

@@ -1,0 +1,2 @@
+{"backend":"libmdbx","binary_fuse_filter":false,"cache_bytes":448987008,"durable":false,"point_index":false,"type":"requested_config"}
+{"backend":"libmdbx","branch_pages":232,"crate":"0.9.0","entries":1000000,"flags":35979264,"geometry":{"current":687865856,"growth":16777216,"max":10737418240,"min":1048576,"shrink":0},"leaf_pages":41370,"overflow_pages":0,"page_bytes":16384,"sync":"SafeNoSync","tree_depth":3,"tuning":{"growth_bytes":16777216,"liforeclaim":false,"no_rdahead":false,"page_bytes":16384,"writemap":false},"txnid":4,"type":"backend_config","version":"0.14.4"}

@@ -13,6 +13,7 @@ mod embedded;
 mod fjall;
 mod index_hints;
 mod inline_index;
+mod libmdbx;
 #[path = "../../../../examples/scale/metrics.rs"]
 #[allow(dead_code)]
 mod metrics;
@@ -101,6 +102,8 @@ struct Options {
     redb: redb::Tuning,
     #[serde(default)]
     fjall: fjall::Tuning,
+    #[serde(default)]
+    libmdbx: libmdbx::Tuning,
 }
 
 impl Options {
@@ -161,11 +164,12 @@ fn open(o: &Options) -> Result<Box<dyn Backend>> {
             );
             Box::new(db)
         }
+        "libmdbx" => libmdbx::open(o)?,
         "sqlite" => Box::new(sqlite::Sqlite::open(o)?),
         "rocksdb" => Box::new(rocks::Rocks::open(o)?),
         "redb" => redb::open(o, false)?,
         "fjall" => Box::new(fjall::Fjall::open(o)?),
-        _ => return Err("only kiban/lmdb/sqlite/rocksdb/redb/fjall supported".into()),
+        _ => return Err("only kiban/lmdb/libmdbx/sqlite/rocksdb/redb/fjall supported".into()),
     })
 }
 
@@ -459,6 +463,9 @@ fn run() -> Result<()> {
         "crash-write" if c.backend == "fjall" => fjall::crash_write(&o),
         "read" | "profile" | "miss" => reads(&o),
         "write" => writes(&o),
+        "libmdbx-crash-write" | "libmdbx-crash-verify" if c.operations <= c.n => {
+            libmdbx::crash_check(&o, o.action == "libmdbx-crash-verify")
+        }
         "varied" => varied::run(&o),
         #[cfg(feature = "remix")]
         "scan-cost" => remix_cost::run(&o),
@@ -497,6 +504,7 @@ mod tests {
             ("redb", "redb"),
             ("redb-plain", "redb"),
             ("fjall", "fjall"),
+            ("libmdbx", "libmdbx"),
         ] {
             for shape in ["bulk", "normal"] {
                 let mut o = Options {
@@ -530,6 +538,7 @@ mod tests {
                     fjall: crate::fjall::Tuning::default(),
                     rocks: rocks::Tuning::default(),
                     redb: redb::Tuning::default(),
+                    libmdbx: libmdbx::Tuning::default(),
                 };
                 o.redb.plain_keys = label == "redb-plain";
                 prepare(&o)?;

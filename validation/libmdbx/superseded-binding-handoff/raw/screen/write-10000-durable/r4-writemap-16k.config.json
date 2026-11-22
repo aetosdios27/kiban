@@ -1,0 +1,22 @@
+{
+  "backend": "libmdbx",
+  "n": 10000,
+  "operations": 1000,
+  "k": 10,
+  "seed": 20261016,
+  "db": "/home/aetos/.t3-app/worktrees/kiban/t3-c158b6a5-62c4619a2d410fa9/target/libmdbx-data/write-trial",
+  "output": "/home/aetos/.t3-app/worktrees/kiban/t3-c158b6a5-62c4619a2d410fa9/validation/libmdbx/raw/screen/write-10000-durable/r4-writemap-16k.jsonl",
+  "action": "write",
+  "layout": "bulk",
+  "cache_mib": null,
+  "point_index": false,
+  "durable": true,
+  "rocks": {},
+  "libmdbx": {
+    "page_bytes": 16384,
+    "growth_bytes": 16777216,
+    "writemap": true,
+    "no_rdahead": false,
+    "liforeclaim": false
+  }
+}

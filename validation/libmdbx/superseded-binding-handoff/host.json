@@ -1,0 +1,59 @@
+{
+  "captured_utc": "2026-11-22T17:10:53.668258+00:00",
+  "uname": "Linux fedora 7.3.4-200.fc44.x86_64 #1 SMP PREEMPT_DYNAMIC Tue Nov 10 22:45:35 UTC 2026 x86_64 GNU/Linux",
+  "cpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           46 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  22\nOn-line CPU(s) list:                     0-21\nVendor ID:                               GenuineIntel\nModel name:                              Intel(R) Core(TM) Ultra 9 185H\nCPU family:                              6\nModel:                                   170\nThread(s) per core:                      2\nCore(s) per socket:                      16\nSocket(s):                               1\nStepping:                                4\nCPU(s) scaling MHz:                      49%\nCPU max MHz:                             5100.0000\nCPU min MHz:                             400.0000\nBogoMIPS:                                6144.00\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb ssbd ibrs ibpb stibp ibrs_enhanced tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt clwb intel_pt sha_ni xsaveopt xsavec xgetbv1 xsaves split_lock_detect user_shstk avx_vnni dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp hwp_pkg_req hfi vnmi umip pku ospke waitpkg gfni vaes vpclmulqdq rdpid bus_lock_detect movdiri movdir64b fsrm md_clear serialize pconfig arch_lbr ibt flush_l1d arch_capabilities\nVirtualization:                          VT-x\nL1d cache:                               544 KiB (14 instances)\nL1i cache:                               896 KiB (14 instances)\nL2 cache:                                18 MiB (9 instances)\nL3 cache:                                24 MiB (1 instance)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0-21\nVulnerability Gather data sampling:      Not affected\nVulnerability Ghostwrite:                Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Old microcode:             Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Not affected\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Enhanced / Automatic IBRS; IBPB conditional; PBRSB-eIBRS Not affected; BHI BHI_DIS_S\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Not affected\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Mitigation; IBPB before exit to userspace",
+  "cpu_topology": "CPU CORE SOCKET ONLINE\n  0    0      0    yes\n  1    1      0    yes\n  2    1      0    yes\n  3    2      0    yes\n  4    2      0    yes\n  5    0      0    yes\n  6    3      0    yes\n  7    3      0    yes\n  8    4      0    yes\n  9    4      0    yes\n 10    5      0    yes\n 11    5      0    yes\n 12    6      0    yes\n 13    7      0    yes\n 14    8      0    yes\n 15    9      0    yes\n 16   10      0    yes\n 17   11      0    yes\n 18   12      0    yes\n 19   13      0    yes\n 20   14      0    yes\n 21   15      0    yes",
+  "sibling": "10-11",
+  "meminfo": "MemTotal:       32255992 kB\nMemFree:         2335168 kB\nMemAvailable:   22503868 kB\nBuffers:            1296 kB\nCached:         22750500 kB\nSwapCached:            0 kB\nActive:          7128700 kB\nInactive:       20180496 kB\nActive(anon):    3996620 kB\nInactive(anon):  3146264 kB\nActive(file):    3132080 kB\nInactive(file): 17034232 kB\nUnevictable:     1011144 kB\nMlocked:             116 kB\nSwapTotal:       8388604 kB\nSwapFree:        8387748 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:            183308 kB\nWriteback:             0 kB\nAnonPages:       5569116 kB\nMapped:          1891020 kB\nShmem:           2585752 kB\nKReclaimable:     469764 kB\nSlab:             928204 kB\nSReclaimable:     469764 kB\nSUnreclaim:       458440 kB\nKernelStack:       29712 kB\nPageTables:       106156 kB\nSecPageTables:      2276 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    24516600 kB\nCommitted_AS:   29500556 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:      107816 kB\nVmallocChunk:          0 kB\nPercpu:            25248 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:  1921024 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nCmaTotal:              0 kB\nCmaFree:               0 kB\nUnaccepted:            0 kB\nBalloon:               0 kB\nGPUActive:             0 kB\nGPUReclaim:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      374528 kB\nDirectMap2M:     8470528 kB\nDirectMap1G:    26214400 kB",
+  "memory_max": null,
+  "cpu10_governor": "powersave",
+  "no_turbo": "0",
+  "filesystem": "btrfs rw,relatime,seclabel,compress=zstd:1,ssd,discard=async,space_cache=v2,subvolid=257,subvol=/home",
+  "coordinator_affinity": [
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21
+  ],
+  "coordinator_nice": 10,
+  "initial_ticks": {
+    "cpu10": [
+      4978,
+      2,
+      2359,
+      167924,
+      316,
+      265,
+      262,
+      0,
+      0,
+      0
+    ],
+    "cpu11": [
+      1736,
+      5,
+      1284,
+      171439,
+      103,
+      90,
+      116,
+      0,
+      0,
+      0
+    ]
+  },
+  "load": [
+    3.45947265625,
+    2.96337890625,
+    1.7548828125
+  ],
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.1\nLLVM version: 22.1.8",
+  "cargo": "cargo 1.98.1 (797e8a9bc 2026-08-05)",
+  "native_cc": "cc (GCC) 16.2.1 20261029 (Red Hat 16.2.1-3)"
+}

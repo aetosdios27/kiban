@@ -1,0 +1,37 @@
+{
+  "affinity": "12-21",
+  "nice": 10,
+  "cargo_build_jobs": 2,
+  "libclang_path": "/usr/lib64/llvm15/lib",
+  "bindgen_extra_clang_args": "-resource-dir=/usr/lib64/llvm15/lib/clang/15.0.7",
+  "rocksdb_link": {
+    "archive": "/home/aetos/dev/personal/kiban/tools/agentbench/readpath/target/release/build/librocksdb-sys-4e8f08d23b260015/out/librocksdb.a",
+    "sha256": "3e7d2e4852c635587ae428780c6643fbd5d8dfd549bded46dab71c2317334eaf",
+    "static": true,
+    "reason": "Use the existing bundled RocksDB archive for unrelated RocksDB compatibility tests."
+  },
+  "checks": {
+    "build": {
+      "exit": 0,
+      "sha256": "01fcea5a025b0180abd94a7f8f0ad0608c7975a35f60298338b205b64223393f"
+    },
+    "fmt": {
+      "exit": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "test": {
+      "exit": 0,
+      "sha256": "0db80562b9c08b4b523780a0a247147dcac1ed43c55c2f3559ae229b781b43d9"
+    },
+    "clippy": {
+      "exit": 0,
+      "sha256": "0a5e5d635ab7ecf50c8063b6e4d8812c14086f2e1862605d8f418ad71e169099"
+    },
+    "clippy-default": {
+      "exit": 0,
+      "sha256": "fe5f6fa558d60000a416cc004cb73221df16e292206e6bbfedb60bac7791d698"
+    }
+  },
+  "build_profile": "release --features remix",
+  "test_threads": 2
+}

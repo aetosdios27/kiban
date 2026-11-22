@@ -1,0 +1,6 @@
+{"backend":"kiban","binary_fuse_filter":false,"cache_bytes":448987008,"durable":false,"point_index":false,"type":"requested_config"}
+scan preparation ready=false ns=557 stats=None
+kiban: bulk preload 10000/10000
+{"backend":"kiban","binary_fuse_filter":false,"cache_bytes":448987008,"durable":false,"point_index":false,"type":"requested_config"}
+scan preparation ready=false ns=811 stats=None
+{"layout":{"0":[2]},"type":"prepared","verified_records":10000}

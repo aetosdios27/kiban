@@ -1,0 +1,25 @@
+{
+  "read": "lifo",
+  "write": "no-readahead",
+  "scores_seconds": {
+    "read": {
+      "baseline": 2.657021649011837e-06,
+      "growth-1m": 2.639086583133565e-06,
+      "lifo": 2.4793495269381872e-06,
+      "no-readahead": 2.578835977385096e-06,
+      "page-16k": 2.7046433038639808e-06,
+      "writemap": 2.5314501627293768e-06,
+      "writemap-16k": 2.7127465909217536e-06
+    },
+    "write": {
+      "baseline": 0.00017356071213135466,
+      "growth-1m": 0.00034846779140730274,
+      "lifo": 0.00022704078139395529,
+      "no-readahead": 0.00016922973154114481,
+      "page-16k": 0.00021370194432285812,
+      "writemap": 0.00020625586627938785,
+      "writemap-16k": 0.000273670125852894
+    }
+  },
+  "rule": "Minimize the equal-workload geometric mean of five-trial medians of mean call seconds. Reads include recall-by-id and recent-for-agent on the single mmap layout. Writes include remember, update and mixed-90-10 in fast and durable mode. Select one complete configuration per family; break ties by label."
+}

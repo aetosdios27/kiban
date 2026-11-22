@@ -1,0 +1,51 @@
+{
+  "screen_commands": 120,
+  "primary_commands": 120,
+  "screen_timed_calls": 8400000,
+  "primary_timed_calls": 16200000,
+  "prepared_fixtures": 22,
+  "errors": 0,
+  "affinity": "10",
+  "default_cache_bytes": 448987008,
+  "cpu11_busy_percent": {
+    "median": 2.2728923685378746,
+    "min": 0.0,
+    "max": 15.157116451016636
+  },
+  "load1": {
+    "median": 4.2958984375,
+    "min": 3.3193359375,
+    "max": 6.16259765625
+  },
+  "durability": {
+    "baseline": {
+      "acks_with_sync": 32,
+      "verified_records": 10016,
+      "native_mechanisms": {
+        "fdatasync": 32,
+        "write-through": 32
+      },
+      "writer_tid": 145065,
+      "writer_thread_count": 1
+    },
+    "writemap": {
+      "acks_with_sync": 32,
+      "verified_records": 10016,
+      "native_mechanisms": {
+        "msync(MS_SYNC)": 32
+      },
+      "writer_tid": 145069,
+      "writer_thread_count": 1
+    },
+    "no-readahead": {
+      "acks_with_sync": 32,
+      "verified_records": 10016,
+      "native_mechanisms": {
+        "fdatasync": 32,
+        "write-through": 32
+      },
+      "writer_tid": 145073,
+      "writer_thread_count": 1
+    }
+  }
+}

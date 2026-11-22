@@ -1,0 +1,14 @@
+time_utc	decision	why	evidence	result
+2026-11-22T17:10:53.028514+00:00	Pin libmdbx-rs and its native crate	Recent published binding with safe transactions, borrowed bytes and documented knobs	PROTOCOL.md; Cargo.lock	Rust 0.9.0, C 0.14.4
+2026-11-22T17:10:53.028543+00:00	Use SafeNoSync for fast	Keep the last steady snapshot in the fast path	MDBX 0.14.4 public header and combine_durability_flags	Native adds NOMETASYNC; reject UtterlyNoSync
+2026-11-22T17:10:53.028549+00:00	Enable Kiban agent-memory with prefix length 18	Measure the profile described in the README	Engine API and readpath remix feature	Index-off row uses sorted-range fallback of the same API
+2026-11-22T17:10:53.028553+00:00	Screen seven complete candidates	Cover page size, map growth, write mapping, readahead and page recycling	PROTOCOL.md	Separate read and write winners; COALESCE absent from the vendored public header
+2026-11-22T17:10:53.028556+00:00	Use one B-tree layout per candidate	Same ID-order single transaction as LMDB	PROTOCOL.md	Four primary strata vary only Kiban layout and cache settings
+2026-11-22T17:10:53.028559+00:00	Reuse the existing static RocksDB archive	Keep unrelated harness backends available without recompiling their native dependency	checks/receipt.json	Private target for all campaign builds and tests
+2026-11-22T17:10:53.028561+00:00	Freeze screening and comparison rules	Specify selection and verification before observing timing	PROTOCOL.md	Only CPU 10 runs benchmark children and diagnostics
+2026-11-22T17:20:05.603803+00:00	Freeze read and write winners	Apply the predeclared score after auditing all 120 commands	raw/selection.json; checks/screen-audit.log	Read lifo (2.479 µs); write no-readahead (169.230 µs)
+2026-11-22T17:28:17.631377+00:00	Keep every screen trial	The predeclared rule uses five-trial medians	SCREEN.md	Verified NORDAHEAD round with 341167 major faults retained
+2026-11-22T17:28:17.631399+00:00	Accept primary matrix	Check all raw receipts, effective options and fixture invariants	audit.json; checks/primary-audit.log	120 commands and 16200000 timed calls with zero errors
+2026-11-22T17:28:17.631405+00:00	Audit synchronous acknowledgment before process death	Confirm timing boundary for durable mutations	checks/durable-*.strace; audit.json	96 traced acknowledgments and three complete SIGKILL recovery checks
+2026-11-22T17:28:17.631409+00:00	Describe shared-host sibling activity	CPU affinity gives process placement and background activity remains visible	host.json; audit.json	CPU 11 median 4.67% busy, max 22.22%
+2026-11-22T17:28:17.631412+00:00	Remove generated fixtures after checks	Release shared disk while retaining evidence	fixture-layouts.json	Removed 22 private fixtures with 7305904128 recorded allocated bytes

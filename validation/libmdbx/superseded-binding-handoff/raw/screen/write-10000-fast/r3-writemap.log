@@ -1,0 +1,9 @@
+{"backend":"libmdbx","binary_fuse_filter":false,"cache_bytes":448987008,"durable":false,"point_index":false,"type":"requested_config"}
+{"backend":"libmdbx","branch_pages":47,"crate":"0.9.0","entries":10000,"flags":36503552,"geometry":{"current":16777216,"growth":16777216,"max":10737418240,"min":1048576,"shrink":0},"leaf_pages":1717,"overflow_pages":0,"page_bytes":4096,"sync":"SafeNoSync","tree_depth":3,"tuning":{"growth_bytes":16777216,"liforeclaim":false,"no_rdahead":false,"page_bytes":4096,"writemap":true},"txnid":4,"type":"backend_config","version":"0.14.4"}
+libmdbx: remember 1000 verified calls
+libmdbx: recall-by-id 1000 verified calls
+libmdbx: recent-for-agent 1000 verified calls
+libmdbx: update 1000 verified calls
+libmdbx: mixed-90-10 1000 verified calls
+{"backend":"libmdbx","binary_fuse_filter":false,"cache_bytes":448987008,"durable":false,"point_index":false,"type":"requested_config"}
+{"backend":"libmdbx","branch_pages":52,"crate":"0.9.0","entries":11000,"flags":36503552,"geometry":{"current":16777216,"growth":16777216,"max":10737418240,"min":1048576,"shrink":0},"leaf_pages":1893,"overflow_pages":0,"page_bytes":4096,"sync":"SafeNoSync","tree_depth":3,"tuning":{"growth_bytes":16777216,"liforeclaim":false,"no_rdahead":false,"page_bytes":4096,"writemap":true},"txnid":2104,"type":"backend_config","version":"0.14.4"}
